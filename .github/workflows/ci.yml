@@ -1,0 +1,35 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: proto/go.mod
+          cache-dependency-path: "**/go.sum"
+      - run: make vet
+      - run: make test
+      - run: make fuzz
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # git describe for the version
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: proto/go.mod
+          cache-dependency-path: "**/go.sum"
+      - run: make dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/

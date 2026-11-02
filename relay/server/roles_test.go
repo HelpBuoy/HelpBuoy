@@ -1,0 +1,480 @@
+package server_test
+
+import (
+	"strings"
+	"testing"
+	"time"
+
+	"golang.org/x/crypto/ssh"
+
+	"github.com/mevdschee/help-me-win/proto/control"
+	"github.com/mevdschee/help-me-win/relay/fake"
+	"github.com/mevdschee/help-me-win/relay/hostkey"
+	"github.com/mevdschee/help-me-win/relay/server"
+	"github.com/mevdschee/help-me-win/relay/store"
+)
+
+type roleConn struct {
+	role control.Role
+	conn func(e *env) *fake.Conn
+}
+
+func roles() []roleConn {
+	return []roleConn{
+		{control.RoleHelper, func(e *env) *fake.Conn { return e.helper(uniq("helper")) }},
+		{control.RoleClient, func(e *env) *fake.Conn { c, _ := e.client(uniq("user@pc")); return c }},
+		{control.RolePending, func(e *env) *fake.Conn { c, _ := e.connect(fake.NewKey(), control.RolePending); return c }},
+	}
+}
+
+func TestHello(t *testing.T) {
+	e := newEnv(t, nil)
+	hk := e.addHelper("alice")
+	_, h := e.connect(hk, control.RoleHelper)
+	if h.Name != "alice" || h.DisplayName != "Display alice" || h.RelayVersion != "test" ||
+		time.Duration(h.RequestExpiry) != time.Hour || !h.ServerTime.Equal(e.clock.Now()) {
+		t.Errorf("helper hello %+v", h)
+	}
+	_, h = e.connect(e.addClient("anna@PC"), control.RoleClient)
+	if h.Name != "anna@PC" || h.DisplayName != "" {
+		t.Errorf("client hello %+v", h)
+	}
+	_, h = e.connect(fake.NewKey(), control.RolePending)
+	if h.Name != "" {
+		t.Errorf("pending hello %+v", h)
+	}
+}
+
+func TestHostKeyStable(t *testing.T) {
+	e := newEnv(t, nil)
+	k1 := e.srv.HostKey()
+	e.restart()
+	if string(k1.Marshal()) != string(e.srv.HostKey().Marshal()) {
+		t.Fatal("host key changed across restart")
+	}
+	s, err := hostkey.LoadOrCreate(e.dir)
+	if err != nil || string(s.PublicKey().Marshal()) != string(k1.Marshal()) {
+		t.Fatalf("hostkey file: %v", err)
+	}
+}
+
+func TestGlobalRequests(t *testing.T) {
+	for _, rc := range roles() {
+		t.Run(string(rc.role), func(t *testing.T) {
+			e := newEnv(t, nil)
+			c := rc.conn(e)
+			for _, typ := range []string{"tcpip-forward", "cancel-tcpip-forward", "streamlocal-forward@openssh.com",
+				"no-more-sessions@openssh.com", "hostkeys-prove-00@openssh.com", "bogus"} {
+				ok, _, err := c.Client.SendRequest(typ, true, []byte("x"))
+				if err != nil || ok {
+					t.Errorf("%s: ok=%v err=%v, want refused", typ, ok, err)
+				}
+			}
+			ok, _, err := c.Client.SendRequest("keepalive@openssh.com", true, nil)
+			if err != nil || !ok {
+				t.Errorf("keepalive: ok=%v err=%v", ok, err)
+			}
+		})
+	}
+}
+
+func TestChannelTypes(t *testing.T) {
+	for _, rc := range roles() {
+		t.Run(string(rc.role), func(t *testing.T) {
+			e := newEnv(t, nil)
+			c := rc.conn(e)
+			for _, typ := range []string{"session", "direct-tcpip", "direct-streamlocal@openssh.com", "x11",
+				"forwarded-tcpip", "auth-agent@openssh.com", "bogus"} {
+				_, _, err := c.Client.OpenChannel(typ, nil)
+				if openReason(err) != ssh.UnknownChannelType {
+					t.Errorf("%s: err=%v, want unknown channel type", typ, err)
+				}
+			}
+			_, _, err := c.Client.OpenChannel(control.ChannelControl, nil)
+			if openReason(err) != ssh.Prohibited {
+				t.Errorf("second control channel: err=%v, want prohibited", err)
+			}
+			data := control.MarshalSessionChannelData(control.SessionChannelData{RequestID: "nope"})
+			_, _, err = c.Client.OpenChannel(control.ChannelSession, data)
+			if openReason(err) != ssh.Prohibited {
+				t.Errorf("session without request: err=%v, want prohibited", err)
+			}
+			_, _, err = c.Client.OpenChannel(control.ChannelSession, []byte("garbage"))
+			if openReason(err) != ssh.Prohibited {
+				t.Errorf("session with bad data: err=%v, want prohibited", err)
+			}
+			assertOpen(t, c)
+		})
+	}
+}
+
+func TestControlChannelRequests(t *testing.T) {
+	for _, rc := range roles() {
+		t.Run(string(rc.role), func(t *testing.T) {
+			e := newEnv(t, nil)
+			c := rc.conn(e)
+			for _, typ := range []string{"pty-req", "shell", "exec", "subsystem", "env", "x11-req",
+				"auth-agent-req@openssh.com", "window-change", "signal", "bogus"} {
+				ok, err := c.Ctrl.SendRequest(typ, true, ssh.Marshal(struct{ S string }{"sh"}))
+				if err != nil || ok {
+					t.Errorf("%s: ok=%v err=%v, want refused", typ, ok, err)
+				}
+			}
+			assertOpen(t, c)
+		})
+	}
+}
+
+// TestMessagesPerRole sends every app->relay message from every role. The
+// allowed ones keep the connection open; the others end it with an Error.
+func TestMessagesPerRole(t *testing.T) {
+	msgs := []struct {
+		name string
+		m    any
+		ok   map[control.Role]bool
+	}{
+		{"ClientHello", &control.ClientHello{UserMachine: "x@y"}, map[control.Role]bool{control.RoleClient: true, control.RolePending: true, control.RoleHelper: true}},
+		{"RequestHelp", &control.RequestHelp{}, map[control.Role]bool{control.RoleClient: true}},
+		{"CancelRequest", &control.CancelRequest{RequestID: "x"}, map[control.Role]bool{control.RoleClient: true}},
+		{"OpenRequest", &control.OpenRequest{Seq: 1, RequestID: "x"}, map[control.Role]bool{control.RoleHelper: true}},
+		{"RegisterClient", &control.RegisterClient{Seq: 1, PublicKey: "bad"}, map[control.Role]bool{control.RoleHelper: true}},
+		{"UnregisterClient", &control.UnregisterClient{Seq: 1, Fingerprint: "SHA256:x"}, map[control.Role]bool{control.RoleHelper: true}},
+		// Relay->app messages are never accepted from apps.
+		{"Hello", &control.Hello{Role: control.RoleHelper}, nil},
+		{"Presence", &control.Presence{}, nil},
+		{"Reply", &control.Reply{}, nil},
+		{"Registered", &control.Registered{}, nil},
+		{"RequestState", &control.RequestStateMsg{}, nil},
+		{"SessionReady", &control.SessionReady{}, nil},
+		{"Error", &control.Error{}, nil},
+	}
+	for _, rc := range roles() {
+		t.Run(string(rc.role), func(t *testing.T) {
+			e := newEnv(t, nil)
+			for _, mm := range msgs {
+				c := rc.conn(e)
+				if err := c.Send(mm.m); err != nil {
+					t.Fatal(err)
+				}
+				if mm.ok[rc.role] {
+					// Allowed: the connection stays and answers helper commands.
+					if rc.role == control.RoleHelper && mm.name != "ClientHello" {
+						rep := mustWait[control.Reply](t, c, nil)
+						if rep.Seq != 1 || rep.Error == "" {
+							t.Errorf("%s: reply %+v, want an error for the bogus argument", mm.name, rep)
+						}
+					}
+					assertOpen(t, c)
+				} else if msg := waitClosed(t, c); msg == "" {
+					t.Errorf("%s from %s: closed without Error", mm.name, rc.role)
+				}
+				c.Close()
+			}
+		})
+	}
+}
+
+func TestBadFrames(t *testing.T) {
+	e := newEnv(t, nil)
+	for _, frame := range [][]byte{
+		{0, 0, 0, 2, 99, '{'},                                // unknown type
+		{0, 0, 0, 3, byte(control.MsgClientHello), '{', '['}, // bad JSON
+		{0, 0, 0, 0}, // empty frame
+		{0, 1, 0, 0}, // larger than the app limit
+	} {
+		c, _ := e.connect(fake.NewKey(), control.RolePending)
+		if _, err := c.Ctrl.Write(frame); err != nil {
+			t.Fatal(err)
+		}
+		if msg := waitClosed(t, c); !strings.Contains(msg, "bad control message") {
+			t.Errorf("frame %v: error %q", frame, msg)
+		}
+	}
+}
+
+func TestNoControlChannelTimesOut(t *testing.T) {
+	e := newEnv(t, func(c *server.Config) { c.HandshakeTimeout = 200 * time.Millisecond })
+	c, err := fake.Dial(e.addr, fake.NewKey(), fake.Options{NoControl: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	done := make(chan error, 1)
+	go func() { done <- c.Client.Wait() }()
+	select {
+	case <-done:
+	case <-time.After(wait):
+		t.Fatal("connection without control channel was not closed")
+	}
+}
+
+func TestPendingNotInPresence(t *testing.T) {
+	e := newEnv(t, nil)
+	h := e.helper("alice")
+	k := fake.NewKey()
+	e.connect(k, control.RolePending)
+	// A later change produces a fresh snapshot; the pending key must not be in it.
+	e.addClient("bob@PC")
+	p := presenceWhere(t, h, func(p *control.Presence) bool { return len(p.Clients) == 1 })
+	if clientInfo(p, fp(k)).Fingerprint != "" {
+		t.Fatal("pending key shown in Presence")
+	}
+}
+
+func TestPresenceContent(t *testing.T) {
+	e := newEnv(t, nil)
+	e.addHelper("bob") // offline helper
+	offline := e.addClient("zed@OFF")
+	h := e.helper("alice")
+	c, ck := e.client("anna@PC")
+	if err := c.Send(&control.ClientHello{UserMachine: "anna@PC-NOW"}); err != nil {
+		t.Fatal(err)
+	}
+	p := presenceWhere(t, h, func(p *control.Presence) bool {
+		ci := clientInfo(p, fp(ck))
+		return ci != nil && ci.UserMachine == "anna@PC-NOW"
+	})
+	if len(p.Helpers) != 2 || p.Helpers[0].Name != "alice" || !p.Helpers[0].Online ||
+		p.Helpers[1].Name != "bob" || p.Helpers[1].Online || p.Helpers[1].DisplayName != "Display bob" {
+		t.Errorf("helpers %+v", p.Helpers)
+	}
+	if len(p.Clients) != 2 || p.Clients[0].Name != "anna@PC" || p.Clients[1].Name != "zed@OFF" {
+		t.Fatalf("clients %+v", p.Clients)
+	}
+	on, off := clientInfo(p, fp(ck)), clientInfo(p, fp(offline))
+	if !on.Online || on.RegisteredBy != "admin" || on.Request != nil || on.InSessionWith != "" {
+		t.Errorf("online client %+v", on)
+	}
+	if off.Online || off.UserMachine != "" || !off.RegisteredAt.Equal(e.clock.Now()) {
+		t.Errorf("offline client %+v", off)
+	}
+	c.Close()
+	presenceWhere(t, h, func(p *control.Presence) bool { return !clientInfo(p, fp(ck)).Online })
+}
+
+func TestPromotion(t *testing.T) {
+	e := newEnv(t, nil)
+	h := e.helper("alice")
+	k := fake.NewKey()
+	pc, _ := e.connect(k, control.RolePending)
+
+	// Bad registrations are answered with an error.
+	for i, pk := range []string{
+		"garbage",
+		"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQC7 user@host",
+		keyLine(k, ""), // no comment and no name
+	} {
+		h.Send(&control.RegisterClient{Seq: uint32(10 + i), PublicKey: pk})
+		if rep := mustWait[control.Reply](t, h, nil); rep.Seq != uint32(10+i) || rep.Error == "" {
+			t.Errorf("register %q: reply %+v", pk, rep)
+		}
+	}
+
+	h.Send(&control.RegisterClient{Seq: 1, PublicKey: "  " + keyLine(k, "anna@PC") + "\n"})
+	if rep := mustWait[control.Reply](t, h, nil); rep.Seq != 1 || rep.Error != "" {
+		t.Fatalf("reply %+v", rep)
+	}
+	if reg := mustWait[control.Registered](t, pc, nil); reg.Name != "anna@PC" {
+		t.Errorf("registered %+v", reg)
+	}
+	p := presenceWhere(t, h, func(p *control.Presence) bool {
+		ci := clientInfo(p, fp(k))
+		return ci != nil && ci.Online
+	})
+	if ci := clientInfo(p, fp(k)); ci.RegisteredBy != "alice" || ci.Name != "anna@PC" || ci.UserMachine != "user@machine" {
+		t.Errorf("client info %+v", ci)
+	}
+	// The same connection now acts as a client.
+	pc.Send(&control.RequestHelp{})
+	if st := mustWait[control.RequestStateMsg](t, pc, nil); st.State != control.RequestOpen {
+		t.Errorf("request state %+v", st)
+	}
+
+	// Registering again, or registering a helper key, fails.
+	h.Send(&control.RegisterClient{Seq: 2, PublicKey: keyLine(k, "anna@PC")})
+	if rep := mustWait[control.Reply](t, h, nil); rep.Error == "" {
+		t.Error("duplicate registration accepted")
+	}
+	hk := e.addHelper("bob")
+	h.Send(&control.RegisterClient{Seq: 3, PublicKey: keyLine(hk, "bob@PC")})
+	if rep := mustWait[control.Reply](t, h, nil); rep.Error == "" {
+		t.Error("helper key registered as client")
+	}
+	// A name overrides the key comment.
+	k2 := fake.NewKey()
+	h.Send(&control.RegisterClient{Seq: 4, PublicKey: keyLine(k2, ""), Name: "carl@PC"})
+	if rep := mustWait[control.Reply](t, h, nil); rep.Error != "" {
+		t.Errorf("register with name: %+v", rep)
+	}
+	if _, hello := e.connect(k2, control.RoleClient); hello.Name != "carl@PC" {
+		t.Errorf("hello %+v", hello)
+	}
+}
+
+func TestReconnectReplaces(t *testing.T) {
+	e := newEnv(t, nil)
+	hk := e.addHelper("alice")
+	h1, _ := e.connect(hk, control.RoleHelper)
+	h2, _ := e.connect(hk, control.RoleHelper)
+	if msg := waitClosed(t, h1); !strings.Contains(msg, "replaced") {
+		t.Errorf("old connection error %q", msg)
+	}
+	assertOpen(t, h2)
+
+	ck := e.addClient("anna@PC")
+	c1, _ := e.connect(ck, control.RoleClient)
+	c1.Send(&control.RequestHelp{})
+	mustWait[control.RequestStateMsg](t, c1, nil)
+	c2, _ := e.connect(ck, control.RoleClient)
+	waitClosed(t, c1)
+	// The old connection's request went away with it.
+	p := presenceWhere(t, h2, func(p *control.Presence) bool {
+		ci := clientInfo(p, fp(ck))
+		return ci != nil && ci.Online && ci.Request == nil
+	})
+	_ = p
+	assertOpen(t, c2)
+
+	pk := fake.NewKey()
+	p1, _ := e.connect(pk, control.RolePending)
+	p2, _ := e.connect(pk, control.RolePending)
+	waitClosed(t, p1)
+	assertOpen(t, p2)
+}
+
+func TestRemoval(t *testing.T) {
+	e := newEnv(t, nil)
+	hk := e.addHelper("alice")
+	h, _ := e.connect(hk, control.RoleHelper)
+	h2 := e.helper("bob")
+	c, ck := e.client("anna@PC")
+
+	// A helper removes a client: the client is disconnected at once and is
+	// pending when it comes back.
+	h.Send(&control.UnregisterClient{Seq: 7, Fingerprint: fp(ck)})
+	if rep := mustWait[control.Reply](t, h, nil); rep.Seq != 7 || rep.Error != "" {
+		t.Fatalf("reply %+v", rep)
+	}
+	if msg := waitClosed(t, c); msg == "" {
+		t.Error("removed client got no Error")
+	}
+	e.connect(ck, control.RolePending)
+	h.Send(&control.UnregisterClient{Seq: 8, Fingerprint: fp(ck)})
+	if rep := mustWait[control.Reply](t, h, nil); rep.Error == "" {
+		t.Error("removing an unknown client succeeded")
+	}
+
+	// The admin removes a helper through state.json (as the CLI does,
+	// without telling the relay): it is kicked by the reload poll.
+	if _, _, err := e.st.Update(func(st *store.State) error { return st.RemoveHelper("alice") }); err != nil {
+		t.Fatal(err)
+	}
+	if msg := waitClosed(t, h); msg == "" {
+		t.Error("removed helper got no Error")
+	}
+	presenceWhere(t, h2, func(p *control.Presence) bool { return len(p.Helpers) == 1 })
+	e.connect(hk, control.RolePending)
+
+	// The admin removes a client through state.json.
+	c3, ck3 := e.client("carl@PC")
+	if _, _, err := e.st.Update(func(st *store.State) error { _, err := st.RemoveClient(fp(ck3)); return err }); err != nil {
+		t.Fatal(err)
+	}
+	waitClosed(t, c3)
+}
+
+func TestStateReload(t *testing.T) {
+	e := newEnv(t, nil)
+	h := e.helper("alice")
+	k := fake.NewKey()
+	pc, _ := e.connect(k, control.RolePending)
+	// CLI-style changes, picked up by the poll only.
+	hk := fake.NewKey()
+	if _, _, err := e.st.Update(func(st *store.State) error { return st.AddHelper("bob", "Bob", keyLine(hk, "")) }); err != nil {
+		t.Fatal(err)
+	}
+	presenceWhere(t, h, func(p *control.Presence) bool { return len(p.Helpers) == 2 })
+	e.connect(hk, control.RoleHelper)
+	// A client added outside the control protocol promotes its pending connection.
+	if _, _, err := e.st.Update(func(st *store.State) error {
+		_, _, err := st.AddClient(keyLine(k, "anna@PC"), "", "admin", time.Now())
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	mustWait[control.Registered](t, pc, nil)
+	// A broken file is ignored and the old state kept.
+	if err := writeFile(e.st.Path(), "{not json"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	assertOpen(t, h)
+	assertOpen(t, pc)
+}
+
+func TestRestartKeepsRegistrations(t *testing.T) {
+	e := newEnv(t, nil)
+	hk := e.addHelper("alice")
+	h, _ := e.connect(hk, control.RoleHelper)
+	k := fake.NewKey()
+	h.Send(&control.RegisterClient{Seq: 1, PublicKey: keyLine(k, "anna@PC")})
+	if rep := mustWait[control.Reply](t, h, nil); rep.Error != "" {
+		t.Fatal(rep.Error)
+	}
+	c, _ := e.connect(k, control.RoleClient)
+	c.Close()
+	e.restart()
+	if _, hello := e.connect(k, control.RoleClient); hello.Name != "anna@PC" {
+		t.Errorf("hello after restart %+v", hello)
+	}
+	h, _ = e.connect(hk, control.RoleHelper)
+	p := mustWait[control.Presence](t, h, nil)
+	ci := clientInfo(p, fp(k))
+	if ci == nil || ci.RegisteredBy != "alice" || ci.LastSeen.IsZero() {
+		t.Errorf("client after restart %+v", ci)
+	}
+}
+
+func TestKeepaliveDropsDeadPeer(t *testing.T) {
+	e := newEnv(t, func(c *server.Config) { c.KeepaliveInterval = 30 * time.Millisecond })
+	h := e.helper("alice")
+	ck := e.addClient("anna@PC")
+	px := newProxy(t, e.addr)
+	c, err := fake.Dial(px.addr(), ck, fake.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	presenceWhere(t, h, func(p *control.Presence) bool { return clientInfo(p, fp(ck)).Online })
+	// A live peer survives several keepalive rounds.
+	time.Sleep(200 * time.Millisecond)
+	assertOpen(t, c)
+	px.freeze()
+	presenceWhere(t, h, func(p *control.Presence) bool { return !clientInfo(p, fp(ck)).Online })
+}
+
+func TestPendingIdleTimeout(t *testing.T) {
+	e := newEnv(t, nil)
+	pc, _ := e.connect(fake.NewKey(), control.RolePending)
+	e.clock.Advance(23 * time.Hour)
+	time.Sleep(50 * time.Millisecond)
+	assertOpen(t, pc)
+	e.clock.Advance(time.Hour)
+	if msg := waitClosed(t, pc); !strings.Contains(msg, "timed out") {
+		t.Errorf("error %q", msg)
+	}
+}
+
+func TestPasswordAuthRefused(t *testing.T) {
+	e := newEnv(t, nil)
+	cfg := &ssh.ClientConfig{
+		User:            "hmw",
+		Auth:            []ssh.AuthMethod{ssh.Password("x"), ssh.KeyboardInteractive(func(string, string, []string, []bool) ([]string, error) { return nil, nil })},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         wait,
+	}
+	if c, err := ssh.Dial("tcp", e.addr, cfg); err == nil {
+		c.Close()
+		t.Fatal("password login accepted")
+	}
+}
