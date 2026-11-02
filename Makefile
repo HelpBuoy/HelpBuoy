@@ -5,30 +5,45 @@
 # which embeds the raylib shared library per OS/arch). No Docker, no C compiler.
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-# Numeric version for Info.plist: v1.2.3-4-gabc -> 1.2.3, anything else -> 0.0.1.
+# Numeric version for Info.plist and the MSI: v1.2.3-4-gabc -> 1.2.3, anything else -> 0.0.1.
 APP_VERSION := $(shell echo $(VERSION) | sed 's/^v//; s/-.*//; /^[0-9][0-9.]*$$/!s/.*/0.0.1/')
 LDFLAGS := -s -w -X main.version=$(VERSION)
 GOFLAGS := -trimpath
 export CGO_ENABLED := 0
+SHELL := /bin/bash
 
 BIN  := bin
 DIST := dist
 
-TARGETS       := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
-CLIENT_ARCHES := amd64 arm64
-WINRES        := go run github.com/tc-hib/go-winres@v0.3.3
+# Only Linux and Windows on amd64 for now; add darwin or arm64 here to build
+# them again (the MSI stays x64).
+OSES    := linux windows
+ARCHES  := amd64
+TARGETS := $(foreach os,$(OSES),$(addprefix $(os)/,$(ARCHES)))
+WINRES  := go run github.com/tc-hib/go-winres@v0.3.3
+comma   := ,
+space   := $(subst ,, )
+WINRES_ARCH := $(subst $(space),$(comma),$(ARCHES))
 
-.PHONY: help all test vet fuzz relay client helper dist icon clean
+HELPER_SYSO := $(foreach a,$(ARCHES),helper/rsrc_windows_$(a).syso)
+CLIENT_SYSO := $(foreach a,$(ARCHES),client-windows/rsrc_windows_$(a).syso)
+CLIENT_ICONS := $(addprefix client-windows/resources/,icon.png icon48.png icon32.png icon16.png)
+# Four part version of the client exe, which the MSI needs for the upgrade.
+FILE_VERSION = $(shell jq -r '.RT_VERSION[]["0000"].fixed.file_version' client-windows/resources/winres.json)
+MSI := $(DIST)/help-me-win_$(VERSION)_windows-amd64.msi
+
+.PHONY: help all test vet fuzz relay client helper dist msi icon clean
 
 help:
 	@echo "make test     run proto and relay tests"
 	@echo "make vet      go vet all modules (client for windows too)"
 	@echo "make fuzz     short fuzz run of the fuzz targets"
-	@echo "make relay    build hmw-relay for all OS/arch into $(BIN)/"
-	@echo "make client   build the Windows client (amd64, arm64) into $(BIN)/"
-	@echo "make helper   build the helper app for all OS/arch into $(BIN)/"
-	@echo "make dist     release archives in $(DIST)/"
-	@echo "make icon     regenerate the placeholder icon"
+	@echo "make relay    build hmw-relay ($(TARGETS)) into $(BIN)/"
+	@echo "make client   build the Windows client ($(ARCHES)) into $(BIN)/"
+	@echo "make helper   build the helper app ($(TARGETS)) into $(BIN)/"
+	@echo "make dist     release archives and the portable client exe in $(DIST)/"
+	@echo "make msi      dist plus the client installer (needs wixl and msitools)"
+	@echo "make icon     regenerate the lifebuoy app icon (client, copied to the helper)"
 
 all: vet test relay client helper
 
@@ -56,17 +71,17 @@ endef
 relay:
 	$(call build-all,hmw-relay,./relay/cmd/hmw-relay,)
 
-helper: helper/rsrc_windows_amd64.syso helper/rsrc_windows_arm64.syso
+helper: $(HELPER_SYSO)
 	$(call build-all,hmw-helper,./helper,-H=windowsgui)
 
-helper/rsrc_windows_amd64.syso helper/rsrc_windows_arm64.syso: helper/resources/winres.json helper/resources/icon.png
-	cd helper && $(WINRES) make --in resources/winres.json --arch amd64,arm64
+$(HELPER_SYSO): helper/resources/winres.json helper/resources/icon.png
+	cd helper && $(WINRES) make --in resources/winres.json --arch $(WINRES_ARCH)
 
-client-windows/rsrc_windows_amd64.syso client-windows/rsrc_windows_arm64.syso: client-windows/resources/winres.json client-windows/resources/icon.png
-	cd client-windows && $(WINRES) make --in resources/winres.json --arch amd64,arm64
+$(CLIENT_SYSO): client-windows/resources/winres.json $(CLIENT_ICONS)
+	cd client-windows && $(WINRES) make --in resources/winres.json --arch $(WINRES_ARCH)
 
-client: client-windows/rsrc_windows_amd64.syso client-windows/rsrc_windows_arm64.syso
-	@for arch in $(CLIENT_ARCHES); do \
+client: $(CLIENT_SYSO)
+	@for arch in $(ARCHES); do \
 		echo "help-me-win.exe windows/$$arch"; \
 		GOOS=windows GOARCH=$$arch go build $(GOFLAGS) -ldflags "$(LDFLAGS) -H=windowsgui" \
 			-o $(BIN)/windows-$$arch/help-me-win.exe ./client-windows || exit 1; \
@@ -76,26 +91,48 @@ client: client-windows/rsrc_windows_amd64.syso client-windows/rsrc_windows_arm64
 # client exe alone. macOS gets a zipped .app with hmw-relay in Contents/MacOS.
 dist: relay helper client
 	@rm -rf $(DIST) && mkdir -p $(DIST)
-	@for t in linux-amd64 linux-arm64; do \
+	@for t in $(subst /,-,$(filter linux/%,$(TARGETS))); do \
 		tar -czf $(DIST)/hmw-helper_$(VERSION)_$$t.tar.gz -C $(BIN)/$$t hmw-helper hmw-relay; \
 	done
-	@for t in windows-amd64 windows-arm64; do \
+	@for t in $(subst /,-,$(filter windows/%,$(TARGETS))); do \
 		(cd $(BIN)/$$t && zip -q ../../$(DIST)/hmw-helper_$(VERSION)_$$t.zip hmw-helper.exe hmw-relay.exe) || exit 1; \
 	done
-	@for t in darwin-amd64 darwin-arm64; do \
+	@for t in $(subst /,-,$(filter darwin/%,$(TARGETS))); do \
 		GOWORK=off GO111MODULE=off go run tools/macapp/main.go -app hmw-helper -id help-me-win.helper \
 			-version $(APP_VERSION) -exe $(BIN)/$$t/hmw-helper -relay $(BIN)/$$t/hmw-relay \
 			-icon helper/resources/icon.png -out $(DIST)/hmw-helper_$(VERSION)_$$t.zip || exit 1; \
 	done
-	@for arch in $(CLIENT_ARCHES); do \
+	@for arch in $(ARCHES); do \
 		cp $(BIN)/windows-$$arch/help-me-win.exe $(DIST)/help-me-win_$(VERSION)_windows-$$arch.exe; \
 	done
-	@cd $(DIST) && sha256sum * > SHA256SUMS
+	@cd $(DIST) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS
+	@ls -l $(DIST)
+
+# Client installer, per user and without admin rights (installer/help-me-win.wxs).
+# wixl removes the old version right after InstallValidate, outside the
+# installation transaction: if the new install then fails, nothing is left.
+# RemoveExistingProducts moves after InstallInitialize, so a failed upgrade
+# rolls back to the old version (WiX: Schedule="afterInstallInitialize").
+msi: dist
+	GOWORK=off GO111MODULE=off go run tools/mkico/main.go $(BIN)/help-me-win.ico $(CLIENT_ICONS)
+	wixl -a x64 -D Version="$(APP_VERSION)" -D FileVersion="$(FILE_VERSION)" \
+		-D ExePath=$(BIN)/windows-amd64/help-me-win.exe -D IconPath=$(BIN)/help-me-win.ico \
+		-o $(MSI) installer/help-me-win.wxs
+	msiinfo export $(MSI) InstallExecuteSequence > $(BIN)/seq.idt
+	sed -i 's/^RemoveExistingProducts\t\t1401\r\?$$/RemoveExistingProducts\t\t1501\r/' $(BIN)/seq.idt
+	grep -q $$'^RemoveExistingProducts\t\t1501\r$$' $(BIN)/seq.idt
+	msibuild $(MSI) -i $(BIN)/seq.idt
+	@# The exe must be versioned in the File table, see installer/help-me-win.wxs.
+	msiinfo export $(MSI) File | grep -q $$'\t'"$(FILE_VERSION)"$$'\t'
+	@cd $(DIST) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS
 	@ls -l $(DIST)
 
 icon:
-	GOWORK=off GO111MODULE=off go run tools/genicon/main.go helper/resources/icon.png
-	cp helper/resources/icon.png client-windows/resources/icon.png
+	GOWORK=off GO111MODULE=off go run tools/genicon/main.go client-windows/resources/icon.png
+	for n in 48 32 16; do \
+		GOWORK=off GO111MODULE=off go run tools/genicon/main.go client-windows/resources/icon$$n.png $$n || exit 1; \
+	done
+	cp client-windows/resources/icon.png helper/resources/icon.png
 
 clean:
 	rm -rf $(BIN) $(DIST) helper/rsrc_windows_*.syso client-windows/rsrc_windows_*.syso

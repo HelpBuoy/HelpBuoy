@@ -551,9 +551,15 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   administrator"), no Ctrl+Alt+Del or secure desktop.
 
 ### 6.5 Distribution
-- One generic portable exe for everybody: no installer, no admin, nothing embedded. The user
-  downloads it and runs it from anywhere (Downloads, Desktop). Because it is never patched, it
-  can be Authenticode-signed (`osslsigncode`) once per release.
+- One generic exe for everybody, nothing embedded, never needs admin. It ships two ways:
+  portable (`help-me-win_<version>_windows-amd64.exe`, run from anywhere, such as Downloads or
+  Desktop) and as a per-user MSI (`installer/help-me-win.wxs`, no UAC prompt) that installs it
+  into `%LOCALAPPDATA%\Programs\help-me-win` with a Start menu shortcut. Because the exe is
+  never patched, it can be Authenticode-signed (`osslsigncode`) once per release.
+- `release.sh [major|minor|build]` bumps the version in both `winres.json` files, runs
+  `make vet test msi`, commits, tags `v<version>`, pushes and creates the GitHub release
+  with everything in `dist/`. For now only Linux and Windows on amd64 are built (`OSES` and
+  `ARCHES` in the Makefile).
 - All state lives in `%LOCALAPPDATA%\help-me-win`, not next to the exe, so a newer exe
   picks up the same key and registration.
 
