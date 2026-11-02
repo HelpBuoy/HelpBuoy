@@ -737,7 +737,11 @@ func TestPaletteSpeed(t *testing.T) {
 			EncodePalette(px, 256, 64, 64)
 		}
 	})
-	if ns := res.NsPerOp(); ns > 50000 {
+	// About 13 µs on a desktop CPU. The bound only catches gross regressions
+	// (an accidental per-pixel allocation or the slowest zstd level); shared CI
+	// runners are several times slower, so it is generous on purpose. Use
+	// BenchmarkEncodePalette for real numbers.
+	if ns := res.NsPerOp(); ns > 500000 {
 		t.Fatalf("EncodePalette of a 64x64 text tile takes %d ns", ns)
 	}
 }

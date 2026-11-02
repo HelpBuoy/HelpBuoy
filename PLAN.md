@@ -675,13 +675,13 @@ address entry and key window, stored configuration,
 Request help button, helper client list with request notifications, sessions with a test pattern instead of the
 screen.
 
-**Phase 3 - fast view only (5-7 days)**
+**Phase 3 - fast view only (5-7 days)** (done; `hmw-bench` passes the 5.1 targets on synthetic scenes)
 GDI capture into DIB sections, tile damage, solid/palette/JPEG codecs, tile cache, flow control,
 helper renderer benchmark and GPU upload path. Benchmark harness
 that replays recorded screen sequences (typing, scrolling, video) and reports fps, bytes and
 latency per scenario. Milestone: meets the 5.1 targets for typing and menus.
 
-**Phase 4 - control and scrolling (4-6 days)**
+**Phase 4 - control and scrolling (4-6 days)** (implemented and checked under Wine; the side-by-side RDP comparison needs real Windows)
 Mouse, wheel, keys, release of held keys, minimize on start, helper ends the session, Esc stops
 the session via keyboard hook, window restored for the next request, local cursor rendering, scroll
 detection with `CopyRect`, lossless refine, rate controller. Milestone: meets all 5.1 targets
