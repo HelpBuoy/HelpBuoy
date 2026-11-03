@@ -1,7 +1,7 @@
 # helpbuoy build. Run "make help" for the targets.
 #
 # Everything builds on Linux with only the Go toolchain and CGO_ENABLED=0:
-# helpbuoy-relay, the Windows client, and the raylib desk app (raylib-go purego,
+# helpbuoy-server, the Windows client, and the raylib desk app (raylib-go purego,
 # which embeds the raylib shared library per OS/arch). No Docker, no C compiler.
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -32,32 +32,32 @@ CLIENT_ICONS := $(addprefix client-windows/resources/,icon.png icon48.png icon32
 FILE_VERSION = $(shell jq -r '.RT_VERSION[]["0000"].fixed.file_version' client-windows/resources/winres.json)
 MSI := $(DIST)/helpbuoy_$(VERSION)_windows-amd64.msi
 
-.PHONY: help all test vet fuzz relay client desk dist msi deb icon clean
+.PHONY: help all test vet fuzz server client desk dist msi deb icon clean
 
 help:
-	@echo "make test     run proto and relay tests"
+	@echo "make test     run proto and server tests"
 	@echo "make vet      go vet all modules (client for windows too)"
 	@echo "make fuzz     short fuzz run of the fuzz targets"
-	@echo "make relay    build helpbuoy-relay ($(TARGETS)) into $(BIN)/"
+	@echo "make server   build helpbuoy-server ($(TARGETS)) into $(BIN)/"
 	@echo "make client   build the Windows client ($(ARCHES)) into $(BIN)/"
 	@echo "make desk     build the desk app ($(TARGETS)) into $(BIN)/"
-	@echo "make dist     desk/relay archives in $(DIST)/ (the client ships only as the MSI)"
+	@echo "make dist     desk/server archives in $(DIST)/ (the client ships only as the MSI)"
 	@echo "make msi      dist plus the client installer (needs wixl and msitools)"
-	@echo "make deb      Debian 13 package of helpbuoy-relay with a systemd service (needs dpkg-deb)"
+	@echo "make deb      Debian 13 package of helpbuoy-server with a systemd service (needs dpkg-deb)"
 	@echo "make icon     regenerate the lifebuoy app icon (client, copied to the desk app)"
 
-all: vet test relay client desk
+all: vet test server client desk
 
 test:
-	go test ./proto/... ./relay/...
+	go test ./proto/... ./server/...
 
 vet:
-	go vet ./proto/... ./relay/... ./desk/... ./client-windows/...
+	go vet ./proto/... ./server/... ./desk/... ./client-windows/...
 	GOOS=windows go vet ./client-windows/... ./desk/...
 	GOOS=darwin go vet ./desk/...
 
 fuzz:
-	go test ./proto/relayaddr -run '^$$' -fuzz FuzzParse -fuzztime 20s
+	go test ./proto/serveraddr -run '^$$' -fuzz FuzzParse -fuzztime 20s
 
 # build-all NAME PKG EXTRA_LDFLAGS: build PKG for every target in TARGETS.
 define build-all
@@ -69,8 +69,8 @@ define build-all
 	done
 endef
 
-relay:
-	$(call build-all,helpbuoy-relay,./relay/cmd/helpbuoy-relay,)
+server:
+	$(call build-all,helpbuoy-server,./server/cmd/helpbuoy-server,)
 
 desk: $(DESK_SYSO)
 	$(call build-all,helpbuoy-desk,./desk,-H=windowsgui)
@@ -88,20 +88,20 @@ client: $(CLIENT_SYSO)
 			-o $(BIN)/windows-$$arch/helpbuoy.exe ./client-windows || exit 1; \
 	done
 
-# Release archives: desk app and helpbuoy-relay side by side per OS/arch. macOS
-# gets a zipped .app with helpbuoy-relay in Contents/MacOS. The client exe is built
+# Release archives: desk app and helpbuoy-server side by side per OS/arch. macOS
+# gets a zipped .app with helpbuoy-server in Contents/MacOS. The client exe is built
 # into bin/ for the MSI (make msi) and not released on its own.
-dist: relay desk client
+dist: server desk client
 	@rm -rf $(DIST) && mkdir -p $(DIST)
 	@for t in $(subst /,-,$(filter linux/%,$(TARGETS))); do \
-		tar -czf $(DIST)/helpbuoy-desk_$(VERSION)_$$t.tar.gz -C $(BIN)/$$t helpbuoy-desk helpbuoy-relay; \
+		tar -czf $(DIST)/helpbuoy-desk_$(VERSION)_$$t.tar.gz -C $(BIN)/$$t helpbuoy-desk helpbuoy-server; \
 	done
 	@for t in $(subst /,-,$(filter windows/%,$(TARGETS))); do \
-		(cd $(BIN)/$$t && zip -q ../../$(DIST)/helpbuoy-desk_$(VERSION)_$$t.zip helpbuoy-desk.exe helpbuoy-relay.exe) || exit 1; \
+		(cd $(BIN)/$$t && zip -q ../../$(DIST)/helpbuoy-desk_$(VERSION)_$$t.zip helpbuoy-desk.exe helpbuoy-server.exe) || exit 1; \
 	done
 	@for t in $(subst /,-,$(filter darwin/%,$(TARGETS))); do \
 		GOWORK=off GO111MODULE=off go run tools/macapp/main.go -app helpbuoy-desk -id helpbuoy.desk \
-			-version $(APP_VERSION) -exe $(BIN)/$$t/helpbuoy-desk -relay $(BIN)/$$t/helpbuoy-relay \
+			-version $(APP_VERSION) -exe $(BIN)/$$t/helpbuoy-desk -server $(BIN)/$$t/helpbuoy-server \
 			-icon desk/resources/icon.png -out $(DIST)/helpbuoy-desk_$(VERSION)_$$t.zip || exit 1; \
 	done
 	@cd $(DIST) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS
@@ -126,37 +126,37 @@ msi: dist
 	@cd $(DIST) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS
 	@ls -l $(DIST)
 
-# Debian 13 package of helpbuoy-relay (packaging/debian): the binary, a hardened
-# systemd service running as the helpbuoy-relay system user with its state in
-# /var/lib/helpbuoy-relay, and helpbuoy-relayctl for admin commands. One per Linux arch.
+# Debian 13 package of helpbuoy-server (packaging/debian): the binary, a hardened
+# systemd service running as the helpbuoy-server system user with its state in
+# /var/lib/helpbuoy-server, and helpbuoy-serverctl for admin commands. One per Linux arch.
 DEB_ARCHES := $(patsubst linux/%,%,$(filter linux/%,$(TARGETS)))
 DEB_DATE    = $(shell date -R -d @$$(git log -1 --format=%ct 2>/dev/null || date +%s))
-deb: relay
+deb: server
 	@mkdir -p $(DIST)
 	@for arch in $(DEB_ARCHES); do \
 		root=$(BIN)/deb-$$arch; rm -rf $$root; \
-		install -D -m 0755 $(BIN)/linux-$$arch/helpbuoy-relay $$root/usr/bin/helpbuoy-relay; \
-		install -D -m 0755 packaging/debian/helpbuoy-relayctl $$root/usr/sbin/helpbuoy-relayctl; \
-		install -D -m 0644 packaging/debian/helpbuoy-relay.service $$root/usr/lib/systemd/system/helpbuoy-relay.service; \
-		install -D -m 0644 packaging/debian/helpbuoy-relay.sysusers $$root/usr/lib/sysusers.d/helpbuoy-relay.conf; \
-		install -D -m 0644 packaging/debian/helpbuoy-relay.default $$root/etc/default/helpbuoy-relay; \
-		install -D -m 0644 packaging/debian/README.Debian $$root/usr/share/doc/helpbuoy-relay/README.Debian; \
-		install -D -m 0644 packaging/debian/copyright $$root/usr/share/doc/helpbuoy-relay/copyright; \
-		printf 'helpbuoy-relay (%s) unstable; urgency=medium\n\n  * Release %s.\n\n -- Maurits van der Schee <maurits@vdschee.nl>  %s\n' \
-			"$(APP_VERSION)" "$(VERSION)" "$(DEB_DATE)" | gzip -9n > $$root/usr/share/doc/helpbuoy-relay/changelog.gz; \
-		chmod 0644 $$root/usr/share/doc/helpbuoy-relay/changelog.gz; \
+		install -D -m 0755 $(BIN)/linux-$$arch/helpbuoy-server $$root/usr/bin/helpbuoy-server; \
+		install -D -m 0755 packaging/debian/helpbuoy-serverctl $$root/usr/sbin/helpbuoy-serverctl; \
+		install -D -m 0644 packaging/debian/helpbuoy-server.service $$root/usr/lib/systemd/system/helpbuoy-server.service; \
+		install -D -m 0644 packaging/debian/helpbuoy-server.sysusers $$root/usr/lib/sysusers.d/helpbuoy-server.conf; \
+		install -D -m 0644 packaging/debian/helpbuoy-server.default $$root/etc/default/helpbuoy-server; \
+		install -D -m 0644 packaging/debian/README.Debian $$root/usr/share/doc/helpbuoy-server/README.Debian; \
+		install -D -m 0644 packaging/debian/copyright $$root/usr/share/doc/helpbuoy-server/copyright; \
+		printf 'helpbuoy-server (%s) unstable; urgency=medium\n\n  * Release %s.\n\n -- Maurits van der Schee <maurits@vdschee.nl>  %s\n' \
+			"$(APP_VERSION)" "$(VERSION)" "$(DEB_DATE)" | gzip -9n > $$root/usr/share/doc/helpbuoy-server/changelog.gz; \
+		chmod 0644 $$root/usr/share/doc/helpbuoy-server/changelog.gz; \
 		install -d $$root/usr/share/man/man1 $$root/usr/share/man/man8; \
-		gzip -9n < packaging/debian/helpbuoy-relay.1 > $$root/usr/share/man/man1/helpbuoy-relay.1.gz; \
-		gzip -9n < packaging/debian/helpbuoy-relayctl.8 > $$root/usr/share/man/man8/helpbuoy-relayctl.8.gz; \
-		chmod 0644 $$root/usr/share/man/man1/helpbuoy-relay.1.gz $$root/usr/share/man/man8/helpbuoy-relayctl.8.gz; \
-		install -D -m 0644 packaging/debian/lintian-overrides $$root/usr/share/lintian/overrides/helpbuoy-relay; \
+		gzip -9n < packaging/debian/helpbuoy-server.1 > $$root/usr/share/man/man1/helpbuoy-server.1.gz; \
+		gzip -9n < packaging/debian/helpbuoy-serverctl.8 > $$root/usr/share/man/man8/helpbuoy-serverctl.8.gz; \
+		chmod 0644 $$root/usr/share/man/man1/helpbuoy-server.1.gz $$root/usr/share/man/man8/helpbuoy-serverctl.8.gz; \
+		install -D -m 0644 packaging/debian/lintian-overrides $$root/usr/share/lintian/overrides/helpbuoy-server; \
 		install -d $$root/DEBIAN; \
 		install -m 0755 packaging/debian/postinst packaging/debian/prerm packaging/debian/postrm $$root/DEBIAN/; \
-		echo /etc/default/helpbuoy-relay > $$root/DEBIAN/conffiles; \
+		echo /etc/default/helpbuoy-server > $$root/DEBIAN/conffiles; \
 		size=$$(du -sk --exclude=DEBIAN $$root | cut -f1); \
 		sed "s/@VERSION@/$(APP_VERSION)/; s/@ARCH@/$$arch/; s/@SIZE@/$$size/" packaging/debian/control.in > $$root/DEBIAN/control; \
 		(cd $$root && find usr -type f -exec md5sum {} + | sort -k2) > $$root/DEBIAN/md5sums; \
-		dpkg-deb --root-owner-group -Zxz --build $$root $(DIST)/helpbuoy-relay_$(APP_VERSION)_$$arch.deb || exit 1; \
+		dpkg-deb --root-owner-group -Zxz --build $$root $(DIST)/helpbuoy-server_$(APP_VERSION)_$$arch.deb || exit 1; \
 	done
 	@cd $(DIST) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS
 	@ls -l $(DIST)

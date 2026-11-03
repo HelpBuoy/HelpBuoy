@@ -13,7 +13,7 @@ const (
 	actNone       hostAction = iota
 	actFullscreen            // Right Ctrl+F
 	actToggleMode            // Right Ctrl+S: Fit or 1:1
-	actResize                // Right Ctrl+R: resize the window to the client
+	actResize                // Right Ctrl+R: resize the window to the computer
 )
 
 // hostCombos maps the W3C code of the second key to its shortcut. Codes are

@@ -1,5 +1,5 @@
-// Package encode is the client-side screen encoder (PLAN.md 5.3 and 5.4):
-// damage detection against what the agent already has, scroll/move
+// Package encode is the computer-side screen encoder (PLAN.md 5.3 and 5.4):
+// damage detection against what the techie already has, scroll/move
 // detection (OpCopy), the tile cache LRU (OpCacheRef / Store), per-tile
 // classification (solid, palette+zstd, JPEG), lossless refine of regions that
 // stopped changing, the rate controller, and splitting into frame parts.
@@ -7,10 +7,10 @@
 //
 // # How a frame is built
 //
-// The encoder keeps a shadow copy of the agent's image in the input byte
+// The encoder keeps a shadow copy of the techie's image in the input byte
 // order (BGRA when Config.SwapRB is set). For lossy tiles the shadow holds
 // the source pixels and the tile is flagged lossy until it has been resent
-// losslessly, so damage is always measured against what the agent should
+// losslessly, so damage is always measured against what the techie should
 // converge to.
 //
 //  1. Damage: whole rows of the capture are compared with the shadow first;
@@ -75,11 +75,11 @@ type Encoder struct {
 
 	w, h           int
 	tilesX, tilesY int
-	valid          bool   // shadow holds the agent's image
+	valid          bool   // shadow holds the techie's image
 	shadow         []byte // w*h*4, stride w*4, input byte order, A = 255
 	in             []byte // the current capture with A = 255, same layout
 
-	lossy    []bool      // per tile: agent has lossy pixels there
+	lossy    []bool      // per tile: techie has lossy pixels there
 	refineAt []time.Time // per tile, when lossy: when to refine
 	dirty    []bool      // scratch: damaged tiles of the current frame
 	touched  []bool      // scratch: tiles written by copies
@@ -102,16 +102,16 @@ func New(cfg Config) *Encoder {
 	return e
 }
 
-// Encode compares cur with the image the agent has after all frames
-// returned so far, and returns the frame parts that bring the agent up to
+// Encode compares cur with the image the techie has after all frames
+// returned so far, and returns the frame parts that bring the techie up to
 // date (Seq left 0: the caller numbers frames; all parts of one call share a
 // Seq). It returns nil when nothing changed and no refine is due. cur must
 // keep the same bounds between calls; call Reset after a size change.
-// The encoder keeps its own copy of what the agent has, so the caller may
+// The encoder keeps its own copy of what the techie has, so the caller may
 // reuse cur's buffer for the next capture.
 //
 // A size change without Reset is handled like a Reset (full frame, empty
-// cache), so the agent's Decoder must be reset in that case too.
+// cache), so the techie's Decoder must be reset in that case too.
 func (e *Encoder) Encode(cur *image.RGBA, now time.Time) []screen.Frame {
 	start := time.Now()
 	w, h := cur.Rect.Dx(), cur.Rect.Dy()
@@ -149,7 +149,7 @@ func (e *Encoder) Encode(cur *image.RGBA, now time.Time) []screen.Frame {
 	return frames
 }
 
-// setup sizes the encoder for a w x h screen and forgets the agent state.
+// setup sizes the encoder for a w x h screen and forgets the techie state.
 func (e *Encoder) setup(w, h int) {
 	e.w, e.h = w, h
 	e.tilesX = (w + TileSize - 1) / TileSize
@@ -190,9 +190,9 @@ func (e *Encoder) RefineDue() time.Time {
 	return due
 }
 
-// LossyRects returns the tiles where the agent currently has lossy pixels
+// LossyRects returns the tiles where the techie currently has lossy pixels
 // that are still waiting for their refine, in shared-monitor pixels. Outside
-// them the agent's image equals the last encoded capture exactly.
+// them the techie's image equals the last encoded capture exactly.
 func (e *Encoder) LossyRects() []image.Rectangle {
 	var rs []image.Rectangle
 	for t, l := range e.lossy {
@@ -204,14 +204,14 @@ func (e *Encoder) LossyRects() []image.Rectangle {
 }
 
 // Reset forgets everything: the next Encode sends a full lossless frame and
-// the tile cache starts empty (the agent's Decoder must Reset too). Use it
+// the tile cache starts empty (the techie's Decoder must Reset too). Use it
 // for Refresh, a new Hello or a size change.
 func (e *Encoder) Reset() {
 	e.valid = false
 	e.cache.reset()
 }
 
-// SetQuality applies the agent's quality preference.
+// SetQuality applies the techie's quality preference.
 func (e *Encoder) SetQuality(m screen.QualityMode) { e.rate.setMode(m) }
 
 // Acked feeds the rate controller: a frame of size bytes was acked after rtt.
@@ -245,7 +245,7 @@ func (e *Encoder) ResetStats() { e.stats = Stats{} }
 
 // normalize copies cur into e.in with every alpha byte set to 255. GDI
 // leaves alpha undefined, so it must neither count as damage nor reach the
-// palette classification, the cache hashes or the agent. Working on one
+// palette classification, the cache hashes or the techie. Working on one
 // normalized copy keeps every later stage simple; the copy is about as
 // cheap as one read of the capture.
 func (e *Encoder) normalize(cur *image.RGBA) pixSource {

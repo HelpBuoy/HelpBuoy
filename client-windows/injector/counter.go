@@ -1,4 +1,4 @@
-// Package injector receives the agent's input. In phase 2 it only counts and
+// Package injector receives the techie's input. In phase 2 it only counts and
 // logs the messages; injecting them with SendInput is phase 4. The Esc hook
 // that lets the user end a session locally is already real (PLAN.md 6.4).
 package injector

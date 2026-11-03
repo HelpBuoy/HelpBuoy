@@ -1,4 +1,4 @@
-// Command recpng writes frames of a recording made with the client's
+// Command recpng writes frames of a recording made with the computer's
 // --record option as PNG files, to check captures by eye:
 //
 //	go run ./client-windows/internal/cmd/recpng -frame 0 -out first.png DIR

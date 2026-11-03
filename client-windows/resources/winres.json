@@ -16,7 +16,7 @@
           "name": "helpbuoy.client",
           "version": "0.4.8.13"
         },
-        "description": "HelpBuoy client",
+        "description": "HelpBuoy computer",
         "minimum-os": "win10",
         "execution-level": "as invoker",
         "ui-access": false,
@@ -43,7 +43,7 @@
         },
         "info": {
           "0409": {
-            "FileDescription": "HelpBuoy client",
+            "FileDescription": "HelpBuoy computer",
             "InternalName": "helpbuoy",
             "OriginalFilename": "helpbuoy.exe",
             "ProductName": "HelpBuoy",

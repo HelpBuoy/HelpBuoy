@@ -1,1 +1,1 @@
-helpbuoy-relay: statically-linked-binary [usr/bin/helpbuoy-relay]
+helpbuoy-server: statically-linked-binary [usr/bin/helpbuoy-server]

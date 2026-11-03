@@ -1,5 +1,5 @@
 // Package refdec is a small, sequential reference implementation of the
-// agent side of the frame format (proto/screen/ops.go), written straight
+// techie side of the frame format (proto/screen/ops.go), written straight
 // from the documented semantics. The encoder tests and helpbuoy-bench use it to
 // check the encoder independently of screen.Decoder. It is not optimized.
 package refdec

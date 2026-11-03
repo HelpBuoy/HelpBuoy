@@ -1,6 +1,6 @@
 //go:build windows
 
-// Package ui is the client's window (PLAN.md 6.2 and 6.3), built with
+// Package ui is the computer's window (PLAN.md 6.2 and 6.3), built with
 // windigo. It only renders the app.View it is given and forwards button
 // presses to the app.Controller; all logic lives in package app.
 package ui
@@ -30,11 +30,11 @@ const copyKeyText = "C&opy key"
 // long words, they cut them off).
 const dialogWidth = 320
 
-// Client area size in 96-DPI units.
+// Computer area size in 96-DPI units.
 const clientW, clientH = 460, 330
 
 // statusY is the position of the waiting screen's status line; it moves
-// down by titleH when the relay's title is shown above it.
+// down by titleH when the server's title is shown above it.
 const statusY, titleH = 160, 26
 
 // fontKind selects one of the window's fonts.
@@ -54,7 +54,7 @@ type item struct {
 	font       fontKind
 }
 
-// Window is the client's only top-level window.
+// Window is the computer's only top-level window.
 type Window struct {
 	wnd    *ui.Main
 	ctrl   *app.Controller
@@ -71,13 +71,13 @@ type Window struct {
 	edtKey       *ui.Edit
 	btnCopy      *ui.Button
 	lblKeyFp     *ui.Static
-	lblRelayFp   *ui.Static
+	lblServerFp  *ui.Static
 	lblKeyNotice *ui.Static
 	lnkChange    *ui.SysLink
 	// ScreenMain
 	lblWaiting    *ui.Static
 	lblStatus     *ui.Static
-	lblInfoTitle  *ui.Static // the relay's title, above the status line
+	lblInfoTitle  *ui.Static // the server's title, above the status line
 	btnDisconnect *ui.Button
 	lblComment    *ui.Static
 	// ScreenKeyError
@@ -86,7 +86,7 @@ type Window struct {
 
 	dialogs     int    // modal windows open
 	updateAsked bool   // the update in the view was offered
-	relayAsked  string // new relay fingerprint the user was warned about
+	serverAsked string // new server fingerprint the user was warned about
 	updating    string // status while an update is downloaded
 
 	items []item
@@ -120,19 +120,19 @@ func New(iconID uint16) *Window {
 		return ui.NewSysLink(p, ui.OptsSysLink().Text(text).Size(1, 1).CtrlStyle(0))
 	}
 
-	w.lblHeading = static("Connect to an agent", co.SS_LEFT)
-	w.lblAddrHint = static("Type the relay address an agent gave you, for example helpme.example.com.", co.SS_LEFT)
+	w.lblHeading = static("Connect to a techie", co.SS_LEFT)
+	w.lblAddrHint = static("Type the server address a techie gave you, for example helpme.example.com.", co.SS_LEFT)
 	w.edtAddr = ui.NewEdit(p, ui.OptsEdit())
 	w.btnConnect = button("&Connect", co.BS_DEFPUSHBUTTON)
 	w.lblAddrError = static("", co.SS_LEFT)
 
-	w.lblKeyIntro = static("Paste this key into a chat with an agent (for example WhatsApp).", co.SS_LEFT)
+	w.lblKeyIntro = static("Paste this key into a chat with a techie (for example WhatsApp).", co.SS_LEFT)
 	w.edtKey = ui.NewEdit(p, ui.OptsEdit().CtrlStyle(co.ES_MULTILINE|co.ES_READONLY|co.ES_AUTOVSCROLL))
 	w.btnCopy = button(copyKeyText, co.BS_PUSHBUTTON)
 	w.lblKeyFp = static("", co.SS_LEFT)
-	w.lblRelayFp = static("", co.SS_LEFT)
+	w.lblServerFp = static("", co.SS_LEFT)
 	w.lblKeyNotice = static("", co.SS_LEFT)
-	w.lnkChange = link(`<a>Use a different relay address</a>`)
+	w.lnkChange = link(`<a>Use a different server address</a>`)
 
 	w.lblWaiting = static("", co.SS_CENTER)
 	w.lblStatus = static("", co.SS_CENTER)
@@ -154,7 +154,7 @@ func New(iconID uint16) *Window {
 		{w.edtKey, 24, 56, 412, 62, fontNormal},
 		{w.btnCopy, 24, 128, 412, 46, fontBig},
 		{w.lblKeyFp, 24, 186, 412, 18, fontNormal},
-		{w.lblRelayFp, 24, 206, 412, 18, fontNormal},
+		{w.lblServerFp, 24, 206, 412, 18, fontNormal},
 		{w.lblKeyNotice, 24, 234, 412, 40, fontNormal},
 		{w.lnkChange, 24, 298, 260, 20, fontNormal},
 
@@ -187,10 +187,10 @@ func (w *Window) Render(v app.View) {
 	w.wnd.UiThread(func() { w.apply(v) })
 }
 
-// ConfirmAgent implements app.UI with a modal dialog that asks whether the
-// agent may take control. A changed agent key gets its own dialog with an
+// ConfirmTechie implements app.UI with a modal dialog that asks whether the
+// techie may take control. A changed techie key gets its own dialog with an
 // error icon, a warning headline and Cancel as the default button.
-func (w *Window) ConfirmAgent(ctx context.Context, h session.Agent, oldFP string) bool {
+func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie, oldFP string) bool {
 	if w.wnd.Hwnd() == 0 {
 		return false
 	}
@@ -217,15 +217,15 @@ func (w *Window) ConfirmAgent(ctx context.Context, h session.Agent, oldFP string
 		cfg.MainInstruction = "Warning: the key of " + quoted + " has changed"
 		cfg.Content = "Key last time:\n" + oldFP + "\n\n" +
 			"Key now:\n" + h.Fingerprint + "\n\n" +
-			"This may be someone pretending to be an agent. Do not continue " +
-			"unless the agent confirmed by phone that they have a new key."
+			"This may be someone pretending to be a techie. Do not continue " +
+			"unless the techie confirmed by phone that they have a new key."
 		cfg.Buttons = []win.TASKDIALOG_BUTTON{
 			{Id: co.ID_CANCEL, Text: "&Cancel"},
 			{Id: co.ID_OK, Text: "Allow &anyway"},
 		}
 		cfg.DefaultButtonId = uint16(co.ID_CANCEL)
 	}
-	// When the question becomes moot (the agent gave up, the relay
+	// When the question becomes moot (the techie gave up, the server
 	// connection was lost) the dialog is closed as if Cancel was pressed.
 	stop := context.AfterFunc(ctx, func() {
 		w.wnd.UiThread(w.closeTaskDialog)
@@ -392,7 +392,7 @@ func (w *Window) layout() {
 	}
 }
 
-// moveStatus puts the status line of the waiting screen below the relay's
+// moveStatus puts the status line of the waiting screen below the server's
 // title when it is shown, and in the title's place when not.
 func (w *Window) moveStatus(belowTitle bool) {
 	y := statusY
@@ -452,17 +452,17 @@ func (w *Window) apply(v app.View) {
 	}
 
 	key := v.Screen == app.ScreenKey
-	for _, c := range []ui.Window{w.lblKeyIntro, w.edtKey, w.btnCopy, w.lblKeyFp, w.lblRelayFp, w.lblKeyNotice} {
+	for _, c := range []ui.Window{w.lblKeyIntro, w.edtKey, w.btnCopy, w.lblKeyFp, w.lblServerFp, w.lblKeyNotice} {
 		show(c, key)
 	}
 	show(w.lnkChange, key)
 	if key {
 		setText(w.edtKey, v.KeyLine)
 		setText(w.lblKeyFp, "Key fingerprint: "+v.KeyFingerprint)
-		setText(w.lblRelayFp, "Relay fingerprint: "+v.RelayFingerprint)
+		setText(w.lblServerFp, "Server fingerprint: "+v.ServerFingerprint)
 		notice := v.Notice
 		if notice == "" {
-			notice = "Waiting for an agent to add this key. This window changes by itself when that is done."
+			notice = "Waiting for a techie to add this key. This window changes by itself when that is done."
 		}
 		setText(w.lblKeyNotice, notice)
 		if entered {
@@ -482,7 +482,7 @@ func (w *Window) apply(v app.View) {
 		setText(w.lblComment, v.KeyComment)
 		waiting := ""
 		if v.Ready {
-			waiting = "Waiting for an agent"
+			waiting = "Waiting for a techie"
 		}
 		setText(w.lblWaiting, waiting)
 		status := v.Error
@@ -490,7 +490,7 @@ func (w *Window) apply(v app.View) {
 			status = v.Notice
 		}
 		if status == "" && v.Ready {
-			// The relay's instruction line, or the default text.
+			// The server's instruction line, or the default text.
 			setText(w.lblInfoTitle, v.Title)
 			status = v.Instruction
 		}
@@ -514,7 +514,7 @@ func (w *Window) apply(v app.View) {
 	if keyErr {
 		setText(w.lblKeyErr, v.Error+"\n\nFolder: "+v.KeyDir+
 			"\n\nThe key is never replaced on its own. Remove key deletes it and makes a new one; "+
-			"an agent will have to register this PC again.")
+			"a techie will have to register this PC again.")
 	}
 
 	caption := Title
@@ -536,25 +536,25 @@ func (w *Window) apply(v app.View) {
 	}
 	w.lblStatus.Hwnd().InvalidateRect(nil, true) // its color depends on w.view
 	w.maybeOfferUpdate()
-	w.maybeWarnRelayKey()
+	w.maybeWarnServerKey()
 }
 
-// maybeWarnRelayKey shows the relay key change warning once per new key.
-func (w *Window) maybeWarnRelayKey() {
-	hk := w.view.RelayKeyChange
-	if hk == nil || w.relayAsked == hk.NewFingerprint || w.dialogs > 0 || w.wnd.Hwnd() == 0 {
+// maybeWarnServerKey shows the server key change warning once per new key.
+func (w *Window) maybeWarnServerKey() {
+	hk := w.view.ServerKeyChange
+	if hk == nil || w.serverAsked == hk.NewFingerprint || w.dialogs > 0 || w.wnd.Hwnd() == 0 {
 		return
 	}
-	w.relayAsked = hk.NewFingerprint
+	w.serverAsked = hk.NewFingerprint
 	change := *hk
 	// Ask outside the current message handler, like the update offer.
-	go w.wnd.UiThread(func() { w.warnRelayKey(change) })
+	go w.wnd.UiThread(func() { w.warnServerKey(change) })
 }
 
-// warnRelayKey asks whether to trust the relay's new key. Cancel, the
-// default, keeps the client stopped.
-func (w *Window) warnRelayKey(hk session.HostKeyChangedError) {
-	if w.view.RelayKeyChange == nil || w.view.RelayKeyChange.NewFingerprint != hk.NewFingerprint {
+// warnServerKey asks whether to trust the server's new key. Cancel, the
+// default, keeps the computer stopped.
+func (w *Window) warnServerKey(hk session.HostKeyChangedError) {
+	if w.view.ServerKeyChange == nil || w.view.ServerKeyChange.NewFingerprint != hk.NewFingerprint {
 		return
 	}
 	w.bringToFront()
@@ -564,11 +564,11 @@ func (w *Window) warnRelayKey(hk session.HostKeyChangedError) {
 		Flags:           co.TDF_ALLOW_DIALOG_CANCELLATION | co.TDF_POSITION_RELATIVE_TO_WINDOW,
 		Width:           dialogWidth,
 		HMainIcon:       win.TdcIconTdi(co.TDICON_ERROR),
-		MainInstruction: "Warning: the identity of the relay has changed",
+		MainInstruction: "Warning: the identity of the server has changed",
 		Content: "Key last time:\n" + hk.OldFingerprint + "\n\n" +
 			"Key now:\n" + hk.NewFingerprint + "\n\n" +
-			"This may be someone pretending to be your relay. HelpBuoy stopped connecting. " +
-			"Only continue if an agent confirmed by phone that the relay has a new key " +
+			"This may be someone pretending to be your server. HelpBuoy stopped connecting. " +
+			"Only continue if a techie confirmed by phone that the server has a new key " +
 			"and the new fingerprint above matches what they read to you.",
 		Buttons: []win.TASKDIALOG_BUTTON{
 			{Id: co.ID_CANCEL, Text: "&Cancel"},
@@ -580,7 +580,7 @@ func (w *Window) warnRelayKey(hk session.HostKeyChangedError) {
 	id, err := win.TaskDialogIndirect(&cfg)
 	w.dialogs--
 	if err == nil && id == co.ID_OK {
-		w.ctrl.TrustRelayKey(hk.NewFingerprint)
+		w.ctrl.TrustServerKey(hk.NewFingerprint)
 	}
 }
 
@@ -635,7 +635,7 @@ func (w *Window) copyText(text string, btn *ui.Button) {
 func (w *Window) confirmRemoveKey() {
 	if !ui.MsgOkCancel(w.wnd, Title, "Remove the key of this PC?",
 		"This deletes the key and the settings of this app. A new key is made, and your "+
-			"agent will have to register this PC again before you can ask for help.",
+			"techie will have to register this PC again before you can ask for help.",
 		"&Remove key") {
 		return
 	}

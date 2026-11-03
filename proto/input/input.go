@@ -1,5 +1,5 @@
 // Package input defines the messages on the inner "input" channel, sent by
-// the agent and injected by the client. Coordinates are normalized to
+// the techie and injected by the computer. Coordinates are normalized to
 // 0..65535 over the shared monitor so the two sides need not agree on size.
 //
 // # Encodings
@@ -71,7 +71,7 @@ type Key struct {
 // Text types characters without a physical key.
 type Text struct{ Text string } // characters without a physical key
 
-// ReleaseAll releases every key and button the client holds down.
+// ReleaseAll releases every key and button the computer holds down.
 type ReleaseAll struct{}
 
 func boolByte(b bool) byte {

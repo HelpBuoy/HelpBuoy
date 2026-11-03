@@ -7,8 +7,8 @@ import (
 
 	"github.com/mevdschee/helpbuoy/proto/control"
 	"github.com/mevdschee/helpbuoy/proto/input"
-	"github.com/mevdschee/helpbuoy/proto/relayaddr"
 	"github.com/mevdschee/helpbuoy/proto/screen"
+	"github.com/mevdschee/helpbuoy/proto/serveraddr"
 )
 
 func TestWheel(t *testing.T) {
@@ -58,12 +58,12 @@ func TestDemoShapes(t *testing.T) {
 	}
 }
 
-func TestSortedAgentsAndHelping(t *testing.T) {
+func TestSortedTechiesAndHelping(t *testing.T) {
 	p := &control.Presence{
-		Agents:  []control.AgentInfo{{Name: "zoe", Online: true}, {Name: "bob"}, {Name: "Alice", Online: true}},
-		Clients: []control.ClientInfo{{Name: "jan@PC", InSessionWith: "zoe"}, {Name: "anna@PC", InSessionWith: "zoe"}, {Name: "piet@PC"}},
+		Techies:   []control.TechieInfo{{Name: "zoe", Online: true}, {Name: "bob"}, {Name: "Alice", Online: true}},
+		Computers: []control.ComputerInfo{{Name: "jan@PC", InSessionWith: "zoe"}, {Name: "anna@PC", InSessionWith: "zoe"}, {Name: "piet@PC"}},
 	}
-	hs := sortedAgents(p)
+	hs := sortedTechies(p)
 	if len(hs) != 3 || hs[0].Name != "Alice" || hs[1].Name != "zoe" || hs[2].Name != "bob" {
 		t.Fatalf("order %+v", hs)
 	}
@@ -75,20 +75,20 @@ func TestSortedAgentsAndHelping(t *testing.T) {
 	}
 }
 
-func TestAgentNames(t *testing.T) {
+func TestTechieNames(t *testing.T) {
 	for comment, want := range map[string]string{"bob@PC": "bob", "Bob Smith@pc": "", "": "", "alice": "alice"} {
-		if got := agentNameFrom(comment); got != want {
-			t.Errorf("agentNameFrom(%q) = %q, want %q", comment, got, want)
+		if got := techieNameFrom(comment); got != want {
+			t.Errorf("techieNameFrom(%q) = %q, want %q", comment, got, want)
 		}
 	}
-	if validAgentName("with space") || !validAgentName("bob") || validAgentName("") {
-		t.Error("validAgentName")
+	if validTechieName("with space") || !validTechieName("bob") || validTechieName("") {
+		t.Error("validTechieName")
 	}
 }
 
 func TestFieldText(t *testing.T) {
 	for in, want := range map[string]string{"localhost": "", "localhost:2300": "localhost:2300", "helpme.example.com": "helpme.example.com:5959"} {
-		ad, err := relayaddr.Parse(in)
+		ad, err := serveraddr.Parse(in)
 		if err != nil {
 			t.Fatal(err)
 		}

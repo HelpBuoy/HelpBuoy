@@ -10,6 +10,6 @@ import (
 )
 
 func main() {
-	fmt.Fprintln(os.Stderr, "HelpBuoy: this client runs on Windows only")
+	fmt.Fprintln(os.Stderr, "HelpBuoy: this computer runs on Windows only")
 	os.Exit(1)
 }

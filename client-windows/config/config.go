@@ -1,7 +1,7 @@
-// Package config stores what the client learns about its relay in
-// config.json in the app's data directory (PLAN.md section 0): the relay
-// address, the pinned relay host key, the pinned key
-// of every agent met on that relay, and the hand-set performance mode. The app key lives next to it but is managed by
+// Package config stores what the computer learns about its server in
+// config.json in the app's data directory (PLAN.md section 0): the server
+// address, the pinned server host key, the pinned key
+// of every techie met on that server, and the hand-set performance mode. The app key lives next to it but is managed by
 // proto/appkey.
 package config
 
@@ -19,18 +19,18 @@ import (
 // FileName is the configuration file inside the data directory.
 const FileName = "config.json"
 
-// Config is the stored client configuration.
+// Config is the stored computer configuration.
 type Config struct {
-	// RelayAddress is the normalized hostname:port of the relay.
-	RelayAddress string `json:"relay_address,omitempty"`
-	// RelayHostKey is the pinned relay host key as an authorized_keys line.
-	RelayHostKey string `json:"relay_host_key,omitempty"`
-	// KnownAgents maps an agent name to its pinned authorized_keys line.
-	// The pins belong to RelayAddress: agents are vouched for by the relay
-	// and names are only unique within one relay, so changing the relay
+	// ServerAddress is the normalized hostname:port of the server.
+	ServerAddress string `json:"server_address,omitempty"`
+	// ServerHostKey is the pinned server host key as an authorized_keys line.
+	ServerHostKey string `json:"server_host_key,omitempty"`
+	// KnownTechies maps a techie name to its pinned authorized_keys line.
+	// The pins belong to ServerAddress: techies are vouched for by the server
+	// and names are only unique within one server, so changing the server
 	// address clears them.
-	KnownAgents map[string]string `json:"known_agents,omitempty"`
-	// LastAddress is the last address that reached a relay, used to
+	KnownTechies map[string]string `json:"known_techies,omitempty"`
+	// LastAddress is the last address that reached a server, used to
 	// prefill the address field on the next start.
 	LastAddress string `json:"last_address,omitempty"`
 	// PerformanceMode turns on solid wallpaper and no window animations
@@ -41,7 +41,7 @@ type Config struct {
 
 // Registered reports whether the first-run flow has been completed.
 func (c *Config) Registered() bool {
-	return c != nil && c.RelayAddress != "" && c.RelayHostKey != ""
+	return c != nil && c.ServerAddress != "" && c.ServerHostKey != ""
 }
 
 // Clone returns a deep copy.
@@ -50,10 +50,10 @@ func (c *Config) Clone() *Config {
 		return &Config{}
 	}
 	n := *c
-	if c.KnownAgents != nil {
-		n.KnownAgents = make(map[string]string, len(c.KnownAgents))
-		for k, v := range c.KnownAgents {
-			n.KnownAgents[k] = v
+	if c.KnownTechies != nil {
+		n.KnownTechies = make(map[string]string, len(c.KnownTechies))
+		for k, v := range c.KnownTechies {
+			n.KnownTechies[k] = v
 		}
 	}
 	return &n

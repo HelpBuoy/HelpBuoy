@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/proto/relayaddr"
+	"github.com/mevdschee/helpbuoy/proto/serveraddr"
 )
 
 func newKey(t *testing.T) ssh.PublicKey {
@@ -32,14 +32,14 @@ func TestLoadMissingGivesDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.RelayAddr != "" || c.RelayHostKey != "" {
+	if c.ServerAddr != "" || c.ServerHostKey != "" {
 		t.Errorf("defaults = %+v", c)
 	}
 }
 
 func TestIsLocal(t *testing.T) {
 	for s, want := range map[string]bool{"localhost": true, "localhost:2300": true, "helpme.example.com": false, "127.0.0.1": false} {
-		a, err := relayaddr.Parse(s)
+		a, err := serveraddr.Parse(s)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -52,7 +52,7 @@ func TestIsLocal(t *testing.T) {
 func TestSaveLoadRoundTrip(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "sub")
 	k := newKey(t)
-	c := &Config{RelayAddr: "relay.example.com:5959"}
+	c := &Config{ServerAddr: "server.example.com:5959"}
 	if _, err := c.Pin(k); err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestLoadDamaged(t *testing.T) {
 	if err == nil {
 		t.Fatal("no error for damaged file")
 	}
-	if c == nil || c.RelayAddr != "" {
+	if c == nil || c.ServerAddr != "" {
 		t.Errorf("want defaults, got %+v", c)
 	}
 }
@@ -104,14 +104,14 @@ func TestPinTOFU(t *testing.T) {
 	if err != nil || pinned {
 		t.Fatalf("same key = %v, %v", pinned, err)
 	}
-	before := c.RelayHostKey
-	if _, err := c.Pin(k2); !errors.Is(err, ErrRelayIdentityChanged) {
+	before := c.ServerHostKey
+	if _, err := c.Pin(k2); !errors.Is(err, ErrServerIdentityChanged) {
 		t.Fatalf("other key: err = %v", err)
 	}
-	if c.RelayHostKey != before {
+	if c.ServerHostKey != before {
 		t.Error("pin changed after mismatch")
 	}
-	if err := CheckPinned(before, k2); err == nil || err.Error() != "relay identity changed" {
+	if err := CheckPinned(before, k2); err == nil || err.Error() != "server identity changed" {
 		t.Errorf("CheckPinned = %v", err)
 	}
 	if err := CheckPinned("", k2); err != nil {
@@ -122,37 +122,37 @@ func TestPinTOFU(t *testing.T) {
 	}
 }
 
-func TestSetRelayAddrForgetsPin(t *testing.T) {
+func TestSetServerAddrForgetsPin(t *testing.T) {
 	c := &Config{}
-	a, _ := relayaddr.Parse("Relay.Example.com")
-	if !c.SetRelayAddr(a) {
+	a, _ := serveraddr.Parse("Server.Example.com")
+	if !c.SetServerAddr(a) {
 		t.Fatal("no change reported")
 	}
-	if c.RelayAddr != "relay.example.com:5959" {
-		t.Errorf("addr = %q", c.RelayAddr)
+	if c.ServerAddr != "server.example.com:5959" {
+		t.Errorf("addr = %q", c.ServerAddr)
 	}
 	c.Pin(newKey(t))
-	if c.SetRelayAddr(a) {
+	if c.SetServerAddr(a) {
 		t.Error("same address reported as change")
 	}
-	if c.RelayHostKey == "" {
+	if c.ServerHostKey == "" {
 		t.Error("pin dropped for the same address")
 	}
-	b, _ := relayaddr.Parse("other.example.com:2223")
-	c.SetRelayAddr(b)
-	if c.RelayHostKey != "" {
-		t.Error("pin kept for a different relay")
+	b, _ := serveraddr.Parse("other.example.com:2223")
+	c.SetServerAddr(b)
+	if c.ServerHostKey != "" {
+		t.Error("pin kept for a different server")
 	}
 }
 
 func TestLoadDropsInvalidAddr(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, FileName), []byte(`{"relay_addr":"http://x y"}`), 0o600)
+	os.WriteFile(filepath.Join(dir, FileName), []byte(`{"server_addr":"http://x y"}`), 0o600)
 	c, err := Load(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.RelayAddr != "" {
-		t.Errorf("invalid address kept: %q", c.RelayAddr)
+	if c.ServerAddr != "" {
+		t.Errorf("invalid address kept: %q", c.ServerAddr)
 	}
 }

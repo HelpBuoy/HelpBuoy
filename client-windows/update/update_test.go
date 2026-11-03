@@ -70,10 +70,10 @@ func TestParseRelease(t *testing.T) {
 }
 
 func TestCheck(t *testing.T) {
-	var agent string
+	var techie string
 	status := http.StatusOK
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		agent = r.Header.Get("User-Agent")
+		techie = r.Header.Get("User-Agent")
 		w.WriteHeader(status)
 		fmt.Fprint(w, `{"tag_name": "v0.3.0", "assets": [{"name": "a.msi", "browser_download_url": "https://x/a.msi", "size": 5}]}`)
 	}))
@@ -81,14 +81,14 @@ func TestCheck(t *testing.T) {
 	ctx := context.Background()
 
 	r, err := Check(ctx, srv.URL, "v0.2.0")
-	if err != nil || r == nil || r.Version != "0.3.0" || agent != "helpbuoy/v0.2.0" {
-		t.Fatalf("got %+v, %v, agent %q", r, err, agent)
+	if err != nil || r == nil || r.Version != "0.3.0" || techie != "helpbuoy/v0.2.0" {
+		t.Fatalf("got %+v, %v, techie %q", r, err, techie)
 	}
 	if r, err := Check(ctx, srv.URL, "v0.3.0"); r != nil || err != nil {
 		t.Fatalf("same version: %+v, %v", r, err)
 	}
-	agent = ""
-	if r, err := Check(ctx, srv.URL, "dev"); r != nil || err != nil || agent != "" {
+	techie = ""
+	if r, err := Check(ctx, srv.URL, "dev"); r != nil || err != nil || techie != "" {
 		t.Fatalf("dev build checked: %+v, %v", r, err)
 	}
 	status = http.StatusNotFound // a private repository

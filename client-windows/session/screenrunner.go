@@ -29,7 +29,7 @@ type FrameEncoder interface {
 	Stats() encode.Stats
 }
 
-// Injector injects the agent's input; *injector.Injector implements it.
+// Injector injects the techie's input; *injector.Injector implements it.
 type Injector interface {
 	InputSink
 	SetMonitor(r image.Rectangle)
@@ -151,7 +151,7 @@ func (pc *pacer) kicked(now time.Time) time.Time {
 
 // ScreenRunner is the Runner of real sessions: it shares a monitor of the
 // local screen through the encoder, sends the cursor, and injects the
-// agent's input (PLAN.md 5 and 6.4).
+// techie's input (PLAN.md 5 and 6.4).
 type ScreenRunner struct {
 	HostKey ssh.Signer  // the app key, host key of the inner server
 	Serve   InnerServer // default ServeInner
@@ -183,7 +183,7 @@ func (r *ScreenRunner) log() *slog.Logger {
 }
 
 // Run implements Runner.
-func (r *ScreenRunner) Run(ctx context.Context, ch io.ReadWriteCloser, agentKey ssh.PublicKey) error {
+func (r *ScreenRunner) Run(ctx context.Context, ch io.ReadWriteCloser, techieKey ssh.PublicKey) error {
 	if r.NewSource == nil || r.NewEncoder == nil {
 		ch.Close()
 		return errors.New("session: screen runner without source or encoder")
@@ -197,7 +197,7 @@ func (r *ScreenRunner) Run(ctx context.Context, ch io.ReadWriteCloser, agentKey 
 	stop := context.AfterFunc(ctx, func() { ch.Close() })
 	defer stop()
 
-	s, err := serve(ch, r.HostKey, agentKey)
+	s, err := serve(ch, r.HostKey, techieKey)
 	if err != nil {
 		return fmt.Errorf("inner handshake: %w", err)
 	}
@@ -295,8 +295,8 @@ func readInputTo(st inner.Stream, sink InputSink) {
 	}
 }
 
-// agentMsg is a decoded message from the agent on the screen channel.
-type agentMsg struct {
+// techieMsg is a decoded message from the techie on the screen channel.
+type techieMsg struct {
 	typ uint8
 	ack screen.Ack
 	sel screen.SelectMonitor
@@ -333,7 +333,7 @@ type streamer struct {
 	pending  bool // a capture was due while the window was full
 
 	// Cursor state.
-	sent       map[uint32]bool // shape IDs the agent has
+	sent       map[uint32]bool // shape IDs the techie has
 	lastHandle uintptr
 	shapeID    uint32
 	lastPos    screen.CursorPos
@@ -352,9 +352,9 @@ func (st *streamer) closeCapturer() {
 
 func (st *streamer) run(ctx context.Context, stream inner.Stream) error {
 	st.w = wire.NewWriter(stream)
-	msgs := make(chan agentMsg, 16)
+	msgs := make(chan techieMsg, 16)
 	readErr := make(chan error, 1)
-	go st.readAgent(stream, msgs, readErr)
+	go st.readTechie(stream, msgs, readErr)
 
 	ms, err := st.src.Monitors()
 	if err != nil {
@@ -413,8 +413,8 @@ func (st *streamer) writeErr(ctx context.Context, err error) error {
 	return err
 }
 
-// readAgent decodes the agent's messages until the stream ends.
-func (st *streamer) readAgent(stream inner.Stream, msgs chan<- agentMsg, errc chan<- error) {
+// readTechie decodes the techie's messages until the stream ends.
+func (st *streamer) readTechie(stream inner.Stream, msgs chan<- techieMsg, errc chan<- error) {
 	fr := wire.NewReader(stream)
 	for {
 		typ, payload, err := fr.ReadFrame()
@@ -422,7 +422,7 @@ func (st *streamer) readAgent(stream inner.Stream, msgs chan<- agentMsg, errc ch
 			errc <- err
 			return
 		}
-		m := agentMsg{typ: typ}
+		m := techieMsg{typ: typ}
 		switch typ {
 		case screen.MsgAck:
 			m.ack, err = st.codec.DecodeAck(payload)
@@ -432,7 +432,7 @@ func (st *streamer) readAgent(stream inner.Stream, msgs chan<- agentMsg, errc ch
 		case screen.MsgQuality:
 			m.q, err = st.codec.DecodeQuality(payload)
 		default:
-			continue // unknown messages from newer agents are ignored
+			continue // unknown messages from newer techies are ignored
 		}
 		if err != nil {
 			errc <- fmt.Errorf("screen message %d: %w", typ, err)
@@ -442,8 +442,8 @@ func (st *streamer) readAgent(stream inner.Stream, msgs chan<- agentMsg, errc ch
 	}
 }
 
-// handle applies one agent message. It reports whether to capture now.
-func (st *streamer) handle(m agentMsg, now time.Time) (bool, error) {
+// handle applies one techie message. It reports whether to capture now.
+func (st *streamer) handle(m techieMsg, now time.Time) (bool, error) {
 	switch m.typ {
 	case screen.MsgAck:
 		rtt, ok := st.win.Acked(m.ack.Seq)
@@ -471,7 +471,7 @@ func (st *streamer) handle(m agentMsg, now time.Time) (bool, error) {
 		// The index refers to the list of the last Hello.
 		i := m.sel.Index
 		if i < 0 || i >= len(st.monitors) {
-			st.log.Warn("agent selected an unknown monitor", "index", i)
+			st.log.Warn("techie selected an unknown monitor", "index", i)
 			return false, nil
 		}
 		want := st.monitors[i]
@@ -544,7 +544,7 @@ func (st *streamer) tick(now time.Time) error {
 				return err
 			}
 		case st.capt == nil:
-			// Opening failed before; the agent already has the Hello.
+			// Opening failed before; the techie already has the Hello.
 			if c, err := st.src.Open(cur); err == nil {
 				st.capt = c
 				st.enc.Reset()
@@ -605,7 +605,7 @@ func (st *streamer) send(parts []screen.Frame) error {
 	return nil
 }
 
-// cursor sends the cursor shape when it changed to one the agent doesn't
+// cursor sends the cursor shape when it changed to one the techie doesn't
 // have, and the position when position, visibility or shape changed.
 func (st *streamer) cursor(now time.Time) error {
 	ci, err := st.src.Cursor()

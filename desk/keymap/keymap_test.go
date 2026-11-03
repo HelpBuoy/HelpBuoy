@@ -7,7 +7,7 @@ import (
 	"github.com/mevdschee/helpbuoy/proto/input"
 )
 
-// w3c lists every W3C code the agent must be able to send: the full
+// w3c lists every W3C code the techie must be able to send: the full
 // 104/105-key PC keyboard plus F13 to F24.
 func w3c() []string {
 	var s []string
@@ -97,7 +97,7 @@ func TestModifier(t *testing.T) {
 }
 
 // TestCodesAreKnown checks that every code this key map produces is in
-// input.Codes, the list the client's injector is tested against.
+// input.Codes, the list the computer's injector is tested against.
 func TestCodesAreKnown(t *testing.T) {
 	for _, k := range Keys() {
 		c, _ := Code(k)

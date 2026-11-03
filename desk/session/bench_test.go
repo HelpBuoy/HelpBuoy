@@ -53,7 +53,7 @@ func benchFrame(w, h int, share float64, jpeg bool, seed uint64) screen.Frame {
 }
 
 // BenchmarkDecodeAndPrepareUpload measures the CPU side of one frame on the
-// agent with the real screen.Decoder: decoding into the private image,
+// techie with the real screen.Decoder: decoding into the private image,
 // publishing into the shared image, planning the upload, and packing the
 // rows each texture update needs. Only the GPU calls are left out.
 func BenchmarkDecodeAndPrepareUpload(b *testing.B) {

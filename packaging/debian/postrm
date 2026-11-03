@@ -6,17 +6,17 @@ if [ -d /run/systemd/system ] && [ "$1" = remove ]; then
 fi
 
 if [ "$1" = "remove" ] && command -v deb-systemd-helper >/dev/null; then
-	deb-systemd-helper mask 'helpbuoy-relay.service' >/dev/null || true
+	deb-systemd-helper mask 'helpbuoy-server.service' >/dev/null || true
 fi
 
 if [ "$1" = "purge" ]; then
 	if command -v deb-systemd-helper >/dev/null; then
-		deb-systemd-helper purge 'helpbuoy-relay.service' >/dev/null || true
-		deb-systemd-helper unmask 'helpbuoy-relay.service' >/dev/null || true
+		deb-systemd-helper purge 'helpbuoy-server.service' >/dev/null || true
+		deb-systemd-helper unmask 'helpbuoy-server.service' >/dev/null || true
 	fi
-	# Purge removes the relay's host key, agents and registered clients.
-	# The helpbuoy-relay system user is kept, as is usual in Debian.
-	rm -rf /var/lib/helpbuoy-relay
+	# Purge removes the server's host key, techies and registered computers.
+	# The helpbuoy-server system user is kept, as is usual in Debian.
+	rm -rf /var/lib/helpbuoy-server
 fi
 
 exit 0

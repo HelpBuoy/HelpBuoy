@@ -191,20 +191,20 @@ func thumbJump(track, view, content, at float32) float32 {
 	return clampf((at-length/2)*(content-view)/free, 0, content-view)
 }
 
-// resizeTarget is the window size Resize to client asks for.
+// resizeTarget is the window size Resize to computer asks for.
 type resizeTarget struct {
 	w, h int  // window size in window units (what rl.SetWindowSize takes)
 	fits bool // false if clamped to the monitor: the screen needs scrolling
 }
 
-// resizeToClient computes the window size that shows a remote screen of
+// resizeToComputer computes the window size that shows a remote screen of
 // rw x rh pixels at 1:1. chromeW and chromeH are the logical sizes around the
 // view (tab strip, toolbar); dpi converts remote pixels to
 // logical pixels and units converts logical pixels to window units (they
 // differ on platforms where the window size is in physical pixels). The
 // result is clamped to the monitor (in window units) minus room for the
 // window decorations, and kept at least minW x minH.
-func resizeToClient(rw, rh int, dpi, units, chromeW, chromeH float32, monW, monH, minW, minH int) resizeTarget {
+func resizeToComputer(rw, rh int, dpi, units, chromeW, chromeH float32, monW, monH, minW, minH int) resizeTarget {
 	if dpi <= 0 {
 		dpi = 1
 	}
@@ -226,7 +226,7 @@ func resizeToClient(rw, rh int, dpi, units, chromeW, chromeH float32, monW, monH
 }
 
 // Room left on the monitor for the window frame, title bar and task bar when
-// a window is resized to its client, in window units.
+// a window is resized to its computer, in window units.
 const (
 	decorW = 16
 	decorH = 80

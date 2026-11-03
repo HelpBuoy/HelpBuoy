@@ -1,6 +1,6 @@
 // Package keymap maps raylib key codes to W3C KeyboardEvent.code strings
 // ("KeyA", "Enter", "ShiftLeft"), which name physical keys independent of the
-// keyboard layout. The client injects them by scan code, so the remote layout
+// keyboard layout. The computer injects them by scan code, so the remote layout
 // decides which character a key produces.
 //
 // The package does not import raylib, so it builds and tests with cgo and

@@ -1,0 +1,739 @@
+// Package registry is the server's in-memory state machine: online
+// connections and their roles, help requests and sessions, and the Presence
+// snapshot for techies. It knows nothing about SSH; connections are Peers
+// that queue control messages. The server package feeds it decoded control
+// messages and opens the session channels it asks for.
+//
+// All methods are safe for concurrent use. Peer methods are called with the
+// registry lock held and must not block.
+package registry
+
+import (
+	"cmp"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/mevdschee/helpbuoy/proto/control"
+	"github.com/mevdschee/helpbuoy/server/auth"
+	"github.com/mevdschee/helpbuoy/server/splice"
+	"github.com/mevdschee/helpbuoy/server/store"
+)
+
+// Peer is one SSH connection as the registry sees it.
+type Peer interface {
+	// Send queues a control message for the connection's control channel.
+	Send(m any)
+	// NotifyPresence tells a techie connection that the Presence snapshot
+	// changed; the connection fetches it with Registry.Presence.
+	NotifyPresence()
+	// Kick sends an Error with reason and closes the connection.
+	Kick(reason string)
+}
+
+// Config configures a Registry. Zero durations and counts take the defaults.
+type Config struct {
+	Now                  func() time.Time
+	SessionStartTimeout  time.Duration // a taken request must get its session channel within this (1 min)
+	PendingIdle          time.Duration // pending connections are closed after this (24 h)
+	MaxSessionsPerTechie int           // 20
+	Version              string        // server version for Hello
+	// Mutate persists a change to the stored state. The implementation must
+	// call SetIndex with the new state before it returns.
+	Mutate func(fn func(*store.State) error) error
+	Log    *slog.Logger
+}
+
+// Protocol errors returned by Handle; the caller closes the connection.
+var (
+	ErrNotAllowed = errors.New("message not allowed for this role")
+)
+
+// Conn is an attached connection.
+type Conn struct {
+	peer        Peer
+	fp          string
+	ip          string
+	role        control.Role
+	name        string
+	keyLine     string
+	userMachine string
+	connectedAt time.Time
+
+	control  bool // Hello has been queued; messages may be sent
+	detached bool
+	release  func() // pending limit slot, nil for known keys
+	req      *request
+}
+
+// Fingerprint returns the connection's key fingerprint.
+func (c *Conn) Fingerprint() string { return c.fp }
+
+type request struct {
+	id       string
+	computer *Conn
+	created  time.Time
+	state    control.RequestState
+	techie   *Conn
+	takenAt  time.Time
+	sess     *Session
+}
+
+// Session is a session being set up or running for a taken request.
+type Session struct {
+	r       *Registry
+	req     *request
+	closeFn func()
+	started bool
+	ended   bool
+	start   time.Time
+}
+
+// Registry holds the live state.
+type Registry struct {
+	cfg Config
+	log *slog.Logger
+
+	mu       sync.Mutex
+	idx      *store.Index
+	conns    map[string]*Conn // fingerprint -> current connection
+	requests map[string]*request
+	lastSeen map[string]time.Time
+
+	gen       uint64
+	cacheGen  uint64
+	cache     []byte
+	cacheTime time.Time
+}
+
+// New returns a registry over the stored state idx.
+func New(cfg Config, idx *store.Index) *Registry {
+	if cfg.Now == nil {
+		cfg.Now = time.Now
+	}
+	if cfg.SessionStartTimeout == 0 {
+		cfg.SessionStartTimeout = time.Minute
+	}
+	if cfg.PendingIdle == 0 {
+		cfg.PendingIdle = 24 * time.Hour
+	}
+	if cfg.MaxSessionsPerTechie == 0 {
+		cfg.MaxSessionsPerTechie = 20
+	}
+	if cfg.Log == nil {
+		cfg.Log = slog.New(slog.DiscardHandler)
+	}
+	return &Registry{
+		cfg:      cfg,
+		log:      cfg.Log,
+		idx:      idx,
+		conns:    map[string]*Conn{},
+		requests: map[string]*request{},
+		lastSeen: map[string]time.Time{},
+		gen:      1,
+	}
+}
+
+// Lookup returns the identity of a fingerprint in the current state.
+func (r *Registry) Lookup(fp string) store.Identity {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.idx.Lookup(fp)
+}
+
+// Attach registers a new authenticated connection for key fp. The role comes
+// from the current state. For an unknown key, admit is called to apply the
+// pending limits; its release func is called when the connection ends or is
+// promoted. A connection with the same key replaces the older one, which is
+// kicked.
+func (r *Registry) Attach(p Peer, fp, ip string, admit func() (func(), error)) (*Conn, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	id := r.idx.Lookup(fp)
+	c := &Conn{peer: p, fp: fp, ip: ip, role: id.Role, name: id.Name,
+		keyLine: id.KeyLine, connectedAt: r.cfg.Now()}
+	if id.Role == control.RolePending {
+		rel, err := admit()
+		if err != nil {
+			return nil, err
+		}
+		c.release = rel
+	}
+	if old := r.conns[fp]; old != nil {
+		r.detachLocked(old)
+		old.peer.Kick("replaced by a newer connection with the same key")
+		r.log.Info("conn replaced", "fp", fp, "role", string(old.role), "old_ip", old.ip, "ip", ip)
+	}
+	r.conns[fp] = c
+	if c.role == control.RoleComputer {
+		r.lastSeen[fp] = c.connectedAt
+	}
+	r.changedLocked()
+	return c, nil
+}
+
+// Role returns the connection's current role.
+func (r *Registry) Role(c *Conn) control.Role {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return c.role
+}
+
+// Detach removes a closed connection. It ends its request and the sessions
+// it takes part in. Calling it more than once is harmless.
+func (r *Registry) Detach(c *Conn) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.detachLocked(c)
+}
+
+func (r *Registry) detachLocked(c *Conn) {
+	if c.detached {
+		return
+	}
+	c.detached = true
+	if r.conns[c.fp] == c {
+		delete(r.conns, c.fp)
+	}
+	if c.release != nil {
+		c.release()
+		c.release = nil
+	}
+	now := r.cfg.Now()
+	switch c.role {
+	case control.RoleComputer:
+		r.lastSeen[c.fp] = now
+		if c.req != nil {
+			r.endRequestLocked(c.req, control.RequestCancelled, false)
+		}
+	case control.RoleTechie:
+		for _, req := range r.requests {
+			if req.techie == c {
+				r.endRequestLocked(req, control.RequestEnded, true)
+			}
+		}
+	}
+	r.changedLocked()
+}
+
+// OpenControl is called when the connection's control channel is open. It
+// queues Hello, ServerInfo and, for techies, the first Presence.
+func (r *Registry) OpenControl(c *Conn) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if c.detached {
+		return errors.New("connection is closed")
+	}
+	if c.control {
+		return errors.New("control channel already open")
+	}
+	c.control = true
+	h := &control.Hello{
+		Role:          c.role,
+		ServerVersion: r.cfg.Version,
+		ServerTime:    r.cfg.Now().UTC(),
+	}
+	if c.role == control.RoleTechie {
+		h.Name = c.name // computers are not told the name techies gave them
+	}
+	c.peer.Send(h)
+	c.peer.Send(r.serverInfoLocked())
+	if c.role == control.RoleTechie {
+		c.peer.NotifyPresence()
+	}
+	return nil
+}
+
+// send queues m if the connection can receive messages.
+func send(c *Conn, m any) {
+	if c.control && !c.detached {
+		c.peer.Send(m)
+	}
+}
+
+func (r *Registry) serverInfoLocked() *control.ServerInfo {
+	return &control.ServerInfo{Title: r.idx.State.Title, Instruction: r.idx.State.Instruction}
+}
+
+// changedLocked marks the Presence snapshot stale and tells the techies.
+func (r *Registry) changedLocked() {
+	r.gen++
+	for _, c := range r.conns {
+		if c.role == control.RoleTechie && c.control {
+			c.peer.NotifyPresence()
+		}
+	}
+}
+
+// Presence returns the encoded current Presence snapshot and its generation.
+// Callers that already sent this generation can skip it.
+func (r *Registry) Presence() ([]byte, uint64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.cache == nil || r.cacheGen != r.gen {
+		b, err := json.Marshal(r.presenceLocked())
+		if err != nil {
+			panic(err) // only plain data, can't fail
+		}
+		r.cache, r.cacheGen = b, r.gen
+	}
+	return r.cache, r.cacheGen
+}
+
+// PresenceSnapshot returns the current Presence as a value.
+func (r *Registry) PresenceSnapshot() control.Presence {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.presenceLocked()
+}
+
+func (r *Registry) presenceLocked() control.Presence {
+	now := r.cfg.Now().UTC()
+	st := r.idx.State
+	p := control.Presence{Computers: []control.ComputerInfo{}, Techies: []control.TechieInfo{}}
+	for i, sc := range st.Computers {
+		fp := r.idx.ComputerFingerprint(i)
+		ci := control.ComputerInfo{
+			Fingerprint:  fp,
+			Name:         sc.Name,
+			RegisteredBy: sc.RegisteredBy,
+			RegisteredAt: sc.RegisteredAt,
+			LastSeen:     sc.LastSeen,
+		}
+		if t, ok := r.lastSeen[fp]; ok && t.After(ci.LastSeen) {
+			ci.LastSeen = t.UTC()
+		}
+		if c := r.conns[fp]; c != nil && c.role == control.RoleComputer {
+			ci.Online = true
+			ci.LastSeen = now
+			ci.UserMachine = c.userMachine
+			if q := c.req; q != nil {
+				ri := &control.RequestInfo{ID: q.id, Created: q.created.UTC(), State: q.state}
+				if q.techie != nil {
+					ri.TakenBy = q.techie.name
+					if q.sess != nil && q.sess.started {
+						ci.InSessionWith = q.techie.name
+					}
+				}
+				ci.Request = ri
+			}
+		}
+		p.Computers = append(p.Computers, ci)
+	}
+	for i, h := range st.Techies {
+		fp := r.idx.TechieFingerprint(i)
+		c := r.conns[fp]
+		p.Techies = append(p.Techies, control.TechieInfo{
+			Name: h.Name, Fingerprint: fp,
+			Online: c != nil && c.role == control.RoleTechie,
+		})
+	}
+	slices.SortFunc(p.Computers, func(a, b control.ComputerInfo) int {
+		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.Fingerprint, b.Fingerprint))
+	})
+	slices.SortFunc(p.Techies, func(a, b control.TechieInfo) int { return cmp.Compare(a.Name, b.Name) })
+	return p
+}
+
+// SetIndex installs a new stored state. Connections whose key was removed
+// or changed role are kicked; pending connections whose key is now a
+// registered computer are promoted and told so with Registered.
+func (r *Registry) SetIndex(idx *store.Index) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	old := r.idx.State
+	r.idx = idx
+	if old.Title != idx.State.Title || old.Instruction != idx.State.Instruction {
+		info := r.serverInfoLocked()
+		for _, c := range r.conns {
+			send(c, info)
+		}
+	}
+	for fp, c := range r.conns {
+		id := idx.Lookup(fp)
+		switch {
+		case id.Role == c.role:
+			c.name, c.keyLine = id.Name, id.KeyLine
+		case c.role == control.RolePending && id.Role == control.RoleComputer:
+			c.role = control.RoleComputer
+			c.name, c.keyLine = id.Name, id.KeyLine
+			if c.release != nil {
+				c.release()
+				c.release = nil
+			}
+			r.lastSeen[fp] = r.cfg.Now()
+			send(c, &control.Registered{})
+			r.log.Info("pending promoted", "fp", fp, "name", id.Name, "ip", c.ip)
+		default:
+			reason := "key removed from the server"
+			if id.Role != control.RolePending {
+				reason = "key changed role"
+			}
+			r.log.Info("conn revoked", "fp", fp, "role", string(c.role), "new_role", string(id.Role), "ip", c.ip)
+			r.detachLocked(c)
+			c.peer.Kick(reason)
+		}
+	}
+	r.changedLocked()
+}
+
+// Handle processes one control message from c. A returned error is a
+// protocol violation; the caller sends it as Error and closes the connection.
+func (r *Registry) Handle(c *Conn, m any) error {
+	switch m := m.(type) {
+	case *control.ComputerHello:
+		return r.computerHello(c, m)
+	case *control.CancelRequest:
+		return r.cancelRequest(c, m)
+	case *control.Connect:
+		return r.connect(c, m)
+	case *control.RegisterComputer:
+		return r.registerComputer(c, m)
+	case *control.UnregisterComputer:
+		return r.unregisterComputer(c, m)
+	case *control.RegisterTechie:
+		return r.registerTechie(c, m)
+	case *control.RenameComputer:
+		return r.renameComputer(c, m)
+	case *control.SetServerInfo:
+		return r.setServerInfo(c, m)
+	}
+	return fmt.Errorf("%w: %T", ErrNotAllowed, m)
+}
+
+func (r *Registry) computerHello(c *Conn, m *control.ComputerHello) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if c.role == control.RoleTechie {
+		return nil // techies have no ComputerHello; ignored per the contract
+	}
+	um := auth.Truncate(m.UserMachine, 256)
+	if um != c.userMachine {
+		c.userMachine = um
+		if c.role == control.RoleComputer {
+			r.changedLocked()
+		}
+	}
+	return nil
+}
+
+func (r *Registry) cancelRequest(c *Conn, m *control.CancelRequest) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if c.role != control.RoleComputer {
+		return fmt.Errorf("%w: CancelRequest from %s", ErrNotAllowed, c.role)
+	}
+	// This also closes the session channels if they are being opened or open.
+	if q := c.req; q != nil && q.id == m.RequestID {
+		r.endRequestLocked(q, control.RequestCancelled, true)
+	}
+	return nil
+}
+
+// endRequestLocked finishes a request: it leaves the computer, the computer is
+// told (if notify), and a session for it is closed.
+func (r *Registry) endRequestLocked(q *request, state control.RequestState, notify bool) {
+	if r.requests[q.id] != q {
+		return
+	}
+	delete(r.requests, q.id)
+	q.state = state
+	if q.computer.req == q {
+		q.computer.req = nil
+	}
+	if notify {
+		send(q.computer, &control.RequestStateMsg{RequestID: q.id, State: state})
+	}
+	if s := q.sess; s != nil && !s.ended {
+		s.ended = true
+		if s.closeFn != nil {
+			go s.closeFn()
+		}
+	}
+	attrs := []any{"event", string(state), "id", q.id, "computer", q.computer.fp}
+	if q.techie != nil {
+		attrs = append(attrs, "techie", q.techie.name)
+	}
+	r.log.Info("request", attrs...)
+	r.changedLocked()
+}
+
+func (r *Registry) techiesessionsLocked(h *Conn) int {
+	n := 0
+	for _, q := range r.requests {
+		if q.techie == h {
+			n++
+		}
+	}
+	return n
+}
+
+// connect starts a session from techie c: a request, taken by c, that waits
+// for the computer's user to allow it.
+func (r *Registry) connect(c *Conn, m *control.Connect) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if c.role != control.RoleTechie {
+		return fmt.Errorf("%w: Connect from %s", ErrNotAllowed, c.role)
+	}
+	fail := func(msg string) error {
+		send(c, &control.Reply{Seq: m.Seq, Error: msg})
+		return nil
+	}
+	if !control.ValidRequestID(m.RequestID) || r.requests[m.RequestID] != nil {
+		return fail("bad request id")
+	}
+	cl := r.conns[m.Fingerprint]
+	switch {
+	case cl == nil || cl.role != control.RoleComputer || cl.detached:
+		return fail("computer is not online")
+	case cl.req != nil:
+		return fail("computer is busy")
+	case r.techiesessionsLocked(c) >= r.cfg.MaxSessionsPerTechie:
+		return fail(fmt.Sprintf("too many sessions (max %d)", r.cfg.MaxSessionsPerTechie))
+	}
+	now := r.cfg.Now()
+	q := &request{id: m.RequestID, computer: cl, created: now, state: control.RequestTaken, techie: c, takenAt: now}
+	r.requests[q.id] = q
+	cl.req = q
+	send(c, &control.Reply{Seq: m.Seq})
+	send(cl, &control.SessionReady{
+		RequestID:  q.id,
+		TechieName: c.name,
+		TechieKey:  c.keyLine,
+	})
+	r.log.Info("request", "event", "connect", "id", q.id, "computer", cl.fp, "techie", c.name)
+	r.changedLocked()
+	return nil
+}
+
+// techieName returns c's techie name, or an error if c is not a techie.
+func (r *Registry) techieName(c *Conn, what string) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if c.role != control.RoleTechie {
+		return "", fmt.Errorf("%w: %s from %s", ErrNotAllowed, what, c.role)
+	}
+	return c.name, nil
+}
+
+func (r *Registry) reply(c *Conn, seq uint32, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	rep := &control.Reply{Seq: seq}
+	if err != nil {
+		rep.Error = err.Error()
+	}
+	send(c, rep)
+}
+
+func (r *Registry) mutate(fn func(*store.State) error) error {
+	if r.cfg.Mutate == nil {
+		return errors.New("state is read-only")
+	}
+	return r.cfg.Mutate(fn)
+}
+
+// registerTechie adds a techie key on behalf of techie c.
+func (r *Registry) registerTechie(c *Conn, m *control.RegisterTechie) error {
+	by, err := r.techieName(c, "RegisterTechie")
+	if err != nil {
+		return err
+	}
+	err = r.mutate(func(st *store.State) error { return st.AddTechie(m.Name, m.PublicKey) })
+	if err == nil {
+		r.log.Info("techie added", "name", strings.TrimSpace(m.Name), "by", by)
+	}
+	r.reply(c, m.Seq, err)
+	return nil
+}
+
+func (r *Registry) registerComputer(c *Conn, m *control.RegisterComputer) error {
+	by, err := r.techieName(c, "RegisterComputer")
+	if err != nil {
+		return err
+	}
+	var fp, name string
+	err = r.mutate(func(st *store.State) error {
+		var err error
+		fp, name, err = st.AddComputer(m.PublicKey, m.Name, by, r.cfg.Now())
+		return err
+	})
+	if err == nil {
+		r.log.Info("computer registered", "fp", fp, "name", name, "by", by)
+	}
+	r.reply(c, m.Seq, err)
+	return nil
+}
+
+func (r *Registry) renameComputer(c *Conn, m *control.RenameComputer) error {
+	by, err := r.techieName(c, "RenameComputer")
+	if err != nil {
+		return err
+	}
+	var old string
+	err = r.mutate(func(st *store.State) error {
+		var err error
+		old, err = st.RenameComputer(m.Fingerprint, m.Name)
+		return err
+	})
+	if err == nil {
+		r.log.Info("computer renamed", "fp", m.Fingerprint, "from", old, "to", strings.TrimSpace(m.Name), "by", by)
+	}
+	r.reply(c, m.Seq, err)
+	return nil
+}
+
+func (r *Registry) setServerInfo(c *Conn, m *control.SetServerInfo) error {
+	by, err := r.techieName(c, "SetServerInfo")
+	if err != nil {
+		return err
+	}
+	err = r.mutate(func(st *store.State) error { return st.SetInfo(m.Title, m.Instruction) })
+	if err == nil {
+		r.log.Info("server info set", "title", strings.TrimSpace(m.Title), "instruction", strings.TrimSpace(m.Instruction), "by", by)
+	}
+	r.reply(c, m.Seq, err)
+	return nil
+}
+
+func (r *Registry) unregisterComputer(c *Conn, m *control.UnregisterComputer) error {
+	by, err := r.techieName(c, "UnregisterComputer")
+	if err != nil {
+		return err
+	}
+	var name string
+	err = r.mutate(func(st *store.State) error {
+		var err error
+		name, err = st.RemoveComputer(m.Fingerprint)
+		return err
+	})
+	if err == nil {
+		r.log.Info("computer unregistered", "fp", m.Fingerprint, "name", name, "by", by)
+	}
+	r.reply(c, m.Seq, err)
+	return nil
+}
+
+// BeginSession checks that computer connection c may open the session channel
+// for requestID: its current request, taken by a techie, with no session yet.
+// It returns the session, the techie's peer and the extra data for the
+// channel to the techie. The caller opens that channel and then calls
+// Started, or End if it could not.
+func (r *Registry) BeginSession(c *Conn, requestID string) (*Session, Peer, control.TechiesessionData, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var none control.TechiesessionData
+	if c.detached || c.role != control.RoleComputer {
+		return nil, nil, none, fmt.Errorf("only registered computers open sessions")
+	}
+	q := c.req
+	if q == nil || q.id != requestID {
+		return nil, nil, none, fmt.Errorf("no such request")
+	}
+	if q.state != control.RequestTaken || q.techie == nil || q.techie.detached {
+		return nil, nil, none, fmt.Errorf("request is not taken")
+	}
+	if q.sess != nil {
+		return nil, nil, none, fmt.Errorf("session already open")
+	}
+	s := &Session{r: r, req: q, start: r.cfg.Now()}
+	q.sess = s
+	return s, q.techie.peer, control.TechiesessionData{
+		RequestID:    q.id,
+		ComputerName: c.name,
+		ComputerKey:  c.keyLine,
+		UserMachine:  c.userMachine,
+	}, nil
+}
+
+// Started records that both channels are open and spliced. closeFn closes
+// them; the registry calls it when the request ends from elsewhere. If the
+// request already ended, Started returns false and the caller must close
+// the channels itself.
+func (s *Session) Started(closeFn func()) bool {
+	r := s.r
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if s.ended {
+		return false
+	}
+	s.started = true
+	s.closeFn = closeFn
+	r.log.Info("session", "event", "start", "id", s.req.id, "computer", s.req.computer.fp, "techie", s.req.techie.name)
+	r.changedLocked()
+	return true
+}
+
+// Ended reports whether the request ended while the session was being set up.
+func (s *Session) Ended() bool {
+	s.r.mu.Lock()
+	defer s.r.mu.Unlock()
+	return s.ended
+}
+
+// End finishes the session and its request, with the bytes copied.
+func (s *Session) End(res splice.Result) {
+	r := s.r
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.log.Info("session", "event", "end", "id", s.req.id, "computer", s.req.computer.fp, "techie", s.req.techie.name,
+		"computer_to_techie", res.AToB, "techie_to_computer", res.BToA,
+		"duration", r.cfg.Now().Sub(s.start).String())
+	s.ended = true
+	r.endRequestLocked(s.req, control.RequestEnded, true)
+}
+
+// Sweep drops requests whose session never
+// started, and closes pending connections past their idle timeout.
+func (r *Registry) Sweep() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := r.cfg.Now()
+	for _, q := range r.requests {
+		switch {
+		case q.state == control.RequestTaken && q.sess == nil && now.Sub(q.takenAt) >= r.cfg.SessionStartTimeout:
+			r.endRequestLocked(q, control.RequestEnded, true)
+		}
+	}
+	for _, c := range r.conns {
+		if c.role == control.RolePending && now.Sub(c.connectedAt) >= r.cfg.PendingIdle {
+			r.log.Info("pending idle timeout", "fp", c.fp, "ip", c.ip)
+			r.detachLocked(c)
+			c.peer.Kick("pending connection timed out")
+		}
+	}
+}
+
+// LastSeen returns the last-seen times of computers that connected since start.
+func (r *Registry) LastSeen() map[string]time.Time {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := r.cfg.Now()
+	m := make(map[string]time.Time, len(r.lastSeen))
+	for fp, t := range r.lastSeen {
+		m[fp] = t
+	}
+	for fp, c := range r.conns {
+		if c.role == control.RoleComputer {
+			m[fp] = now
+		}
+	}
+	return m
+}
+
+// Counts reports the number of online connections per role.
+func (r *Registry) Counts() map[control.Role]int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	m := map[control.Role]int{}
+	for _, c := range r.conns {
+		m[c.role]++
+	}
+	return m
+}

@@ -1,13 +1,13 @@
-// Command helpbuoy-desk is the desk app: it lists connected clients
+// Command helpbuoy-desk is the desk app: it lists connected computers
 // and opens remote sessions for their help requests.
 //
 // It uses raylib through raylib-go built with CGO_ENABLED=0 (purego), so it
 // cross-compiles for every target with plain "go build".
 //
-// Flags for trying the UI without a relay:
+// Flags for trying the UI without a server:
 //
-//	--demo           fake clients and requests, no network, nothing stored
-//	--page NAME      start on "register", "relay" or "session" (demo only)
+//	--demo           fake computers and requests, no network, nothing stored
+//	--page NAME      start on "register", "server" or "session" (demo only)
 //	--datadir DIR    use DIR instead of the per-user data directory
 package main
 
@@ -35,8 +35,8 @@ func init() {
 }
 
 func main() {
-	demo := flag.Bool("demo", os.Getenv("SV_AGENT_DEMO") != "", "show fake clients; no network, nothing stored")
-	page := flag.String("page", os.Getenv("SV_AGENT_PAGE"), `start page: "register", "relay" or "session" (demo)`)
+	demo := flag.Bool("demo", os.Getenv("SV_TECHIE_DEMO") != "", "show fake computers; no network, nothing stored")
+	page := flag.String("page", os.Getenv("SV_TECHIE_PAGE"), `start page: "register", "server" or "session" (demo)`)
 	dataDir := flag.String("datadir", "", "data directory (default: per-user data directory)")
 	// --upload-bench is a hidden developer check (desk/perf): it measures
 	// texture uploads in a window, prints a table and exits.

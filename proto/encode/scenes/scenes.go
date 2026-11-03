@@ -163,7 +163,7 @@ func desktop(dst *image.RGBA) {
 	text(dst, sans, b.Max.X-90, tb.Min.Y+26, "14:32", white)
 }
 
-// window draws a frame with a title bar and returns the client rectangle.
+// window draws a frame with a title bar and returns the computer rectangle.
 func window(dst *image.RGBA, r image.Rectangle, title string) image.Rectangle {
 	fill(dst, r, border)
 	in := r.Inset(1)
@@ -173,9 +173,9 @@ func window(dst *image.RGBA, r image.Rectangle, title string) image.Rectangle {
 		x := in.Max.X - 46*(3-i)
 		fill(dst, image.Rect(x+16, in.Min.Y+14, x+30, in.Min.Y+16), c)
 	}
-	client := image.Rect(in.Min.X, in.Min.Y+30, in.Max.X, in.Max.Y)
-	fill(dst, client, white)
-	return client
+	computer := image.Rect(in.Min.X, in.Min.Y+30, in.Max.X, in.Max.Y)
+	fill(dst, computer, white)
+	return computer
 }
 
 // Source text typed and shown by the scenarios.
@@ -207,13 +207,13 @@ func main() {
 	}
 }`, "\n")
 
-var prose = strings.Fields(`The relay never sees the screen: everything inside the tunnel is
-end-to-end encrypted between the client and the agent. Screen updates are sent as
+var prose = strings.Fields(`The server never sees the screen: everything inside the tunnel is
+end-to-end encrypted between the computer and the techie. Screen updates are sent as
 small rectangles, encoded losslessly when they contain text and user interface elements,
 and as JPEG when they look like photos or video. Regions that stop changing are refined
 so that the final image is exact. Scrolling is detected and sent as a copy of pixels the
-agent already has, so only the newly exposed strip is encoded. A cache of recently sent
-tiles lets the client refer to pixels by slot number when a window is shown again.`)
+techie already has, so only the newly exposed strip is encoded. A cache of recently sent
+tiles lets the computer refer to pixels by slot number when a window is shown again.`)
 
 // paragraph returns deterministic prose of n words starting at word k.
 func paragraph(k, n int) []string {
@@ -235,15 +235,15 @@ func paragraph(k, n int) []string {
 // --- typing -----------------------------------------------------------
 
 type typing struct {
-	client  image.Rectangle
-	lineH   int
-	adv     int
-	lines   []string // typed so far
-	src     []rune   // all text to type
-	pos     int      // runes typed
-	top     int      // first visible line
-	visible int
-	prevCur [2]int
+	computer image.Rectangle
+	lineH    int
+	adv      int
+	lines    []string // typed so far
+	src      []rune   // all text to type
+	pos      int      // runes typed
+	top      int      // first visible line
+	visible  int
+	prevCur  [2]int
 }
 
 func newTyping() Player { return &typing{} }
@@ -251,9 +251,9 @@ func newTyping() Player { return &typing{} }
 func (p *typing) Frame(i int, dst *image.RGBA) {
 	if i == 0 {
 		desktop(dst)
-		p.client = window(dst, image.Rect(0, 0, W, H-40), "main.go - Editor")
+		p.computer = window(dst, image.Rect(0, 0, W, H-40), "main.go - Editor")
 		p.lineH, p.adv = 18, monoAdvance()
-		p.visible = (p.client.Dy() - 30) / p.lineH
+		p.visible = (p.computer.Dy() - 30) / p.lineH
 		// Start with a screenful of code, then type the program again below.
 		for k := 0; k < p.visible-6; k++ {
 			p.lines = append(p.lines, sourceLines[k%len(sourceLines)])
@@ -289,18 +289,18 @@ func (p *typing) Frame(i int, dst *image.RGBA) {
 	}
 	p.renderLine(dst, cur[0])
 	if (i/30)%2 == 0 {
-		x := p.client.Min.X + 60 + cur[1]*p.adv
-		y := p.client.Min.Y + (cur[0]-p.top)*p.lineH
+		x := p.computer.Min.X + 60 + cur[1]*p.adv
+		y := p.computer.Min.Y + (cur[0]-p.top)*p.lineH
 		fill(dst, image.Rect(x, y+2, x+2, y+p.lineH), black)
 	}
 	p.prevCur = cur
-	sb := image.Rect(p.client.Min.X, p.client.Max.Y-24, p.client.Max.X, p.client.Max.Y)
+	sb := image.Rect(p.computer.Min.X, p.computer.Max.Y-24, p.computer.Max.X, p.computer.Max.Y)
 	fill(dst, sb, accent)
 	text(dst, sans, sb.Min.X+10, sb.Min.Y+17, fmt.Sprintf("Ln %d, Col %d    UTF-8    Go", cur[0]+1, cur[1]+1), white)
 }
 
 func (p *typing) renderAll(dst *image.RGBA) {
-	fill(dst, image.Rect(p.client.Min.X, p.client.Min.Y, p.client.Max.X, p.client.Max.Y-24), white)
+	fill(dst, image.Rect(p.computer.Min.X, p.computer.Min.Y, p.computer.Max.X, p.computer.Max.Y-24), white)
 	for l := p.top; l < len(p.lines) && l < p.top+p.visible; l++ {
 		p.renderLine(dst, l)
 	}
@@ -310,10 +310,10 @@ func (p *typing) renderLine(dst *image.RGBA, l int) {
 	if l < p.top || l >= p.top+p.visible {
 		return
 	}
-	y := p.client.Min.Y + (l-p.top)*p.lineH
-	fill(dst, image.Rect(p.client.Min.X, y, p.client.Min.X+50, y+p.lineH), color.RGBA{245, 245, 245, 255})
-	fill(dst, image.Rect(p.client.Min.X+50, y, p.client.Max.X, y+p.lineH), white)
-	text(dst, mono, p.client.Min.X+8, y+14, fmt.Sprintf("%4d", l+1), color.RGBA{140, 140, 140, 255})
+	y := p.computer.Min.Y + (l-p.top)*p.lineH
+	fill(dst, image.Rect(p.computer.Min.X, y, p.computer.Min.X+50, y+p.lineH), color.RGBA{245, 245, 245, 255})
+	fill(dst, image.Rect(p.computer.Min.X+50, y, p.computer.Max.X, y+p.lineH), white)
+	text(dst, mono, p.computer.Min.X+8, y+14, fmt.Sprintf("%4d", l+1), color.RGBA{140, 140, 140, 255})
 	s := p.lines[l]
 	c := textGray
 	switch t := strings.TrimSpace(s); {
@@ -325,14 +325,14 @@ func (p *typing) renderLine(dst *image.RGBA, l int) {
 	case strings.Contains(t, `"`):
 		c = color.RGBA{163, 21, 21, 255}
 	}
-	text(dst, mono, p.client.Min.X+60, y+14, strings.ReplaceAll(s, "\t", "    "), c)
+	text(dst, mono, p.computer.Min.X+60, y+14, strings.ReplaceAll(s, "\t", "    "), c)
 }
 
 // --- menus ------------------------------------------------------------
 
 type menus struct {
-	base   *image.RGBA
-	client image.Rectangle
+	base     *image.RGBA
+	computer image.Rectangle
 }
 
 func newMenus() Player { return &menus{} }
@@ -343,15 +343,15 @@ func (p *menus) Frame(i int, dst *image.RGBA) {
 	if i == 0 {
 		p.base = image.NewRGBA(dst.Bounds())
 		desktop(p.base)
-		p.client = window(p.base, image.Rect(160, 40, 1700, 1000), "Report.txt - Writer")
-		fill(p.base, image.Rect(p.client.Min.X, p.client.Min.Y, p.client.Max.X, p.client.Min.Y+28), chrome)
+		p.computer = window(p.base, image.Rect(160, 40, 1700, 1000), "Report.txt - Writer")
+		fill(p.base, image.Rect(p.computer.Min.X, p.computer.Min.Y, p.computer.Max.X, p.computer.Min.Y+28), chrome)
 		for k, n := range menuNames {
-			text(p.base, sans, p.client.Min.X+12+k*70, p.client.Min.Y+19, n, textGray)
+			text(p.base, sans, p.computer.Min.X+12+k*70, p.computer.Min.Y+19, n, textGray)
 		}
-		y := p.client.Min.Y + 60
-		for k := 0; y < p.client.Max.Y-20; k++ {
+		y := p.computer.Min.Y + 60
+		for k := 0; y < p.computer.Max.Y-20; k++ {
 			for _, l := range paragraph(k*13, 60) {
-				text(p.base, sans, p.client.Min.X+40, y, l, textGray)
+				text(p.base, sans, p.computer.Min.X+40, y, l, textGray)
 				y += 20
 			}
 			y += 14
@@ -365,7 +365,7 @@ func (p *menus) Frame(i int, dst *image.RGBA) {
 		return
 	}
 	k := cycle % len(menuNames)
-	mx, my := p.client.Min.X+4+k*70, p.client.Min.Y+28
+	mx, my := p.computer.Min.X+4+k*70, p.computer.Min.Y+28
 	fill(dst, image.Rect(mx+4, my-22, mx+66, my), color.RGBA{204, 228, 247, 255})
 	text(dst, sans, mx+8, my-9, menuNames[k], textGray)
 	items := 12
@@ -389,9 +389,9 @@ func (p *menus) Frame(i int, dst *image.RGBA) {
 // --- scroll -----------------------------------------------------------
 
 type scroll struct {
-	base   *image.RGBA
-	doc    *image.RGBA
-	client image.Rectangle
+	base     *image.RGBA
+	doc      *image.RGBA
+	computer image.Rectangle
 }
 
 func newScroll() Player { return &scroll{} }
@@ -400,8 +400,8 @@ func (p *scroll) Frame(i int, dst *image.RGBA) {
 	if i == 0 {
 		p.base = image.NewRGBA(dst.Bounds())
 		desktop(p.base)
-		p.client = window(p.base, image.Rect(200, 0, 1720, H-40), "Design notes - Viewer")
-		w := p.client.Dx() - 16
+		p.computer = window(p.base, image.Rect(200, 0, 1720, H-40), "Design notes - Viewer")
+		w := p.computer.Dx() - 16
 		p.doc = image.NewRGBA(image.Rect(0, 0, w, 14000))
 		fill(p.doc, p.doc.Bounds(), white)
 		y := 40
@@ -428,9 +428,9 @@ func (p *scroll) Frame(i int, dst *image.RGBA) {
 	}
 	copy(dst.Pix, p.base.Pix)
 	off := i * 24 // 24 px per frame: 1440 px/s at 60 fps
-	view := image.Rect(p.client.Min.X, p.client.Min.Y, p.client.Max.X-16, p.client.Max.Y)
+	view := image.Rect(p.computer.Min.X, p.computer.Min.Y, p.computer.Max.X-16, p.computer.Max.Y)
 	draw.Draw(dst, view, p.doc, image.Pt(0, off), draw.Src)
-	sb := image.Rect(p.client.Max.X-16, p.client.Min.Y, p.client.Max.X, p.client.Max.Y)
+	sb := image.Rect(p.computer.Max.X-16, p.computer.Min.Y, p.computer.Max.X, p.computer.Max.Y)
 	fill(dst, sb, chrome)
 	th := sb.Dy() * view.Dy() / p.doc.Rect.Dy()
 	ty := sb.Min.Y + off*sb.Dy()/p.doc.Rect.Dy()
@@ -450,13 +450,13 @@ func (p *drag) Frame(i int, dst *image.RGBA) {
 		p.base = image.NewRGBA(dst.Bounds())
 		desktop(p.base)
 		p.win = image.NewRGBA(image.Rect(0, 0, 900, 600))
-		client := window(p.win, p.win.Bounds(), "Notes")
-		y := client.Min.Y + 30
+		computer := window(p.win, p.win.Bounds(), "Notes")
+		y := computer.Min.Y + 30
 		for _, l := range paragraph(5, 300) {
-			if y > client.Max.Y-10 {
+			if y > computer.Max.Y-10 {
 				break
 			}
-			text(p.win, sans, client.Min.X+20, y, l, textGray)
+			text(p.win, sans, computer.Min.X+20, y, l, textGray)
 			y += 20
 		}
 	}

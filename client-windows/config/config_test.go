@@ -22,9 +22,9 @@ func TestLoadMissing(t *testing.T) {
 func TestSaveLoadRoundTrip(t *testing.T) {
 	s := Store{Dir: filepath.Join(t.TempDir(), "helpbuoy")}
 	in := &Config{
-		RelayAddress: "relay.example.com:5959",
-		RelayHostKey: "ssh-ed25519 AAAA",
-		KnownAgents:  map[string]string{"alice": "ssh-ed25519 BBBB"},
+		ServerAddress: "server.example.com:5959",
+		ServerHostKey: "ssh-ed25519 AAAA",
+		KnownTechies:  map[string]string{"alice": "ssh-ed25519 BBBB"},
 	}
 	if err := s.Save(in); err != nil {
 		t.Fatal(err)
@@ -40,7 +40,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 		t.Fatal("not registered")
 	}
 	// Overwrite works and leaves no temp files behind.
-	in.RelayAddress = "other.example.com:5959"
+	in.ServerAddress = "other.example.com:5959"
 	if err := s.Save(in); err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestResetKeepsKey(t *testing.T) {
 	s := Store{Dir: t.TempDir()}
 	key := filepath.Join(s.Dir, "id_ed25519")
 	os.WriteFile(key, []byte("key"), 0o600)
-	s.Save(&Config{RelayAddress: "a:1"})
+	s.Save(&Config{ServerAddress: "a:1"})
 	if err := s.Reset(); err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestRemoveKey(t *testing.T) {
 	orig := removeKey
 	defer func() { removeKey = orig }()
 	removeKey = func(dir string) error { removed = dir; return nil }
-	s.Save(&Config{RelayAddress: "a:1"})
+	s.Save(&Config{ServerAddress: "a:1"})
 	if err := s.RemoveKey(); err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestRemoveKey(t *testing.T) {
 	}
 
 	// A failing key removal keeps the config.
-	s.Save(&Config{RelayAddress: "a:1"})
+	s.Save(&Config{ServerAddress: "a:1"})
 	removeKey = func(string) error { return errors.New("locked") }
 	if err := s.RemoveKey(); err == nil {
 		t.Fatal("no error")
@@ -109,10 +109,10 @@ func TestRemoveKey(t *testing.T) {
 }
 
 func TestClone(t *testing.T) {
-	c := &Config{KnownAgents: map[string]string{"a": "x"}}
+	c := &Config{KnownTechies: map[string]string{"a": "x"}}
 	n := c.Clone()
-	n.KnownAgents["a"] = "y"
-	if c.KnownAgents["a"] != "x" {
+	n.KnownTechies["a"] = "y"
+	if c.KnownTechies["a"] != "x" {
 		t.Fatal("clone shares map")
 	}
 }

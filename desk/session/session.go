@@ -1,5 +1,5 @@
-// Package session is the agent's side of one remote session: it checks the
-// session the relay hands over against the registered client, runs the inner
+// Package session is the techie's side of one remote session: it checks the
+// session the server hands over against the registered computer, runs the inner
 // SSH client (proto/inner), applies screen frames to an *image.RGBA, acks
 // them, and sends input messages.
 //
@@ -28,47 +28,47 @@ import (
 	"github.com/mevdschee/helpbuoy/proto/wire"
 )
 
-// MaxSide bounds the remote screen size accepted from a client.
+// MaxSide bounds the remote screen size accepted from a computer.
 const MaxSide = 16384
 
-// Info identifies the client of a session after Verify.
+// Info identifies the computer of a session after Verify.
 type Info struct {
-	RequestID   string
-	ClientName  string // registered user@machine
-	UserMachine string // as the client currently reports it to the relay
-	ClientKey   ssh.PublicKey
-	Fingerprint string
+	RequestID    string
+	ComputerName string // registered user@machine
+	UserMachine  string // as the computer currently reports it to the server
+	ComputerKey  ssh.PublicKey
+	Fingerprint  string
 }
 
-// Verify checks a session the relay hands over: the agent must have opened
-// the request, and ClientKey must be the registered key of ClientName in the
-// last Presence. The relay is not trusted for this; the inner handshake then
+// Verify checks a session the server hands over: the techie must have opened
+// the request, and ComputerKey must be the registered key of ComputerName in the
+// last Presence. The server is not trusted for this; the inner handshake then
 // pins the returned key.
-func Verify(d control.AgentSessionData, p *control.Presence, opened bool) (Info, error) {
+func Verify(d control.TechiesessionData, p *control.Presence, opened bool) (Info, error) {
 	if !opened {
-		return Info{}, fmt.Errorf("session for request %q, which this agent did not open", d.RequestID)
+		return Info{}, fmt.Errorf("session for request %q, which this techie did not open", d.RequestID)
 	}
-	key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(d.ClientKey))
+	key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(d.ComputerKey))
 	if err != nil {
-		return Info{}, fmt.Errorf("session client key: %w", err)
+		return Info{}, fmt.Errorf("session computer key: %w", err)
 	}
 	if key.Type() != ssh.KeyAlgoED25519 {
-		return Info{}, fmt.Errorf("session client key is %s, not ssh-ed25519", key.Type())
+		return Info{}, fmt.Errorf("session computer key is %s, not ssh-ed25519", key.Type())
 	}
 	fp := ssh.FingerprintSHA256(key)
 	if p == nil {
-		return Info{}, errors.New("no client list from the relay yet")
+		return Info{}, errors.New("no computer list from the server yet")
 	}
-	for _, c := range p.Clients {
-		if c.Name != d.ClientName {
+	for _, c := range p.Computers {
+		if c.Name != d.ComputerName {
 			continue
 		}
 		if c.Fingerprint != fp {
-			return Info{}, fmt.Errorf("the relay offered key %s for %s, but %s is registered", fp, d.ClientName, c.Fingerprint)
+			return Info{}, fmt.Errorf("the server offered key %s for %s, but %s is registered", fp, d.ComputerName, c.Fingerprint)
 		}
-		return Info{RequestID: d.RequestID, ClientName: d.ClientName, UserMachine: d.UserMachine, ClientKey: key, Fingerprint: fp}, nil
+		return Info{RequestID: d.RequestID, ComputerName: d.ComputerName, UserMachine: d.UserMachine, ComputerKey: key, Fingerprint: fp}, nil
 	}
-	return Info{}, fmt.Errorf("%s is not a registered client", d.ClientName)
+	return Info{}, fmt.Errorf("%s is not a registered computer", d.ComputerName)
 }
 
 // Codec encodes and decodes the inner stream messages.
@@ -149,12 +149,12 @@ type Session struct {
 	skipSeq  uint32
 	// awaitFull is set after a frame failed and a Refresh was requested:
 	// frames still in flight were encoded against the old cache, so they are
-	// acked but not applied until the client's Full frame arrives.
+	// acked but not applied until the computer's Full frame arrives.
 	awaitFull   bool
 	fullSeq     uint32 // Seq of the Full frame being received in parts
 	fullStarted bool   // a Full frame's earlier parts were already passed to the decoder
 
-	// Messages to the client on the screen channel.
+	// Messages to the computer on the screen channel.
 	acks  chan uint32
 	kick  chan struct{}
 	ctlMu sync.Mutex
@@ -186,7 +186,7 @@ type Session struct {
 	mbps    float64
 }
 
-// requests holds the pending agent-to-client requests, merged so the UI
+// requests holds the pending techie-to-computer requests, merged so the UI
 // thread never blocks: only the latest monitor choice and quality matter.
 type requests struct {
 	refresh bool
@@ -209,13 +209,13 @@ func newSession(info Info, codec Codec, closer io.Closer) *Session {
 	}
 }
 
-// Dial starts the inner SSH client on the relay's session channel ch, with
-// the agent's key and the verified client key. It returns at once; the
+// Dial starts the inner SSH client on the server's session channel ch, with
+// the techie's key and the verified computer key. It returns at once; the
 // handshake runs in the background and its failure ends the session.
 func Dial(ch io.ReadWriteCloser, signer ssh.Signer, info Info) *Session {
 	s := newSession(info, ProtoCodec{}, ch)
 	go func() {
-		cs, err := inner.Dial(ch, signer, info.ClientKey)
+		cs, err := inner.Dial(ch, signer, info.ComputerKey)
 		if err != nil {
 			ch.Close()
 			s.finish(fmt.Errorf("inner connection: %w", err))
@@ -272,7 +272,7 @@ func (s *Session) Close() { s.finish(nil) }
 func (s *Session) Done() <-chan struct{} { return s.done }
 
 // Err returns why the session ended: nil after Close or a clean end of the
-// stream by the client.
+// stream by the computer.
 func (s *Session) Err() error {
 	select {
 	case <-s.done:
@@ -282,7 +282,7 @@ func (s *Session) Err() error {
 	}
 }
 
-// readScreen reads the client's screen messages and applies them.
+// readScreen reads the computer's screen messages and applies them.
 // Malformed messages end the session; a frame that decodes but can't be
 // applied (a bad rect, an unknown cache slot) only asks for a Refresh.
 func (s *Session) readScreen(rw io.ReadWriter) error {
@@ -341,7 +341,7 @@ func (s *Session) setHello(h screen.Hello) error {
 		return fmt.Errorf("screen hello: bad size %dx%d", h.Width, h.Height)
 	}
 	if h.Current < 0 || h.Current >= len(h.Monitors) {
-		h.Current = -1 // unknown, e.g. a phase 2 client
+		h.Current = -1 // unknown, e.g. a phase 2 computer
 	}
 	s.dec.Reset()
 	s.skipping = false
@@ -376,7 +376,7 @@ func (s *Session) frame(f screen.Frame) error {
 	s.skipping = false
 	if f.Full {
 		if !s.fullStarted || f.Seq != s.fullSeq {
-			// First part of a full frame: the client reset its encoder and
+			// First part of a full frame: the computer reset its encoder and
 			// cache, so start from a clean decoder too.
 			s.dec.Reset()
 		}
@@ -394,7 +394,7 @@ func (s *Session) frame(f screen.Frame) error {
 	dirty, complete, err := s.dec.Apply(s.back, f)
 	if err != nil {
 		// The image may be partly updated and the tile cache out of step
-		// with the client: start over from a full frame.
+		// with the computer: start over from a full frame.
 		s.dec.Reset()
 		s.refreshes.Add(1)
 		s.mu.Lock()
@@ -462,7 +462,7 @@ func (s *Session) request(f func(*requests)) {
 	}
 }
 
-// writeScreen sends acks and the agent's requests on the screen channel.
+// writeScreen sends acks and the techie's requests on the screen channel.
 func (s *Session) writeScreen(w io.Writer) {
 	fw := wire.NewWriter(w)
 	for {
@@ -512,7 +512,7 @@ func (s *Session) addShape(c screen.CursorShape) {
 }
 
 // Cursor returns the latest remote cursor position and the shape it names
-// (nil if that shape is not known). ok is false until the client sent a
+// (nil if that shape is not known). ok is false until the computer sent a
 // position. Shapes are never modified after they arrive. Safe from any
 // goroutine.
 func (s *Session) Cursor() (pos screen.CursorPos, shape *screen.CursorShape, ok bool) {
@@ -524,13 +524,13 @@ func (s *Session) Cursor() (pos screen.CursorPos, shape *screen.CursorShape, ok 
 	return s.cursor, s.shapes[s.cursor.ID], true
 }
 
-// SelectMonitor asks the client to share Hello().Monitors[i]. The client
+// SelectMonitor asks the computer to share Hello().Monitors[i]. The computer
 // answers with a new Hello.
 func (s *Session) SelectMonitor(i int) {
 	s.request(func(c *requests) { c.monitor = &screen.SelectMonitor{Index: i} })
 }
 
-// SetQuality sends the user's quality preference to the client.
+// SetQuality sends the user's quality preference to the computer.
 func (s *Session) SetQuality(m screen.QualityMode) {
 	s.quality = m
 	s.request(func(c *requests) { c.quality = &screen.Quality{Mode: m} })
@@ -540,7 +540,7 @@ func (s *Session) SetQuality(m screen.QualityMode) {
 // default).
 func (s *Session) Quality() screen.QualityMode { return s.quality }
 
-// Refresh asks the client for a full lossless frame.
+// Refresh asks the computer for a full lossless frame.
 func (s *Session) Refresh() {
 	s.request(func(c *requests) { c.refresh = true })
 }
@@ -570,19 +570,19 @@ func (s *Session) Update(upload func(img *image.RGBA, dirty []image.Rectangle, r
 	upload(s.img, d, resized)
 }
 
-// Hello returns the client's latest screen hello once one arrived.
+// Hello returns the computer's latest screen hello once one arrived.
 func (s *Session) Hello() (screen.Hello, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.hello, s.helloOK
 }
 
-// NameMismatch reports the user@machine the client's screen hello reports if
+// NameMismatch reports the user@machine the computer's screen hello reports if
 // it differs from the registered name (key copied to another PC or account,
 // or the PC was renamed), or "" if it matches or is not known yet.
 func (s *Session) NameMismatch() string {
 	h, ok := s.Hello()
-	if !ok || h.UserMachine == "" || strings.EqualFold(h.UserMachine, s.Info.ClientName) {
+	if !ok || h.UserMachine == "" || strings.EqualFold(h.UserMachine, s.Info.ComputerName) {
 		return ""
 	}
 	return h.UserMachine

@@ -1,11 +1,11 @@
 // Package inner runs the end-to-end "inner" SSH connection inside the session
-// channel that the relay splices between client and agent (PLAN.md section 4).
+// channel that the server splices between computer and techie (PLAN.md section 4).
 //
 // The client app is the SSH server: its host key is its app key, and it
-// accepts public key auth only from the one agent key it was told about. The
-// desk app is the SSH client: it accepts only the client's registered key as
-// host key. Exactly two channel types are allowed, "screen" (client -> agent
-// data) and "input" (agent -> client data); everything else is rejected.
+// accepts public key auth only from the one techie key it was told about. The
+// desk app is the SSH client: it accepts only the computer's registered key as
+// host key. Exactly two channel types are allowed, "screen" (computer -> techie
+// data) and "input" (techie -> computer data); everything else is rejected.
 package inner
 
 import (
@@ -21,7 +21,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// Channel type names inside the inner connection. The agent opens both.
+// Channel type names inside the inner connection. The techie opens both.
 const (
 	ChannelScreen = "screen"
 	ChannelInput  = "input"
@@ -113,17 +113,17 @@ type ServerSession struct {
 	input  ssh.Channel
 }
 
-// Serve runs the inner SSH server on rw (the client's sv-session channel).
-// hostKey is the client's app key; agentKey is the only accepted client key
+// Serve runs the inner SSH server on rw (the computer's sv-session channel).
+// hostKey is the computer's app key; techieKey is the only accepted computer key
 // (from control.SessionReady). It returns after the handshake and after the
-// agent has opened both the screen and input channels, or with an error.
+// techie has opened both the screen and input channels, or with an error.
 //
-// An agent that offers a different key gets an error wrapping ErrWrongKey.
+// A techie that offers a different key gets an error wrapping ErrWrongKey.
 // Global requests other than keepalive@openssh.com, all channel requests and
 // all channel types except one "screen" and one "input" are rejected. If setup
 // does not complete within 15 seconds, rw is closed and ErrTimeout returned.
-func Serve(rw io.ReadWriteCloser, hostKey ssh.Signer, agentKey ssh.PublicKey) (*ServerSession, error) {
-	if hostKey == nil || agentKey == nil {
+func Serve(rw io.ReadWriteCloser, hostKey ssh.Signer, techieKey ssh.PublicKey) (*ServerSession, error) {
+	if hostKey == nil || techieKey == nil {
 		return nil, errors.New("inner: missing key")
 	}
 	var wrongKey atomic.Bool
@@ -131,7 +131,7 @@ func Serve(rw io.ReadWriteCloser, hostKey ssh.Signer, agentKey ssh.PublicKey) (*
 		Config:       ssh.Config{Ciphers: ciphers},
 		MaxAuthTries: maxAuthTries,
 		PublicKeyCallback: func(_ ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-			if !sameKey(key, agentKey) {
+			if !sameKey(key, techieKey) {
 				wrongKey.Store(true)
 				return nil, ErrWrongKey
 			}
@@ -220,10 +220,10 @@ func (s *ServerSession) serveChannels(chans <-chan ssh.NewChannel, ready chan st
 	}
 }
 
-// Screen is the stream on which the client sends screen messages and reads acks.
+// Screen is the stream on which the computer sends screen messages and reads acks.
 func (s *ServerSession) Screen() Stream { return s.screen }
 
-// Input is the stream on which the client reads input messages.
+// Input is the stream on which the computer reads input messages.
 func (s *ServerSession) Input() Stream { return s.input }
 
 // Close ends the inner connection.
@@ -232,24 +232,24 @@ func (s *ServerSession) Close() error { return s.close() }
 // Wait blocks until the inner connection ends.
 func (s *ServerSession) Wait() error { return s.wait() }
 
-// ClientSession is the desk app's side of an inner connection.
-type ClientSession struct {
+// Computersession is the desk app's side of an inner connection.
+type Computersession struct {
 	*conn
 	screen ssh.Channel
 	input  ssh.Channel
 	rtt    atomic.Int64
 }
 
-// Dial runs the inner SSH client on rw (the agent's sv-session channel).
-// signer is the agent's app key; clientKey is the only accepted host key (the
-// registered client key). It opens the screen and input channels.
+// Dial runs the inner SSH client on rw (the techie's sv-session channel).
+// signer is the techie's app key; computerKey is the only accepted host key (the
+// registered computer key). It opens the screen and input channels.
 //
 // A host presenting any other key fails with an error wrapping ErrWrongKey.
 // After setup the session sends a keepalive every 15 seconds and closes the
 // connection when three in a row go unanswered. If setup does not complete
 // within 15 seconds, rw is closed and ErrTimeout returned.
-func Dial(rw io.ReadWriteCloser, signer ssh.Signer, clientKey ssh.PublicKey) (*ClientSession, error) {
-	if signer == nil || clientKey == nil {
+func Dial(rw io.ReadWriteCloser, signer ssh.Signer, computerKey ssh.PublicKey) (*Computersession, error) {
+	if signer == nil || computerKey == nil {
 		return nil, errors.New("inner: missing key")
 	}
 	var wrongKey atomic.Bool
@@ -258,7 +258,7 @@ func Dial(rw io.ReadWriteCloser, signer ssh.Signer, clientKey ssh.PublicKey) (*C
 		User:   sshUser,
 		Auth:   []ssh.AuthMethod{ssh.PublicKeys(signer)},
 		HostKeyCallback: func(_ string, _ net.Addr, key ssh.PublicKey) error {
-			if !sameKey(key, clientKey) {
+			if !sameKey(key, computerKey) {
 				wrongKey.Store(true)
 				return ErrWrongKey
 			}
@@ -272,7 +272,7 @@ func Dial(rw io.ReadWriteCloser, signer ssh.Signer, clientKey ssh.PublicKey) (*C
 	timer := time.AfterFunc(setupTimeout, cl.timeout)
 	defer timer.Stop()
 
-	fail := func(err error) (*ClientSession, error) {
+	fail := func(err error) (*Computersession, error) {
 		cl.close()
 		switch {
 		case cl.fired.Load():
@@ -294,7 +294,7 @@ func Dial(rw io.ReadWriteCloser, signer ssh.Signer, clientKey ssh.PublicKey) (*C
 		}
 	}()
 
-	c := &ClientSession{conn: newConn(cc)}
+	c := &Computersession{conn: newConn(cc)}
 	open := func(typ string) (ssh.Channel, error) {
 		ch, creqs, err := cc.OpenChannel(typ, nil)
 		if err != nil {
@@ -322,7 +322,7 @@ func Dial(rw io.ReadWriteCloser, signer ssh.Signer, clientKey ssh.PublicKey) (*C
 // keepalive sends keepalive@openssh.com requests and records the round trip
 // time. A tick that finds the previous request still unanswered counts as a
 // miss; after maxMiss misses in a row the connection is closed.
-func (c *ClientSession) keepalive(interval time.Duration, maxMiss int) {
+func (c *Computersession) keepalive(interval time.Duration, maxMiss int) {
 	t := time.NewTicker(interval)
 	defer t.Stop()
 	var (
@@ -368,16 +368,16 @@ func (c *ClientSession) keepalive(interval time.Duration, maxMiss int) {
 // RTT returns the round trip time of the most recent answered keepalive, or
 // 0 if none has been answered yet. The first keepalive is sent right after
 // setup, so a value is usually available within one round trip.
-func (c *ClientSession) RTT() time.Duration { return time.Duration(c.rtt.Load()) }
+func (c *Computersession) RTT() time.Duration { return time.Duration(c.rtt.Load()) }
 
-// Screen is the stream on which the agent reads screen messages and sends acks.
-func (c *ClientSession) Screen() Stream { return c.screen }
+// Screen is the stream on which the techie reads screen messages and sends acks.
+func (c *Computersession) Screen() Stream { return c.screen }
 
-// Input is the stream on which the agent sends input messages.
-func (c *ClientSession) Input() Stream { return c.input }
+// Input is the stream on which the techie sends input messages.
+func (c *Computersession) Input() Stream { return c.input }
 
 // Close ends the inner connection.
-func (c *ClientSession) Close() error { return c.close() }
+func (c *Computersession) Close() error { return c.close() }
 
 // Wait blocks until the inner connection ends.
-func (c *ClientSession) Wait() error { return c.wait() }
+func (c *Computersession) Wait() error { return c.wait() }

@@ -1,0 +1,32 @@
+.TH HELPBUOY-SERVERCTL 8 "" "helpbuoy" "System Administration"
+.SH NAME
+helpbuoy-serverctl \- run helpbuoy-server admin commands on the system server
+.SH SYNOPSIS
+.B helpbuoy-serverctl
+.I command
+.RI [ args ...]
+.SH DESCRIPTION
+.B helpbuoy-serverctl
+runs
+.BR helpbuoy-server (1)
+as the helpbuoy-server system user on the state of the helpbuoy-server service in
+.IR /var/lib/helpbuoy-server ,
+so the files it writes stay readable by the service. It must be run as root.
+The running server picks up changes within a second.
+.SH EXAMPLES
+.nf
+sudo helpbuoy-serverctl hostkey
+sudo helpbuoy-serverctl techie add alice 'ssh\-ed25519 AAAA...'
+sudo helpbuoy-serverctl techie list
+sudo helpbuoy-serverctl computer list
+sudo helpbuoy-serverctl computer remove SHA256:...
+.fi
+.SH FILES
+.TP
+.I /etc/default/helpbuoy-server
+Listen address of the service.
+.TP
+.I /var/lib/helpbuoy-server
+Host key, techies, registered computers and server.log.
+.SH SEE ALSO
+.BR helpbuoy-server (1)

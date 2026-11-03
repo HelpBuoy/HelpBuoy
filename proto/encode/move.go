@@ -28,7 +28,7 @@ const (
 )
 
 // moves finds scrolled and moved content among the damaged tiles, applies
-// the resulting copies to the shadow (as the agent will) and recomputes
+// the resulting copies to the shadow (as the techie will) and recomputes
 // e.dirty. It returns the OpCopy ops in the order they must be applied.
 func (e *Encoder) moves(src pixSource, now time.Time) []screen.Rect {
 	var ops []screen.Rect
@@ -439,7 +439,7 @@ func (e *Encoder) grow(src pixSource, r image.Rectangle, dx, dy int) image.Recta
 }
 
 // applyCopy copies the shadow rectangle r - (dx, dy) to r with memmove
-// semantics, as the agent does for OpCopy, carries the lossy flags of the
+// semantics, as the techie does for OpCopy, carries the lossy flags of the
 // source tiles to the destination tiles, and returns the op.
 func (e *Encoder) applyCopy(r image.Rectangle, dx, dy int, now time.Time) screen.Rect {
 	d := image.Pt(dx, dy)

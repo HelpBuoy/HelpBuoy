@@ -231,8 +231,8 @@ func (j *fakeInjector) get(f func(j *fakeInjector)) {
 	j.mu.Unlock()
 }
 
-// agentSide reads the screen channel like an agent would.
-type agentSide struct {
+// techieside reads the screen channel like a techie would.
+type techieside struct {
 	hellos chan screen.Hello
 	frames chan sentFrame
 	shapes chan screen.CursorShape
@@ -245,7 +245,7 @@ type runnerFixture struct {
 	scr    *fakeScreen
 	enc    *fakeEncoder
 	inj    *fakeInjector
-	h      *agentSide
+	h      *techieside
 	inputW *wire.Writer
 	inner  *fakeInner
 	cancel context.CancelFunc
@@ -275,7 +275,7 @@ func startRunner(t *testing.T, pacing Pacing, setup func(f *runnerFixture)) *run
 		},
 		enc: &fakeEncoder{last: -1},
 		inj: &fakeInjector{},
-		h: &agentSide{
+		h: &techieside{
 			hellos: make(chan screen.Hello, 16),
 			frames: make(chan sentFrame, 64),
 			shapes: make(chan screen.CursorShape, 16),
@@ -547,7 +547,7 @@ func TestRunnerCursor(t *testing.T) {
 	if p := recvT(t, f.h.poses, "pos"); p.ID != s2.ID || s2.ID == s1.ID {
 		t.Fatalf("pos %+v shapes %d %d", p, s1.ID, s2.ID)
 	}
-	// Back to a handle whose image the agent has: position only.
+	// Back to a handle whose image the techie has: position only.
 	f.scr.set(func(s *fakeScreen) { s.cursor.Handle = 3 })
 	if p := recvT(t, f.h.poses, "pos"); p.ID != s1.ID {
 		t.Fatalf("pos %+v", p)

@@ -17,10 +17,10 @@ require (
 	github.com/ebitengine/purego v0.10.0 // indirect
 	github.com/jupiterrider/ffi v0.7.0 // indirect
 	github.com/mevdschee/helpbuoy/proto v0.0.0
-	github.com/mevdschee/helpbuoy/relay v0.0.0
+	github.com/mevdschee/helpbuoy/server v0.0.0
 	golang.org/x/exp v0.0.0-20260508232706-74f9aab9d74a // indirect
 )
 
 replace github.com/mevdschee/helpbuoy/proto => ../proto
 
-replace github.com/mevdschee/helpbuoy/relay => ../relay
+replace github.com/mevdschee/helpbuoy/server => ../server

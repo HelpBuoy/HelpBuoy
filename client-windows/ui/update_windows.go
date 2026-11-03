@@ -17,7 +17,7 @@ import (
 
 // maybeOfferUpdate offers the release in the current view, once, when no
 // dialog is open. The controller only puts a release in the view while the
-// client is idle (no request, no session).
+// computer is idle (no request, no session).
 func (w *Window) maybeOfferUpdate() {
 	r := w.view.Update
 	if r == nil || w.updateAsked || w.dialogs > 0 || w.wnd.Hwnd() == 0 {

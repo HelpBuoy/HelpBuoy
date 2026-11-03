@@ -12,9 +12,9 @@ func TestUserMachine(t *testing.T) {
 	}
 }
 
-func TestAgentName(t *testing.T) {
-	if n := AgentName(); !validName(n) {
-		t.Errorf("AgentName = %q is not valid", n)
+func TestTechieName(t *testing.T) {
+	if n := TechieName(); !validName(n) {
+		t.Errorf("TechieName = %q is not valid", n)
 	}
 	for s, want := range map[string]bool{"anna": true, "a.b-c_1": true, "": false, "Anna": false, "a b": false} {
 		if validName(s) != want {

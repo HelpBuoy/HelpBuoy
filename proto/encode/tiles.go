@@ -192,7 +192,7 @@ func (e *Encoder) encodeJobs(ops []screen.Rect, src pixSource, jobs []tileJob, n
 		ops = append(ops, op)
 		e.stats.JPEG++
 	}
-	// The agent now has these tiles; JPEG ones are lossy until refined.
+	// The techie now has these tiles; JPEG ones are lossy until refined.
 	delay := e.refineDelay()
 	for i := range jobs {
 		j := &jobs[i]

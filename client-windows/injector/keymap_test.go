@@ -6,7 +6,7 @@ import (
 	"github.com/mevdschee/helpbuoy/proto/input"
 )
 
-// TestTableCoversInputCodes checks that every key code the agent may send
+// TestTableCoversInputCodes checks that every key code the techie may send
 // (input.Codes) has an entry in the injection table.
 func TestTableCoversInputCodes(t *testing.T) {
 	for _, c := range input.Codes {

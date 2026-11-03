@@ -9,15 +9,15 @@ import (
 	"syscall"
 )
 
-// ErrHostKeyChanged is returned when the relay presents a host key other than
-// the pinned one. It is a hard error: the client stops connecting.
-var ErrHostKeyChanged = errors.New("relay identity changed")
+// ErrHostKeyChanged is returned when the server presents a host key other than
+// the pinned one. It is a hard error: the computer stops connecting.
+var ErrHostKeyChanged = errors.New("server identity changed")
 
-// HostKeyChangedError is the ErrHostKeyChanged a relay caused by showing
+// HostKeyChangedError is the ErrHostKeyChanged a server caused by showing
 // another host key than the pinned one.
 type HostKeyChangedError struct {
 	OldFingerprint string // pinned
-	NewFingerprint string // shown by the relay now
+	NewFingerprint string // shown by the server now
 	NewKeyLine     string // authorized_keys line of the new key, to pin it if the user trusts it
 }
 
@@ -27,19 +27,19 @@ func (e *HostKeyChangedError) Error() string {
 
 func (e *HostKeyChangedError) Unwrap() error { return ErrHostKeyChanged }
 
-// ErrNotRelay is returned when the other end is not a helpbuoy relay.
-var ErrNotRelay = errors.New("not a HelpBuoy relay")
+// ErrNotServer is returned when the other end is not a helpbuoy server.
+var ErrNotServer = errors.New("not a HelpBuoy server")
 
-// ErrRefusedKey is returned when the relay refuses the app key.
-var ErrRefusedKey = errors.New("the relay refused this key")
+// ErrRefusedKey is returned when the server refuses the app key.
+var ErrRefusedKey = errors.New("the server refused this key")
 
-// ErrAgentKey is returned when the key belongs to an agent on this relay.
-var ErrAgentKey = errors.New("this key is an agent key on this relay")
+// ErrTechieKey is returned when the key belongs to a techie on this server.
+var ErrTechieKey = errors.New("this key is a techie key on this server")
 
-// RelayError is a message the relay sent with control.Error before closing.
-type RelayError struct{ Message string }
+// ServerError is a message the server sent with control.Error before closing.
+type ServerError struct{ Message string }
 
-func (e *RelayError) Error() string { return "relay: " + e.Message }
+func (e *ServerError) Error() string { return "server: " + e.Message }
 
 // Kind classifies connection errors for the first-run window.
 type Kind int
@@ -50,17 +50,17 @@ const (
 	KindNameNotFound
 	KindRefused
 	KindTimeout
-	KindNotRelay
+	KindNotServer
 	KindRefusedKey
 	KindHostKeyChanged
-	KindAgentKey
-	KindRelay
+	KindTechieKey
+	KindServer
 )
 
 // Classify returns the kind of a connection error.
 func Classify(err error) Kind {
 	var dnsErr *net.DNSError
-	var relayErr *RelayError
+	var serverErr *ServerError
 	var errno syscall.Errno
 	var netErr net.Error
 	switch {
@@ -68,14 +68,14 @@ func Classify(err error) Kind {
 		return KindOther
 	case errors.Is(err, ErrHostKeyChanged):
 		return KindHostKeyChanged
-	case errors.Is(err, ErrAgentKey):
-		return KindAgentKey
+	case errors.Is(err, ErrTechieKey):
+		return KindTechieKey
 	case errors.Is(err, ErrRefusedKey):
 		return KindRefusedKey
-	case errors.As(err, &relayErr):
-		return KindRelay
-	case errors.Is(err, ErrNotRelay):
-		return KindNotRelay
+	case errors.As(err, &serverErr):
+		return KindServer
+	case errors.Is(err, ErrNotServer):
+		return KindNotServer
 	case errors.As(err, &dnsErr):
 		// IsNotFound is not always set (for example on Windows for some
 		// resolvers); any DNS failure means the name could not be used.
@@ -99,24 +99,24 @@ func isRefused(e syscall.Errno) bool {
 func Describe(err error) string {
 	switch Classify(err) {
 	case KindNameNotFound:
-		return "This name was not found. Check the relay address."
+		return "This name was not found. Check the server address."
 	case KindRefused:
-		return "Nothing is answering at this address. Check the address and the port, and whether the relay is running."
+		return "Nothing is answering at this address. Check the address and the port, and whether the server is running."
 	case KindTimeout:
-		return "The relay did not answer in time. Check the address and your internet connection."
-	case KindNotRelay:
-		return "This address does not belong to a HelpBuoy relay."
+		return "The server did not answer in time. Check the address and your internet connection."
+	case KindNotServer:
+		return "This address does not belong to a HelpBuoy server."
 	case KindRefusedKey:
-		return "The relay refused this PC for now. Try again later."
+		return "The server refused this PC for now. Try again later."
 	case KindHostKeyChanged:
-		return "The relay's identity changed, so HelpBuoy stopped connecting. Ask an agent before you continue. " +
+		return "The server's identity changed, so HelpBuoy stopped connecting. Ask a techie before you continue. " +
 			"Restart HelpBuoy to answer the warning again."
-	case KindAgentKey:
-		return "This key belongs to an agent on this relay and can't be used here."
-	case KindRelay:
-		var re *RelayError
+	case KindTechieKey:
+		return "This key belongs to a techie on this server and can't be used here."
+	case KindServer:
+		var re *ServerError
 		errors.As(err, &re)
-		return "The relay closed the connection: " + strings.TrimSuffix(re.Message, ".") + "."
+		return "The server closed the connection: " + strings.TrimSuffix(re.Message, ".") + "."
 	}
 	if err == nil {
 		return ""

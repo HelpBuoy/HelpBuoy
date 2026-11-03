@@ -1,11 +1,11 @@
-// Package control defines the sv-control protocol between the relay and the
-// agent and client apps, plus the SSH channel names and extra data used to
-// set up sessions. This file is the contract shared by relay/, desk/ and
+// Package control defines the sv-control protocol between the server and the
+// techie and client apps, plus the SSH channel names and extra data used to
+// set up sessions. This file is the contract shared by server/, desk/ and
 // client-windows/; change it only together with all three.
 //
 // # Transport
 //
-// Every app connects to the relay over SSH with its own Ed25519 key (user
+// Every app connects to the server over SSH with its own Ed25519 key (user
 // name "helpbuoy", ignored). After auth it opens exactly one channel of type
 // ChannelControl. Messages on it are wire frames (proto/wire) whose type byte
 // is a MsgType and whose payload is the JSON encoding of the matching struct.
@@ -14,41 +14,41 @@
 //
 // Any role, right after opening the control channel:
 //
-//	app   -> relay  ClientHello (clients and pending) or nothing (agents)
-//	relay -> app    Hello{Role}
+//	app   -> server  ComputerHello (computers and pending) or nothing (techies)
+//	server -> app    Hello{Role}
 //
-// Pending (unknown key): may only send ClientHello. When an agent registers its
-// key the relay sends Registered and from then on treats the connection as a
-// client (no reconnect needed).
+// Pending (unknown key): may only send ComputerHello. When a techie registers its
+// key the server sends Registered and from then on treats the connection as a
+// computer (no reconnect needed).
 //
-// Right after Hello the relay sends RelayInfo (title and instruction line set
-// by the agents), and again to every connection whenever it changes.
+// Right after Hello the server sends ServerInfo (title and instruction line set
+// by the techies), and again to every connection whenever it changes.
 //
-// Agent commands carry a Seq; the relay answers each with Reply{Seq, Error}.
+// Techie commands carry a Seq; the server answers each with Reply{Seq, Error}.
 // Presence is a full snapshot, sent after Hello and after every change.
 //
-// Agent keys that send ClientHello anyway get Hello{agent} and the message is ignored.
+// Techie keys that send ComputerHello anyway get Hello{techie} and the message is ignored.
 // Every connection answers the global request keepalive@openssh.com (want-reply true);
-// the relay replies true, the apps drop a connection after 3 unanswered keepalives.
+// the server replies true, the apps drop a connection after 3 unanswered keepalives.
 //
-// Session setup (client is the inner SSH server, agent the inner client). A
-// session always starts from an agent and always needs the user's consent:
+// Session setup (computer is the inner SSH server, techie the inner client). A
+// session always starts from a techie and always needs the user's consent:
 //
-//	agent -> relay   Connect{Seq, Fingerprint, RequestID}  (RequestID chosen by the agent)
-//	relay  -> agent  Reply{Seq}  or Reply{Seq, Error} when the client is offline or busy
-//	relay  -> agents Presence (client's Request.State = taken, TakenBy = agent)
-//	relay  -> client  SessionReady{RequestID, Agent...}
-//	client asks its user whether this agent may take control. If not:
-//	client -> relay   CancelRequest{RequestID}
-//	relay  -> client  RequestStateMsg{RequestID, cancelled}; agents see it in Presence
+//	techie -> server   Connect{Seq, Fingerprint, RequestID}  (RequestID chosen by the techie)
+//	server  -> techie  Reply{Seq}  or Reply{Seq, Error} when the computer is offline or busy
+//	server  -> techies Presence (computer's Request.State = taken, TakenBy = techie)
+//	server  -> computer  SessionReady{RequestID, Techie...}
+//	computer asks its user whether this techie may take control. If not:
+//	computer -> server   CancelRequest{RequestID}
+//	server  -> computer  RequestStateMsg{RequestID, cancelled}; techies see it in Presence
 //	If so:
-//	client -> relay   opens channel ChannelSession, extra data = SessionChannelData
-//	relay  -> agent  opens channel ChannelSession, extra data = AgentSessionData
-//	relay splices the two channels; inner SSH runs end to end.
+//	computer -> server   opens channel ChannelSession, extra data = SessionChannelData
+//	server  -> techie  opens channel ChannelSession, extra data = TechiesessionData
+//	server splices the two channels; inner SSH runs end to end.
 //
-// The relay ends a request whose session channel did not come within its
-// session start timeout (1 min) and tells the client RequestStateMsg{ended}.
-// A session ends when either side closes its session channel; the relay then
+// The server ends a request whose session channel did not come within its
+// session start timeout (1 min) and tells the computer RequestStateMsg{ended}.
+// A session ends when either side closes its session channel; the server then
 // closes the other one and updates Presence.
 package control
 
@@ -66,168 +66,168 @@ import (
 
 // SSH names.
 const (
-	SSHUser        = "helpbuoy"                  // user name sent by apps; the relay ignores it
+	SSHUser        = "helpbuoy"                  // user name sent by apps; the server ignores it
 	ChannelControl = "helpbuoy-control@helpbuoy" // one per connection, opened by the app
-	ChannelSession = "helpbuoy-session@helpbuoy" // opened by the client, and by the relay towards the agent
+	ChannelSession = "helpbuoy-session@helpbuoy" // opened by the computer, and by the server towards the techie
 )
 
-// Role of a connection, decided by the relay from the key alone.
+// Role of a connection, decided by the server from the key alone.
 type Role string
 
 const (
-	RoleAgent   Role = "agent"
-	RoleClient  Role = "client"
-	RolePending Role = "pending"
+	RoleTechie   Role = "techie"
+	RoleComputer Role = "computer"
+	RolePending  Role = "pending"
 )
 
 // MsgType is the wire frame type byte.
 type MsgType uint8
 
 const (
-	// relay -> any
+	// server -> any
 	MsgHello MsgType = 1
-	// client/pending -> relay
-	MsgClientHello MsgType = 2
-	// relay -> agents
+	// computer/pending -> server
+	MsgComputerHello MsgType = 2
+	// server -> techies
 	MsgPresence MsgType = 3
-	// agent -> relay
-	MsgRegisterClient   MsgType = 4
-	MsgUnregisterClient MsgType = 5
+	// techie -> server
+	MsgRegisterComputer   MsgType = 4
+	MsgUnregisterComputer MsgType = 5
 	// 6 was OpenRequest
-	// relay -> agent
+	// server -> techie
 	MsgReply MsgType = 7
-	// relay -> client
+	// server -> computer
 	MsgRegistered   MsgType = 8
 	MsgRequestState MsgType = 9
 	MsgSessionReady MsgType = 10
-	// client -> relay (11 was RequestHelp)
+	// computer -> server (11 was RequestHelp)
 	MsgCancelRequest MsgType = 12
-	// relay -> any: fatal error before the relay closes the connection
+	// server -> any: fatal error before the server closes the connection
 	MsgError MsgType = 13
-	// agent -> relay
-	MsgRenameClient  MsgType = 14
-	MsgConnect       MsgType = 15
-	MsgRegisterAgent MsgType = 16
-	MsgSetRelayInfo  MsgType = 18
-	// relay -> any
-	MsgRelayInfo MsgType = 17
+	// techie -> server
+	MsgRenameComputer MsgType = 14
+	MsgConnect        MsgType = 15
+	MsgRegisterTechie MsgType = 16
+	MsgSetServerInfo  MsgType = 18
+	// server -> any
+	MsgServerInfo MsgType = 17
 )
 
-// Hello is the relay's first message on every control channel.
+// Hello is the server's first message on every control channel.
 type Hello struct {
-	Role         Role      `json:"role"`
-	RelayVersion string    `json:"relay_version"`
-	ServerTime   time.Time `json:"server_time"`
-	// Name is the agent's name, agents only. Clients are not told the name
-	// agents gave them; that name is only for agents.
+	Role          Role      `json:"role"`
+	ServerVersion string    `json:"server_version"`
+	ServerTime    time.Time `json:"server_time"`
+	// Name is the techie's name, techies only. Computers are not told the name
+	// techies gave them; that name is only for techies.
 	Name string `json:"name,omitempty"`
 }
 
-// RelayInfo is the relay's title and instruction line, e.g. "Example Inc" and
-// "Call +1 234 567 890 for support". Both may be empty. Clients show them to
-// their user; agents show and edit them on the Relay tab.
-type RelayInfo struct {
+// ServerInfo is the server's title and instruction line, e.g. "Example Inc" and
+// "Call +1 234 567 890 for support". Both may be empty. Computers show them to
+// their user; techies show and edit them on the Server tab.
+type ServerInfo struct {
 	Title       string `json:"title"`
 	Instruction string `json:"instruction"`
 }
 
-// DefaultInstruction is what clients show when the relay's instruction line
+// DefaultInstruction is what computers show when the server's instruction line
 // is empty. An empty title shows nothing.
-const DefaultInstruction = "An agent can now ask to connect. You will be asked first, " +
+const DefaultInstruction = "A techie can now ask to connect. You will be asked first, " +
 	"and pressing Esc always takes back control."
 
-// SetRelayInfo replaces the relay's title and instruction line (each one line
+// SetServerInfo replaces the server's title and instruction line (each one line
 // of printable text, title at most 64 and instruction at most 160 characters,
-// empty to clear). Every connection gets the new RelayInfo.
-type SetRelayInfo struct {
+// empty to clear). Every connection gets the new ServerInfo.
+type SetServerInfo struct {
 	Seq         uint32 `json:"seq"`
 	Title       string `json:"title"`
 	Instruction string `json:"instruction"`
 }
 
-// ClientHello is sent by clients and pending connections right after opening
+// ComputerHello is sent by computers and pending connections right after opening
 // the control channel.
-type ClientHello struct {
+type ComputerHello struct {
 	AppVersion  string `json:"app_version"`
 	UserMachine string `json:"user_machine"` // current %USERNAME%@%COMPUTERNAME%, lower-case user
 }
 
-// Presence is a full snapshot for agents.
+// Presence is a full snapshot for techies.
 type Presence struct {
-	Clients []ClientInfo `json:"clients"` // all registered clients, online or not
-	Agents  []AgentInfo  `json:"agents"`  // all agents, online or not
+	Computers []ComputerInfo `json:"computers"` // all registered computers, online or not
+	Techies   []TechieInfo   `json:"techies"`   // all techies, online or not
 }
 
-// ClientInfo describes one registered client.
-type ClientInfo struct {
+// ComputerInfo describes one registered computer.
+type ComputerInfo struct {
 	Fingerprint   string       `json:"fingerprint"` // SHA256:...
 	Name          string       `json:"name"`        // user@machine from the key comment
 	Online        bool         `json:"online"`
-	UserMachine   string       `json:"user_machine,omitempty"` // as reported in ClientHello while online
+	UserMachine   string       `json:"user_machine,omitempty"` // as reported in ComputerHello while online
 	RegisteredBy  string       `json:"registered_by"`
 	RegisteredAt  time.Time    `json:"registered_at"`
 	LastSeen      time.Time    `json:"last_seen"`
 	Request       *RequestInfo `json:"request,omitempty"`         // request of a Connect, nil if none
-	InSessionWith string       `json:"in_session_with,omitempty"` // agent name while a session runs
+	InSessionWith string       `json:"in_session_with,omitempty"` // techie name while a session runs
 }
 
-// RequestState of the request an agent's Connect creates.
+// RequestState of the request a techie's Connect creates.
 type RequestState string
 
 const (
-	RequestTaken     RequestState = "taken"     // an agent connected; waiting for the user, or session running
+	RequestTaken     RequestState = "taken"     // a techie connected; waiting for the user, or session running
 	RequestCancelled RequestState = "cancelled" // the user refused
 	RequestEnded     RequestState = "ended"     // its session ended, or never started in time
 )
 
-// RequestInfo is the request of an agent's Connect as agents see it.
+// RequestInfo is the request of a techie's Connect as techies see it.
 type RequestInfo struct {
 	ID      string       `json:"id"`
 	Created time.Time    `json:"created"`
 	State   RequestState `json:"state"`
-	TakenBy string       `json:"taken_by,omitempty"` // agent name
+	TakenBy string       `json:"taken_by,omitempty"` // techie name
 }
 
-// AgentInfo describes one agent.
-type AgentInfo struct {
+// TechieInfo describes one techie.
+type TechieInfo struct {
 	Name        string `json:"name"`
 	Fingerprint string `json:"fingerprint"`
 	Online      bool   `json:"online"`
 }
 
-// RegisterClient registers a client key. PublicKey is the authorized_keys line
+// RegisterComputer registers a computer key. PublicKey is the authorized_keys line
 // as pasted (already cleaned by proto/identity); Name overrides the key
 // comment and is required when the comment is empty.
-type RegisterClient struct {
+type RegisterComputer struct {
 	Seq       uint32 `json:"seq"`
 	PublicKey string `json:"public_key"`
 	Name      string `json:"name,omitempty"`
 }
 
-// RegisterAgent adds another agent key, like helpbuoy-relay agent add. Name
+// RegisterTechie adds another techie key, like helpbuoy-server techie add. Name
 // is required (1 to 64 characters, no spaces).
-type RegisterAgent struct {
+type RegisterTechie struct {
 	Seq       uint32 `json:"seq"`
 	PublicKey string `json:"public_key"`
 	Name      string `json:"name"`
 }
 
-// RenameClient changes the name agents see for a registered client (and the
+// RenameComputer changes the name techies see for a registered computer (and the
 // comment of its stored key line). Name may contain spaces, e.g. "Anna laptop".
-type RenameClient struct {
+type RenameComputer struct {
 	Seq         uint32 `json:"seq"`
 	Fingerprint string `json:"fingerprint"`
 	Name        string `json:"name"`
 }
 
-// UnregisterClient removes a client; an online client is disconnected.
-type UnregisterClient struct {
+// UnregisterComputer removes a computer; an online computer is disconnected.
+type UnregisterComputer struct {
 	Seq         uint32 `json:"seq"`
 	Fingerprint string `json:"fingerprint"`
 }
 
-// Connect starts a session with an online client, once its user allows it.
-// RequestID is chosen by the agent (16 random bytes in hex) so it can
+// Connect starts a session with an online computer, once its user allows it.
+// RequestID is chosen by the techie (16 random bytes in hex) so it can
 // recognize the session channel that follows.
 type Connect struct {
 	Seq         uint32 `json:"seq"`
@@ -257,77 +257,77 @@ func ValidRequestID(id string) bool {
 	return true
 }
 
-// Reply answers an agent command. Error is empty on success.
+// Reply answers a techie command. Error is empty on success.
 type Reply struct {
 	Seq   uint32 `json:"seq"`
 	Error string `json:"error,omitempty"`
 }
 
-// Registered tells a pending connection that it is now a registered client.
-// It carries no name: the name a client is registered under is only for
-// agents.
+// Registered tells a pending connection that it is now a registered computer.
+// It carries no name: the name a computer is registered under is only for
+// techies.
 type Registered struct{}
 
-// CancelRequest refuses an agent's Connect (or ends it before the session
+// CancelRequest refuses a techie's Connect (or ends it before the session
 // channel is opened).
 type CancelRequest struct {
 	RequestID string `json:"request_id"`
 }
 
-// RequestStateMsg tells the client that a request ended.
+// RequestStateMsg tells the computer that a request ended.
 type RequestStateMsg struct {
 	RequestID string       `json:"request_id"`
 	State     RequestState `json:"state"`
 }
 
-// SessionReady tells the client that an agent wants to connect. The client
+// SessionReady tells the computer that a techie wants to connect. The computer
 // asks its user and then opens the session channel, or sends CancelRequest.
-// AgentKey is the agent's authorized_keys line; the client accepts only this
-// key in the inner SSH handshake (and warns if a known agent name shows a
+// TechieKey is the techie's authorized_keys line; the computer accepts only this
+// key in the inner SSH handshake (and warns if a known techie name shows a
 // different key).
 type SessionReady struct {
-	RequestID string `json:"request_id"`
-	AgentName string `json:"agent_name"`
-	AgentKey  string `json:"agent_key"`
+	RequestID  string `json:"request_id"`
+	TechieName string `json:"techie_name"`
+	TechieKey  string `json:"techie_key"`
 }
 
-// Error is sent before the relay closes a connection on purpose.
+// Error is sent before the server closes a connection on purpose.
 type Error struct {
 	Message string `json:"message"`
 }
 
-// SessionChannelData is the extra data of the client's ChannelSession open.
+// SessionChannelData is the extra data of the computer's ChannelSession open.
 type SessionChannelData struct {
 	RequestID string
 }
 
-// AgentSessionData is the extra data of the relay's ChannelSession open
-// towards the agent. ClientKey is the client's authorized_keys line; the
-// agent pins it in the inner handshake and also checks it against its own
-// view of the registered client.
-type AgentSessionData struct {
-	RequestID   string
-	ClientName  string
-	ClientKey   string
-	UserMachine string
+// TechiesessionData is the extra data of the server's ChannelSession open
+// towards the techie. ComputerKey is the computer's authorized_keys line; the
+// techie pins it in the inner handshake and also checks it against its own
+// view of the registered computer.
+type TechiesessionData struct {
+	RequestID    string
+	ComputerName string
+	ComputerKey  string
+	UserMachine  string
 }
 
-// MarshalSessionChannelData encodes the client's channel extra data in SSH wire format.
+// MarshalSessionChannelData encodes the computer's channel extra data in SSH wire format.
 func MarshalSessionChannelData(d SessionChannelData) []byte { return ssh.Marshal(&d) }
 
-// UnmarshalSessionChannelData parses the client's channel extra data.
+// UnmarshalSessionChannelData parses the computer's channel extra data.
 func UnmarshalSessionChannelData(b []byte) (SessionChannelData, error) {
 	var d SessionChannelData
 	err := ssh.Unmarshal(b, &d)
 	return d, err
 }
 
-// MarshalAgentSessionData encodes the relay's channel extra data.
-func MarshalAgentSessionData(d AgentSessionData) []byte { return ssh.Marshal(&d) }
+// MarshalTechiesessionData encodes the server's channel extra data.
+func MarshalTechiesessionData(d TechiesessionData) []byte { return ssh.Marshal(&d) }
 
-// UnmarshalAgentSessionData parses the relay's channel extra data.
-func UnmarshalAgentSessionData(b []byte) (AgentSessionData, error) {
-	var d AgentSessionData
+// UnmarshalTechiesessionData parses the server's channel extra data.
+func UnmarshalTechiesessionData(b []byte) (TechiesessionData, error) {
+	var d TechiesessionData
 	err := ssh.Unmarshal(b, &d)
 	return d, err
 }
@@ -337,24 +337,24 @@ func typeOf(m any) (MsgType, error) {
 	switch m.(type) {
 	case *Hello, Hello:
 		return MsgHello, nil
-	case *ClientHello, ClientHello:
-		return MsgClientHello, nil
+	case *ComputerHello, ComputerHello:
+		return MsgComputerHello, nil
 	case *Presence, Presence:
 		return MsgPresence, nil
-	case *RegisterClient, RegisterClient:
-		return MsgRegisterClient, nil
-	case *UnregisterClient, UnregisterClient:
-		return MsgUnregisterClient, nil
-	case *RenameClient, RenameClient:
-		return MsgRenameClient, nil
-	case *RegisterAgent, RegisterAgent:
-		return MsgRegisterAgent, nil
+	case *RegisterComputer, RegisterComputer:
+		return MsgRegisterComputer, nil
+	case *UnregisterComputer, UnregisterComputer:
+		return MsgUnregisterComputer, nil
+	case *RenameComputer, RenameComputer:
+		return MsgRenameComputer, nil
+	case *RegisterTechie, RegisterTechie:
+		return MsgRegisterTechie, nil
 	case *Connect, Connect:
 		return MsgConnect, nil
-	case *RelayInfo, RelayInfo:
-		return MsgRelayInfo, nil
-	case *SetRelayInfo, SetRelayInfo:
-		return MsgSetRelayInfo, nil
+	case *ServerInfo, ServerInfo:
+		return MsgServerInfo, nil
+	case *SetServerInfo, SetServerInfo:
+		return MsgSetServerInfo, nil
 	case *Reply, Reply:
 		return MsgReply, nil
 	case *Registered, Registered:
@@ -376,24 +376,24 @@ func newOf(t MsgType) (any, error) {
 	switch t {
 	case MsgHello:
 		return &Hello{}, nil
-	case MsgClientHello:
-		return &ClientHello{}, nil
+	case MsgComputerHello:
+		return &ComputerHello{}, nil
 	case MsgPresence:
 		return &Presence{}, nil
-	case MsgRegisterClient:
-		return &RegisterClient{}, nil
-	case MsgUnregisterClient:
-		return &UnregisterClient{}, nil
-	case MsgRenameClient:
-		return &RenameClient{}, nil
-	case MsgRegisterAgent:
-		return &RegisterAgent{}, nil
+	case MsgRegisterComputer:
+		return &RegisterComputer{}, nil
+	case MsgUnregisterComputer:
+		return &UnregisterComputer{}, nil
+	case MsgRenameComputer:
+		return &RenameComputer{}, nil
+	case MsgRegisterTechie:
+		return &RegisterTechie{}, nil
 	case MsgConnect:
 		return &Connect{}, nil
-	case MsgRelayInfo:
-		return &RelayInfo{}, nil
-	case MsgSetRelayInfo:
-		return &SetRelayInfo{}, nil
+	case MsgServerInfo:
+		return &ServerInfo{}, nil
+	case MsgSetServerInfo:
+		return &SetServerInfo{}, nil
 	case MsgReply:
 		return &Reply{}, nil
 	case MsgRegistered:
@@ -410,7 +410,7 @@ func newOf(t MsgType) (any, error) {
 	return nil, fmt.Errorf("control: unknown message type byte %d", t)
 }
 
-// MaxMessage bounds a control message payload. Presence for many clients is
+// MaxMessage bounds a control message payload. Presence for many computers is
 // the largest message.
 const MaxMessage = 4 << 20
 

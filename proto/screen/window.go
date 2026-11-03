@@ -5,15 +5,15 @@ import (
 	"time"
 )
 
-// MaxUnacked is the most frames the client keeps in flight (PLAN.md 5.5).
+// MaxUnacked is the most frames the computer keeps in flight (PLAN.md 5.5).
 const MaxUnacked = 2
 
-// Window is the client's flow control for frames: it tracks frames sent but
+// Window is the computer's flow control for frames: it tracks frames sent but
 // not yet acknowledged and allows at most MaxUnacked of them. While the window
-// is full the client keeps accumulating damage and sends the newest pixels
+// is full the computer keeps accumulating damage and sends the newest pixels
 // once a slot frees up, so latency never builds up in SSH or TCP buffers.
 //
-// Acks are cumulative: the agent applies frames in order, so an Ack for Seq
+// Acks are cumulative: the techie applies frames in order, so an Ack for Seq
 // n also acknowledges every older frame still in flight. Sequence numbers are
 // compared with wraparound.
 //
@@ -21,7 +21,7 @@ const MaxUnacked = 2
 // example a sender goroutine calling CanSend and Sent and a reader goroutine
 // calling Acked.
 //
-// Typical use on the client:
+// Typical use on the computer:
 //
 //	for {
 //		if !win.CanSend() {

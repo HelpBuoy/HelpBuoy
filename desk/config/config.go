@@ -1,9 +1,9 @@
 // Package config stores the desk app's settings in its data directory:
-// the last relay address and its pinned relay host key.
+// the last server address and its pinned server host key.
 //
-// The relay host key is trust on first use (PLAN.md 3.5): it is pinned on the
+// The server host key is trust on first use (PLAN.md 3.5): it is pinned on the
 // first successful connection and any later change is a hard error, never a
-// silent update. Choosing a different relay address forgets the pin.
+// silent update. Choosing a different server address forgets the pin.
 package config
 
 import (
@@ -18,30 +18,30 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/proto/relayaddr"
+	"github.com/mevdschee/helpbuoy/proto/serveraddr"
 )
 
 // FileName is the settings file inside the data directory. The client app
-// uses config.json in the same kind of directory, so the agent uses its own
-// name to never read or overwrite the client's file.
-const FileName = "agent.json"
+// uses config.json in the same kind of directory, so the techie uses its own
+// name to never read or overwrite the computer's file.
+const FileName = "techie.json"
 
-// ErrRelayIdentityChanged is returned when the relay presents a host key that
+// ErrServerIdentityChanged is returned when the server presents a host key that
 // differs from the pinned one.
-var ErrRelayIdentityChanged = errors.New("relay identity changed")
+var ErrServerIdentityChanged = errors.New("server identity changed")
 
-// Config is the stored agent configuration.
+// Config is the stored techie configuration.
 type Config struct {
-	// RelayAddr is the relay address last connected to, as typed on the
-	// connect screen (normalized hostname:port). localhost means the relay
+	// ServerAddr is the server address last connected to, as typed on the
+	// connect screen (normalized hostname:port). localhost means the server
 	// that runs inside this app.
-	RelayAddr string `json:"relay_addr,omitempty"`
-	// RelayHostKey is the pinned host key of RelayAddr as an authorized_keys line.
-	RelayHostKey string `json:"relay_host_key,omitempty"`
+	ServerAddr string `json:"server_addr,omitempty"`
+	// ServerHostKey is the pinned host key of ServerAddr as an authorized_keys line.
+	ServerHostKey string `json:"server_host_key,omitempty"`
 }
 
-// IsLocal reports whether a names the relay that runs inside this app.
-func IsLocal(a relayaddr.Addr) bool { return a.Host == "localhost" }
+// IsLocal reports whether a names the server that runs inside this app.
+func IsLocal(a serveraddr.Addr) bool { return a.Host == "localhost" }
 
 // Load reads the configuration from dir. A missing file gives the defaults
 // and no error. A damaged file gives the defaults and an error, so the app can
@@ -58,14 +58,14 @@ func Load(dir string) (*Config, error) {
 	if err := json.Unmarshal(b, c); err != nil {
 		return &Config{}, fmt.Errorf("%s is damaged: %w", FileName, err)
 	}
-	if c.RelayAddr != "" {
-		if _, err := relayaddr.Parse(c.RelayAddr); err != nil {
-			c.RelayAddr = ""
+	if c.ServerAddr != "" {
+		if _, err := serveraddr.Parse(c.ServerAddr); err != nil {
+			c.ServerAddr = ""
 		}
 	}
-	if c.RelayHostKey != "" {
-		if _, err := ParseHostKey(c.RelayHostKey); err != nil {
-			return c, fmt.Errorf("%s: pinned relay host key: %w", FileName, err)
+	if c.ServerHostKey != "" {
+		if _, err := ParseHostKey(c.ServerHostKey); err != nil {
+			return c, fmt.Errorf("%s: pinned server host key: %w", FileName, err)
 		}
 	}
 	return c, nil
@@ -110,34 +110,34 @@ func isUnsupported(err error) bool {
 	return errors.Is(err, errors.ErrUnsupported)
 }
 
-// SetRelayAddr stores a new relay address. If it names a different relay than
+// SetServerAddr stores a new server address. If it names a different server than
 // before, the pinned host key is forgotten. It reports whether anything changed.
-func (c *Config) SetRelayAddr(a relayaddr.Addr) bool {
+func (c *Config) SetServerAddr(a serveraddr.Addr) bool {
 	s := a.String()
-	if s == c.RelayAddr {
+	if s == c.ServerAddr {
 		return false
 	}
-	c.RelayAddr = s
-	c.RelayHostKey = ""
+	c.ServerAddr = s
+	c.ServerHostKey = ""
 	return true
 }
 
 // Pin applies trust on first use to key: with nothing pinned it pins key and
 // reports true; with the same key pinned it reports false; with a different
-// key pinned it returns ErrRelayIdentityChanged and keeps the old pin.
+// key pinned it returns ErrServerIdentityChanged and keeps the old pin.
 func (c *Config) Pin(key ssh.PublicKey) (bool, error) {
-	if err := CheckPinned(c.RelayHostKey, key); err != nil {
+	if err := CheckPinned(c.ServerHostKey, key); err != nil {
 		return false, err
 	}
-	if c.RelayHostKey != "" {
+	if c.ServerHostKey != "" {
 		return false, nil
 	}
-	c.RelayHostKey = HostKeyLine(key)
+	c.ServerHostKey = HostKeyLine(key)
 	return true, nil
 }
 
-// ForgetHostKey drops the pinned relay key. Only for an explicit user action.
-func (c *Config) ForgetHostKey() { c.RelayHostKey = "" }
+// ForgetHostKey drops the pinned server key. Only for an explicit user action.
+func (c *Config) ForgetHostKey() { c.ServerHostKey = "" }
 
 // CheckPinned compares key with a pinned authorized_keys line. An empty pin
 // accepts any key; a damaged pin accepts none.
@@ -147,15 +147,15 @@ func CheckPinned(pinned string, key ssh.PublicKey) error {
 	}
 	want, err := ParseHostKey(pinned)
 	if err != nil {
-		return fmt.Errorf("pinned relay host key: %w", err)
+		return fmt.Errorf("pinned server host key: %w", err)
 	}
 	if !bytes.Equal(want.Marshal(), key.Marshal()) {
-		return ErrRelayIdentityChanged
+		return ErrServerIdentityChanged
 	}
 	return nil
 }
 
-// ParseHostKey parses an authorized_keys line holding a relay host key.
+// ParseHostKey parses an authorized_keys line holding a server host key.
 func ParseHostKey(line string) (ssh.PublicKey, error) {
 	key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(line))
 	return key, err

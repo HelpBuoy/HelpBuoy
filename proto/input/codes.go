@@ -1,8 +1,8 @@
 package input
 
 // Codes lists every W3C KeyboardEvent.code value the desk app can send in a
-// Key message. The agent's key map may only produce codes from this list,
-// and the client's injector must be able to inject every one of them; tests
+// Key message. The techie's key map may only produce codes from this list,
+// and the computer's injector must be able to inject every one of them; tests
 // on both sides check that, so the two apps can't drift apart.
 var Codes = []string{
 	"AltLeft",

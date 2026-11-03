@@ -9,7 +9,7 @@ import (
 	"github.com/mevdschee/helpbuoy/proto/input"
 )
 
-// Injector injects the agent's input into the local desktop with SendInput
+// Injector injects the techie's input into the local desktop with SendInput
 // (PLAN.md 6.4). It implements session.InputSink.
 //
 // CONTRACT: the session/capture code (another owner) uses exactly this API:

@@ -28,7 +28,7 @@ type sessionTab struct {
 	lastMove input.MouseMove
 	moved    bool
 	host     hostFilter
-	shape    *screen.CursorShape // last cursor shape the client reported
+	shape    *screen.CursorShape // last cursor shape the computer reported
 
 	mode   viewMode   // Fit or 1:1, per tab
 	scroll rl.Vector2 // 1:1 scroll offset in remote pixels
@@ -54,7 +54,7 @@ func (st *sessionTab) close() {
 
 // release lifts every key and button the remote side thinks is down: key
 // and button ups for the ones this side sent down, then ReleaseAll for
-// anything the client may still hold. It also forgets a held host key.
+// anything the computer may still hold. It also forgets a held host key.
 func (st *sessionTab) release() {
 	st.host.reset()
 	if len(st.held) == 0 && st.buttons == [5]bool{} {
@@ -351,7 +351,7 @@ func (a *App) runHostAction(st *sessionTab, act hostAction) {
 	case actToggleMode:
 		st.toggleMode()
 	case actResize:
-		a.resizeToClient(st)
+		a.resizeToComputer(st)
 	}
 }
 
@@ -370,15 +370,15 @@ const (
 	cursorNone          cursorDraw = iota
 	cursorShapeAtMouse             // the remote shape at the local pointer
 	cursorArrowAtMouse             // a plain arrow at the local pointer
-	cursorShapeAtRemote            // the remote shape where the client reports it
+	cursorShapeAtRemote            // the remote shape where the computer reports it
 )
 
 // cursorChoice decides how to show the pointer. While the local pointer
 // controls the session (over), the system cursor is hidden, so a pointer is
-// always drawn there: the remote shape if one is known, even when the client
+// always drawn there: the remote shape if one is known, even when the computer
 // reports its cursor as hidden (touch input, no mouse attached, an app hiding
 // it), else a plain arrow. Otherwise the remote cursor is drawn at the
-// client's position only when it is visible and its shape is known.
+// computer's position only when it is visible and its shape is known.
 func cursorChoice(over, posKnown, visible, hasShape bool) cursorDraw {
 	switch {
 	case over && hasShape:
@@ -395,7 +395,7 @@ func cursorChoice(over, posKnown, visible, hasShape bool) cursorDraw {
 // session (over), the system cursor is hidden for this frame and a pointer
 // is drawn at the local mouse, so pointer movement has no network latency;
 // the remote side still decides the shape (arrow, I-beam, hand). Otherwise
-// the shape is drawn where the client reports its cursor, with the same
+// the shape is drawn where the computer reports its cursor, with the same
 // transform as the screen.
 func (a *App) drawCursor(st *sessionTab, l viewLayout, over bool) {
 	w, h := st.screen.Size()
@@ -474,7 +474,7 @@ func drawPointer(p rl.Vector2) {
 var qualityLabels = []string{"Auto", "Sharp", "Fast"}
 
 var qualityTips = []string{
-	"Auto: the client balances sharpness and frame rate",
+	"Auto: the computer balances sharpness and frame rate",
 	"Sharp: lossless text and images, at a lower frame rate",
 	"Fast: higher frame rate, softer images",
 }
@@ -489,7 +489,7 @@ var viewTips = []string{
 
 // drawToolbar draws the session toolbar: End session, special keys,
 // Refresh, monitor and quality choice, statistics, and on the right the view
-// controls: Fit or 1:1, Resize to client and fullscreen. When the toolbar
+// controls: Fit or 1:1, Resize to computer and fullscreen. When the toolbar
 // is narrow, the statistics go first, then Refresh, then quality, then the
 // monitor choice, then Resize.
 func (a *App) drawToolbar(st *sessionTab, r rl.Rectangle) {
@@ -606,7 +606,7 @@ func (a *App) drawToolbar(st *sessionTab, r rl.Rectangle) {
 	if showResize {
 		rx -= gap + wResize
 		if c.Button(id+"/resize", rl.NewRectangle(rx, y, wResize, bh), resizeLabel, ui.Normal, false) {
-			a.resizeToClient(st)
+			a.resizeToComputer(st)
 		}
 		if c.Hover(rl.NewRectangle(rx, y, wResize, bh)) {
 			c.Tooltip("Resize the window to show the remote screen at 1:1 (Right Ctrl+R)")
@@ -625,7 +625,7 @@ func (a *App) drawToolbar(st *sessionTab, r rl.Rectangle) {
 		sx -= wStats
 		c.TextIn(ui.Regular, ui.SizeSmall, stats, rl.NewRectangle(sx, r.Y, wStats, r.Height), ui.ColMuted)
 		if c.Hover(rl.NewRectangle(sx, r.Y, wStats, r.Height)) {
-			c.Tooltip("Frames per second, round trip time to the client, and screen data received")
+			c.Tooltip("Frames per second, round trip time to the computer, and screen data received")
 		}
 	}
 
@@ -638,7 +638,7 @@ func (a *App) drawToolbar(st *sessionTab, r rl.Rectangle) {
 	} else if um := hello.UserMachine; um != "" && !strings.EqualFold(um, name) {
 		c.TextIn(ui.Regular, ui.SizeSmall, c.Ellipsize(ui.Regular, ui.SizeSmall, um, sx-x-16), rl.NewRectangle(x+8, r.Y, sx-x, r.Height), ui.ColMuted)
 		if c.Hover(rl.NewRectangle(x, r.Y, sx-x, r.Height)) {
-			c.Tooltip("The user and machine the client reports")
+			c.Tooltip("The user and machine the computer reports")
 		}
 	}
 }

@@ -1,6 +1,6 @@
-// Package app is the client's logic between the window and the relay
-// connection: which screen to show (the relay address with Connect, the key
-// to send, waiting for an agent with Disconnect), the stored configuration,
+// Package app is the computer's logic between the window and the server
+// connection: which screen to show (the server address with Connect, the key
+// to send, waiting for a techie with Disconnect), the stored configuration,
 // Remove key and the update offer. It has
 // no GUI dependencies; the window renders the View it is given and forwards
 // button presses.
@@ -20,7 +20,7 @@ import (
 	"github.com/mevdschee/helpbuoy/client-windows/update"
 	"github.com/mevdschee/helpbuoy/proto/appkey"
 	"github.com/mevdschee/helpbuoy/proto/control"
-	"github.com/mevdschee/helpbuoy/proto/relayaddr"
+	"github.com/mevdschee/helpbuoy/proto/serveraddr"
 )
 
 // Screen is one of the window's layouts.
@@ -28,9 +28,9 @@ type Screen int
 
 // Screens.
 const (
-	ScreenAddress  Screen = iota // relay address and Connect; always the first screen
-	ScreenKey                    // connected, key not registered: send this key to an agent
-	ScreenMain                   // registered: waiting for an agent to connect, Disconnect
+	ScreenAddress  Screen = iota // server address and Connect; always the first screen
+	ScreenKey                    // connected, key not registered: send this key to a techie
+	ScreenMain                   // registered: waiting for a techie to connect, Disconnect
 	ScreenKeyError               // the app key exists but can't be used
 )
 
@@ -49,34 +49,34 @@ type View struct {
 	Error string
 
 	// ScreenKey
-	RelayFingerprint string
-	KeyLine          string
-	KeyFingerprint   string
+	ServerFingerprint string
+	KeyLine           string
+	KeyFingerprint    string
 	// Notice is a short, calm line for a temporary condition, like a lost
 	// connection being retried (ScreenKey, ScreenMain). Empty most of the time.
 	Notice string
 
 	// ScreenMain
 	KeyComment string // comment of this PC's key, user@machine
-	Ready      bool   // connected and registered: agents can connect
-	Asking     bool   // an agent wants to connect; the user is being asked
+	Ready      bool   // connected and registered: techies can connect
+	Asking     bool   // a techie wants to connect; the user is being asked
 	InSession  bool   // the window is minimized while true
-	// RelayKeyChange is set when the relay showed another key than the
-	// pinned one; the client stopped connecting (ScreenAddress). The window
-	// warns, and TrustRelayKey pins the new key if the user accepts it.
-	RelayKeyChange *session.HostKeyChangedError
+	// ServerKeyChange is set when the server showed another key than the
+	// pinned one; the computer stopped connecting (ScreenAddress). The window
+	// warns, and TrustServerKey pins the new key if the user accepts it.
+	ServerKeyChange *session.HostKeyChangedError
 
 	// ScreenKeyError
 	KeyDir string
 
-	// Title and Instruction are the relay's title and instruction line
+	// Title and Instruction are the server's title and instruction line
 	// (e.g. "Example Inc", "Call +1 234 567 890 for support"), or the
-	// generic defaults when the relay has none or is not known.
+	// generic defaults when the server has none or is not known.
 	Title       string
 	Instruction string
 
-	// Update is a newer release to offer. It is only set while the client
-	// is idle (address screen, or waiting for an agent), so the offer never
+	// Update is a newer release to offer. It is only set while the computer
+	// is idle (address screen, or waiting for a techie), so the offer never
 	// interrupts the user.
 	Update *update.Release
 }
@@ -86,10 +86,10 @@ type UI interface {
 	// Render shows v. It is called from any goroutine, one call at a time,
 	// and must not wait for the controller.
 	Render(v View)
-	// ConfirmAgent asks whether agent h may take control. oldFingerprint
-	// is set when that agent showed a different key last time. It may
+	// ConfirmTechie asks whether techie h may take control. oldFingerprint
+	// is set when that techie showed a different key last time. It may
 	// block; when ctx ends the question is moot and it should return false.
-	ConfirmAgent(ctx context.Context, h session.Agent, oldFingerprint string) bool
+	ConfirmTechie(ctx context.Context, h session.Techie, oldFingerprint string) bool
 }
 
 // Deps are the controller's collaborators.
@@ -115,7 +115,7 @@ type Deps struct {
 	Logger *slog.Logger
 }
 
-// Controller connects the window, the configuration and the relay client.
+// Controller connects the window, the configuration and the server computer.
 // Its methods are meant to be called from the UI thread; they never block on
 // the network.
 type Controller struct {
@@ -126,14 +126,14 @@ type Controller struct {
 	cfg      *config.Config
 	key      *appkey.Key
 	keyErr   error
-	addr     string // address of the running client, or the last one tried
-	client   *session.Client
-	gen      int // identifies the running client; events of older ones are dropped
+	addr     string // address of the running computer, or the last one tried
+	computer *session.Computer
+	gen      int // identifies the running computer; events of older ones are dropped
 	st       session.State
-	reached  bool       // the running client got through to the relay at least once
-	known    bool       // the running client is registered on its relay
-	info     *[2]string // title and instruction the running client's relay sent
-	lastErr  error      // why the last client stopped, shown on the address screen
+	reached  bool       // the running computer got through to the server at least once
+	known    bool       // the running computer is registered on its server
+	info     *[2]string // title and instruction the running computer's server sent
+	lastErr  error      // why the last computer stopped, shown on the address screen
 	inputErr string
 	closed   bool
 	closing  <-chan struct{}
@@ -198,7 +198,7 @@ func (c *Controller) View() View {
 func (c *Controller) viewLocked() View {
 	v := c.screenLocked()
 	if v.Screen == ScreenMain {
-		v.Title, v.Instruction = c.relayInfoLocked()
+		v.Title, v.Instruction = c.serverInfoLocked()
 		if v.Instruction == "" {
 			v.Instruction = control.DefaultInstruction
 		}
@@ -210,9 +210,9 @@ func (c *Controller) viewLocked() View {
 	return v
 }
 
-// relayInfoLocked returns the title and instruction the relay sent on this
+// serverInfoLocked returns the title and instruction the server sent on this
 // connection; they are never stored.
-func (c *Controller) relayInfoLocked() (string, string) {
+func (c *Controller) serverInfoLocked() (string, string) {
 	if c.info != nil {
 		return c.info[0], c.info[1]
 	}
@@ -231,11 +231,11 @@ func (c *Controller) screenLocked() View {
 	v.KeyLine = c.key.Line
 	v.KeyFingerprint = c.key.Fingerprint
 	v.KeyComment = c.key.Comment
-	v.RelayFingerprint = c.st.RelayFingerprint
+	v.ServerFingerprint = c.st.ServerFingerprint
 
-	lost := "The connection to the relay was lost. Trying again..."
+	lost := "The connection to the server was lost. Trying again..."
 	switch p := c.st.Phase; {
-	case c.client == nil:
+	case c.computer == nil:
 		v.Screen = ScreenAddress
 		v.Address = c.addr
 		if v.Address == "" {
@@ -248,7 +248,7 @@ func (c *Controller) screenLocked() View {
 			v.Error = session.Describe(c.lastErr)
 			var hk *session.HostKeyChangedError
 			if errors.As(c.lastErr, &hk) {
-				v.RelayKeyChange = hk
+				v.ServerKeyChange = hk
 			}
 		}
 	case p == session.PhasePending:
@@ -256,7 +256,7 @@ func (c *Controller) screenLocked() View {
 	case p == session.PhaseReady:
 		v.Screen, v.Ready = ScreenMain, true
 	case p == session.PhaseAsking:
-		v.Screen, v.Asking, v.Notice = ScreenMain, true, "An agent wants to connect."
+		v.Screen, v.Asking, v.Notice = ScreenMain, true, "A techie wants to connect."
 	case p == session.PhaseInSession:
 		v.Screen, v.InSession = ScreenMain, true
 	case !c.reached:
@@ -279,7 +279,7 @@ func describeKeyError(err error) string {
 	return "The key of this PC could not be loaded or created: " + err.Error()
 }
 
-// Start loads the key and the configuration and connects to the last relay
+// Start loads the key and the configuration and connects to the last server
 // address right away. Without one it shows the empty address screen; the
 // address can only be changed once connecting failed or after Disconnect.
 func (c *Controller) Start() {
@@ -287,19 +287,19 @@ func (c *Controller) Start() {
 	c.loadLocked()
 	c.startUpdateCheckLocked()
 	if addr := c.storedAddrLocked(); addr != "" && c.key != nil && c.keyErr == nil {
-		c.startClientLocked(addr)
+		c.startComputerLocked(addr)
 	}
 	c.mu.Unlock()
 	c.update()
 }
 
 // storedAddrLocked is the address to connect to or prefill: the last one
-// that reached a relay, else the relay this PC is registered on.
+// that reached a server, else the server this PC is registered on.
 func (c *Controller) storedAddrLocked() string {
 	if c.cfg.LastAddress != "" {
 		return c.cfg.LastAddress
 	}
-	return c.cfg.RelayAddress
+	return c.cfg.ServerAddress
 }
 
 // startUpdateCheckLocked runs Deps.CheckUpdate once in the background.
@@ -344,42 +344,42 @@ func (c *Controller) loadLocked() {
 	c.cfg = cfg
 }
 
-// startClientLocked replaces the running client. The relay's host key and
-// the agent pins are the stored ones when addr is the stored relay;
+// startComputerLocked replaces the running computer. The server's host key and
+// the techie pins are the stored ones when addr is the stored server;
 // otherwise the host key is pinned on first use.
-func (c *Controller) startClientLocked(addr string) {
-	c.stopClientLocked()
+func (c *Controller) startComputerLocked(addr string) {
+	c.stopComputerLocked()
 	c.gen++
 	c.addr = addr
 	c.reached, c.known, c.lastErr = false, false, nil
 	c.info = nil
 	c.st = session.State{Phase: session.PhaseConnecting}
 	var hostKey string
-	var agents map[string]string
-	if addr == c.cfg.RelayAddress {
-		hostKey, agents = c.cfg.RelayHostKey, c.cfg.Clone().KnownAgents
+	var techies map[string]string
+	if addr == c.cfg.ServerAddress {
+		hostKey, techies = c.cfg.ServerHostKey, c.cfg.Clone().KnownTechies
 	}
-	c.client = c.newClientLocked(addr, hostKey, agents, c.gen)
-	c.client.Start()
+	c.computer = c.newComputerLocked(addr, hostKey, techies, c.gen)
+	c.computer.Start()
 }
 
-// newClientLocked returns a relay client whose events carry gen.
-func (c *Controller) newClientLocked(addr, hostKey string, agents map[string]string, gen int) *session.Client {
+// newComputerLocked returns a server computer whose events carry gen.
+func (c *Controller) newComputerLocked(addr, hostKey string, techies map[string]string, gen int) *session.Computer {
 	var runner session.Runner
 	if c.d.NewRunner != nil {
 		runner = c.d.NewRunner(c.key)
 	}
 	opts := session.Options{
-		Addr:         addr,
-		Signer:       c.key.Signer,
-		AppVersion:   c.d.AppVersion,
-		UserMachine:  c.d.UserMachine,
-		RelayHostKey: hostKey,
-		KnownAgents:  agents,
-		Handler:      handler{c, gen},
-		Runner:       runner,
-		EscHook:      c.d.EscHook,
-		Logger:       c.log,
+		Addr:          addr,
+		Signer:        c.key.Signer,
+		AppVersion:    c.d.AppVersion,
+		UserMachine:   c.d.UserMachine,
+		ServerHostKey: hostKey,
+		KnownTechies:  techies,
+		Handler:       handler{c, gen},
+		Runner:        runner,
+		EscHook:       c.d.EscHook,
+		Logger:        c.log,
 	}
 	if c.d.Tune != nil {
 		c.d.Tune(&opts)
@@ -387,11 +387,11 @@ func (c *Controller) newClientLocked(addr, hostKey string, agents map[string]str
 	return session.New(opts)
 }
 
-// stopClientLocked stops the running client.
-func (c *Controller) stopClientLocked() {
-	if c.client != nil {
-		c.client.Close()
-		c.client = nil
+// stopComputerLocked stops the running computer.
+func (c *Controller) stopComputerLocked() {
+	if c.computer != nil {
+		c.computer.Close()
+		c.computer = nil
 	}
 	c.st = session.State{}
 }
@@ -399,62 +399,62 @@ func (c *Controller) stopClientLocked() {
 // Connect is the Connect button on the address screen.
 func (c *Controller) Connect(text string) {
 	c.mu.Lock()
-	if c.closed || c.key == nil || c.client != nil {
+	if c.closed || c.key == nil || c.computer != nil {
 		c.mu.Unlock()
 		return
 	}
-	a, err := relayaddr.Parse(text)
+	a, err := serveraddr.Parse(text)
 	if err != nil {
 		c.addr = text
 		c.lastErr = nil
 		c.inputErr = capitalize(err.Error()) + "."
 	} else {
 		c.inputErr = ""
-		c.startClientLocked(a.String())
+		c.startComputerLocked(a.String())
 	}
 	c.mu.Unlock()
 	c.update()
 }
 
-// Disconnect is the Disconnect button (and the "use a different relay
-// address" link): it leaves the relay and goes back to the address screen.
+// Disconnect is the Disconnect button (and the "use a different server
+// address" link): it leaves the server and goes back to the address screen.
 // A running session ends with it.
 func (c *Controller) Disconnect() {
 	c.mu.Lock()
-	if c.client == nil {
+	if c.computer == nil {
 		c.mu.Unlock()
 		return
 	}
-	c.log.Info("disconnected by the user", "relay", c.addr)
-	c.stopClientLocked()
+	c.log.Info("disconnected by the user", "server", c.addr)
+	c.stopComputerLocked()
 	c.lastErr = nil
 	c.mu.Unlock()
 	c.update()
 }
 
 // EndSession is the End session button shown during a session: it ends
-// the session and the client keeps waiting for an agent.
+// the session and the computer keeps waiting for a techie.
 func (c *Controller) EndSession() {
 	c.mu.Lock()
-	cl := c.client
+	cl := c.computer
 	c.mu.Unlock()
 	if cl != nil {
 		cl.EndSession()
 	}
 }
 
-// TrustRelayKey pins the relay's new host key after the user accepted the
+// TrustServerKey pins the server's new host key after the user accepted the
 // change warning for newFingerprint, and connects again.
-func (c *Controller) TrustRelayKey(newFingerprint string) {
+func (c *Controller) TrustServerKey(newFingerprint string) {
 	c.mu.Lock()
 	var hk *session.HostKeyChangedError
-	if c.client != nil || !errors.As(c.lastErr, &hk) || hk.NewFingerprint != newFingerprint || c.addr != c.cfg.RelayAddress {
+	if c.computer != nil || !errors.As(c.lastErr, &hk) || hk.NewFingerprint != newFingerprint || c.addr != c.cfg.ServerAddress {
 		c.mu.Unlock()
 		return
 	}
-	c.log.Warn("relay host key change accepted by the user", "old", hk.OldFingerprint, "new", hk.NewFingerprint)
-	c.cfg.RelayHostKey = hk.NewKeyLine
-	c.startClientLocked(c.addr)
+	c.log.Warn("server host key change accepted by the user", "old", hk.OldFingerprint, "new", hk.NewFingerprint)
+	c.cfg.ServerHostKey = hk.NewKeyLine
+	c.startComputerLocked(c.addr)
 	c.mu.Unlock()
 	c.save()
 	c.update()
@@ -464,7 +464,7 @@ func (c *Controller) TrustRelayKey(newFingerprint string) {
 // and goes back to the address screen. Call only after the user confirmed.
 func (c *Controller) RemoveKey() error {
 	c.mu.Lock()
-	c.stopClientLocked()
+	c.stopComputerLocked()
 	err := c.d.RemoveKey()
 	if err == nil {
 		c.addr, c.inputErr, c.lastErr = "", "", nil
@@ -482,15 +482,15 @@ func (c *Controller) Close() {
 	if c.updateCancel != nil {
 		c.updateCancel()
 	}
-	if c.client != nil {
-		c.closing = c.client.Done()
+	if c.computer != nil {
+		c.closing = c.computer.Done()
 	}
-	c.stopClientLocked()
+	c.stopComputerLocked()
 	c.mu.Unlock()
 }
 
-// WaitClosed waits up to d for the client stopped by Close to finish, so
-// the relay sees a clean disconnect before the process exits.
+// WaitClosed waits up to d for the computer stopped by Close to finish, so
+// the server sees a clean disconnect before the process exits.
 func (c *Controller) WaitClosed(d time.Duration) {
 	c.mu.Lock()
 	done := c.closing
@@ -516,7 +516,7 @@ func (c *Controller) DismissUpdate() {
 	c.update()
 }
 
-// handler receives the events of one client generation.
+// handler receives the events of one computer generation.
 type handler struct {
 	c   *Controller
 	gen int
@@ -525,7 +525,7 @@ type handler struct {
 func (h handler) StateChanged(s session.State) {
 	c := h.c
 	c.mu.Lock()
-	if c.gen != h.gen || c.client == nil {
+	if c.gen != h.gen || c.computer == nil {
 		c.mu.Unlock()
 		return
 	}
@@ -533,9 +533,9 @@ func (h handler) StateChanged(s session.State) {
 	var save bool
 	switch s.Phase {
 	case session.PhaseStopped:
-		// The client gave up (the relay could not be reached at first, or
+		// The computer gave up (the server could not be reached at first, or
 		// refused this PC): back to the address screen with the reason.
-		c.client = nil
+		c.computer = nil
 		c.lastErr = s.Err
 	case session.PhasePending, session.PhaseReady:
 		c.known = s.Phase == session.PhaseReady
@@ -554,51 +554,51 @@ func (h handler) StateChanged(s session.State) {
 	c.update()
 }
 
-// Registered saves the relay this PC is registered on. A different relay
-// than the stored one replaces it, and the agent pins of the old relay are
-// forgotten: agent names are only unique within one relay.
-func (h handler) Registered(relayHostKey string) {
+// Registered saves the server this PC is registered on. A different server
+// than the stored one replaces it, and the techie pins of the old server are
+// forgotten: techie names are only unique within one server.
+func (h handler) Registered(serverHostKey string) {
 	c := h.c
 	c.mu.Lock()
-	if c.gen != h.gen || c.client == nil {
+	if c.gen != h.gen || c.computer == nil {
 		c.mu.Unlock()
 		return
 	}
 	c.known = true
-	if c.cfg.RelayAddress != c.addr {
-		c.cfg.KnownAgents = nil
+	if c.cfg.ServerAddress != c.addr {
+		c.cfg.KnownTechies = nil
 	}
-	changed := c.cfg.RelayAddress != c.addr || c.cfg.RelayHostKey != relayHostKey
-	c.cfg.RelayAddress = c.addr
-	c.cfg.RelayHostKey = relayHostKey
+	changed := c.cfg.ServerAddress != c.addr || c.cfg.ServerHostKey != serverHostKey
+	c.cfg.ServerAddress = c.addr
+	c.cfg.ServerHostKey = serverHostKey
 	c.mu.Unlock()
 	if changed {
-		c.log.Info("registered on the relay", "relay", c.addr)
+		c.log.Info("registered on the server", "server", c.addr)
 		c.save()
 	}
 	c.update()
 }
 
-func (h handler) AgentPinned(name, line string) {
+func (h handler) TechiePinned(name, line string) {
 	c := h.c
 	c.mu.Lock()
 	if c.gen != h.gen {
 		c.mu.Unlock()
 		return
 	}
-	if c.cfg.KnownAgents == nil {
-		c.cfg.KnownAgents = make(map[string]string)
+	if c.cfg.KnownTechies == nil {
+		c.cfg.KnownTechies = make(map[string]string)
 	}
-	c.cfg.KnownAgents[name] = line
+	c.cfg.KnownTechies[name] = line
 	c.mu.Unlock()
 	c.save()
 }
 
-// RelayInfo shows the relay's title and instruction.
-func (h handler) RelayInfo(title, instruction string) {
+// ServerInfo shows the server's title and instruction.
+func (h handler) ServerInfo(title, instruction string) {
 	c := h.c
 	c.mu.Lock()
-	if c.gen != h.gen || c.client == nil {
+	if c.gen != h.gen || c.computer == nil {
 		c.mu.Unlock()
 		return
 	}
@@ -607,8 +607,8 @@ func (h handler) RelayInfo(title, instruction string) {
 	c.update()
 }
 
-func (h handler) ConfirmAgent(ctx context.Context, agent session.Agent, oldFP string) bool {
-	return h.c.d.UI.ConfirmAgent(ctx, agent, oldFP)
+func (h handler) ConfirmTechie(ctx context.Context, techie session.Techie, oldFP string) bool {
+	return h.c.d.UI.ConfirmTechie(ctx, techie, oldFP)
 }
 
 // save writes the current configuration. Saves are serialized and each

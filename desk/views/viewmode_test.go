@@ -200,29 +200,29 @@ func TestThumb(t *testing.T) {
 	}
 }
 
-func TestResizeToClient(t *testing.T) {
+func TestResizeToComputer(t *testing.T) {
 	// Fits: remote size plus chrome.
-	r := resizeToClient(1280, 720, 1, 1, 301, 85, 1920, 1080, 760, 480)
+	r := resizeToComputer(1280, 720, 1, 1, 301, 85, 1920, 1080, 760, 480)
 	if r != (resizeTarget{w: 1581, h: 805, fits: true}) {
 		t.Errorf("fit %+v", r)
 	}
 	// 2x screen: remote pixels are halved in logical units.
-	r = resizeToClient(1280, 720, 2, 1, 0, 85, 3840, 2160, 760, 480)
+	r = resizeToComputer(1280, 720, 2, 1, 0, 85, 3840, 2160, 760, 480)
 	if r != (resizeTarget{w: 760, h: 480, fits: true}) {
 		t.Errorf("hidpi %+v", r)
 	}
 	// Window units in physical pixels.
-	r = resizeToClient(1600, 1000, 2, 2, 100, 85, 3840, 2160, 760, 480)
+	r = resizeToComputer(1600, 1000, 2, 2, 100, 85, 3840, 2160, 760, 480)
 	if r != (resizeTarget{w: 1800, h: 1170, fits: true}) {
 		t.Errorf("physical units %+v", r)
 	}
 	// Too big: clamped to the monitor minus the decorations.
-	r = resizeToClient(2560, 1440, 1, 1, 301, 85, 1920, 1080, 760, 480)
+	r = resizeToComputer(2560, 1440, 1, 1, 301, 85, 1920, 1080, 760, 480)
 	if r != (resizeTarget{w: 1920 - decorW, h: 1080 - decorH, fits: false}) {
 		t.Errorf("clamped %+v", r)
 	}
 	// Small screens keep the minimum window size.
-	r = resizeToClient(320, 200, 1, 1, 0, 85, 1920, 1080, 760, 480)
+	r = resizeToComputer(320, 200, 1, 1, 0, 85, 1920, 1080, 760, 480)
 	if r != (resizeTarget{w: 760, h: 480, fits: true}) {
 		t.Errorf("min %+v", r)
 	}
@@ -328,18 +328,18 @@ func TestCursorChoice(t *testing.T) {
 	}
 }
 
-func TestValidClientName(t *testing.T) {
+func TestValidComputerName(t *testing.T) {
 	long := ""
-	for range maxClientName {
+	for range maxComputerName {
 		long += "é"
 	}
 	for _, s := range []string{"a", "Anna laptop", "anna@ANNA-PC", "  padded  ", long} {
-		if !validClientName(s) {
+		if !validComputerName(s) {
 			t.Errorf("%q rejected", s)
 		}
 	}
 	for _, s := range []string{"", "   ", long + "x", "tab\there", "nl\nx", "\x00"} {
-		if validClientName(s) {
+		if validComputerName(s) {
 			t.Errorf("%q accepted", s)
 		}
 	}

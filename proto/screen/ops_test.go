@@ -510,7 +510,7 @@ func TestDecoderScript(t *testing.T) {
 		ref := &model{img: image.NewRGBA(bounds), cache: map[uint16]*image.RGBA{}}
 		d := NewDecoder()
 		for _, f := range script() {
-			// Through the wire format, as the agent sees it.
+			// Through the wire format, as the techie sees it.
 			wf, err := DecodeFrame(EncodeFrame(f))
 			if err != nil {
 				t.Fatal(err)

@@ -1,4 +1,4 @@
-// Package update checks GitHub for a newer release of the client and
+// Package update checks GitHub for a newer release of the computer and
 // downloads its MSI. It has no GUI dependencies; the window asks the user
 // and starts msiexec.
 package update

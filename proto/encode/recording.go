@@ -12,7 +12,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
-// Recording format, shared by the client's --record option and the replay
+// Recording format, shared by the computer's --record option and the replay
 // benchmark: a directory with index.json and one file per frame.
 //
 //	index.json: {"width": W, "height": H, "bgra": true|false,

@@ -1,0 +1,61 @@
+.TH HELPBUOY-SERVER 1 "" "helpbuoy" "User Commands"
+.SH NAME
+helpbuoy-server \- server for helpbuoy self-hosted remote support
+.SH SYNOPSIS
+.B helpbuoy-server serve
+.RB [ \-\-listen
+.IR addr ]
+.RB [ \-\-state
+.IR dir ]
+.br
+.B helpbuoy-server techie add
+.I name
+.I key
+.br
+.B helpbuoy-server techie remove
+.I name
+.br
+.B helpbuoy-server techie list
+.br
+.B helpbuoy-server computer list
+.br
+.B helpbuoy-server computer remove
+.I fingerprint
+.br
+.B helpbuoy-server title
+.RI [ text ]
+.br
+.B helpbuoy-server instruction
+.RI [ text ]
+.br
+.B helpbuoy-server hostkey
+.br
+.B helpbuoy-server version
+.SH DESCRIPTION
+.B helpbuoy-server
+is the SSH server of helpbuoy. Techies and the people they help connect to
+it on one port; it authenticates their Ed25519 keys and splices their
+sessions. The screen and input run end to end over an inner SSH connection
+that the server cannot read.
+.PP
+.B serve
+runs the server, by default on
+.BR :5959 .
+The other commands change or show the state directory; a running server picks
+up changes within a second.
+.SH OPTIONS
+.TP
+.BI \-\-listen " addr"
+Address to listen on, as host:port or :port.
+.TP
+.BI \-\-state " dir"
+State directory with the host key, techies and registered computers. Default:
+.B $HELPBUOY_SERVER_STATE
+if set, else the per-user data directory.
+.SH ENVIRONMENT
+.TP
+.B HELPBUOY_SERVER_STATE
+Default state directory. The Debian service sets it to
+.IR /var/lib/helpbuoy-server .
+.SH SEE ALSO
+.BR helpbuoy-serverctl (8)

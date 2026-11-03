@@ -45,10 +45,10 @@ func tcpPair(t *testing.T) (net.Conn, net.Conn) {
 	return a, <-acc
 }
 
-// TestDialRealInner runs the agent side against the real inner server and
+// TestDialRealInner runs the techie side against the real inner server and
 // the real screen and input encodings.
 func TestDialRealInner(t *testing.T) {
-	agentKey, clientKey := signer(t), signer(t)
+	techieKey, computerKey := signer(t), signer(t)
 	hc, cc := tcpPair(t)
 	defer cc.Close()
 
@@ -58,11 +58,11 @@ func TestDialRealInner(t *testing.T) {
 	}
 	srv := make(chan served, 1)
 	go func() {
-		s, err := inner.Serve(cc, clientKey, agentKey.PublicKey())
+		s, err := inner.Serve(cc, computerKey, techieKey.PublicKey())
 		srv <- served{s, err}
 	}()
 
-	s := Dial(hc, agentKey, Info{ClientName: "anna@ANNA-PC", ClientKey: clientKey.PublicKey()})
+	s := Dial(hc, techieKey, Info{ComputerName: "anna@ANNA-PC", ComputerKey: computerKey.PublicKey()})
 	defer s.Close()
 	sv := <-srv
 	if sv.err != nil {
@@ -102,7 +102,7 @@ func TestDialRealInner(t *testing.T) {
 		t.Errorf("input = %#v, %v", m, err)
 	}
 
-	// The client ends the session: the agent side notices.
+	// The computer ends the session: the techie side notices.
 	sv.s.Close()
 	select {
 	case <-s.Done():
@@ -111,19 +111,19 @@ func TestDialRealInner(t *testing.T) {
 	}
 }
 
-// TestDialWrongClientKey: a relay that splices to the wrong client is refused.
-func TestDialWrongClientKey(t *testing.T) {
-	agentKey, clientKey := signer(t), signer(t)
+// TestDialWrongComputerKey: a server that splices to the wrong computer is refused.
+func TestDialWrongComputerKey(t *testing.T) {
+	techieKey, computerKey := signer(t), signer(t)
 	hc, cc := tcpPair(t)
 	defer cc.Close()
-	go inner.Serve(cc, clientKey, agentKey.PublicKey())
-	s := Dial(hc, agentKey, Info{ClientKey: signer(t).PublicKey()})
+	go inner.Serve(cc, computerKey, techieKey.PublicKey())
+	s := Dial(hc, techieKey, Info{ComputerKey: signer(t).PublicKey()})
 	select {
 	case <-s.Done():
 	case <-time.After(10 * time.Second):
 		t.Fatal("session with the wrong key still running")
 	}
 	if s.Err() == nil {
-		t.Error("no error for the wrong client key")
+		t.Error("no error for the wrong computer key")
 	}
 }

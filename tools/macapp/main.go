@@ -1,9 +1,9 @@
 // Command macapp writes a zipped macOS .app bundle for the desk app, with
-// helpbuoy-relay next to the main executable, on any OS (no Xcode tools needed).
+// helpbuoy-server next to the main executable, on any OS (no Xcode tools needed).
 //
 //	go run tools/macapp/main.go -app helpbuoy-desk -id helpbuoy.desk \
 //	    -version 0.0.1 -exe bin/darwin-arm64/helpbuoy-desk \
-//	    -relay bin/darwin-arm64/helpbuoy-relay -icon desk/resources/icon.png -out out.zip
+//	    -server bin/darwin-arm64/helpbuoy-server -icon desk/resources/icon.png -out out.zip
 package main
 
 import (
@@ -25,25 +25,25 @@ func main() {
 	id := flag.String("id", "helpbuoy.desk", "CFBundleIdentifier")
 	version := flag.String("version", "0.0.1", "CFBundleShortVersionString (numeric, like 1.2.3)")
 	exe := flag.String("exe", "", "main executable")
-	relay := flag.String("relay", "", "helpbuoy-relay executable to put next to it")
+	server := flag.String("server", "", "helpbuoy-server executable to put next to it")
 	icon := flag.String("icon", "", "PNG icon, 256x256 or 512x512")
 	out := flag.String("out", "", "output .zip")
 	flag.Parse()
-	if *exe == "" || *relay == "" || *icon == "" || *out == "" {
+	if *exe == "" || *server == "" || *icon == "" || *out == "" {
 		flag.Usage()
 		os.Exit(2)
 	}
-	if err := run(*app, *id, *version, *exe, *relay, *icon, *out); err != nil {
+	if err := run(*app, *id, *version, *exe, *server, *icon, *out); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(app, id, version, exe, relay, icon, out string) error {
+func run(app, id, version, exe, server, icon, out string) error {
 	exeData, err := os.ReadFile(exe)
 	if err != nil {
 		return err
 	}
-	relayData, err := os.ReadFile(relay)
+	serverData, err := os.ReadFile(server)
 	if err != nil {
 		return err
 	}
@@ -67,7 +67,7 @@ func run(app, id, version, exe, relay, icon, out string) error {
 	}{
 		{root + "Info.plist", []byte(infoPlist(app, id, version)), 0o644},
 		{root + "MacOS/" + app, exeData, 0o755},
-		{root + "MacOS/helpbuoy-relay", relayData, 0o755},
+		{root + "MacOS/helpbuoy-server", serverData, 0o755},
 		{root + "Resources/icon.icns", icns, 0o644},
 	}
 	for _, f := range files {

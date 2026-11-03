@@ -2,17 +2,17 @@
 set -e
 
 if [ "$1" = "configure" ]; then
-	systemd-sysusers helpbuoy-relay.conf
-	install -d -o helpbuoy-relay -g helpbuoy-relay -m 0700 /var/lib/helpbuoy-relay
+	systemd-sysusers helpbuoy-server.conf
+	install -d -o helpbuoy-server -g helpbuoy-server -m 0700 /var/lib/helpbuoy-server
 fi
 
 # Same as what dh_installsystemd generates.
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ]; then
 	# was-enabled defaults to true, so a new installation enables the unit.
-	if deb-systemd-helper --quiet was-enabled 'helpbuoy-relay.service'; then
-		deb-systemd-helper enable 'helpbuoy-relay.service' >/dev/null || true
+	if deb-systemd-helper --quiet was-enabled 'helpbuoy-server.service'; then
+		deb-systemd-helper enable 'helpbuoy-server.service' >/dev/null || true
 	else
-		deb-systemd-helper update-state 'helpbuoy-relay.service' >/dev/null || true
+		deb-systemd-helper update-state 'helpbuoy-server.service' >/dev/null || true
 	fi
 	if [ -d /run/systemd/system ]; then
 		systemctl --system daemon-reload >/dev/null || true
@@ -21,7 +21,7 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 		else
 			action=start
 		fi
-		deb-systemd-invoke $action 'helpbuoy-relay.service' >/dev/null || true
+		deb-systemd-invoke $action 'helpbuoy-server.service' >/dev/null || true
 	fi
 fi
 

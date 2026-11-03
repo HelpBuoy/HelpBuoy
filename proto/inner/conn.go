@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// rwConn adapts an io.ReadWriteCloser (an ssh.Channel from the relay) to the
+// rwConn adapts an io.ReadWriteCloser (an ssh.Channel from the server) to the
 // net.Conn that ssh.NewServerConn and ssh.NewClientConn expect. Deadlines are
 // not supported and are silently ignored; timeouts are handled by closing.
 type rwConn struct {

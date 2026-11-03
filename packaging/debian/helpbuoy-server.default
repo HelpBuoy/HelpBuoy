@@ -1,0 +1,7 @@
+# Settings for the helpbuoy-server service. After a change:
+#   systemctl restart helpbuoy-server
+#
+# Address to listen on, host:port or :port. Every techie and computer connects
+# to this one port. Ports below 1024 need an extra capability, see
+# /usr/lib/systemd/system/helpbuoy-server.service.
+HELPBUOY_SERVER_LISTEN=:5959

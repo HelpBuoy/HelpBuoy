@@ -7,8 +7,8 @@ import (
 	"github.com/mevdschee/helpbuoy/proto/screen"
 )
 
-// lru is the encoder's view of the agent's tile cache: which content hash
-// is in which slot, and the least recently used order for reuse. The agent
+// lru is the encoder's view of the techie's tile cache: which content hash
+// is in which slot, and the least recently used order for reuse. The techie
 // only stores and draws what the ops tell it, so this is the single source
 // of truth for both sides.
 type lru struct {
@@ -29,7 +29,7 @@ func newLRU() *lru {
 	return c
 }
 
-// reset empties the cache, as on the agent after Reset.
+// reset empties the cache, as on the techie after Reset.
 func (c *lru) reset() {
 	c.slots = make(map[uint64]uint16)
 	c.used = 0

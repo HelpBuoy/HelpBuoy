@@ -115,8 +115,8 @@ func (d *fakeDecoder) Apply(dst *image.RGBA, f screen.Frame) ([]image.Rectangle,
 	return dirty, true, nil
 }
 
-// fakeClient is the client end of the two streams.
-type fakeClient struct {
+// fakeComputer is the computer end of the two streams.
+type fakeComputer struct {
 	screen net.Conn
 	input  net.Conn
 	sw     *wire.Writer
@@ -125,13 +125,13 @@ type fakeClient struct {
 	marker uint32
 }
 
-func start(t *testing.T) (*Session, *fakeClient) {
+func start(t *testing.T) (*Session, *fakeComputer) {
 	t.Helper()
 	sa, sb := net.Pipe()
 	ia, ib := net.Pipe()
 	closer := closerFunc(func() error { sa.Close(); ia.Close(); return nil })
-	s := Run(Info{ClientName: "anna@ANNA-PC"}, sa, ia, closer, fakeCodec{})
-	c := &fakeClient{screen: sb, input: ib, sw: wire.NewWriter(sb), sr: wire.NewReader(sb), ir: wire.NewReader(ib)}
+	s := Run(Info{ComputerName: "anna@ANNA-PC"}, sa, ia, closer, fakeCodec{})
+	c := &fakeComputer{screen: sb, input: ib, sw: wire.NewWriter(sb), sr: wire.NewReader(sb), ir: wire.NewReader(ib)}
 	t.Cleanup(func() { s.Close(); sb.Close(); ib.Close() })
 	return s, c
 }
@@ -140,7 +140,7 @@ type closerFunc func() error
 
 func (f closerFunc) Close() error { return f() }
 
-func (c *fakeClient) send(t *testing.T, typ uint8, v any) {
+func (c *fakeComputer) send(t *testing.T, typ uint8, v any) {
 	t.Helper()
 	b, _ := json.Marshal(v)
 	if err := c.sw.WriteFrame(typ, b); err != nil {
@@ -148,7 +148,7 @@ func (c *fakeClient) send(t *testing.T, typ uint8, v any) {
 	}
 }
 
-func (c *fakeClient) ack(t *testing.T) uint32 {
+func (c *fakeComputer) ack(t *testing.T) uint32 {
 	t.Helper()
 	c.screen.SetReadDeadline(time.Now().Add(5 * time.Second))
 	typ, b, err := c.sr.ReadFrame()
@@ -227,11 +227,11 @@ func TestNameMismatch(t *testing.T) {
 }
 
 func TestBadFramesEndSession(t *testing.T) {
-	cases := map[string]func(*testing.T, *fakeClient){
-		"frame before hello": func(t *testing.T, c *fakeClient) {
+	cases := map[string]func(*testing.T, *fakeComputer){
+		"frame before hello": func(t *testing.T, c *fakeComputer) {
 			c.send(t, screen.MsgFrame, screen.Frame{Seq: 1})
 		},
-		"huge hello": func(t *testing.T, c *fakeClient) {
+		"huge hello": func(t *testing.T, c *fakeComputer) {
 			c.send(t, screen.MsgHello, screen.Hello{Width: MaxSide + 1, Height: 10})
 		},
 	}
@@ -251,7 +251,7 @@ func TestBadFramesEndSession(t *testing.T) {
 	}
 }
 
-func TestClientEndsSession(t *testing.T) {
+func TestComputerEndsSession(t *testing.T) {
 	s, c := start(t)
 	c.screen.Close()
 	select {
@@ -297,7 +297,7 @@ func TestCloseEndsStreams(t *testing.T) {
 	s.Close()
 	c.screen.SetReadDeadline(time.Now().Add(5 * time.Second))
 	if _, err := c.screen.Read(make([]byte, 1)); err != io.EOF && !errors.Is(err, io.ErrClosedPipe) {
-		t.Errorf("client read after close: %v", err)
+		t.Errorf("computer read after close: %v", err)
 	}
 }
 
@@ -310,31 +310,31 @@ func newKeyLine(t *testing.T) (string, string) {
 func TestVerify(t *testing.T) {
 	line, fp := newKeyLine(t)
 	other, _ := newKeyLine(t)
-	p := &control.Presence{Clients: []control.ClientInfo{{Name: "anna@ANNA-PC", Fingerprint: fp}}}
-	d := control.AgentSessionData{RequestID: "r1", ClientName: "anna@ANNA-PC", ClientKey: line}
+	p := &control.Presence{Computers: []control.ComputerInfo{{Name: "anna@ANNA-PC", Fingerprint: fp}}}
+	d := control.TechiesessionData{RequestID: "r1", ComputerName: "anna@ANNA-PC", ComputerKey: line}
 
 	info, err := Verify(d, p, true)
-	if err != nil || info.Fingerprint != fp || info.ClientKey == nil {
+	if err != nil || info.Fingerprint != fp || info.ComputerKey == nil {
 		t.Fatalf("Verify = %+v, %v", info, err)
 	}
 	if _, err := Verify(d, p, false); err == nil {
-		t.Error("accepted a request this agent did not open")
+		t.Error("accepted a request this techie did not open")
 	}
 	if _, err := Verify(d, nil, true); err == nil {
 		t.Error("accepted without presence")
 	}
 	bad := d
-	bad.ClientKey = other
+	bad.ComputerKey = other
 	if _, err := Verify(bad, p, true); err == nil {
 		t.Error("accepted a key that is not the registered one")
 	}
 	bad = d
-	bad.ClientName = "bob@PC"
+	bad.ComputerName = "bob@PC"
 	if _, err := Verify(bad, p, true); err == nil {
-		t.Error("accepted an unknown client")
+		t.Error("accepted an unknown computer")
 	}
 	bad = d
-	bad.ClientKey = "garbage"
+	bad.ComputerKey = "garbage"
 	if _, err := Verify(bad, p, true); err == nil {
 		t.Error("accepted a garbage key")
 	}
@@ -368,8 +368,8 @@ func covers(rs []image.Rectangle, p image.Point) bool {
 	return false
 }
 
-// read returns the next message the agent sent on the screen channel.
-func (c *fakeClient) read(t *testing.T) (uint8, []byte) {
+// read returns the next message the techie sent on the screen channel.
+func (c *fakeComputer) read(t *testing.T) (uint8, []byte) {
 	t.Helper()
 	c.screen.SetReadDeadline(time.Now().Add(5 * time.Second))
 	typ, b, err := c.sr.ReadFrame()
@@ -381,7 +381,7 @@ func (c *fakeClient) read(t *testing.T) (uint8, []byte) {
 
 // sync waits until the session has handled everything sent before it, using
 // a cursor position as a marker.
-func (c *fakeClient) sync(t *testing.T, s *Session) {
+func (c *fakeComputer) sync(t *testing.T, s *Session) {
 	t.Helper()
 	c.marker++
 	id := 1_000_000 + c.marker
@@ -467,7 +467,7 @@ func TestRefreshOnDecodeError(t *testing.T) {
 		t.Errorf("frames %d, want 0 while waiting for a full frame", s.Frames())
 	}
 
-	// The client's Full frame resets the decoder and is applied; normal
+	// The computer's Full frame resets the decoder and is applied; normal
 	// frames follow.
 	c.send(t, screen.MsgFrame, screen.Frame{Seq: 3, Full: true, Rects: []screen.Rect{{X: 1, Y: 1, W: 1, H: 1, RGBA: solid(1, 1, 5)}}})
 	if seq := c.ack(t); seq != 3 {
@@ -512,7 +512,7 @@ func TestSkipRestOfFailedFrame(t *testing.T) {
 	sa, sb := net.Pipe()
 	ia, ib := net.Pipe()
 	s := Run(Info{}, sa, ia, closerFunc(func() error { sa.Close(); ia.Close(); return nil }), skipCodec{})
-	c := &fakeClient{screen: sb, input: ib, sw: wire.NewWriter(sb), sr: wire.NewReader(sb), ir: wire.NewReader(ib)}
+	c := &fakeComputer{screen: sb, input: ib, sw: wire.NewWriter(sb), sr: wire.NewReader(sb), ir: wire.NewReader(ib)}
 	defer func() { s.Close(); sb.Close(); ib.Close() }()
 	go io.Copy(io.Discard, ib)
 

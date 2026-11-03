@@ -16,13 +16,13 @@ import (
 )
 
 // TestPatternRunnerRealInner runs the real inner SSH server and the real
-// screen codec against an inner client acting as the agent.
+// screen codec against an inner client acting as the techie.
 func TestPatternRunnerRealInner(t *testing.T) {
-	client, err := identity.Ephemeral("anna@PC")
+	computer, err := identity.Ephemeral("anna@PC")
 	if err != nil {
 		t.Fatal(err)
 	}
-	agent, _ := identity.Ephemeral("alice")
+	techie, _ := identity.Ephemeral("alice")
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -34,16 +34,16 @@ func TestPatternRunnerRealInner(t *testing.T) {
 		c, _ := ln.Accept()
 		accepted <- c
 	}()
-	agentSide, err := net.Dial("tcp", ln.Addr().String())
+	techieside, err := net.Dial("tcp", ln.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer agentSide.Close()
-	clientSide := <-accepted
+	defer techieside.Close()
+	computerside := <-accepted
 
 	sink := &injector.Counter{}
 	r := &PatternRunner{
-		HostKey: client.Signer,
+		HostKey: computer.Signer,
 		Sink:    sink,
 		Hello:   screen.Hello{UserMachine: "anna@PC", OS: "windows", Width: 320, Height: 200},
 		Label:   "anna@PC",
@@ -51,9 +51,9 @@ func TestPatternRunnerRealInner(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	runErr := make(chan error, 1)
-	go func() { runErr <- r.Run(ctx, clientSide, agent.Public) }()
+	go func() { runErr <- r.Run(ctx, computerside, techie.Public) }()
 
-	cs, err := inner.Dial(agentSide, agent.Signer, client.Public)
+	cs, err := inner.Dial(techieside, techie.Signer, computer.Public)
 	if err != nil {
 		t.Fatal("inner dial:", err)
 	}

@@ -15,7 +15,7 @@ import (
 // AppName is the data directory name shared with the client app's layout.
 const AppName = "helpbuoy"
 
-// Dir returns the agent's data directory. It does not create it.
+// Dir returns the techie's data directory. It does not create it.
 func Dir() (string, error) { return datadir.Dir(AppName) }
 
 // Load loads the app key from dir, creating it on the very first start with
@@ -41,9 +41,9 @@ func UserMachine() string {
 	return userName() + "@" + host
 }
 
-// AgentName returns a name for this agent on a local relay: the lower-cased
-// user part of user@machine, or "agent" if that is not a valid name.
-func AgentName() string {
+// TechieName returns a name for this techie on a local server: the lower-cased
+// user part of user@machine, or "techie" if that is not a valid name.
+func TechieName() string {
 	um := UserMachine()
 	name := um
 	if i := strings.IndexByte(um, '@'); i >= 0 {
@@ -51,7 +51,7 @@ func AgentName() string {
 	}
 	name = strings.ToLower(name)
 	if !validName(name) {
-		return "agent"
+		return "techie"
 	}
 	return name
 }
@@ -83,5 +83,5 @@ func userName() string {
 			return strings.ToLower(s)
 		}
 	}
-	return "agent"
+	return "techie"
 }

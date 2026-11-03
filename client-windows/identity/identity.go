@@ -1,4 +1,4 @@
-// Package identity gives the client its application-specific Ed25519 key
+// Package identity gives the computer its application-specific Ed25519 key
 // (PLAN.md 6.1), kept in %LOCALAPPDATA%\helpbuoy through proto/appkey.
 package identity
 
@@ -17,7 +17,7 @@ import (
 // AppName is the data directory name below %LOCALAPPDATA%.
 const AppName = "helpbuoy"
 
-// Dir returns the client's data directory. It does not create it.
+// Dir returns the computer's data directory. It does not create it.
 func Dir() (string, error) { return datadir.Dir(AppName) }
 
 // Comment returns the comment for a new key: the current user@machine.

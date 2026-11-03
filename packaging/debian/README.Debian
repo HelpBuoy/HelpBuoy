@@ -1,30 +1,30 @@
-helpbuoy-relay for Debian
+helpbuoy-server for Debian
 ====================
 
-The relay runs as the systemd service helpbuoy-relay, as the system user
-helpbuoy-relay, with its host key, agents and registered clients in
-/var/lib/helpbuoy-relay. It listens on :5959 by default; change that in
-/etc/default/helpbuoy-relay and run "systemctl restart helpbuoy-relay".
+The server runs as the systemd service helpbuoy-server, as the system user
+helpbuoy-server, with its host key, techies and registered computers in
+/var/lib/helpbuoy-server. It listens on :5959 by default; change that in
+/etc/default/helpbuoy-server and run "systemctl restart helpbuoy-server".
 
-Every agent and client connects to that one port, so open it in the
-firewall (and forward it on the router if the relay is behind NAT). The
+Every techie and computer connects to that one port, so open it in the
+firewall (and forward it on the router if the server is behind NAT). The
 apps use port 5959 when no port is given, so with the default users only
-type the host name, e.g. relay.example.com.
+type the host name, e.g. server.example.com.
 
-Admin commands go through helpbuoy-relayctl, which runs helpbuoy-relay as the
+Admin commands go through helpbuoy-serverctl, which runs helpbuoy-server as the
 service user on the service's state:
 
-  sudo helpbuoy-relayctl hostkey              # fingerprint to give to agents
-  sudo helpbuoy-relayctl agent add alice 'ssh-ed25519 AAAA...'
-  sudo helpbuoy-relayctl agent list
-  sudo helpbuoy-relayctl agent remove alice
-  sudo helpbuoy-relayctl client list
-  sudo helpbuoy-relayctl client remove SHA256:...
-  sudo helpbuoy-relayctl title 'Example Inc'
-  sudo helpbuoy-relayctl instruction 'Call +1 234 567 890 for support'
+  sudo helpbuoy-serverctl hostkey              # fingerprint to give to techies
+  sudo helpbuoy-serverctl techie add alice 'ssh-ed25519 AAAA...'
+  sudo helpbuoy-serverctl techie list
+  sudo helpbuoy-serverctl techie remove alice
+  sudo helpbuoy-serverctl computer list
+  sudo helpbuoy-serverctl computer remove SHA256:...
+  sudo helpbuoy-serverctl title 'Example Inc'
+  sudo helpbuoy-serverctl instruction 'Call +1 234 567 890 for support'
 
-The running relay picks up changes within a second. Logs are in the
-journal (journalctl -u helpbuoy-relay) and in /var/lib/helpbuoy-relay/relay.log.
+The running server picks up changes within a second. Logs are in the
+journal (journalctl -u helpbuoy-server) and in /var/lib/helpbuoy-server/server.log.
 
-"apt purge helpbuoy-relay" deletes /var/lib/helpbuoy-relay, including the host key:
-clients registered with this relay would then see a changed relay identity.
+"apt purge helpbuoy-server" deletes /var/lib/helpbuoy-server, including the host key:
+computers registered with this server would then see a changed server identity.

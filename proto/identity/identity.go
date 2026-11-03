@@ -288,7 +288,7 @@ func commentAfter(rs []rune, end int) string {
 }
 
 // ParseLine parses one well-formed authorized_keys line (as stored by the
-// relay or sent in control messages). Only ssh-ed25519 is accepted.
+// server or sent in control messages). Only ssh-ed25519 is accepted.
 //
 // The line is "ssh-ed25519 <base64>" optionally followed by a space and a
 // comment; surrounding ASCII whitespace (such as a trailing newline) is
@@ -425,7 +425,7 @@ func sanitize(s, fallback string) string {
 	return s
 }
 
-// ValidName reports whether s is acceptable as a client or agent name:
+// ValidName reports whether s is acceptable as a computer or techie name:
 // 1..64 printable characters, no spaces or control characters.
 func ValidName(s string) bool {
 	if s == "" || !utf8.ValidString(s) || utf8.RuneCountInString(s) > 64 {

@@ -14,7 +14,7 @@ import (
 
 	"github.com/mevdschee/helpbuoy/client-windows/config"
 	"github.com/mevdschee/helpbuoy/client-windows/identity"
-	"github.com/mevdschee/helpbuoy/client-windows/internal/fakerelay"
+	"github.com/mevdschee/helpbuoy/client-windows/internal/fakeserver"
 	"github.com/mevdschee/helpbuoy/client-windows/session"
 	"github.com/mevdschee/helpbuoy/proto/appkey"
 )
@@ -24,12 +24,12 @@ type fakeUI struct {
 
 	mu     sync.Mutex
 	refuse bool
-	// gate, if set, holds ConfirmAgent until it is closed (then the
+	// gate, if set, holds ConfirmTechie until it is closed (then the
 	// answer is "allow") or the question becomes moot.
 	gate chan struct{}
 }
 
-// answer sets how ConfirmAgent answers from now on.
+// answer sets how ConfirmTechie answers from now on.
 func (u *fakeUI) answer(refuse bool, gate chan struct{}) {
 	u.mu.Lock()
 	u.refuse, u.gate = refuse, gate
@@ -37,7 +37,7 @@ func (u *fakeUI) answer(refuse bool, gate chan struct{}) {
 }
 
 func (u *fakeUI) Render(v View) { u.views <- v }
-func (u *fakeUI) ConfirmAgent(ctx context.Context, _ session.Agent, _ string) bool {
+func (u *fakeUI) ConfirmTechie(ctx context.Context, _ session.Techie, _ string) bool {
 	u.mu.Lock()
 	refuse, gate := u.refuse, u.gate
 	u.mu.Unlock()
@@ -88,7 +88,7 @@ type env struct {
 	keyErr  error
 	loads   int
 	removed int
-	relay   *fakerelay.Relay
+	server  *fakeserver.Server
 }
 
 func newEnv(t *testing.T) *env {
@@ -96,12 +96,12 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	relay, err := fakerelay.Start("", fakerelay.Options{})
+	server, err := fakeserver.Start("", fakeserver.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { relay.Close() })
-	return &env{t: t, dir: t.TempDir(), key: k, relay: relay}
+	t.Cleanup(func() { server.Close() })
+	return &env{t: t, dir: t.TempDir(), key: k, server: server}
 }
 
 func (e *env) fp() string { return e.key.Fingerprint }
@@ -162,36 +162,36 @@ func TestFirstRunToMain(t *testing.T) {
 		t.Fatalf("%+v", v)
 	}
 
-	c.Connect(e.relay.Addr())
+	c.Connect(e.server.Addr())
 	v = ui.wait(t, "key screen", screenIs(ScreenKey))
 	if v.KeyLine != e.key.Line || v.KeyFingerprint != e.key.Fingerprint ||
-		v.RelayFingerprint != ssh.FingerprintSHA256(e.relay.HostKey()) {
+		v.ServerFingerprint != ssh.FingerprintSHA256(e.server.HostKey()) {
 		t.Fatalf("key view %+v", v)
 	}
-	if cfg := e.config(); cfg.LastAddress != e.relay.Addr() || cfg.Registered() {
+	if cfg := e.config(); cfg.LastAddress != e.server.Addr() || cfg.Registered() {
 		t.Fatalf("config while pending %+v", cfg)
 	}
 
-	e.relay.Register(e.fp())
+	e.server.Register(e.fp())
 	v = ui.wait(t, "main screen", func(v View) bool { return v.Screen == ScreenMain && v.Ready })
 	if v.KeyComment != e.key.Comment || v.KeyComment == "" || v.Notice != "" || v.Error != "" {
 		t.Fatalf("main view %+v", v)
 	}
 	cfg := e.config()
-	if !cfg.Registered() || cfg.RelayAddress != e.relay.Addr() ||
-		cfg.RelayHostKey != identity.KeyLine(e.relay.HostKey(), "") {
+	if !cfg.Registered() || cfg.ServerAddress != e.server.Addr() ||
+		cfg.ServerHostKey != identity.KeyLine(e.server.HostKey(), "") {
 		t.Fatalf("config %+v", cfg)
 	}
 
-	// The next start connects to the same relay by itself.
+	// The next start connects to the same server by itself.
 	c.Close()
-	waitOffline(t, e.relay, e.fp())
+	waitOffline(t, e.server, e.fp())
 	c2, ui2 := e.controller()
-	startAndConnect(t, c2, ui2, e.relay.Addr())
+	startAndConnect(t, c2, ui2, e.server.Addr())
 	ui2.wait(t, "main after restart", readyMain)
 }
 
-// TestAutoConnectFails: when the stored relay can't be reached at start,
+// TestAutoConnectFails: when the stored server can't be reached at start,
 // the address screen shows why and the address can be changed.
 func TestAutoConnectFails(t *testing.T) {
 	e := newEnv(t)
@@ -205,64 +205,64 @@ func TestAutoConnectFails(t *testing.T) {
 	if v.Screen != ScreenAddress || v.Connecting || v.Address != addr {
 		t.Fatalf("%+v", v)
 	}
-	c.Connect(e.relay.Addr()) // now the address can be changed
+	c.Connect(e.server.Addr()) // now the address can be changed
 	ui.wait(t, "key screen", screenIs(ScreenKey))
 }
 
 func registered(t *testing.T, e *env) {
 	t.Helper()
-	e.relay.Register(e.fp())
+	e.server.Register(e.fp())
 	config.Store{Dir: e.dir}.Save(&config.Config{
-		RelayAddress: e.relay.Addr(),
-		RelayHostKey: identity.KeyLine(e.relay.HostKey(), ""),
+		ServerAddress: e.server.Addr(),
+		ServerHostKey: identity.KeyLine(e.server.HostKey(), ""),
 	})
 }
 
-// connectAgent plays agent alice connecting through the fake relay.
-func connectAgent(t *testing.T, r *fakerelay.Relay, fp string) *appkey.Key {
+// connectTechie plays techie alice connecting through the fake server.
+func connectTechie(t *testing.T, r *fakeserver.Server, fp string) *appkey.Key {
 	t.Helper()
-	agent, _ := identity.Ephemeral("alice")
-	if _, err := r.Connect(fp, "alice", agent.Line); err != nil {
+	techie, _ := identity.Ephemeral("alice")
+	if _, err := r.Connect(fp, "alice", techie.Line); err != nil {
 		t.Fatal(err)
 	}
-	return agent
+	return techie
 }
 
-func TestAgentConnects(t *testing.T) {
+func TestTechieConnects(t *testing.T) {
 	e := newEnv(t)
 	registered(t, e)
 	c, ui := e.controller()
-	startAndConnect(t, c, ui, e.relay.Addr())
+	startAndConnect(t, c, ui, e.server.Addr())
 	ui.wait(t, "ready", readyMain)
 
 	// The user refuses: no session, still ready.
 	ui.answer(true, nil)
-	connectAgent(t, e.relay, e.fp())
+	connectTechie(t, e.server, e.fp())
 	select {
-	case <-e.relay.Sessions():
+	case <-e.server.Sessions():
 		t.Fatal("session despite refusal")
 	case <-time.After(100 * time.Millisecond):
 	}
 	ui.wait(t, "ready", readyMain)
-	if len(e.config().KnownAgents) != 0 {
-		t.Fatal("refused agent pinned")
+	if len(e.config().KnownTechies) != 0 {
+		t.Fatal("refused techie pinned")
 	}
 
 	// While the user is asked the window says so.
 	gate := make(chan struct{})
 	ui.answer(false, gate)
-	agent := connectAgent(t, e.relay, e.fp())
+	techie := connectTechie(t, e.server, e.fp())
 	ui.wait(t, "asking", func(v View) bool { return v.Screen == ScreenMain && v.Asking && v.Notice != "" })
 	close(gate)
-	sess := <-e.relay.Sessions()
+	sess := <-e.server.Sessions()
 	v := ui.wait(t, "in session", func(v View) bool { return v.InSession })
 	if v.Screen != ScreenMain || v.Ready {
 		t.Fatalf("session view %+v", v)
 	}
-	if got := e.config().KnownAgents["alice"]; got != identity.KeyLine(agent.Public, "") {
+	if got := e.config().KnownTechies["alice"]; got != identity.KeyLine(techie.Public, "") {
 		t.Fatalf("pinned %q", got)
 	}
-	sess.Channel.Close() // the agent ends the session
+	sess.Channel.Close() // the techie ends the session
 	ui.wait(t, "back", func(v View) bool { return !v.InSession && readyMain(v) })
 }
 
@@ -288,13 +288,13 @@ func TestAutoConnectBeforeRegistration(t *testing.T) {
 	e := newEnv(t)
 	c, ui := e.controller()
 	c.Start()
-	c.Connect(e.relay.Addr())
+	c.Connect(e.server.Addr())
 	ui.wait(t, "key screen", screenIs(ScreenKey))
 	c.Close()
 
-	// The next start goes back to the same relay and shows the key again.
+	// The next start goes back to the same server and shows the key again.
 	c2, ui2 := e.controller()
-	startAndConnect(t, c2, ui2, e.relay.Addr())
+	startAndConnect(t, c2, ui2, e.server.Addr())
 	ui2.wait(t, "key screen", screenIs(ScreenKey))
 }
 
@@ -302,7 +302,7 @@ func TestRemoveKey(t *testing.T) {
 	e := newEnv(t)
 	registered(t, e)
 	c, ui := e.controller()
-	startAndConnect(t, c, ui, e.relay.Addr())
+	startAndConnect(t, c, ui, e.server.Addr())
 	ui.wait(t, "main", screenIs(ScreenMain))
 	old := e.key.Fingerprint
 	if err := c.RemoveKey(); err != nil {
@@ -327,7 +327,7 @@ func TestDamagedKey(t *testing.T) {
 	if !strings.Contains(v.Error, "bad PEM") || v.KeyDir != e.dir {
 		t.Fatalf("%+v", v)
 	}
-	c.Connect(e.relay.Addr()) // ignored without a key
+	c.Connect(e.server.Addr()) // ignored without a key
 	e.keyErr = nil
 	e.key, _ = identity.Ephemeral("x")
 	if err := c.RemoveKey(); err != nil {
@@ -339,59 +339,59 @@ func TestDamagedKey(t *testing.T) {
 func TestUnregisteredShowsKeyAgain(t *testing.T) {
 	e := newEnv(t)
 	registered(t, e)
-	// A relay that does not know the key (an agent removed it): pin a
-	// fresh fake relay on which the key is not registered.
-	relay2, err := fakerelay.Start("", fakerelay.Options{})
+	// A server that does not know the key (a techie removed it): pin a
+	// fresh fake server on which the key is not registered.
+	server2, err := fakeserver.Start("", fakeserver.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer relay2.Close()
+	defer server2.Close()
 	config.Store{Dir: e.dir}.Save(&config.Config{
-		RelayAddress: relay2.Addr(),
-		RelayHostKey: identity.KeyLine(relay2.HostKey(), ""),
+		ServerAddress: server2.Addr(),
+		ServerHostKey: identity.KeyLine(server2.HostKey(), ""),
 	})
 	c, ui := e.controller()
-	startAndConnect(t, c, ui, relay2.Addr())
+	startAndConnect(t, c, ui, server2.Addr())
 	ui.wait(t, "key screen", screenIs(ScreenKey))
-	relay2.Register(e.fp())
+	server2.Register(e.fp())
 	ui.wait(t, "main", func(v View) bool { return v.Screen == ScreenMain && v.Ready })
 }
 
 func TestCapitalize(t *testing.T) {
-	if capitalize("relay address is empty") != "Relay address is empty" || capitalize("") != "" {
+	if capitalize("server address is empty") != "Server address is empty" || capitalize("") != "" {
 		t.Fatal()
 	}
 }
 
-func TestRelayKeyChanged(t *testing.T) {
+func TestServerKeyChanged(t *testing.T) {
 	e := newEnv(t)
-	e.relay.Register(e.fp())
-	old, _ := identity.Ephemeral("old relay")
+	e.server.Register(e.fp())
+	old, _ := identity.Ephemeral("old server")
 	config.Store{Dir: e.dir}.Save(&config.Config{
-		RelayAddress: e.relay.Addr(),
-		RelayHostKey: old.Line,
+		ServerAddress: e.server.Addr(),
+		ServerHostKey: old.Line,
 	})
 	c, ui := e.controller()
-	startAndConnect(t, c, ui, e.relay.Addr())
-	v := ui.wait(t, "warning", func(v View) bool { return v.RelayKeyChange != nil })
+	startAndConnect(t, c, ui, e.server.Addr())
+	v := ui.wait(t, "warning", func(v View) bool { return v.ServerKeyChange != nil })
 	if v.Screen != ScreenAddress {
 		t.Fatalf("warning on %v", v.Screen)
 	}
-	newFP := ssh.FingerprintSHA256(e.relay.HostKey())
-	if v.RelayKeyChange.OldFingerprint != old.Fingerprint || v.RelayKeyChange.NewFingerprint != newFP || v.Error == "" {
+	newFP := ssh.FingerprintSHA256(e.server.HostKey())
+	if v.ServerKeyChange.OldFingerprint != old.Fingerprint || v.ServerKeyChange.NewFingerprint != newFP || v.Error == "" {
 		t.Fatalf("view %+v", v)
 	}
-	if e.relay.Online(e.fp()) {
+	if e.server.Online(e.fp()) {
 		t.Fatal("connected despite the changed key")
 	}
-	c.TrustRelayKey("SHA256:something-else") // a stale answer does nothing
+	c.TrustServerKey("SHA256:something-else") // a stale answer does nothing
 	time.Sleep(50 * time.Millisecond)
-	if c.View().RelayKeyChange == nil {
+	if c.View().ServerKeyChange == nil {
 		t.Fatal("stale answer accepted")
 	}
-	c.TrustRelayKey(newFP)
+	c.TrustServerKey(newFP)
 	ui.wait(t, "ready", readyMain)
-	if got := e.config().RelayHostKey; got != identity.KeyLine(e.relay.HostKey(), "") {
+	if got := e.config().ServerHostKey; got != identity.KeyLine(e.server.HostKey(), "") {
 		t.Fatalf("pinned %q", got)
 	}
 }

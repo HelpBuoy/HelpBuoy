@@ -4,5 +4,5 @@ use (
 	./client-windows
 	./desk
 	./proto
-	./relay
+	./server
 )

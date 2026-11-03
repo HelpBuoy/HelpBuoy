@@ -1,5 +1,5 @@
 // Package screen defines the messages on the inner "screen" channel, the
-// tile codecs, the agent-side Decoder and the phase 2 test pattern. Frames
+// tile codecs, the techie-side Decoder and the phase 2 test pattern. Frames
 // are wire frames (proto/wire) with a binary payload.
 //
 // # Encodings
@@ -44,14 +44,14 @@ import (
 
 // Message type bytes.
 const (
-	MsgHello         uint8 = 1 // client -> agent
-	MsgFrame         uint8 = 2 // client -> agent
-	MsgAck           uint8 = 3 // agent -> client
-	MsgRefresh       uint8 = 4 // agent -> client: send a full frame (lossless)
-	MsgCursor        uint8 = 5 // client -> agent: a cursor shape (CursorShape)
-	MsgCursorPos     uint8 = 6 // client -> agent: cursor position and shape id (CursorPos)
-	MsgSelectMonitor uint8 = 7 // agent -> client: share another monitor (SelectMonitor)
-	MsgQuality       uint8 = 8 // agent -> client: quality preference (Quality)
+	MsgHello         uint8 = 1 // computer -> techie
+	MsgFrame         uint8 = 2 // computer -> techie
+	MsgAck           uint8 = 3 // techie -> computer
+	MsgRefresh       uint8 = 4 // techie -> computer: send a full frame (lossless)
+	MsgCursor        uint8 = 5 // computer -> techie: a cursor shape (CursorShape)
+	MsgCursorPos     uint8 = 6 // computer -> techie: cursor position and shape id (CursorPos)
+	MsgSelectMonitor uint8 = 7 // techie -> computer: share another monitor (SelectMonitor)
+	MsgQuality       uint8 = 8 // techie -> computer: quality preference (Quality)
 )
 
 // Limits enforced by the decoders.
@@ -67,8 +67,8 @@ const (
 // ErrMalformed is wrapped by every decode error.
 var ErrMalformed = errors.New("screen: malformed message")
 
-// Hello describes the client's screen. It is sent at session start and again
-// whenever the shared monitor or its size changes; the agent then resizes its
+// Hello describes the computer's screen. It is sent at session start and again
+// whenever the shared monitor or its size changes; the techie then resizes its
 // image and the next frame is a full frame.
 type Hello struct {
 	Hostname    string
@@ -80,14 +80,14 @@ type Hello struct {
 	Current     int       // index into Monitors of the shared one
 }
 
-// Monitor is one display of the client, in virtual-desktop pixel coordinates.
+// Monitor is one display of the computer, in virtual-desktop pixel coordinates.
 type Monitor struct {
 	X, Y, W, H int
 	Primary    bool
 	Name       string
 }
 
-// Rect is one operation of a frame, applied in order to the agent's image.
+// Rect is one operation of a frame, applied in order to the techie's image.
 // Kind selects which fields are used; see OpKind. The zero Kind is OpRaw, so
 // phase 2 code that only fills RGBA keeps working.
 type Rect struct {
@@ -101,14 +101,14 @@ type Rect struct {
 	Store      bool    // after drawing this op, store its W*H pixels in cache slot Slot (OpRaw, OpSolid, OpPalette, OpJPEG)
 }
 
-// Frame is one screen update; it is applied atomically by the agent. A
+// Frame is one screen update; it is applied atomically by the techie. A
 // frame too large for one wire frame is sent as several parts with the same
-// Seq: every part but the last has More set, and the agent applies nothing
+// Seq: every part but the last has More set, and the techie applies nothing
 // until the last part arrived. Only the last part is acked.
 //
 // Full marks the first frame after the encoder was reset (session start,
 // Refresh, new Hello): it repaints the whole screen and uses no cache slot it
-// didn't store itself. After the agent asks for a Refresh it resets its
+// didn't store itself. After the techie asks for a Refresh it resets its
 // decoder and skips (but still acks) frames until one with Full arrives, so
 // frames already in flight can't hit the cleared cache.
 type Frame struct {
@@ -118,7 +118,7 @@ type Frame struct {
 	Rects []Rect
 }
 
-// Ack acknowledges a frame; the client keeps at most 2 frames unacked.
+// Ack acknowledges a frame; the computer keeps at most 2 frames unacked.
 type Ack struct {
 	Seq uint32
 }
