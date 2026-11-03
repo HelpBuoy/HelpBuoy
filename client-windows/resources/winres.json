@@ -16,7 +16,7 @@
           "name": "help-me-win.client",
           "version": "0.4.1.6"
         },
-        "description": "help-me-win client",
+        "description": "Help-Me-Win client",
         "minimum-os": "win10",
         "execution-level": "as invoker",
         "ui-access": false,
@@ -43,10 +43,10 @@
         },
         "info": {
           "0409": {
-            "FileDescription": "help-me-win client",
+            "FileDescription": "Help-Me-Win client",
             "InternalName": "help-me-win",
             "OriginalFilename": "help-me-win.exe",
-            "ProductName": "help-me-win",
+            "ProductName": "Help-Me-Win",
             "ProductVersion": "0.4.1",
             "FileVersion": "0.4.1"
           }

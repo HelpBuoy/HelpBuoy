@@ -13,7 +13,7 @@
           "name": "help-me-win.helper",
           "version": "0.4.1.6"
         },
-        "description": "help-me-win helper",
+        "description": "Help-Me-Win helper",
         "minimum-os": "win10",
         "execution-level": "as invoker",
         "ui-access": false,
@@ -40,10 +40,10 @@
         },
         "info": {
           "0409": {
-            "FileDescription": "help-me-win helper",
+            "FileDescription": "Help-Me-Win helper",
             "InternalName": "hmw-helper",
             "OriginalFilename": "hmw-helper.exe",
-            "ProductName": "help-me-win",
+            "ProductName": "Help-Me-Win",
             "ProductVersion": "0.4.1",
             "FileVersion": "0.4.1"
           }

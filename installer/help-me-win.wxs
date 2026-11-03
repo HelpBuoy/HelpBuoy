@@ -7,13 +7,13 @@
   The UpgradeCode must never change, so new versions replace old ones.
 -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Product Id="*" Name="help-me-win" Language="1033" Version="$(var.Version)"
+  <Product Id="*" Name="Help-Me-Win" Language="1033" Version="$(var.Version)"
            Manufacturer="Maurits van der Schee" UpgradeCode="A3182225-098E-4C63-8855-57925CF25A30">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser"
-             Description="help-me-win $(var.Version)" Comments="Remote support client for Windows"/>
+             Description="Help-Me-Win $(var.Version)" Comments="Remote support client for Windows"/>
     <Media Id="1" Cabinet="helpmewin.cab" EmbedCab="yes"/>
     <MajorUpgrade AllowSameVersionUpgrades="yes"
-                  DowngradeErrorMessage="A newer version of help-me-win is already installed."/>
+                  DowngradeErrorMessage="A newer version of Help-Me-Win is already installed."/>
 
     <Icon Id="help_me_win.ico" SourceFile="$(var.IconPath)"/>
     <Property Id="ARPPRODUCTICON" Value="help_me_win.ico"/>
@@ -39,7 +39,7 @@
       </Directory>
       <Directory Id="ProgramMenuFolder">
         <Component Id="StartMenuShortcut" Guid="*">
-          <Shortcut Id="helpMeWinShortcut" Name="help-me-win" Description="Remote support client"
+          <Shortcut Id="helpMeWinShortcut" Name="Help-Me-Win" Description="Remote support client"
                     Target="[INSTALLDIR]help-me-win.exe" WorkingDirectory="INSTALLDIR"/>
           <RegistryValue Root="HKCU" Key="Software\help-me-win" Name="shortcut"
                          Type="integer" Value="1" KeyPath="yes"/>
