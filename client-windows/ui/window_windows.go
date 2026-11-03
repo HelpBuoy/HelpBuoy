@@ -30,8 +30,9 @@ const copyKeyText = "C&opy key"
 // long words, they cut them off).
 const dialogWidth = 320
 
-// Client area size in 96-DPI units.
-const clientW, clientH = 460, 330
+// Client area size in 96-DPI units, without the footer with the relay's
+// title and instruction, which adds footerH when shown.
+const clientW, clientH, footerH = 460, 330, 76
 
 // fontKind selects one of the window's fonts.
 type fontKind int
@@ -78,6 +79,11 @@ type Window struct {
 	// ScreenKeyError
 	lblKeyErr    *ui.Static
 	btnRemoveKey *ui.Button
+
+	// Footer on every screen: the relay's title and instruction line.
+	lblInfoTitle *ui.Static
+	lblInfoText  *ui.Static
+	footer       bool   // the footer is shown and the window is footerH taller
 	dialogs      int    // modal windows open
 	updateAsked  bool   // the update in the view was offered
 	relayAsked   string // new relay fingerprint the user was warned about
@@ -136,6 +142,9 @@ func New(iconID uint16) *Window {
 	w.lblKeyErr = static("", co.SS_LEFT)
 	w.btnRemoveKey = button("Remove &key...", co.BS_PUSHBUTTON)
 
+	w.lblInfoTitle = static("", co.SS_CENTER)
+	w.lblInfoText = static("", co.SS_CENTER)
+
 	w.items = []item{
 		{w.lblHeading, 24, 22, 412, 30, fontHeading},
 		{w.lblAddrHint, 24, 62, 412, 36, fontNormal},
@@ -158,6 +167,9 @@ func New(iconID uint16) *Window {
 
 		{w.lblKeyErr, 24, 24, 412, 190, fontNormal},
 		{w.btnRemoveKey, 24, 226, 160, 32, fontNormal},
+
+		{w.lblInfoTitle, 24, clientH + 4, 412, 28, fontHeading},
+		{w.lblInfoText, 24, clientH + 34, 412, 38, fontNormal},
 	}
 	w.events()
 	return w
@@ -371,7 +383,11 @@ func (w *Window) resizeClient() {
 	}
 	frameW := (wr.Right - wr.Left) - (cr.Right - cr.Left)
 	frameH := (wr.Bottom - wr.Top) - (cr.Bottom - cr.Top)
-	h.SetWindowPos(0, win.POINT{}, win.SIZE{Cx: w.scale(clientW) + frameW, Cy: w.scale(clientH) + frameH},
+	ch := clientH
+	if w.footer {
+		ch += footerH
+	}
+	h.SetWindowPos(0, win.POINT{}, win.SIZE{Cx: w.scale(clientW) + frameW, Cy: w.scale(ch) + frameH},
 		co.SWP_NOZORDER|co.SWP_NOMOVE|co.SWP_NOACTIVATE)
 }
 
@@ -486,6 +502,21 @@ func (w *Window) apply(v app.View) {
 		setText(w.lblKeyErr, v.Error+"\n\nFolder: "+v.KeyDir+
 			"\n\nThe key is never replaced on its own. Remove key deletes it and makes a new one; "+
 			"an agent will have to register this PC again.")
+	}
+
+	footer := v.Screen >= 0 && (v.Title != "" || v.Instruction != "")
+	show(w.lblInfoTitle, footer)
+	show(w.lblInfoText, footer)
+	setText(w.lblInfoTitle, v.Title)
+	setText(w.lblInfoText, v.Instruction)
+	caption := Title
+	if v.Title != "" {
+		caption = v.Title + " - " + Title
+	}
+	setText(w.wnd, caption)
+	if footer != w.footer {
+		w.footer = footer
+		w.resizeClient()
 	}
 
 	// During a session the window gets out of the way; afterwards it comes

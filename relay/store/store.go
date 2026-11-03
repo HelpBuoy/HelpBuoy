@@ -31,8 +31,10 @@ const (
 
 // Name length limits.
 const (
-	MaxAgentName  = 64
-	MaxClientName = 128
+	MaxAgentName   = 64
+	MaxClientName  = 128
+	MaxTitle       = 64
+	MaxInstruction = 160
 )
 
 // Agent is an agent key added by the relay admin.
@@ -52,8 +54,10 @@ type Client struct {
 
 // State is the content of state.json.
 type State struct {
-	Agents  []Agent  `json:"agents"`
-	Clients []Client `json:"clients"`
+	Title       string   `json:"title,omitempty"`       // shown by the apps, see control.RelayInfo
+	Instruction string   `json:"instruction,omitempty"` // shown by the apps, see control.RelayInfo
+	Agents      []Agent  `json:"agents"`
+	Clients     []Client `json:"clients"`
 }
 
 // Identity is what a fingerprint maps to.
@@ -76,6 +80,12 @@ type Index struct {
 // NewIndex validates st and builds its index. st must not be changed afterwards.
 func NewIndex(st *State) (*Index, error) {
 	idx := &Index{State: st, agents: map[string]int{}, clients: map[string]int{}}
+	if _, err := cleanLine("title", st.Title, MaxTitle); err != nil {
+		return nil, err
+	}
+	if _, err := cleanLine("instruction", st.Instruction, MaxInstruction); err != nil {
+		return nil, err
+	}
 	names := map[string]bool{}
 	for i, h := range st.Agents {
 		if _, err := auth.CleanName(h.Name, MaxAgentName); err != nil {
@@ -144,7 +154,8 @@ func (x *Index) Client(fp string) (Client, bool) {
 
 // Clone returns a deep copy.
 func (st *State) Clone() *State {
-	return &State{Agents: slices.Clone(st.Agents), Clients: slices.Clone(st.Clients)}
+	return &State{Title: st.Title, Instruction: st.Instruction,
+		Agents: slices.Clone(st.Agents), Clients: slices.Clone(st.Clients)}
 }
 
 // Store reads and writes state.json in a directory.
@@ -302,6 +313,33 @@ func writeAtomic(path string, b []byte) error {
 		d.Close()
 	}
 	return nil
+}
+
+// SetInfo sets the title and instruction line the apps show. Each is one
+// line of printable text; empty clears it.
+func (st *State) SetInfo(title, instruction string) error {
+	t, err := cleanLine("title", title, MaxTitle)
+	if err != nil {
+		return err
+	}
+	in, err := cleanLine("instruction", instruction, MaxInstruction)
+	if err != nil {
+		return err
+	}
+	st.Title, st.Instruction = t, in
+	return nil
+}
+
+// cleanLine trims s and checks it like a name, but allows it to be empty.
+func cleanLine(what, s string, max int) (string, error) {
+	if strings.TrimSpace(s) == "" {
+		return "", nil
+	}
+	s, err := auth.CleanName(s, max)
+	if err != nil {
+		return "", fmt.Errorf("%s: %s", what, strings.TrimPrefix(err.Error(), "name "))
+	}
+	return s, nil
 }
 
 // AddAgent adds an agent. The key line is normalized.

@@ -68,6 +68,12 @@ type View struct {
 	// ScreenKeyError
 	KeyDir string
 
+	// Title and Instruction are the relay's title and instruction line
+	// (e.g. "Example Inc", "Call +1 234 567 890 for support"); empty if
+	// not set or not known.
+	Title       string
+	Instruction string
+
 	// Update is a newer release to offer. It is only set while the client
 	// is idle (address screen, or waiting for an agent), so the offer never
 	// interrupts the user.
@@ -123,9 +129,10 @@ type Controller struct {
 	client   *session.Client
 	gen      int // identifies the running client; events of older ones are dropped
 	st       session.State
-	reached  bool  // the running client got through to the relay at least once
-	known    bool  // the running client is registered on its relay
-	lastErr  error // why the last client stopped, shown on the address screen
+	reached  bool       // the running client got through to the relay at least once
+	known    bool       // the running client is registered on its relay
+	info     *[2]string // title and instruction the running client's relay sent
+	lastErr  error      // why the last client stopped, shown on the address screen
 	inputErr string
 	closed   bool
 	closing  <-chan struct{}
@@ -189,11 +196,26 @@ func (c *Controller) View() View {
 
 func (c *Controller) viewLocked() View {
 	v := c.screenLocked()
+	if v.Screen != ScreenKeyError {
+		v.Title, v.Instruction = c.relayInfoLocked()
+	}
 	idle := v.Screen == ScreenAddress && !v.Connecting || v.Screen == ScreenMain && v.Ready
 	if idle {
 		v.Update = c.newRelease
 	}
 	return v
+}
+
+// relayInfoLocked returns the title and instruction to show: what the
+// relay sent on this connection, or else what the stored relay sent last.
+func (c *Controller) relayInfoLocked() (string, string) {
+	if c.info != nil {
+		return c.info[0], c.info[1]
+	}
+	if c.addr == "" || c.addr == c.cfg.RelayAddress {
+		return c.cfg.RelayTitle, c.cfg.RelayInstruction
+	}
+	return "", ""
 }
 
 // screenLocked computes the View without the update offer.
@@ -329,6 +351,7 @@ func (c *Controller) startClientLocked(addr string) {
 	c.gen++
 	c.addr = addr
 	c.reached, c.known, c.lastErr = false, false, nil
+	c.info = nil
 	c.st = session.State{Phase: session.PhaseConnecting}
 	var hostKey string
 	var agents map[string]string
@@ -543,10 +566,15 @@ func (h handler) Registered(relayHostKey string) {
 	c.known = true
 	if c.cfg.RelayAddress != c.addr {
 		c.cfg.KnownAgents = nil
+		c.cfg.RelayTitle, c.cfg.RelayInstruction = "", ""
 	}
 	changed := c.cfg.RelayAddress != c.addr || c.cfg.RelayHostKey != relayHostKey
 	c.cfg.RelayAddress = c.addr
 	c.cfg.RelayHostKey = relayHostKey
+	if c.info != nil && (c.cfg.RelayTitle != c.info[0] || c.cfg.RelayInstruction != c.info[1]) {
+		c.cfg.RelayTitle, c.cfg.RelayInstruction = c.info[0], c.info[1]
+		changed = true
+	}
 	c.mu.Unlock()
 	if changed {
 		c.log.Info("registered on the relay", "relay", c.addr)
@@ -568,6 +596,27 @@ func (h handler) AgentPinned(name, line string) {
 	c.cfg.KnownAgents[name] = line
 	c.mu.Unlock()
 	c.save()
+}
+
+// RelayInfo shows the relay's title and instruction, and stores them when
+// this is the relay the PC is registered on.
+func (h handler) RelayInfo(title, instruction string) {
+	c := h.c
+	c.mu.Lock()
+	if c.gen != h.gen || c.client == nil {
+		c.mu.Unlock()
+		return
+	}
+	c.info = &[2]string{title, instruction}
+	save := c.addr == c.cfg.RelayAddress && (c.cfg.RelayTitle != title || c.cfg.RelayInstruction != instruction)
+	if save {
+		c.cfg.RelayTitle, c.cfg.RelayInstruction = title, instruction
+	}
+	c.mu.Unlock()
+	if save {
+		c.save()
+	}
+	c.update()
 }
 
 func (h handler) ConfirmAgent(ctx context.Context, agent session.Agent, oldFP string) bool {

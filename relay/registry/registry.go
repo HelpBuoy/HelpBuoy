@@ -222,7 +222,7 @@ func (r *Registry) detachLocked(c *Conn) {
 }
 
 // OpenControl is called when the connection's control channel is open. It
-// queues Hello and, for agents, the first Presence.
+// queues Hello, RelayInfo and, for agents, the first Presence.
 func (r *Registry) OpenControl(c *Conn) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -242,6 +242,7 @@ func (r *Registry) OpenControl(c *Conn) error {
 		h.Name = c.name // clients are not told the name agents gave them
 	}
 	c.peer.Send(h)
+	c.peer.Send(r.relayInfoLocked())
 	if c.role == control.RoleAgent {
 		c.peer.NotifyPresence()
 	}
@@ -253,6 +254,10 @@ func send(c *Conn, m any) {
 	if c.control && !c.detached {
 		c.peer.Send(m)
 	}
+}
+
+func (r *Registry) relayInfoLocked() *control.RelayInfo {
+	return &control.RelayInfo{Title: r.idx.State.Title, Instruction: r.idx.State.Instruction}
 }
 
 // changedLocked marks the Presence snapshot stale and tells the agents.
@@ -341,7 +346,14 @@ func (r *Registry) presenceLocked() control.Presence {
 func (r *Registry) SetIndex(idx *store.Index) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	old := r.idx.State
 	r.idx = idx
+	if old.Title != idx.State.Title || old.Instruction != idx.State.Instruction {
+		info := r.relayInfoLocked()
+		for _, c := range r.conns {
+			send(c, info)
+		}
+	}
 	for fp, c := range r.conns {
 		id := idx.Lookup(fp)
 		switch {
@@ -388,6 +400,8 @@ func (r *Registry) Handle(c *Conn, m any) error {
 		return r.registerAgent(c, m)
 	case *control.RenameClient:
 		return r.renameClient(c, m)
+	case *control.SetRelayInfo:
+		return r.setRelayInfo(c, m)
 	}
 	return fmt.Errorf("%w: %T", ErrNotAllowed, m)
 }
@@ -570,6 +584,19 @@ func (r *Registry) renameClient(c *Conn, m *control.RenameClient) error {
 	})
 	if err == nil {
 		r.log.Info("client renamed", "fp", m.Fingerprint, "from", old, "to", strings.TrimSpace(m.Name), "by", by)
+	}
+	r.reply(c, m.Seq, err)
+	return nil
+}
+
+func (r *Registry) setRelayInfo(c *Conn, m *control.SetRelayInfo) error {
+	by, err := r.agentName(c, "SetRelayInfo")
+	if err != nil {
+		return err
+	}
+	err = r.mutate(func(st *store.State) error { return st.SetInfo(m.Title, m.Instruction) })
+	if err == nil {
+		r.log.Info("relay info set", "title", strings.TrimSpace(m.Title), "instruction", strings.TrimSpace(m.Instruction), "by", by)
 	}
 	r.reply(c, m.Seq, err)
 	return nil

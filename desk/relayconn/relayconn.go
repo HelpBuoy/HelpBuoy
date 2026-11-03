@@ -94,7 +94,8 @@ func (o *Options) defaults() {
 	}
 }
 
-// Event is one of StatusEvent, HostKeyPinned, PresenceEvent, SessionEvent.
+// Event is one of StatusEvent, HostKeyPinned, PresenceEvent, RelayInfoEvent,
+// SessionEvent.
 type Event any
 
 // StatusEvent reports a change of the connection status.
@@ -114,6 +115,11 @@ type HostKeyPinned struct {
 // PresenceEvent carries a full Presence snapshot.
 type PresenceEvent struct {
 	Presence *control.Presence
+}
+
+// RelayInfoEvent carries the relay's title and instruction line.
+type RelayInfoEvent struct {
+	Info *control.RelayInfo
 }
 
 // SessionEvent hands over an accepted sv-session channel. The receiver owns
@@ -210,6 +216,13 @@ func (c *Conn) RenameClient(fingerprint, name string) <-chan error {
 func (c *Conn) UnregisterClient(fingerprint string) <-chan error {
 	return c.command(func(seq uint32) any {
 		return &control.UnregisterClient{Seq: seq, Fingerprint: fingerprint}
+	})
+}
+
+// SetRelayInfo replaces the relay's title and instruction line.
+func (c *Conn) SetRelayInfo(title, instruction string) <-chan error {
+	return c.command(func(seq uint32) any {
+		return &control.SetRelayInfo{Seq: seq, Title: title, Instruction: instruction}
 	})
 }
 
@@ -437,6 +450,8 @@ func (c *Conn) connect() (online bool, err error) {
 		switch m := m.(type) {
 		case *control.Presence:
 			c.emit(PresenceEvent{Presence: m})
+		case *control.RelayInfo:
+			c.emit(RelayInfoEvent{Info: m})
 		case *control.Reply:
 			var rerr error
 			if m.Error != "" {

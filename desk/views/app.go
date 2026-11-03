@@ -58,6 +58,7 @@ type backend interface {
 	RenameClient(fingerprint, name string) <-chan error
 	UnregisterClient(fingerprint string) <-chan error
 	Connect(fingerprint, requestID string) <-chan error
+	SetRelayInfo(title, instruction string) <-chan error
 }
 
 type tabKind int
@@ -111,7 +112,8 @@ type App struct {
 	status   relayconn.StatusEvent
 	hostKey  ssh.PublicKey
 	presence *control.Presence
-	me       string // our agent name from Hello
+	me       string             // our agent name from Hello
+	info     *control.RelayInfo // the relay's title and instruction line, nil until received
 
 	local      *localrelay.Relay
 	localAdded int
@@ -135,6 +137,7 @@ type App struct {
 	active     int          // index into tabs
 	reg        registerPage // Register client
 	regAgent   registerPage // Register agent
+	infoForm   infoForm     // title and instruction on the Relay tab
 	confirmKey bool         // the Remove key confirmation on the damaged key screen
 	pageHeight map[tabKind]float32
 
@@ -173,6 +176,7 @@ func New(opts Options) *App {
 	a.ui.SetIcon(opts.Icon)
 	a.reg.init(false)
 	a.regAgent.init(true)
+	a.infoForm.init()
 	a.cs.init()
 	if opts.Demo {
 		a.demo = newDemo(a)
@@ -379,6 +383,8 @@ func (a *App) handleEvent(ev relayconn.Event) {
 		}
 	case relayconn.PresenceEvent:
 		a.setPresence(ev.Presence)
+	case relayconn.RelayInfoEvent:
+		a.setRelayInfo(ev.Info)
 	case relayconn.SessionEvent:
 		a.incomingSession(ev.Data, ev.Channel)
 	}

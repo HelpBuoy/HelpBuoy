@@ -51,6 +51,7 @@ func (h *testHandler) AgentPinned(name, line string) {
 	h.pinned[name] = line
 	h.mu.Unlock()
 }
+func (h *testHandler) RelayInfo(title, instruction string) {}
 func (h *testHandler) ConfirmAgent(ctx context.Context, agent Agent, oldFP string) bool {
 	h.mu.Lock()
 	h.asked = append(h.asked, asked{agent, oldFP})

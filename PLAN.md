@@ -269,10 +269,12 @@ Agent commands carry a sequence number and the relay answers each with a `Reply`
 | Message | Direction | Content |
 |---|---|---|
 | `Hello` | relay → any | role, relay time, limits |
+| `RelayInfo` | relay → any | title and instruction line (e.g. "Example Inc", "Call +1 234 567 890 for support"), right after `Hello` and again whenever they change |
 | `ClientHello` | client → relay | app version, current `user@machine` (the registered name comes from the key comment) |
 | `Presence` | relay → agents | full snapshot after every change: registered clients (`user@machine`, fingerprint, online, open or taken request with id and time, in session with whom) and agents |
 | `RegisterClient` / `UnregisterClient` | agent → relay | public key line or fingerprint (name taken from the key comment, or given when the comment is empty) |
 | `RegisterAgent` | agent → relay | public key line and name: adds another agent, like `helpbuoy-relay agent add` |
+| `SetRelayInfo` | agent → relay | new title (up to 64 characters) and instruction line (up to 160), one line each, empty to clear; stored in `state.json` |
 | `Reply` | relay → agent | answer to an agent command: sequence number and error text if it failed |
 | `Registered` | relay → client | the key is now registered (no name: that is only for agents) |
 | `RequestHelp` | client → relay | (no content) |
@@ -541,6 +543,11 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   not send it to the client (neither `Hello` nor `Registered` carry it). That name is only
   for agents.
 - There is no settings window.
+- **Relay title and instruction**: when the relay has a title or instruction line (set by
+  an agent on the desk app's Relay tab), the window shows them in a footer on every
+  screen, and the title also goes in the window caption ("Example Inc - HelpBuoy"). The
+  client stores the values of the relay it is registered on, so the footer, typically a
+  phone number to call, still shows when that relay can't be reached.
 - **During a session** the window is minimized (`SW_MINIMIZE`), nothing else is shown.
 - **When the session ends** (the agent ended it, or Esc), the window is restored and brought
   to the front, waiting for the next agent.
@@ -641,9 +648,10 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   agent, the box shows the public key with **Copy public key** to send to an agent on it
   (Register agent tab) or its admin (`helpbuoy-relay agent add`) and keeps retrying, so it moves on by itself once the key is added.
 - Once online the tabs appear. The **Relay** tab shows the connection status, the address,
-  the relay fingerprint to read out to users, **Disconnect** (not while sessions are open;
-  back to the connect screen, stopping the local relay). There is no settings tab: nothing
-  else is configurable.
+  the relay fingerprint to read out to users, the relay's **title** and **instruction line**
+  with **Save** (any agent can change them; every client and agent gets the new values
+  right away), and **Disconnect** (not while sessions are open; back to the connect screen,
+  stopping the local relay). There is no settings tab: nothing else is configurable.
 - One relay connection with the control channel, keepalive, reconnect with backoff. All of
   this agent's sessions run as channels over that one connection.
 - **Local relay**: the relay is compiled into the desk app (`relay/server`, the same code

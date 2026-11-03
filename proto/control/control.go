@@ -21,6 +21,9 @@
 // key the relay sends Registered and from then on treats the connection as a
 // client (no reconnect needed).
 //
+// Right after Hello the relay sends RelayInfo (title and instruction line set
+// by the agents), and again to every connection whenever it changes.
+//
 // Agent commands carry a Seq; the relay answers each with Reply{Seq, Error}.
 // Presence is a full snapshot, sent after Hello and after every change.
 //
@@ -105,6 +108,9 @@ const (
 	MsgRenameClient  MsgType = 14
 	MsgConnect       MsgType = 15
 	MsgRegisterAgent MsgType = 16
+	MsgSetRelayInfo  MsgType = 18
+	// relay -> any
+	MsgRelayInfo MsgType = 17
 )
 
 // Hello is the relay's first message on every control channel.
@@ -115,6 +121,23 @@ type Hello struct {
 	// Name is the agent's name, agents only. Clients are not told the name
 	// agents gave them; that name is only for agents.
 	Name string `json:"name,omitempty"`
+}
+
+// RelayInfo is the relay's title and instruction line, e.g. "Example Inc" and
+// "Call +1 234 567 890 for support". Both may be empty. Clients show them to
+// their user; agents show and edit them on the Relay tab.
+type RelayInfo struct {
+	Title       string `json:"title"`
+	Instruction string `json:"instruction"`
+}
+
+// SetRelayInfo replaces the relay's title and instruction line (each one line
+// of printable text, title at most 64 and instruction at most 160 characters,
+// empty to clear). Every connection gets the new RelayInfo.
+type SetRelayInfo struct {
+	Seq         uint32 `json:"seq"`
+	Title       string `json:"title"`
+	Instruction string `json:"instruction"`
 }
 
 // ClientHello is sent by clients and pending connections right after opening
@@ -323,6 +346,10 @@ func typeOf(m any) (MsgType, error) {
 		return MsgRegisterAgent, nil
 	case *Connect, Connect:
 		return MsgConnect, nil
+	case *RelayInfo, RelayInfo:
+		return MsgRelayInfo, nil
+	case *SetRelayInfo, SetRelayInfo:
+		return MsgSetRelayInfo, nil
 	case *Reply, Reply:
 		return MsgReply, nil
 	case *Registered, Registered:
@@ -358,6 +385,10 @@ func newOf(t MsgType) (any, error) {
 		return &RegisterAgent{}, nil
 	case MsgConnect:
 		return &Connect{}, nil
+	case MsgRelayInfo:
+		return &RelayInfo{}, nil
+	case MsgSetRelayInfo:
+		return &SetRelayInfo{}, nil
 	case MsgReply:
 		return &Reply{}, nil
 	case MsgRegistered:

@@ -73,6 +73,9 @@ type Handler interface {
 	Registered(relayHostKey string)
 	// AgentPinned reports an agent key to remember for name.
 	AgentPinned(name, keyLine string)
+	// RelayInfo reports the relay's title and instruction line, after
+	// connecting and whenever an agent changes them.
+	RelayInfo(title, instruction string)
 	// ConfirmAgent asks the user whether agent h may take control. It is
 	// called for every session, before the session channel is opened.
 	// oldFingerprint is set when the agent called h.Name showed a different
@@ -588,6 +591,10 @@ func (c *Client) dispatch(rc *relayConn, m any) {
 			c.endRequestLocked()
 		}
 		c.mu.Unlock()
+
+	case *control.RelayInfo:
+		c.opts.Handler.RelayInfo(m.Title, m.Instruction)
+		return
 
 	case *control.SessionReady:
 		c.mu.Lock()

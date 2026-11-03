@@ -71,6 +71,7 @@ func (a *App) startConnect() {
 // openConn starts the relay connection to addr with the pinned host key.
 func (a *App) openConn(addr string) {
 	a.presence, a.me = nil, ""
+	a.setRelayInfo(nil)
 	a.status = relayconn.StatusEvent{}
 	a.hostKey = nil
 	if k, err := config.ParseHostKey(a.cfg.RelayHostKey); err == nil && a.cfg.RelayHostKey != "" {
@@ -96,6 +97,7 @@ func (a *App) disconnect() {
 	}
 	a.localWait, a.reached, a.notAgent = false, false, false
 	a.presence, a.me = nil, ""
+	a.setRelayInfo(nil)
 	a.status = relayconn.StatusEvent{}
 	a.opening = map[string]bool{}
 	a.waiting = map[string]*waitInfo{}

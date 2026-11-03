@@ -140,6 +140,7 @@ func TestMessagesPerRole(t *testing.T) {
 		{"UnregisterClient", &control.UnregisterClient{Seq: 1, Fingerprint: "SHA256:x"}, map[control.Role]bool{control.RoleAgent: true}},
 		{"RenameClient", &control.RenameClient{Seq: 1, Fingerprint: "SHA256:x", Name: "x"}, map[control.Role]bool{control.RoleAgent: true}},
 		{"RegisterAgent", &control.RegisterAgent{Seq: 1, PublicKey: "bad", Name: "x"}, map[control.Role]bool{control.RoleAgent: true}},
+		{"SetRelayInfo", &control.SetRelayInfo{Seq: 1, Title: "bad\x00title"}, map[control.Role]bool{control.RoleAgent: true}},
 		// Relay->app messages are never accepted from apps.
 		{"Hello", &control.Hello{Role: control.RoleAgent}, nil},
 		{"Presence", &control.Presence{}, nil},
@@ -148,6 +149,7 @@ func TestMessagesPerRole(t *testing.T) {
 		{"RequestState", &control.RequestStateMsg{}, nil},
 		{"SessionReady", &control.SessionReady{}, nil},
 		{"Error", &control.Error{}, nil},
+		{"RelayInfo", &control.RelayInfo{}, nil},
 	}
 	for _, rc := range roles() {
 		t.Run(string(rc.role), func(t *testing.T) {
@@ -512,6 +514,44 @@ func TestRenameClient(t *testing.T) {
 		h.Send(m)
 		if rep := mustWait[control.Reply](t, h, nil); rep.Seq != m.Seq || rep.Error == "" {
 			t.Errorf("case %d: reply %+v, want an error", i, rep)
+		}
+	}
+}
+
+// TestSetRelayInfo: an agent sets the title and instruction line; every
+// connection gets the new RelayInfo, it is stored, and new connections get
+// it after Hello. Bad values are refused.
+func TestSetRelayInfo(t *testing.T) {
+	e := newEnv(t, nil)
+	h := e.agent("alice")
+	cl, _ := e.client("anna@PC")
+	mustWait[control.RelayInfo](t, cl, func(m *control.RelayInfo) bool { return m.Title == "" && m.Instruction == "" })
+
+	h.Send(&control.SetRelayInfo{Seq: 2, Title: " Example Inc ", Instruction: "Call +1 234 567 890 for support"})
+	if rep := mustWait[control.Reply](t, h, func(r *control.Reply) bool { return r.Seq == 2 }); rep.Error != "" {
+		t.Fatalf("set: %s", rep.Error)
+	}
+	want := func(m *control.RelayInfo) bool {
+		return m.Title == "Example Inc" && m.Instruction == "Call +1 234 567 890 for support"
+	}
+	mustWait[control.RelayInfo](t, cl, want)
+	idx, _, err := e.st.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if idx.State.Title != "Example Inc" {
+		t.Fatalf("stored title %q", idx.State.Title)
+	}
+	h2 := e.agent("bob")
+	mustWait[control.RelayInfo](t, h2, want)
+
+	for i, m := range []*control.SetRelayInfo{
+		{Seq: 3, Title: strings.Repeat("x", 65)},
+		{Seq: 4, Instruction: "two\nlines"},
+	} {
+		h.Send(m)
+		if rep := mustWait[control.Reply](t, h, func(r *control.Reply) bool { return r.Seq == m.Seq }); rep.Error == "" {
+			t.Errorf("case %d: no error", i)
 		}
 	}
 }

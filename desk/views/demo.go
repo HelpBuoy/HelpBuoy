@@ -77,6 +77,7 @@ func newDemo(a *App) *demo {
 	kees.LastSeen = now.Add(-2 * time.Hour)
 	p.Clients = []control.ClientInfo{piet, oma, anna, lisa, jan, kees}
 	a.setPresence(p)
+	a.setRelayInfo(&control.RelayInfo{Title: "Example Inc", Instruction: "Call +1 234 567 890 for support"})
 	return d
 }
 
@@ -103,6 +104,12 @@ func (d *demo) RegisterClient(line, name string) <-chan error {
 		}
 	}
 	p.Clients = append(p.Clients, control.ClientInfo{Fingerprint: fp, Name: name, RegisteredBy: d.a.me, RegisteredAt: time.Now()})
+	return done(nil)
+}
+
+// SetRelayInfo changes the demo relay's title and instruction locally.
+func (d *demo) SetRelayInfo(title, instruction string) <-chan error {
+	d.a.setRelayInfo(&control.RelayInfo{Title: strings.TrimSpace(title), Instruction: strings.TrimSpace(instruction)})
 	return done(nil)
 }
 
