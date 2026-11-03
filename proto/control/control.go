@@ -131,11 +131,10 @@ type RelayInfo struct {
 	Instruction string `json:"instruction"`
 }
 
-// The apps show these when the relay's title or instruction line is empty.
-const (
-	DefaultTitle       = "Remote support"
-	DefaultInstruction = "Contact your support agent by phone or chat, for example WhatsApp."
-)
+// DefaultInstruction is what clients show when the relay's instruction line
+// is empty. An empty title shows nothing.
+const DefaultInstruction = "An agent can now ask to connect. You will be asked first, " +
+	"and pressing Esc always takes back control."
 
 // SetRelayInfo replaces the relay's title and instruction line (each one line
 // of printable text, title at most 64 and instruction at most 160 characters,

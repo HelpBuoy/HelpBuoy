@@ -534,8 +534,8 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
 - Waits for `Registered`, then saves the configuration and moves to the waiting screen.
 
 ### 6.3 Waiting screen
-- The comment of this PC's own key (`anna@ANNA-LAPTOP`) and "Waiting for an agent", with one line
-  saying the user will be asked first and that Esc takes back control. The agent connects,
+- The comment of this PC's own key (`anna@ANNA-LAPTOP`) and "Waiting for an agent", with the
+  relay's title and instruction line below it (see below). The agent connects,
   and the client asks the question from section 1 (Session, step 3) in a modal dialog.
 - **Disconnect** is always available while connected: it leaves the relay and goes back to
   the address screen. During a session the same button reads **End session** and ends only
@@ -544,13 +544,15 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   not send it to the client (neither `Hello` nor `Registered` carry it). That name is only
   for agents.
 - There is no settings window.
-- **Relay title and instruction**: the waiting screen shows the relay's title and
-  instruction line (set by an agent on the desk app's Relay tab or with
-  `helpbuoy-relay title`/`instruction`) below Disconnect, and the title also goes in the
-  window caption ("Example Inc - HelpBuoy"). They always come from the relay on the
-  current connection; the client does not store them. An empty one shows a generic
-  default: "Remote support" and "Contact your support agent by phone or chat, for example
-  WhatsApp."
+- **Relay title and instruction**: below "Waiting for an agent" the waiting screen shows
+  the relay's title and, under it in place of the old status text, its instruction line
+  (both set by an agent on the desk app's Relay tab or with `helpbuoy-relay title` /
+  `instruction`). The title also goes in the window caption ("Example Inc - HelpBuoy").
+  They always come from the relay on the current connection; the client does not store
+  them. Without a title nothing is shown there; without an instruction line the client
+  shows the default "An agent can now ask to connect. You will be asked first, and
+  pressing Esc always takes back control." Errors and notices take that place while they
+  apply.
 - **During a session** the window is minimized (`SW_MINIMIZE`), nothing else is shown.
 - **When the session ends** (the agent ended it, or Esc), the window is restored and brought
   to the front, waiting for the next agent.

@@ -28,7 +28,7 @@ type infoForm struct {
 }
 
 func (f *infoForm) init() {
-	f.title.Placeholder = "Empty: " + control.DefaultTitle
+	f.title.Placeholder = "Empty: no title"
 	f.title.Edit.Max = maxTitle
 	f.instruction.Placeholder = "Empty: " + control.DefaultInstruction
 	f.instruction.Edit.Max = maxInstruction
@@ -76,7 +76,7 @@ func (a *App) setRelayInfo(info *control.RelayInfo) {
 func (a *App) drawRelayInfo(x, y, w float32) float32 {
 	c := a.ui
 	f := &a.infoForm
-	y += c.Paragraph(ui.Regular, ui.SizeSmall, "Clients show this title and instruction line to their user, for example your company name and \"Call +1 234 567 890 for support\". Empty fields show the generic text in grey.", x, y, w, ui.ColMuted)
+	y += c.Paragraph(ui.Regular, ui.SizeSmall, "Clients waiting for an agent show this title and instruction line, for example your company name and \"Call +1 234 567 890 for support\". The grey text shows what an empty field gives.", x, y, w, ui.ColMuted)
 	y += 6
 	fw := min(w, 560)
 	y = label(c, "Title", x, y)

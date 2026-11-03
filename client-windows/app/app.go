@@ -199,9 +199,6 @@ func (c *Controller) viewLocked() View {
 	v := c.screenLocked()
 	if v.Screen == ScreenMain {
 		v.Title, v.Instruction = c.relayInfoLocked()
-		if v.Title == "" {
-			v.Title = control.DefaultTitle
-		}
 		if v.Instruction == "" {
 			v.Instruction = control.DefaultInstruction
 		}

@@ -33,6 +33,10 @@ const dialogWidth = 320
 // Client area size in 96-DPI units.
 const clientW, clientH = 460, 330
 
+// statusY is the position of the waiting screen's status line; it moves
+// down by titleH when the relay's title is shown above it.
+const statusY, titleH = 160, 26
+
 // fontKind selects one of the window's fonts.
 type fontKind int
 
@@ -73,19 +77,17 @@ type Window struct {
 	// ScreenMain
 	lblWaiting    *ui.Static
 	lblStatus     *ui.Static
+	lblInfoTitle  *ui.Static // the relay's title, above the status line
 	btnDisconnect *ui.Button
 	lblComment    *ui.Static
 	// ScreenKeyError
 	lblKeyErr    *ui.Static
 	btnRemoveKey *ui.Button
 
-	// The relay's title and instruction line, on the waiting screen.
-	lblInfoTitle *ui.Static
-	lblInfoText  *ui.Static
-	dialogs      int    // modal windows open
-	updateAsked  bool   // the update in the view was offered
-	relayAsked   string // new relay fingerprint the user was warned about
-	updating     string // status while an update is downloaded
+	dialogs     int    // modal windows open
+	updateAsked bool   // the update in the view was offered
+	relayAsked  string // new relay fingerprint the user was warned about
+	updating    string // status while an update is downloaded
 
 	items []item
 	dpi   int
@@ -134,14 +136,12 @@ func New(iconID uint16) *Window {
 
 	w.lblWaiting = static("", co.SS_CENTER)
 	w.lblStatus = static("", co.SS_CENTER)
+	w.lblInfoTitle = static("", co.SS_CENTER)
 	w.btnDisconnect = button("&Disconnect", co.BS_PUSHBUTTON)
 	w.lblComment = static("", co.SS_CENTER)
 
 	w.lblKeyErr = static("", co.SS_LEFT)
 	w.btnRemoveKey = button("Remove &key...", co.BS_PUSHBUTTON)
-
-	w.lblInfoTitle = static("", co.SS_CENTER)
-	w.lblInfoText = static("", co.SS_CENTER)
 
 	w.items = []item{
 		{w.lblHeading, 24, 22, 412, 30, fontHeading},
@@ -158,12 +158,11 @@ func New(iconID uint16) *Window {
 		{w.lblKeyNotice, 24, 234, 412, 40, fontNormal},
 		{w.lnkChange, 24, 298, 260, 20, fontNormal},
 
-		{w.lblComment, 24, 20, 412, 30, fontHeading},
-		{w.lblWaiting, 24, 62, 412, 40, fontBig},
-		{w.lblStatus, 24, 108, 412, 54, fontNormal},
-		{w.btnDisconnect, 150, 168, 160, 32, fontNormal},
-		{w.lblInfoTitle, 24, 232, 412, 28, fontHeading},
-		{w.lblInfoText, 24, 264, 412, 50, fontNormal},
+		{w.lblComment, 24, 44, 412, 34, fontHeading},
+		{w.lblWaiting, 24, 104, 412, 40, fontBig},
+		{w.lblInfoTitle, 24, 152, 412, 28, fontHeading},
+		{w.lblStatus, 24, statusY, 412, 64, fontNormal},
+		{w.btnDisconnect, 150, 258, 160, 32, fontNormal},
 
 		{w.lblKeyErr, 24, 24, 412, 190, fontNormal},
 		{w.btnRemoveKey, 24, 226, 160, 32, fontNormal},
@@ -393,6 +392,23 @@ func (w *Window) layout() {
 	}
 }
 
+// moveStatus puts the status line of the waiting screen below the relay's
+// title when it is shown, and in the title's place when not.
+func (w *Window) moveStatus(belowTitle bool) {
+	y := statusY
+	if belowTitle {
+		y += titleH
+	}
+	for i := range w.items {
+		if w.items[i].ctl == w.lblStatus && w.items[i].y != y {
+			w.items[i].y = y
+			it := w.items[i]
+			w.lblStatus.Hwnd().MoveWindow(win.POINT{X: w.scale(it.x), Y: w.scale(it.y)},
+				win.SIZE{Cx: w.scale(it.w), Cy: w.scale(it.h)}, true)
+		}
+	}
+}
+
 func show(c ui.Window, on bool) {
 	if on {
 		c.Hwnd().ShowWindow(co.SW_SHOW)
@@ -457,6 +473,9 @@ func (w *Window) apply(v app.View) {
 	main := v.Screen == app.ScreenMain
 	show(w.lblWaiting, main)
 	show(w.lblStatus, main)
+	title := main && v.Ready && v.Error == "" && v.Notice == "" && w.updating == "" && v.Title != ""
+	show(w.lblInfoTitle, title)
+	w.moveStatus(title)
 	show(w.btnDisconnect, main)
 	show(w.lblComment, main)
 	if main {
@@ -471,8 +490,9 @@ func (w *Window) apply(v app.View) {
 			status = v.Notice
 		}
 		if status == "" && v.Ready {
-			status = "An agent can now ask to connect. You will be asked first, " +
-				"and pressing Esc always takes back control."
+			// The relay's instruction line, or the default text.
+			setText(w.lblInfoTitle, v.Title)
+			status = v.Instruction
 		}
 		if w.updating != "" {
 			status = w.updating
@@ -497,11 +517,6 @@ func (w *Window) apply(v app.View) {
 			"an agent will have to register this PC again.")
 	}
 
-	info := v.Title != "" || v.Instruction != ""
-	show(w.lblInfoTitle, info)
-	show(w.lblInfoText, info)
-	setText(w.lblInfoTitle, v.Title)
-	setText(w.lblInfoText, v.Instruction)
 	caption := Title
 	if v.Title != "" {
 		caption = v.Title + " - " + Title

@@ -43,7 +43,7 @@ commands:
   client list                                            list registered clients
   client rename SHA256:... NAME                          rename a registered client
   client remove SHA256:...                               remove a registered client
-  title [TEXT]                                           print or set the title the apps show ("" for the default)
+  title [TEXT]                                           print or set the title the apps show ("" for none)
   instruction [TEXT]                                     print or set the instruction line the apps show ("" for the default)
   hostkey                                                print the relay host key and fingerprint
   version                                                print the version
@@ -343,12 +343,12 @@ func infoCmd(what string, args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-		v, def := idx.State.Title, control.DefaultTitle
+		v := idx.State.Title
 		if what == "instruction" {
-			v, def = idx.State.Instruction, control.DefaultInstruction
-		}
-		if v == "" {
-			v = def + " (default)"
+			v = idx.State.Instruction
+			if v == "" {
+				v = control.DefaultInstruction + " (default)"
+			}
 		}
 		fmt.Fprintln(stdout, v)
 		return nil
@@ -367,7 +367,11 @@ func infoCmd(what string, args []string, stdout, stderr io.Writer) error {
 		v = idx.State.Instruction
 	}
 	if v == "" {
-		fmt.Fprintf(stdout, "cleared the %s; the apps show the default\n", what)
+		if what == "instruction" {
+			fmt.Fprintln(stdout, "cleared the instruction; clients show the default")
+		} else {
+			fmt.Fprintln(stdout, "cleared the title")
+		}
 	} else {
 		fmt.Fprintf(stdout, "set the %s to %q\n", what, v)
 	}
