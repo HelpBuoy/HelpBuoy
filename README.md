@@ -7,3 +7,5 @@ Self-hosted remote support for Windows, a small alternative to TeamViewer QuickS
 - `client-windows/`: the Windows app the person receiving help runs. It shows its public key to send to the agent, and asks for approval before anyone takes control.
 
 A session only carries the screen (client to agent) and mouse and keyboard input (agent to client). See [PLAN.md](PLAN.md) for the design.
+
+To try it locally, run `./run.sh`: it starts a relay, the desk app and the Windows client in wine, with all state in `.run/` (`./run.sh reset` clears it).
