@@ -54,6 +54,6 @@ func (a *App) drawRelay(x, y, w float32) float32 {
 	}
 
 	y += 12
-	c.Text(ui.Regular, ui.SizeSmall, "HelpBuoy helper "+a.opts.Version, x, y, ui.ColMuted)
+	c.Text(ui.Regular, ui.SizeSmall, "HelpBuoy Desk "+a.opts.Version, x, y, ui.ColMuted)
 	return y + 20
 }
