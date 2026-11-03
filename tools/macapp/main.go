@@ -1,7 +1,7 @@
-// Command macapp writes a zipped macOS .app bundle for the helper app, with
+// Command macapp writes a zipped macOS .app bundle for the desk app, with
 // helpbuoy-relay next to the main executable, on any OS (no Xcode tools needed).
 //
-//	go run tools/macapp/main.go -app helpbuoy-desk -id helpbuoy.helper \
+//	go run tools/macapp/main.go -app helpbuoy-desk -id helpbuoy.desk \
 //	    -version 0.0.1 -exe bin/darwin-arm64/helpbuoy-desk \
 //	    -relay bin/darwin-arm64/helpbuoy-relay -icon desk/resources/icon.png -out out.zip
 package main
@@ -22,7 +22,7 @@ import (
 
 func main() {
 	app := flag.String("app", "helpbuoy-desk", "bundle and executable name")
-	id := flag.String("id", "helpbuoy.helper", "CFBundleIdentifier")
+	id := flag.String("id", "helpbuoy.desk", "CFBundleIdentifier")
 	version := flag.String("version", "0.0.1", "CFBundleShortVersionString (numeric, like 1.2.3)")
 	exe := flag.String("exe", "", "main executable")
 	relay := flag.String("relay", "", "helpbuoy-relay executable to put next to it")

@@ -10,10 +10,10 @@
     "#1": {
       "0409": {
         "identity": {
-          "name": "helpbuoy.helper",
+          "name": "helpbuoy.desk",
           "version": "0.4.6.11"
         },
-        "description": "HelpBuoy helper",
+        "description": "HelpBuoy Desk",
         "minimum-os": "win10",
         "execution-level": "as invoker",
         "ui-access": false,
@@ -40,7 +40,7 @@
         },
         "info": {
           "0409": {
-            "FileDescription": "HelpBuoy helper",
+            "FileDescription": "HelpBuoy Desk",
             "InternalName": "helpbuoy-desk",
             "OriginalFilename": "helpbuoy-desk.exe",
             "ProductName": "HelpBuoy",

@@ -48,7 +48,7 @@ func main() {
 
 	rl.SetTraceLogLevel(rl.LogWarning)
 	rl.SetConfigFlags(rl.FlagWindowResizable | rl.FlagWindowHighdpi | rl.FlagMsaa4xHint)
-	rl.InitWindow(1100, 700, "HelpBuoy helper")
+	rl.InitWindow(1100, 700, "HelpBuoy Desk")
 	defer rl.CloseWindow()
 	rl.SetWindowMinSize(views.MinWidth, views.MinHeight)
 	rl.SetExitKey(rl.KeyNull) // Esc belongs to the remote session
