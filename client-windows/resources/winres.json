@@ -14,7 +14,7 @@
       "0409": {
         "identity": {
           "name": "help-me-win.client",
-          "version": "0.4.1.6"
+          "version": "0.4.2.7"
         },
         "description": "Help-Me-Win client",
         "minimum-os": "win10",
@@ -38,8 +38,8 @@
     "#1": {
       "0000": {
         "fixed": {
-          "file_version": "0.4.1.6",
-          "product_version": "0.4.1.6"
+          "file_version": "0.4.2.7",
+          "product_version": "0.4.2.7"
         },
         "info": {
           "0409": {
@@ -47,8 +47,8 @@
             "InternalName": "help-me-win",
             "OriginalFilename": "help-me-win.exe",
             "ProductName": "Help-Me-Win",
-            "ProductVersion": "0.4.1",
-            "FileVersion": "0.4.1"
+            "ProductVersion": "0.4.2",
+            "FileVersion": "0.4.2"
           }
         }
       }
