@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"text/tabwriter"
 	"time"
@@ -34,16 +35,18 @@ var version = "dev"
 const usage = `usage: hmw-relay <command> [flags]
 
 commands:
-  serve [--listen :2222] [--state DIR]                   run the relay
+  serve [--listen :5938] [--state DIR]                   run the relay
   helper add NAME [--display "Name"] 'ssh-ed25519 ...'   add a helper key
   helper remove NAME                                     remove a helper
   helper list                                            list helpers
   client list                                            list registered clients
+  client rename SHA256:... NAME                          rename a registered client
   client remove SHA256:...                               remove a registered client
   hostkey                                                print the relay host key and fingerprint
   version                                                print the version
 
-Every command except version takes --state DIR (default: per-user data directory).
+Every command except version takes --state DIR (default: $HMW_RELAY_STATE,
+else the per-user data directory).
 `
 
 // errUsage marks errors in the command line.
@@ -108,8 +111,14 @@ func parse(fs *flag.FlagSet, args []string) ([]string, error) {
 	}
 }
 
+// stateDir returns the state directory: the --state flag, else the
+// HMW_RELAY_STATE environment variable (set by the Debian package's service
+// and hmw-relayctl to /var/lib/hmw-relay), else the per-user data directory.
 func stateDir(s string) (string, error) {
 	if s != "" {
+		return s, nil
+	}
+	if s := os.Getenv("HMW_RELAY_STATE"); s != "" {
 		return s, nil
 	}
 	return datadir.Dir("hmw-relay")
@@ -124,7 +133,7 @@ func parseServe(args []string, stderr io.Writer) (serveConfig, error) {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	listen := fs.String("listen", fmt.Sprintf(":%d", relayaddr.DefaultPort), "address to listen on, host:port or :port")
-	state := fs.String("state", "", "state directory (default: per-user data directory)")
+	state := fs.String("state", "", "state directory (default: $HMW_RELAY_STATE, else the per-user data directory)")
 	if err := fs.Parse(args); err != nil {
 		return serveConfig{}, err
 	}
@@ -244,7 +253,7 @@ func helperCmd(args []string, stdout, stderr io.Writer) error {
 
 func clientCmd(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("%w: client list|remove", errUsage)
+		return fmt.Errorf("%w: client list|rename|remove", errUsage)
 	}
 	fs := flag.NewFlagSet("client "+args[0], flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -291,8 +300,22 @@ func clientCmd(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 		fmt.Fprintf(stdout, "removed client %s (%s)\n", name, pos[0])
+	case "rename":
+		if len(pos) != 2 {
+			return fmt.Errorf("%w: client rename SHA256:... NAME", errUsage)
+		}
+		var old string
+		_, _, err := st.Update(func(s *store.State) error {
+			var err error
+			old, err = s.RenameClient(pos[0], pos[1])
+			return err
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "renamed client %s to %s (%s)\n", old, strings.TrimSpace(pos[1]), pos[0])
 	default:
-		return fmt.Errorf("%w: client list|remove", errUsage)
+		return fmt.Errorf("%w: client list|rename|remove", errUsage)
 	}
 	return nil
 }

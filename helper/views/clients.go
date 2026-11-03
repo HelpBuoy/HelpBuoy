@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
@@ -198,7 +200,8 @@ func (a *App) drawClientRow(ci control.ClientInfo, r rl.Rectangle) {
 	if open {
 		bg = ui.ColRequest
 	}
-	tabIdx := a.sessionFor(ci.Name)
+	tabIdx := a.sessionFor(ci.Fingerprint)
+	editing := a.rename.fp == ci.Fingerprint
 	selected := tabIdx >= 0 && tabIdx == a.active
 	hover, clicked := c.Row(id, r, bg, selected)
 	if open {
@@ -219,13 +222,21 @@ func (a *App) drawClientRow(ci control.ClientInfo, r rl.Rectangle) {
 	// Right side action area.
 	actionW := float32(0)
 	confirming := a.confirmRemove == ci.Fingerprint
+	canRename := a.online() && a.rename.busy[ci.Fingerprint] == ""
 	switch {
+	case editing:
 	case confirming:
 		actionW = 150
 	case open:
 		actionW = 118
 	case hover && tabIdx < 0:
+		actionW = 140
+	case hover:
 		actionW = 70
+	}
+	if editing {
+		a.drawRenameField(ci, rl.NewRectangle(x, r.Y+5, r.X+r.Width-x-12, 28))
+		return
 	}
 	nameW := r.Width - (x - r.X) - actionW - 12
 	font := ui.Regular
@@ -240,6 +251,9 @@ func (a *App) drawClientRow(ci control.ClientInfo, r rl.Rectangle) {
 		if hover {
 			c.Tooltip(n.text)
 		}
+	}
+	if n := a.rename.busy[ci.Fingerprint]; n != "" {
+		sub, subCol = "Renaming to "+n+"…", ui.ColMuted
 	}
 	if confirming {
 		sub, subCol = "Remove this client?", ui.ColError
@@ -269,18 +283,147 @@ func (a *App) drawClientRow(ci control.ClientInfo, r rl.Rectangle) {
 			a.openRequest(ci)
 			actionClicked = true
 		}
-	case hover && tabIdx < 0:
-		if c.Button(id+"/remove", rl.NewRectangle(ax, ay, 66, 30), "Remove", ui.Flat, !a.online()) {
+	case hover:
+		if c.Button(id+"/rename", rl.NewRectangle(ax, ay, 66, 30), "Rename", ui.Flat, !canRename) {
+			a.startRename(ci)
+			actionClicked = true
+		}
+		if tabIdx < 0 && c.Button(id+"/remove", rl.NewRectangle(ax+70, ay, 66, 30), "Remove", ui.Flat, !a.online()) {
 			a.confirmRemove = ci.Fingerprint
 			actionClicked = true
 		}
 	}
 	if hover && !actionClicked {
-		c.Tooltip(ci.Fingerprint)
+		tip := ci.Fingerprint
+		if ci.UserMachine != "" {
+			tip = ci.UserMachine + "  ·  " + tip
+		}
+		c.Tooltip(tip)
 	}
-	if clicked && !actionClicked && tabIdx >= 0 {
-		a.activate(tabIdx)
+	if clicked && !actionClicked {
+		// A double click on the row renames, like a file manager.
+		if a.rename.lastClick == ci.Fingerprint && c.Now.Sub(a.rename.lastAt) < 400*time.Millisecond && canRename {
+			a.startRename(ci)
+			a.rename.lastClick = ""
+		} else {
+			a.rename.lastClick, a.rename.lastAt = ci.Fingerprint, c.Now
+		}
+		if tabIdx >= 0 {
+			a.activate(tabIdx)
+		}
 	}
+}
+
+// maxClientName is the longest client name the relay accepts, in characters.
+const maxClientName = 128
+
+// validClientName reports whether the relay accepts s as a client name:
+// 1 to 128 printable characters after trimming spaces at both ends. Spaces
+// inside are fine ("Anna laptop").
+func validClientName(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" || !utf8.ValidString(s) || utf8.RuneCountInString(s) > maxClientName {
+		return false
+	}
+	for _, r := range s {
+		if !unicode.IsPrint(r) {
+			return false
+		}
+	}
+	return true
+}
+
+// renameFieldID is the ui id of the inline rename field.
+const renameFieldID = "clients/rename"
+
+// renameState is the inline rename of a client row.
+type renameState struct {
+	fp    string // client being renamed, or ""
+	field ui.Field
+	bad   bool // the typed name was rejected
+
+	busy map[string]string // new names waiting for the relay, by fingerprint
+
+	blur      bool // drop the field's focus at the start of the next frame
+	lastClick string
+	lastAt    time.Time
+}
+
+// beginFrame drops the focus of a closed rename field. It is kept until the
+// next frame so the Enter or Esc that closed the field does not also reach a
+// session in the same frame.
+func (r *renameState) beginFrame(c *ui.Context) {
+	if r.blur {
+		if c.Focus == renameFieldID {
+			c.Focus = ""
+		}
+		r.blur = false
+	}
+}
+
+func (a *App) startRename(ci control.ClientInfo) {
+	r := &a.rename
+	r.fp, r.bad = ci.Fingerprint, false
+	r.field.Edit.Max = maxClientName
+	r.field.Edit.SetText(ci.Name)
+	r.field.Edit.SelectAll()
+	a.confirmRemove = ""
+	a.ui.Focus = renameFieldID
+}
+
+func (a *App) endRename() {
+	a.rename.fp = ""
+	a.rename.blur = true
+}
+
+// drawRenameField draws the inline name field of a row being renamed:
+// Enter saves, Esc or a click elsewhere cancels.
+func (a *App) drawRenameField(ci control.ClientInfo, r rl.Rectangle) {
+	c := a.ui
+	res := c.TextField(renameFieldID, r, &a.rename.field)
+	hint, col := "Enter to save, Esc to cancel", ui.ColMuted
+	if a.rename.bad {
+		hint, col = fmt.Sprintf("1 to %d printable characters", maxClientName), ui.ColError
+	}
+	c.Text(ui.Regular, ui.SizeSmall, c.Ellipsize(ui.Regular, ui.SizeSmall, hint, r.Width), r.X, r.Y+r.Height+3, col)
+	if res.Changed {
+		a.rename.bad = false
+	}
+	switch {
+	case res.Submitted:
+		a.commitRename(ci)
+	case rl.IsKeyPressed(rl.KeyEscape), c.Focus != renameFieldID:
+		a.endRename()
+	}
+}
+
+// commitRename sends the typed name to the relay. An unchanged name just
+// closes the field; an invalid one keeps it open with a hint.
+func (a *App) commitRename(ci control.ClientInfo) {
+	name := strings.TrimSpace(a.rename.field.Edit.String())
+	if name == ci.Name {
+		a.endRename()
+		return
+	}
+	if !validClientName(name) {
+		a.rename.bad = true
+		return
+	}
+	a.endRename()
+	if a.backend == nil {
+		return
+	}
+	fp := ci.Fingerprint
+	if a.rename.busy == nil {
+		a.rename.busy = map[string]string{}
+	}
+	a.rename.busy[fp] = name
+	a.run(a.backend.RenameClient(fp, name), func(err error) {
+		delete(a.rename.busy, fp)
+		if err != nil {
+			a.notes[fp] = note{text: "Could not rename: " + err.Error(), until: time.Now().Add(6 * time.Second)}
+		}
+	})
 }
 
 // rowSubline is the small second line of a client row.
@@ -294,7 +437,7 @@ func (a *App) rowSubline(ci control.ClientInfo, tabIdx int) (string, rl.Color) {
 		return "In session with " + ci.InSessionWith, ui.ColMuted
 	case ci.Online:
 		if ci.UserMachine != "" && !strings.EqualFold(ci.UserMachine, ci.Name) {
-			return "Reports itself as " + ci.UserMachine, ui.ColWarn
+			return ci.UserMachine, ui.ColMuted
 		}
 		return "Online", ui.ColMuted
 	case !ci.LastSeen.IsZero():

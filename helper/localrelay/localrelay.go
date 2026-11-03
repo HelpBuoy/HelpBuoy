@@ -1,37 +1,44 @@
-// Package localrelay runs hmw-relay on the helper's own machine (PLAN.md 7.1):
-// it starts "hmw-relay serve" from next to the helper's executable as a child
-// process unless something already listens on the port, keeps the tail of its
-// log, adds the helper's own key with "hmw-relay helper add" when the relay has
-// no helpers yet, and stops the child when the app exits.
+// Package localrelay runs the relay inside the helper app (PLAN.md 7.1): the
+// same relay/server code as the standalone hmw-relay, compiled in, so there is
+// no separate executable to find or start. Unless something already listens
+// on the port, it serves on that port until Stop, keeps the tail of the relay
+// log for the settings page, and adds the helper's own key when the relay has
+// no helpers yet.
+//
+// It uses the same state directory as "hmw-relay serve" (the per-user data
+// directory "hmw-relay"), so the standalone relay and its admin commands
+// (hmw-relay helper add, client list, ...) work on the same helpers, clients
+// and host key.
 package localrelay
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mevdschee/help-me-win/proto/datadir"
+	"github.com/mevdschee/help-me-win/relay/logfile"
+	"github.com/mevdschee/help-me-win/relay/server"
+	"github.com/mevdschee/help-me-win/relay/store"
 )
 
 // State of the local relay.
 type State int
 
 const (
-	StateStarting State = iota // looking for hmw-relay or waiting for it to listen
-	StateRunning               // our child process is serving
+	StateStarting State = iota // opening the state directory and the port
+	StateRunning               // serving inside this app
 	StateExternal              // something else already listens on the port
-	StateNotFound              // no hmw-relay next to the helper app
-	StateExited                // our child process ended or failed to start
+	StateExited                // failed to start or stopped serving on its own
 	StateStopped               // Stop was called
 )
 
@@ -43,8 +50,6 @@ func (s State) String() string {
 		return "running"
 	case StateExternal:
 		return "already running"
-	case StateNotFound:
-		return "hmw-relay not found"
 	case StateExited:
 		return "stopped unexpectedly"
 	case StateStopped:
@@ -55,27 +60,28 @@ func (s State) String() string {
 
 // Options configure the local relay.
 type Options struct {
-	Exe  string // path of hmw-relay; "" means next to the running executable
-	Port int    // listen port
+	Port     int    // listen port, on all interfaces
+	StateDir string // "" means the per-user data directory "hmw-relay"
+	Version  string // reported to apps in Hello
 
-	// For "hmw-relay helper add" when the relay has no helpers yet.
+	// The helper's own key, added when the relay has no helpers yet.
 	HelperName    string
 	HelperDisplay string
-	KeyLine       string // the helper's own authorized_keys line; "" skips the step
+	KeyLine       string // authorized_keys line; "" skips the step
 }
 
 // Status is a snapshot for the settings page.
 type Status struct {
-	State State
-	Err   error
-	Exe   string
-	Lines []string // log tail, oldest first
-	// HelperAdded counts successful "helper add" runs; the app reconnects to
-	// the relay when it changes.
+	State    State
+	Err      error
+	StateDir string
+	Lines    []string // log tail, oldest first
+	// HelperAdded counts how often the helper's own key was added; the app
+	// reconnects to the relay when it changes.
 	HelperAdded int
 }
 
-// Relay is a running local relay manager.
+// Relay is a running local relay.
 type Relay struct {
 	opts   Options
 	ctx    context.Context
@@ -89,31 +95,7 @@ type Relay struct {
 
 const maxLines = 200
 
-// ExeName is the hmw-relay file name for this OS.
-func ExeName() string {
-	if runtime.GOOS == "windows" {
-		return "hmw-relay.exe"
-	}
-	return "hmw-relay"
-}
-
-// FindExe returns the path of hmw-relay next to the running executable.
-func FindExe() (string, error) {
-	self, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-	if p, err := filepath.EvalSymlinks(self); err == nil {
-		self = p
-	}
-	p := filepath.Join(filepath.Dir(self), ExeName())
-	if fi, err := os.Stat(p); err != nil || fi.IsDir() {
-		return "", fmt.Errorf("%s not found next to %s", ExeName(), filepath.Base(self))
-	}
-	return p, nil
-}
-
-// Start begins managing the local relay in the background.
+// Start begins running the local relay in the background.
 func Start(opts Options) *Relay {
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &Relay{opts: opts, ctx: ctx, cancel: cancel, done: make(chan struct{})}
@@ -130,7 +112,8 @@ func (r *Relay) Status() Status {
 	return s
 }
 
-// Stop stops the child process, if this Relay started one, and waits for it.
+// Stop stops the relay, if this Relay runs one, and waits until it has
+// closed all connections and written its state.
 func (r *Relay) Stop() {
 	r.cancel()
 	<-r.done
@@ -145,6 +128,9 @@ func (r *Relay) set(st State, err error) {
 // logLine appends one line to the log tail.
 func (r *Relay) logLine(s string) {
 	s = strings.TrimRight(s, "\r\n")
+	if s == "" {
+		return
+	}
 	if len(s) > 400 {
 		s = s[:400] + "..."
 	}
@@ -156,129 +142,86 @@ func (r *Relay) logLine(s string) {
 	r.mu.Unlock()
 }
 
+// fail records a start-up error and waits for Stop.
+func (r *Relay) fail(err error) {
+	r.set(StateExited, err)
+	<-r.ctx.Done()
+}
+
 func (r *Relay) run() {
 	defer close(r.done)
-	exe := r.opts.Exe
-	var findErr error
-	if exe == "" {
-		exe, findErr = FindExe()
+	dir := r.opts.StateDir
+	if dir == "" {
+		d, err := datadir.Dir("hmw-relay")
+		if err != nil {
+			r.fail(err)
+			return
+		}
+		dir = d
 	}
 	r.mu.Lock()
-	r.status.Exe = exe
+	r.status.StateDir = dir
 	r.mu.Unlock()
 
 	if Listening(r.opts.Port) {
+		// Probably a standalone hmw-relay on this machine; it reloads
+		// state.json by itself, so adding the key there still works.
 		r.set(StateExternal, nil)
-		if findErr == nil {
-			r.ensureHelper(exe)
-		}
+		r.ensureHelper(dir)
 		<-r.ctx.Done()
 		r.set(StateStopped, nil)
 		return
 	}
-	if findErr != nil {
-		r.set(StateNotFound, findErr)
-		<-r.ctx.Done()
+
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		r.fail(err)
 		return
 	}
-
-	cmd := exec.Command(exe, "serve", "--listen", ":"+strconv.Itoa(r.opts.Port))
-	setSysProcAttr(cmd)
-	pr, pw := io.Pipe()
-	cmd.Stdout, cmd.Stderr = pw, pw
-	if err := cmd.Start(); err != nil {
-		r.set(StateExited, err)
-		<-r.ctx.Done()
+	ln, err := net.Listen("tcp", ":"+strconv.Itoa(r.opts.Port))
+	if err != nil {
+		r.fail(err)
 		return
 	}
-	go func() {
-		sc := bufio.NewScanner(pr)
-		sc.Buffer(make([]byte, 64<<10), 1<<20)
-		for sc.Scan() {
-			r.logLine(sc.Text())
-		}
-		io.Copy(io.Discard, pr)
-	}()
-	exited := make(chan error, 1)
-	go func() {
-		err := cmd.Wait()
-		pw.Close()
-		exited <- err
-	}()
-
-	// Wait until it listens, exits, or we are stopped.
-	tick := time.NewTicker(100 * time.Millisecond)
-	defer tick.Stop()
-	deadline := time.Now().Add(15 * time.Second)
-wait:
-	for {
-		select {
-		case err := <-exited:
-			r.set(StateExited, exitErr(err))
-			<-r.ctx.Done()
-			return
-		case <-r.ctx.Done():
-			stopProcess(cmd, exited)
-			r.set(StateStopped, nil)
-			return
-		case <-tick.C:
-			if Listening(r.opts.Port) {
-				break wait
-			}
-			if time.Now().After(deadline) {
-				stopProcess(cmd, exited)
-				r.set(StateExited, errors.New("hmw-relay did not start listening"))
-				<-r.ctx.Done()
-				return
-			}
-		}
+	lf, err := logfile.Open(filepath.Join(dir, "relay.log"), logfile.DefaultMaxSize)
+	if err != nil {
+		ln.Close()
+		r.fail(err)
+		return
 	}
+	defer lf.Close()
+	log := slog.New(slog.NewJSONHandler(io.MultiWriter(lf, tailWriter{r}), nil))
+
+	// Before the server reads its state, so the key works on the first try.
+	r.ensureHelper(dir)
+
+	srv, err := server.New(server.Config{StateDir: dir, Version: r.opts.Version, Log: log})
+	if err != nil {
+		ln.Close()
+		r.fail(err)
+		return
+	}
+	served := make(chan error, 1)
+	go func() { served <- srv.Serve(ln) }()
 	r.set(StateRunning, nil)
-	r.ensureHelper(exe)
+	r.logLine(fmt.Sprintf("relay listening on :%d, state in %s", r.opts.Port, dir))
 
 	select {
-	case err := <-exited:
-		r.set(StateExited, exitErr(err))
-		<-r.ctx.Done()
+	case err := <-served:
+		srv.Close()
+		if err == nil || errors.Is(err, server.ErrServerClosed) {
+			err = errors.New("relay stopped serving")
+		}
+		r.fail(err)
 	case <-r.ctx.Done():
-		stopProcess(cmd, exited)
+		srv.Close()
+		<-served
 		r.set(StateStopped, nil)
-	}
-}
-
-func exitErr(err error) error {
-	if err == nil {
-		return errors.New("hmw-relay exited")
-	}
-	return fmt.Errorf("hmw-relay exited: %w", err)
-}
-
-// stopProcess asks the child to stop, and kills it after a grace period.
-func stopProcess(cmd *exec.Cmd, exited <-chan error) {
-	if err := cmd.Process.Signal(os.Interrupt); err != nil {
-		cmd.Process.Kill() // Windows has no interrupt for other processes
-	}
-	select {
-	case <-exited:
-	case <-time.After(3 * time.Second):
-		cmd.Process.Kill()
-		<-exited
 	}
 }
 
 // ensureHelper adds the helper's own key when the relay has no helpers yet.
-// "hmw-relay helper list" output counts as empty when it lists no key: no line
-// mentions ssh-ed25519 or a SHA256: fingerprint.
-func (r *Relay) ensureHelper(exe string) {
+func (r *Relay) ensureHelper(dir string) {
 	if r.opts.KeyLine == "" {
-		return
-	}
-	out, err := r.cli(exe, "helper", "list")
-	if err != nil {
-		r.logLine("hmw-relay helper list: " + err.Error())
-		return
-	}
-	if HasHelpers(out) {
 		return
 	}
 	name := r.opts.HelperName
@@ -289,8 +232,23 @@ func (r *Relay) ensureHelper(exe string) {
 	if display == "" {
 		display = name
 	}
-	if _, err := r.cli(exe, "helper", "add", name, "--display", display, r.opts.KeyLine); err != nil {
-		r.logLine("hmw-relay helper add: " + err.Error())
+	st, err := store.Open(dir)
+	if err != nil {
+		r.logLine("relay state: " + err.Error())
+		return
+	}
+	errHasHelpers := errors.New("relay already has helpers")
+	_, _, err = st.Update(func(s *store.State) error {
+		if len(s.Helpers) > 0 {
+			return errHasHelpers
+		}
+		return s.AddHelper(name, display, r.opts.KeyLine)
+	})
+	switch {
+	case errors.Is(err, errHasHelpers):
+		return
+	case err != nil:
+		r.logLine("adding this helper app's key: " + err.Error())
 		return
 	}
 	r.logLine("added this helper app's key to the relay as " + name)
@@ -299,26 +257,14 @@ func (r *Relay) ensureHelper(exe string) {
 	r.mu.Unlock()
 }
 
-// HasHelpers reports whether "hmw-relay helper list" output lists any key.
-func HasHelpers(out []byte) bool {
-	return bytes.Contains(out, []byte("ssh-ed25519")) || bytes.Contains(out, []byte("SHA256:"))
-}
+// tailWriter feeds the relay's log lines into the log tail.
+type tailWriter struct{ r *Relay }
 
-// cli runs a short hmw-relay admin command.
-func (r *Relay) cli(exe string, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(r.ctx, 15*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, exe, args...)
-	setSysProcAttr(cmd)
-	var out, errOut bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errOut
-	if err := cmd.Run(); err != nil {
-		if msg := strings.TrimSpace(errOut.String()); msg != "" {
-			return nil, fmt.Errorf("%w: %s", err, msg)
-		}
-		return nil, err
+func (w tailWriter) Write(p []byte) (int, error) {
+	for _, line := range strings.Split(string(p), "\n") {
+		w.r.logLine(line)
 	}
-	return out.Bytes(), nil
+	return len(p), nil
 }
 
 // Listening reports whether something accepts TCP connections on

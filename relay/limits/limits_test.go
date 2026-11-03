@@ -14,192 +14,135 @@ type clock struct {
 	t  time.Time
 }
 
-func (c *clock) Now() time.Time { c.mu.Lock(); defer c.mu.Unlock(); return c.t }
+func (c *clock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.t
+}
+
 func (c *clock) Add(d time.Duration) {
 	c.mu.Lock()
 	c.t = c.t.Add(d)
 	c.mu.Unlock()
 }
 
-func newLimiter() (*Limiter, *clock) {
-	c := &clock{t: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
-	cfg := Defaults()
-	cfg.Now = c.Now
-	return New(cfg), c
-}
+func newClock() *clock { return &clock{t: time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)} }
 
-func TestPerKeyAttempts(t *testing.T) {
-	l, c := newLimiter()
-	for i := range 10 {
-		rel, err := l.AdmitPending("k", "1.1.1.1")
-		if err != nil {
-			t.Fatalf("attempt %d: %v", i+1, err)
-		}
-		rel()
-		rel() // idempotent
-	}
-	if _, err := l.AdmitPending("k", "1.1.1.1"); !errors.Is(err, ErrKeyAttempts) {
-		t.Fatalf("11th: %v", err)
-	}
-	if _, err := l.AdmitPending("k", "2.2.2.2"); !errors.Is(err, ErrKeyBlocked) {
-		t.Fatalf("blocked key from another IP: %v", err)
-	}
-	c.Add(time.Hour)
-	if _, err := l.AdmitPending("k", "1.1.1.1"); err != nil {
-		t.Fatalf("after block: %v", err)
-	}
-}
-
-func TestPerIPUnknownKeys(t *testing.T) {
-	l, c := newLimiter()
-	for _, k := range []string{"a", "b", "c", "d", "e"} {
-		if _, err := l.AdmitPending(k, "1.1.1.1"); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, err := l.AdmitPending("f", "1.1.1.1"); !errors.Is(err, ErrIPKeys) {
-		t.Fatalf("6th key: %v", err)
-	}
-	if _, err := l.AdmitPending("g", "1.1.1.1"); !errors.Is(err, ErrIPBlocked) {
-		t.Fatalf("while blocked: %v", err)
-	}
-	if _, err := l.AdmitPending("a", "1.1.1.1"); err != nil {
-		t.Fatalf("seen key while blocked: %v", err)
-	}
-	if _, err := l.AdmitPending("f", "3.3.3.3"); err != nil {
-		t.Fatalf("other IP: %v", err)
-	}
-	c.Add(time.Hour + time.Second)
-	if _, err := l.AdmitPending("h", "1.1.1.1"); err != nil {
-		t.Fatalf("after an hour: %v", err)
-	}
-}
-
-func TestPerIPPending(t *testing.T) {
-	l, c := newLimiter()
-	var rels []func()
-	// Spread keys over time so the distinct-keys rule doesn't trigger first.
-	for i := range 10 {
-		rel, err := l.AdmitPending(string(rune('a'+i)), "1.1.1.1")
-		if err != nil {
-			t.Fatalf("%d: %v", i, err)
-		}
-		rels = append(rels, rel)
-		c.Add(13 * time.Minute)
-	}
-	if _, err := l.AdmitPending("z", "1.1.1.1"); !errors.Is(err, ErrIPPending) {
-		t.Fatalf("11th pending: %v", err)
-	}
-	if l.Pending() != 10 {
-		t.Errorf("pending %d", l.Pending())
-	}
-	for _, r := range rels {
-		r()
-	}
-	if l.Pending() != 0 {
-		t.Errorf("pending after release %d", l.Pending())
-	}
-}
-
-func TestPendingTotal(t *testing.T) {
-	c := &clock{t: time.Unix(0, 0)}
-	l := New(Config{PendingTotal: 2, Now: c.Now})
-	l.AdmitPending("a", "1.1.1.1")
-	l.AdmitPending("b", "2.2.2.2")
-	if _, err := l.AdmitPending("c", "3.3.3.3"); !errors.Is(err, ErrPendingTotal) {
+func TestKeyRate(t *testing.T) {
+	c := newClock()
+	l := New(Config{Now: c.Now})
+	if err := l.AdmitKey("A"); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func TestHandshakeSlotsWait(t *testing.T) {
-	l, _ := newLimiter()
-	var rels []func(bool)
-	for range 10 {
-		rel, err := l.AcquireHandshake(context.Background(), "1.1.1.1")
-		if err != nil {
-			t.Fatal(err)
-		}
-		rels = append(rels, rel)
+	// A second attempt within a second is refused, another key is not.
+	c.Add(999 * time.Millisecond)
+	if err := l.AdmitKey("A"); !errors.Is(err, ErrKeyRate) {
+		t.Fatalf("second attempt: %v, want ErrKeyRate", err)
 	}
-	// The 11th waits; with a short context it gives up.
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-	if _, err := l.AcquireHandshake(ctx, "1.1.1.1"); !errors.Is(err, ErrHandshakeBusy) {
-		t.Fatalf("11th: %v", err)
+	if err := l.AdmitKey("B"); err != nil {
+		t.Fatalf("other key: %v", err)
 	}
-	cancel()
-	// Another IP is not affected.
-	if rel, err := l.AcquireHandshake(context.Background(), "2.2.2.2"); err != nil {
-		t.Fatal(err)
-	} else {
-		rel(false)
+	// A refused attempt doesn't extend anything: one second after the last
+	// admitted attempt the key gets in again. There is no block.
+	c.Add(time.Millisecond)
+	if err := l.AdmitKey("A"); err != nil {
+		t.Fatalf("after a second: %v", err)
 	}
-	// It gets a slot as soon as one frees up.
-	got := make(chan error, 1)
-	go func() {
-		rel, err := l.AcquireHandshake(context.Background(), "1.1.1.1")
-		if err == nil {
-			rel(false)
-		}
-		got <- err
-	}()
-	time.Sleep(10 * time.Millisecond)
-	rels[0](false)
-	if err := <-got; err != nil {
-		t.Fatal(err)
+	// Hammering for a minute never blocks the key for longer than a second.
+	for range 600 {
+		c.Add(100 * time.Millisecond)
+		l.AdmitKey("A")
+	}
+	c.Add(time.Second)
+	if err := l.AdmitKey("A"); err != nil {
+		t.Fatalf("after hammering: %v", err)
 	}
 }
 
-func TestHandshakeFailuresBackoff(t *testing.T) {
-	l, c := newLimiter()
-	for range 30 {
-		rel, err := l.AcquireHandshake(context.Background(), "1.1.1.1")
-		if err != nil {
-			t.Fatal(err)
-		}
-		rel(true)
-	}
-	if _, err := l.AcquireHandshake(context.Background(), "1.1.1.1"); !errors.Is(err, ErrBackoff) {
-		t.Fatalf("after 30 failures: %v", err)
-	}
-	c.Add(time.Minute)
-	rel, err := l.AcquireHandshake(context.Background(), "1.1.1.1")
+func TestPendingCaps(t *testing.T) {
+	l := New(Config{PendingPerIP: 2, PendingTotal: 3})
+	r1, err := l.AdmitPending("k1", "1.1.1.1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	rel(true) // fails again: the backoff doubles
-	c.Add(time.Minute)
-	if _, err := l.AcquireHandshake(context.Background(), "1.1.1.1"); !errors.Is(err, ErrBackoff) {
-		t.Fatalf("second backoff too short: %v", err)
-	}
-	c.Add(time.Minute)
-	if rel, err := l.AcquireHandshake(context.Background(), "1.1.1.1"); err != nil {
+	if _, err := l.AdmitPending("k2", "1.1.1.1"); err != nil {
 		t.Fatal(err)
-	} else {
-		rel(false)
+	}
+	if _, err := l.AdmitPending("k3", "1.1.1.1"); !errors.Is(err, ErrIPPending) {
+		t.Fatalf("third from one IP: %v", err)
+	}
+	if _, err := l.AdmitPending("k4", "2.2.2.2"); err != nil {
+		t.Fatalf("other IP: %v", err)
+	}
+	if _, err := l.AdmitPending("k5", "3.3.3.3"); !errors.Is(err, ErrPendingTotal) {
+		t.Fatalf("over the total: %v", err)
+	}
+	// Closing a pending connection frees its slot right away: no block.
+	r1()
+	r1() // harmless twice
+	if _, err := l.AdmitPending("k3", "1.1.1.1"); err != nil {
+		t.Fatalf("after release: %v", err)
+	}
+	if l.Pending() != 3 {
+		t.Fatalf("pending %d", l.Pending())
 	}
 }
 
-func TestSweepForgets(t *testing.T) {
-	l, c := newLimiter()
-	rel, _ := l.AdmitPending("a", "1.1.1.1")
-	rel()
-	c.Add(2 * time.Hour)
+func TestHandshakeSlots(t *testing.T) {
+	l := New(Config{HandshakesPerIP: 2, HandshakeWaiters: 3})
+	ctx := context.Background()
+	rel1, err := l.AcquireHandshake(ctx, "ip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := l.AcquireHandshake(ctx, "ip"); err != nil {
+		t.Fatal(err)
+	}
+	// The third waits until a slot frees, and gives up with its context.
+	short, cancel := context.WithTimeout(ctx, 30*time.Millisecond)
+	defer cancel()
+	if _, err := l.AcquireHandshake(short, "ip"); !errors.Is(err, ErrHandshakeBusy) {
+		t.Fatalf("no slot: %v", err)
+	}
+	got := make(chan error, 1)
+	go func() {
+		_, err := l.AcquireHandshake(ctx, "ip")
+		got <- err
+	}()
+	time.Sleep(20 * time.Millisecond)
+	rel1(true) // a failed handshake changes nothing but the slot
+	if err := <-got; err != nil {
+		t.Fatalf("waiter: %v", err)
+	}
+	// Another IP has its own slots.
+	if _, err := l.AcquireHandshake(ctx, "other"); err != nil {
+		t.Fatalf("other ip: %v", err)
+	}
+}
+
+func TestSweep(t *testing.T) {
+	c := newClock()
+	l := New(Config{Now: c.Now})
+	l.AdmitKey("A")
+	rel, _ := l.AcquireHandshake(context.Background(), "ip")
+	rel(false)
+	c.Add(2 * time.Second)
 	l.Sweep()
-	if len(l.ips) != 0 || len(l.keys) != 0 {
-		t.Errorf("ips %d keys %d", len(l.ips), len(l.keys))
+	if len(l.lastTry) != 0 || len(l.ips) != 0 {
+		t.Fatalf("not swept: %d keys, %d ips", len(l.lastTry), len(l.ips))
 	}
 }
 
 func TestIPOf(t *testing.T) {
-	for in, want := range map[string]string{
-		"1.2.3.4:5":               "1.2.3.4",
-		"[2001:db8:1:2:3::4]:22":  "2001:db8:1:2::/64",
-		"[::ffff:1.2.3.4]:22":     "1.2.3.4",
-		"[2001:db8:1:2:ffff::]:1": "2001:db8:1:2::/64",
+	for _, tt := range []struct {
+		addr net.Addr
+		want string
+	}{
+		{&net.TCPAddr{IP: net.ParseIP("192.0.2.7"), Port: 1}, "192.0.2.7"},
+		{&net.TCPAddr{IP: net.ParseIP("2001:db8:1:2:3:4:5:6"), Port: 1}, "2001:db8:1:2::/64"},
 	} {
-		a, _ := net.ResolveTCPAddr("tcp", in)
-		if got := IPOf(a); got != want {
-			t.Errorf("IPOf(%s) = %s, want %s", in, got, want)
+		if got := IPOf(tt.addr); got != tt.want {
+			t.Errorf("IPOf(%v) = %q, want %q", tt.addr, got, tt.want)
 		}
 	}
 }

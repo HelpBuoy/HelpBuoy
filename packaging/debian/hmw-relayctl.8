@@ -1,0 +1,32 @@
+.TH HMW-RELAYCTL 8 "" "help-me-win" "System Administration"
+.SH NAME
+hmw-relayctl \- run hmw-relay admin commands on the system relay
+.SH SYNOPSIS
+.B hmw-relayctl
+.I command
+.RI [ args ...]
+.SH DESCRIPTION
+.B hmw-relayctl
+runs
+.BR hmw-relay (1)
+as the hmw-relay system user on the state of the hmw-relay service in
+.IR /var/lib/hmw-relay ,
+so the files it writes stay readable by the service. It must be run as root.
+The running relay picks up changes within a second.
+.SH EXAMPLES
+.nf
+sudo hmw-relayctl hostkey
+sudo hmw-relayctl helper add alice \-\-display "Alice" 'ssh\-ed25519 AAAA...'
+sudo hmw-relayctl helper list
+sudo hmw-relayctl client list
+sudo hmw-relayctl client remove SHA256:...
+.fi
+.SH FILES
+.TP
+.I /etc/default/hmw-relay
+Listen address of the service.
+.TP
+.I /var/lib/hmw-relay
+Host key, helpers, registered clients and relay.log.
+.SH SEE ALSO
+.BR hmw-relay (1)

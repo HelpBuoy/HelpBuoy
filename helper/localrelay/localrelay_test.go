@@ -1,62 +1,20 @@
 package localrelay
 
 import (
-	"fmt"
 	"net"
-	"os"
-	"os/signal"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/ssh"
+
+	"github.com/mevdschee/help-me-win/relay/store"
 )
 
-// TestMain lets the test binary act as a fake hmw-relay when FAKE_HMW_RELAY_STATE
-// is set: "serve --listen :PORT" listens and logs, "helper list" prints the
-// state file, "helper add NAME --display D KEY" appends to it.
-func TestMain(m *testing.M) {
-	state := os.Getenv("FAKE_HMW_RELAY_STATE")
-	if state == "" {
-		os.Exit(m.Run())
-	}
-	args := os.Args[1:]
-	switch {
-	case len(args) == 3 && args[0] == "serve" && args[1] == "--listen":
-		ln, err := net.Listen("tcp", args[2])
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "listen:", err)
-			os.Exit(1)
-		}
-		fmt.Println(`{"msg":"listening","addr":"` + args[2] + `"}`)
-		go func() {
-			for {
-				c, err := ln.Accept()
-				if err != nil {
-					return
-				}
-				c.Close()
-			}
-		}()
-		sig := make(chan os.Signal, 1)
-		signal.Notify(sig, os.Interrupt)
-		<-sig
-		fmt.Println(`{"msg":"stopping"}`)
-		os.Exit(0)
-	case len(args) == 2 && args[0] == "helper" && args[1] == "list":
-		b, _ := os.ReadFile(state)
-		os.Stdout.Write(b)
-		os.Exit(0)
-	case len(args) == 6 && args[0] == "helper" && args[1] == "add" && args[3] == "--display":
-		f, _ := os.OpenFile(state, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-		fmt.Fprintf(f, "%s %s SHA256:x %s\n", args[2], args[4], args[5])
-		f.Close()
-		os.Exit(0)
-	}
-	fmt.Fprintln(os.Stderr, "fake hmw-relay: bad args", args)
-	os.Exit(2)
-}
+const keyLine = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJsaI2z9Ean/dC7UtgWXE4Sfld8k4km6FTbrTsI6K3RI alice@pc"
 
 func freePort(t *testing.T) int {
+	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -67,95 +25,120 @@ func freePort(t *testing.T) int {
 
 func waitState(t *testing.T, r *Relay, want State) Status {
 	t.Helper()
-	deadline := time.Now().Add(15 * time.Second)
-	for time.Now().Before(deadline) {
-		if s := r.Status(); s.State == want {
-			return s
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		st := r.Status()
+		if st.State == want {
+			return st
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("state %v (err %v), want %v; log:\n%s", st.State, st.Err, want, strings.Join(st.Lines, "\n"))
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	t.Fatalf("state %v, want %v (err %v)", r.Status().State, want, r.Status().Err)
-	return Status{}
 }
 
-func TestStartAddsHelperAndStops(t *testing.T) {
-	state := filepath.Join(t.TempDir(), "state")
-	t.Setenv("FAKE_HMW_RELAY_STATE", state)
-	exe, _ := os.Executable()
-	port := freePort(t)
-	r := Start(Options{Exe: exe, Port: port, HelperName: "alice", HelperDisplay: "Alice", KeyLine: "ssh-ed25519 AAAA alice@pc"})
-	waitState(t, r, StateRunning)
+func helpers(t *testing.T, dir string) []store.Helper {
+	t.Helper()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	idx, _, err := st.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return idx.State.Helpers
+}
 
-	deadline := time.Now().Add(10 * time.Second)
-	for r.Status().HelperAdded == 0 && time.Now().Before(deadline) {
-		time.Sleep(20 * time.Millisecond)
+// TestRunsInProcess starts the relay inside the test process, checks that it
+// speaks SSH, adds the helper's key once, and stops cleanly.
+func TestRunsInProcess(t *testing.T) {
+	dir := t.TempDir()
+	port := freePort(t)
+	r := Start(Options{Port: port, StateDir: dir, Version: "test", HelperName: "alice", HelperDisplay: "Alice", KeyLine: keyLine})
+	st := waitState(t, r, StateRunning)
+	if st.HelperAdded != 1 || st.StateDir != dir {
+		t.Fatalf("status %+v", st)
 	}
-	b, _ := os.ReadFile(state)
-	if got := string(b); got != "alice Alice SHA256:x ssh-ed25519 AAAA alice@pc\n" {
-		t.Errorf("state = %q", got)
+
+	// A real SSH handshake with the relay's host key.
+	nc, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", itoa(port)), 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !Listening(port) {
-		t.Error("not listening")
+	nc.SetDeadline(time.Now().Add(5 * time.Second))
+	buf := make([]byte, 64)
+	n, _ := nc.Read(buf)
+	nc.Close()
+	if !strings.HasPrefix(string(buf[:n]), "SSH-2.0-") {
+		t.Fatalf("banner %q", buf[:n])
+	}
+
+	if hs := helpers(t, dir); len(hs) != 1 || hs[0].Name != "alice" || hs[0].DisplayName != "Alice" {
+		t.Fatalf("helpers %+v", hs)
 	}
 	r.Stop()
-	if r.Status().State != StateStopped {
-		t.Errorf("state after stop = %v", r.Status().State)
+	if st := r.Status(); st.State != StateStopped {
+		t.Fatalf("after Stop: %v", st.State)
 	}
 	if Listening(port) {
-		t.Error("still listening after Stop")
-	}
-	lines := strings.Join(r.Status().Lines, "\n")
-	if !strings.Contains(lines, "listening") || !strings.Contains(lines, "added this helper") {
-		t.Errorf("log tail:\n%s", lines)
+		t.Fatal("still listening after Stop")
 	}
 
-	// Second start: the relay has a helper now, so nothing is added.
-	r = Start(Options{Exe: exe, Port: port, HelperName: "alice", KeyLine: "ssh-ed25519 AAAA alice@pc"})
-	waitState(t, r, StateRunning)
-	time.Sleep(300 * time.Millisecond)
+	// A second start finds the helper and adds nothing; the host key stays.
+	r = Start(Options{Port: port, StateDir: dir, HelperName: "bob", KeyLine: keyLine})
+	if st := waitState(t, r, StateRunning); st.HelperAdded != 0 {
+		t.Fatalf("added again: %+v", st)
+	}
 	r.Stop()
-	if r.Status().HelperAdded != 0 {
-		t.Error("helper added although the relay had one")
+	if hs := helpers(t, dir); len(hs) != 1 {
+		t.Fatalf("helpers %+v", hs)
 	}
 }
 
+// TestExternalRelay leaves an existing listener alone but still adds the key
+// to the shared state, which a standalone relay reloads by itself.
 func TestExternalRelay(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer ln.Close()
-	r := Start(Options{Exe: "/nonexistent/hmw-relay", Port: ln.Addr().(*net.TCPAddr).Port})
-	waitState(t, r, StateExternal)
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			c.Close()
+		}
+	}()
+	dir := t.TempDir()
+	r := Start(Options{Port: ln.Addr().(*net.TCPAddr).Port, StateDir: dir, HelperName: "alice", KeyLine: keyLine})
+	st := waitState(t, r, StateExternal)
 	r.Stop()
+	if st.HelperAdded != 1 || len(helpers(t, dir)) != 1 {
+		t.Fatalf("status %+v", st)
+	}
 }
 
-func TestNotFound(t *testing.T) {
-	r := Start(Options{Port: freePort(t)})
-	waitState(t, r, StateNotFound)
+// TestBadStateDir reports a start-up failure instead of hanging.
+func TestBadStateDir(t *testing.T) {
+	file := t.TempDir() + "/not-a-dir"
+	if err := writeFile(file); err != nil {
+		t.Fatal(err)
+	}
+	r := Start(Options{Port: freePort(t), StateDir: file})
+	st := waitState(t, r, StateExited)
 	r.Stop()
+	if st.Err == nil {
+		t.Fatal("want an error")
+	}
 }
 
-func TestExits(t *testing.T) {
-	t.Setenv("FAKE_HMW_RELAY_STATE", filepath.Join(t.TempDir(), "state"))
-	exe, _ := os.Executable()
-	// Port 1 is privileged, so the fake fails to listen and exits.
-	r := Start(Options{Exe: exe, Port: 1})
-	if os.Getuid() == 0 {
-		t.Skip("root can listen on port 1")
-	}
-	s := waitState(t, r, StateExited)
-	if s.Err == nil {
-		t.Error("no error")
-	}
-	r.Stop()
-}
-
-func TestHasHelpers(t *testing.T) {
-	if HasHelpers([]byte("")) || HasHelpers([]byte("no helpers\n")) {
-		t.Error("empty list has helpers")
-	}
-	if !HasHelpers([]byte("alice  Alice  SHA256:abc\n")) {
-		t.Error("list with a fingerprint has no helpers")
+func TestKeyLineParses(t *testing.T) {
+	if _, _, _, _, err := ssh.ParseAuthorizedKey([]byte(keyLine)); err != nil {
+		t.Fatal(err)
 	}
 }

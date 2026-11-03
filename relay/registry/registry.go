@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -396,6 +397,8 @@ func (r *Registry) Handle(c *Conn, m any) error {
 		return r.registerClient(c, m)
 	case *control.UnregisterClient:
 		return r.unregisterClient(c, m)
+	case *control.RenameClient:
+		return r.renameClient(c, m)
 	}
 	return fmt.Errorf("%w: %T", ErrNotAllowed, m)
 }
@@ -568,6 +571,24 @@ func (r *Registry) registerClient(c *Conn, m *control.RegisterClient) error {
 	})
 	if err == nil {
 		r.log.Info("client registered", "fp", fp, "name", name, "by", by)
+	}
+	r.reply(c, m.Seq, err)
+	return nil
+}
+
+func (r *Registry) renameClient(c *Conn, m *control.RenameClient) error {
+	by, err := r.helperName(c, "RenameClient")
+	if err != nil {
+		return err
+	}
+	var old string
+	err = r.mutate(func(st *store.State) error {
+		var err error
+		old, err = st.RenameClient(m.Fingerprint, m.Name)
+		return err
+	})
+	if err == nil {
+		r.log.Info("client renamed", "fp", m.Fingerprint, "from", old, "to", strings.TrimSpace(m.Name), "by", by)
 	}
 	r.reply(c, m.Seq, err)
 	return nil

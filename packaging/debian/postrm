@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+if [ -d /run/systemd/system ] && [ "$1" = remove ]; then
+	systemctl --system daemon-reload >/dev/null || true
+fi
+
+if [ "$1" = "remove" ] && command -v deb-systemd-helper >/dev/null; then
+	deb-systemd-helper mask 'hmw-relay.service' >/dev/null || true
+fi
+
+if [ "$1" = "purge" ]; then
+	if command -v deb-systemd-helper >/dev/null; then
+		deb-systemd-helper purge 'hmw-relay.service' >/dev/null || true
+		deb-systemd-helper unmask 'hmw-relay.service' >/dev/null || true
+	fi
+	# Purge removes the relay's host key, helpers and registered clients.
+	# The hmw-relay system user is kept, as is usual in Debian.
+	rm -rf /var/lib/hmw-relay
+fi
+
+exit 0

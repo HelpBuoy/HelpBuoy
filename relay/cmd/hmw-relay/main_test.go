@@ -53,8 +53,8 @@ func TestParseServeDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.listen != ":2222" {
-		t.Errorf("listen = %q, want :2222", cfg.listen)
+	if cfg.listen != ":5938" {
+		t.Errorf("listen = %q, want :5938", cfg.listen)
 	}
 	if !strings.HasSuffix(cfg.state, "hmw-relay") {
 		t.Errorf("state = %q, want a path ending in hmw-relay", cfg.state)
@@ -127,5 +127,19 @@ func TestAdmin(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(out1), "\n")
 	if out1 != out2 || len(lines) != 2 || !strings.HasPrefix(lines[0], "ssh-ed25519 ") || !strings.HasPrefix(lines[1], "SHA256:") {
 		t.Errorf("hostkey output:\n%s", out1)
+	}
+}
+
+func TestStateDirEnv(t *testing.T) {
+	t.Setenv("HMW_RELAY_STATE", "/var/lib/hmw-relay")
+	if d, err := stateDir(""); err != nil || d != "/var/lib/hmw-relay" {
+		t.Fatalf("env: %q, %v", d, err)
+	}
+	if d, _ := stateDir("/tmp/x"); d != "/tmp/x" {
+		t.Fatalf("flag must win over env: %q", d)
+	}
+	t.Setenv("HMW_RELAY_STATE", "")
+	if d, err := stateDir(""); err != nil || d == "" || d == "/var/lib/hmw-relay" {
+		t.Fatalf("default: %q, %v", d, err)
 	}
 }

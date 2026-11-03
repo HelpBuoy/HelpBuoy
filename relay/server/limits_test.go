@@ -47,19 +47,63 @@ func defaultLimits(c *server.Config) {
 	c.Limits = limits.Config{}
 }
 
-// TestUnknownKeyFloodPerIP: fresh keys from one IP are cut off after the
-// per-IP limit, while other IPs and known keys from the same IP still get in.
-func TestUnknownKeyFloodPerIP(t *testing.T) {
+// TestKeyRate: a key may try at most once per second. A refused attempt
+// leaves the key's existing connection alone; a later attempt replaces it.
+// Nothing is blocked beyond that second.
+func TestKeyRate(t *testing.T) {
+	e := newEnv(t, defaultLimits)
+	hk := e.addHelper("alice")
+	h, _ := e.connect(hk, control.RoleHelper)
+
+	// Same second: refused, and the first connection keeps working.
+	if role, _ := dialFrom(t, e, "127.0.0.1", hk); role != "" {
+		t.Fatal("second attempt within a second accepted")
+	}
+	h.Send(&control.OpenRequest{Seq: 9, RequestID: "none"})
+	if rep := mustWait[control.Reply](t, h, nil); rep.Seq != 9 {
+		t.Fatalf("first connection broken: %+v", rep)
+	}
+
+	// A second later the key gets in, and the new connection replaces the old.
+	e.clock.Advance(time.Second)
+	if role, _ := dialFrom(t, e, "127.0.0.1", hk); role != control.RoleHelper {
+		t.Fatalf("after a second: %q", role)
+	}
+	if msg := waitClosed(t, h); msg == "" {
+		t.Error("replaced connection got no Error")
+	}
+
+	// Unknown keys are limited the same way, with no block after hammering.
+	k := fake.NewKey()
+	e.clock.Advance(time.Second)
+	if role, _ := dialFrom(t, e, "127.0.0.1", k); role != control.RolePending {
+		t.Fatal("unknown key refused")
+	}
+	for range 20 {
+		if role, _ := dialFrom(t, e, "127.0.0.1", k); role != "" {
+			t.Fatal("hammering key accepted within its second")
+		}
+	}
+	e.clock.Advance(time.Second)
+	if role, _ := dialFrom(t, e, "127.0.0.1", k); role != control.RolePending {
+		t.Fatal("key blocked after hammering")
+	}
+}
+
+// TestFreshKeyFloodPerIP: fresh keys from one IP fill only that IP's pending
+// slots; other IPs and known keys from the same IP still get in, and a closed
+// pending connection frees its slot at once (no ban).
+func TestFreshKeyFloodPerIP(t *testing.T) {
 	needLoopbackAliases(t)
 	e := newEnv(t, defaultLimits)
-	first := fake.NewKey()
-	for i := range 5 {
-		k := fake.NewKey()
-		if i == 0 {
-			k = first
-		}
-		if role, _ := dialFrom(t, e, "127.0.0.2", k); role != control.RolePending {
+	var first *fake.Conn
+	for i := range 10 {
+		role, c := dialFrom(t, e, "127.0.0.2", fake.NewKey())
+		if role != control.RolePending {
 			t.Fatalf("unknown key %d refused too early", i)
+		}
+		if i == 0 {
+			first = c
 		}
 	}
 	for i := range 5 {
@@ -67,29 +111,29 @@ func TestUnknownKeyFloodPerIP(t *testing.T) {
 			t.Fatalf("flood key %d got in as %s", i, role)
 		}
 	}
-	// Another IP is unaffected.
 	if role, _ := dialFrom(t, e, "127.0.0.3", fake.NewKey()); role != control.RolePending {
 		t.Fatal("other IP refused")
 	}
-	// A key already seen from the blocked IP may reconnect.
-	if role, _ := dialFrom(t, e, "127.0.0.2", first); role != control.RolePending {
-		t.Fatal("known pending key refused on reconnect")
-	}
-	// Known keys from the blocked IP still get in.
 	hk := e.addHelper("alice")
 	if role, _ := dialFrom(t, e, "127.0.0.2", hk); role != control.RoleHelper {
-		t.Fatalf("helper from blocked IP: %q", role)
+		t.Fatalf("helper from the full IP: %q", role)
 	}
-	// The block lasts an hour.
-	e.clock.Advance(61 * time.Minute)
-	if role, _ := dialFrom(t, e, "127.0.0.2", fake.NewKey()); role != control.RolePending {
-		t.Fatal("still blocked after an hour")
+	first.Close()
+	deadline := time.Now().Add(wait)
+	for {
+		if role, _ := dialFrom(t, e, "127.0.0.2", fake.NewKey()); role == control.RolePending {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("closed pending connection did not free its slot")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
-// TestManyClientsBehindBlockedIP: 500 registered clients behind one address
-// connect while that address is blocked for unknown keys.
-func TestManyClientsBehindBlockedIP(t *testing.T) {
+// TestManyClientsBehindFullIP: 500 registered clients behind one address
+// connect while that address has no pending slots left.
+func TestManyClientsBehindFullIP(t *testing.T) {
 	needLoopbackAliases(t)
 	e := newEnv(t, func(c *server.Config) {
 		defaultLimits(c)
@@ -113,12 +157,11 @@ func TestManyClientsBehindBlockedIP(t *testing.T) {
 	for i := range helpers {
 		helpers[i] = e.helper(uniq("h"))
 	}
-	// Block the address for unknown keys.
-	for range 6 {
+	for range 10 {
 		dialFrom(t, e, "127.0.0.2", fake.NewKey())
 	}
 	if role, _ := dialFrom(t, e, "127.0.0.2", fake.NewKey()); role != "" {
-		t.Fatal("address not blocked")
+		t.Fatal("pending slots of the address not full")
 	}
 
 	var wg sync.WaitGroup
@@ -173,33 +216,6 @@ func TestManyClientsBehindBlockedIP(t *testing.T) {
 	}
 }
 
-func TestUnknownKeyAttempts(t *testing.T) {
-	e := newEnv(t, defaultLimits)
-	k := fake.NewKey()
-	for i := range 10 {
-		role, c := dialFrom(t, e, "127.0.0.1", k)
-		if role != control.RolePending {
-			t.Fatalf("attempt %d refused", i+1)
-		}
-		c.Close()
-	}
-	if role, _ := dialFrom(t, e, "127.0.0.1", k); role != "" {
-		t.Fatal("11th attempt within the hour accepted")
-	}
-	// The key is blocked for an hour, the IP is not.
-	if role, _ := dialFrom(t, e, "127.0.0.1", fake.NewKey()); role != control.RolePending {
-		t.Fatal("other key refused")
-	}
-	e.clock.Advance(30 * time.Minute)
-	if role, _ := dialFrom(t, e, "127.0.0.1", k); role != "" {
-		t.Fatal("blocked key accepted after 30 minutes")
-	}
-	e.clock.Advance(31 * time.Minute)
-	if role, _ := dialFrom(t, e, "127.0.0.1", k); role != control.RolePending {
-		t.Fatal("key still blocked after an hour")
-	}
-}
-
 func TestPendingTotal(t *testing.T) {
 	e := newEnv(t, func(c *server.Config) {
 		c.Limits = looseLimits()
@@ -236,10 +252,12 @@ func TestPromotionFreesPendingSlot(t *testing.T) {
 	}
 }
 
-func TestFailedHandshakeBackoff(t *testing.T) {
+// TestFailedHandshakesNoBan: garbage connections don't lead to any block;
+// a helper from the same address gets in right after them.
+func TestFailedHandshakesNoBan(t *testing.T) {
 	e := newEnv(t, defaultLimits)
 	hk := e.addHelper("alice")
-	for range 30 {
+	for range 50 {
 		nc, err := net.Dial("tcp", e.addr)
 		if err != nil {
 			t.Fatal(err)
@@ -248,21 +266,8 @@ func TestFailedHandshakeBackoff(t *testing.T) {
 		nc.Read(make([]byte, 512)) // wait for the relay to give up
 		nc.Close()
 	}
-	// The IP is backing off: even a helper is turned away before any key is proven.
-	deadline := time.Now().Add(wait)
-	for {
-		role, _ := dialFrom(t, e, "127.0.0.1", hk)
-		if role == "" {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("no backoff after 30 failed handshakes")
-		}
-		time.Sleep(10 * time.Millisecond) // the last failure may still be in flight
-	}
-	e.clock.Advance(2 * time.Minute)
 	if role, _ := dialFrom(t, e, "127.0.0.1", hk); role != control.RoleHelper {
-		t.Fatal("still backing off")
+		t.Fatalf("helper after failed handshakes: %q", role)
 	}
 }
 

@@ -139,6 +139,7 @@ func TestMessagesPerRole(t *testing.T) {
 		{"OpenRequest", &control.OpenRequest{Seq: 1, RequestID: "x"}, map[control.Role]bool{control.RoleHelper: true}},
 		{"RegisterClient", &control.RegisterClient{Seq: 1, PublicKey: "bad"}, map[control.Role]bool{control.RoleHelper: true}},
 		{"UnregisterClient", &control.UnregisterClient{Seq: 1, Fingerprint: "SHA256:x"}, map[control.Role]bool{control.RoleHelper: true}},
+		{"RenameClient", &control.RenameClient{Seq: 1, Fingerprint: "SHA256:x", Name: "x"}, map[control.Role]bool{control.RoleHelper: true}},
 		// Relay->app messages are never accepted from apps.
 		{"Hello", &control.Hello{Role: control.RoleHelper}, nil},
 		{"Presence", &control.Presence{}, nil},
@@ -476,5 +477,41 @@ func TestPasswordAuthRefused(t *testing.T) {
 	if c, err := ssh.Dial("tcp", e.addr, cfg); err == nil {
 		c.Close()
 		t.Fatal("password login accepted")
+	}
+}
+
+func TestRenameClient(t *testing.T) {
+	e := newEnv(t, nil)
+	h := e.helper("alice")
+	h2 := e.helper("bob")
+	_, ck := e.client("anna@PC")
+
+	// A helper renames a client: every helper's Presence shows the new name,
+	// and the stored key line carries it as its comment.
+	h.Send(&control.RenameClient{Seq: 3, Fingerprint: fp(ck), Name: "  Anna laptop  "})
+	if rep := mustWait[control.Reply](t, h, nil); rep.Seq != 3 || rep.Error != "" {
+		t.Fatalf("reply %+v", rep)
+	}
+	presenceWhere(t, h2, func(p *control.Presence) bool {
+		return len(p.Clients) == 1 && p.Clients[0].Name == "Anna laptop" && p.Clients[0].Online
+	})
+	idx, _, err := e.st.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := idx.State.Clients[0]; c.Name != "Anna laptop" || !strings.HasSuffix(c.PublicKey, " Anna laptop") {
+		t.Fatalf("stored %+v", c)
+	}
+
+	// Bad names and unknown clients are refused with a Reply error.
+	for i, m := range []*control.RenameClient{
+		{Seq: 4, Fingerprint: fp(ck), Name: "   "},
+		{Seq: 5, Fingerprint: fp(ck), Name: "bad\x00name"},
+		{Seq: 6, Fingerprint: "SHA256:nope", Name: "x"},
+	} {
+		h.Send(m)
+		if rep := mustWait[control.Reply](t, h, nil); rep.Seq != m.Seq || rep.Error == "" {
+			t.Errorf("case %d: reply %+v, want an error", i, rep)
+		}
 	}
 }

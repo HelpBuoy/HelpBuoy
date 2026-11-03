@@ -59,12 +59,10 @@ type env struct {
 // about them.
 func looseLimits() limits.Config {
 	return limits.Config{
-		AttemptsPerKey:   10000,
-		UnknownKeysPerIP: 10000,
-		PendingPerIP:     10000,
-		HandshakesPerIP:  1000,
-		FailuresPerIP:    10000,
-		PendingTotal:     10000,
+		KeyInterval:     -1, // the fake clock stands still; reconnects must not be refused
+		PendingPerIP:    10000,
+		HandshakesPerIP: 1000,
+		PendingTotal:    10000,
 	}
 }
 

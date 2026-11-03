@@ -1,0 +1,9 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: help-me-win
+Upstream-Contact: Maurits van der Schee <maurits@vdschee.nl>
+Source: https://github.com/mevdschee/help-me-win
+
+Files: *
+Copyright: 2026 Maurits van der Schee
+License: none
+ No license has been chosen yet; all rights reserved.

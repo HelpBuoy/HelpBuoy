@@ -27,7 +27,10 @@ require (
 	github.com/ebitengine/purego v0.10.0 // indirect
 	github.com/jupiterrider/ffi v0.7.0 // indirect
 	github.com/mevdschee/help-me-win/proto v0.0.0
+	github.com/mevdschee/help-me-win/relay v0.0.0
 	golang.org/x/exp v0.0.0-20260508232706-74f9aab9d74a // indirect
 )
 
 replace github.com/mevdschee/help-me-win/proto => ../proto
+
+replace github.com/mevdschee/help-me-win/relay => ../relay

@@ -105,6 +105,8 @@ const (
 	MsgCancelRequest MsgType = 12
 	// relay -> any: fatal error before the relay closes the connection
 	MsgError MsgType = 13
+	// helper -> relay
+	MsgRenameClient MsgType = 14
 )
 
 // Hello is the relay's first message on every control channel.
@@ -178,6 +180,14 @@ type RegisterClient struct {
 	Seq       uint32 `json:"seq"`
 	PublicKey string `json:"public_key"`
 	Name      string `json:"name,omitempty"`
+}
+
+// RenameClient changes the name helpers see for a registered client (and the
+// comment of its stored key line). Name may contain spaces, e.g. "Anna laptop".
+type RenameClient struct {
+	Seq         uint32 `json:"seq"`
+	Fingerprint string `json:"fingerprint"`
+	Name        string `json:"name"`
 }
 
 // UnregisterClient removes a client; an online client is disconnected.
@@ -296,6 +306,8 @@ func typeOf(m any) (MsgType, error) {
 		return MsgRegisterClient, nil
 	case *UnregisterClient, UnregisterClient:
 		return MsgUnregisterClient, nil
+	case *RenameClient, RenameClient:
+		return MsgRenameClient, nil
 	case *OpenRequest, OpenRequest:
 		return MsgOpenRequest, nil
 	case *Reply, Reply:
@@ -329,6 +341,8 @@ func newOf(t MsgType) (any, error) {
 		return &RegisterClient{}, nil
 	case MsgUnregisterClient:
 		return &UnregisterClient{}, nil
+	case MsgRenameClient:
+		return &RenameClient{}, nil
 	case MsgOpenRequest:
 		return &OpenRequest{}, nil
 	case MsgReply:

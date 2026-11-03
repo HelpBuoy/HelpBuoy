@@ -7,17 +7,17 @@ func TestParseValid(t *testing.T) {
 		in   string
 		want string
 	}{
-		{"relay.example.com", "relay.example.com:2222"},
-		{"relay.example.com:2222", "relay.example.com:2222"},
+		{"relay.example.com", "relay.example.com:5938"},
+		{"relay.example.com:5938", "relay.example.com:5938"},
 		{"  Relay.Example.COM:443 ", "relay.example.com:443"},
 		{"relay.example.com.:22", "relay.example.com.:22"},
-		{"localhost", "localhost:2222"},
-		{"192.0.2.10", "192.0.2.10:2222"},
+		{"localhost", "localhost:5938"},
+		{"192.0.2.10", "192.0.2.10:5938"},
 		{"192.0.2.10:2200", "192.0.2.10:2200"},
-		{"[2001:db8::1]", "[2001:db8::1]:2222"},
+		{"[2001:db8::1]", "[2001:db8::1]:5938"},
 		{"[2001:db8::1]:443", "[2001:db8::1]:443"},
-		{"2001:db8::1", "[2001:db8::1]:2222"},
-		{"::1", "[::1]:2222"},
+		{"2001:db8::1", "[2001:db8::1]:5938"},
+		{"::1", "[::1]:5938"},
 		{"my-relay:65535", "my-relay:65535"},
 	}
 	for _, tt := range tests {
@@ -36,7 +36,7 @@ func TestParseInvalid(t *testing.T) {
 	for _, in := range []string{
 		"",
 		"   ",
-		":2222",
+		":5938",
 		"relay.example.com:",
 		"relay.example.com:0",
 		"relay.example.com:65536",
@@ -48,7 +48,7 @@ func TestParseInvalid(t *testing.T) {
 		"-relay.example.com",
 		"relay..example.com",
 		"relay_example.com",
-		"[192.0.2.1]:2222",
+		"[192.0.2.1]:5938",
 		"[2001:db8::1",
 		"[2001:db8::1]x",
 		"2001:db8::zz",
@@ -60,7 +60,7 @@ func TestParseInvalid(t *testing.T) {
 }
 
 func FuzzParse(f *testing.F) {
-	for _, s := range []string{"relay.example.com:2222", "[::1]:22", "::1", "a:b:c"} {
+	for _, s := range []string{"relay.example.com:5938", "[::1]:22", "::1", "a:b:c"} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {

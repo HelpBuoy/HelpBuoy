@@ -22,7 +22,7 @@ func TestLoadMissing(t *testing.T) {
 func TestSaveLoadRoundTrip(t *testing.T) {
 	s := Store{Dir: filepath.Join(t.TempDir(), "help-me-win")}
 	in := &Config{
-		RelayAddress: "relay.example.com:2222",
+		RelayAddress: "relay.example.com:5938",
 		RelayHostKey: "ssh-ed25519 AAAA",
 		Name:         "anna@ANNA-LAPTOP",
 		KnownHelpers: map[string]string{"alice": "ssh-ed25519 BBBB"},

@@ -32,7 +32,7 @@ CLIENT_ICONS := $(addprefix client-windows/resources/,icon.png icon48.png icon32
 FILE_VERSION = $(shell jq -r '.RT_VERSION[]["0000"].fixed.file_version' client-windows/resources/winres.json)
 MSI := $(DIST)/help-me-win_$(VERSION)_windows-amd64.msi
 
-.PHONY: help all test vet fuzz relay client helper dist msi icon clean
+.PHONY: help all test vet fuzz relay client helper dist msi deb icon clean
 
 help:
 	@echo "make test     run proto and relay tests"
@@ -41,8 +41,9 @@ help:
 	@echo "make relay    build hmw-relay ($(TARGETS)) into $(BIN)/"
 	@echo "make client   build the Windows client ($(ARCHES)) into $(BIN)/"
 	@echo "make helper   build the helper app ($(TARGETS)) into $(BIN)/"
-	@echo "make dist     release archives and the portable client exe in $(DIST)/"
+	@echo "make dist     helper/relay archives in $(DIST)/ (the client ships only as the MSI)"
 	@echo "make msi      dist plus the client installer (needs wixl and msitools)"
+	@echo "make deb      Debian 13 package of hmw-relay with a systemd service (needs dpkg-deb)"
 	@echo "make icon     regenerate the lifebuoy app icon (client, copied to the helper)"
 
 all: vet test relay client helper
@@ -87,8 +88,9 @@ client: $(CLIENT_SYSO)
 			-o $(BIN)/windows-$$arch/help-me-win.exe ./client-windows || exit 1; \
 	done
 
-# Release archives: helper app and hmw-relay side by side per OS/arch, and the
-# client exe alone. macOS gets a zipped .app with hmw-relay in Contents/MacOS.
+# Release archives: helper app and hmw-relay side by side per OS/arch. macOS
+# gets a zipped .app with hmw-relay in Contents/MacOS. The client exe is built
+# into bin/ for the MSI (make msi) and not released on its own.
 dist: relay helper client
 	@rm -rf $(DIST) && mkdir -p $(DIST)
 	@for t in $(subst /,-,$(filter linux/%,$(TARGETS))); do \
@@ -101,9 +103,6 @@ dist: relay helper client
 		GOWORK=off GO111MODULE=off go run tools/macapp/main.go -app hmw-helper -id help-me-win.helper \
 			-version $(APP_VERSION) -exe $(BIN)/$$t/hmw-helper -relay $(BIN)/$$t/hmw-relay \
 			-icon helper/resources/icon.png -out $(DIST)/hmw-helper_$(VERSION)_$$t.zip || exit 1; \
-	done
-	@for arch in $(ARCHES); do \
-		cp $(BIN)/windows-$$arch/help-me-win.exe $(DIST)/help-me-win_$(VERSION)_windows-$$arch.exe; \
 	done
 	@cd $(DIST) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS
 	@ls -l $(DIST)
@@ -124,6 +123,41 @@ msi: dist
 	msibuild $(MSI) -i $(BIN)/seq.idt
 	@# The exe must be versioned in the File table, see installer/help-me-win.wxs.
 	msiinfo export $(MSI) File | grep -q $$'\t'"$(FILE_VERSION)"$$'\t'
+	@cd $(DIST) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS
+	@ls -l $(DIST)
+
+# Debian 13 package of hmw-relay (packaging/debian): the binary, a hardened
+# systemd service running as the hmw-relay system user with its state in
+# /var/lib/hmw-relay, and hmw-relayctl for admin commands. One per Linux arch.
+DEB_ARCHES := $(patsubst linux/%,%,$(filter linux/%,$(TARGETS)))
+DEB_DATE    = $(shell date -R -d @$$(git log -1 --format=%ct 2>/dev/null || date +%s))
+deb: relay
+	@mkdir -p $(DIST)
+	@for arch in $(DEB_ARCHES); do \
+		root=$(BIN)/deb-$$arch; rm -rf $$root; \
+		install -D -m 0755 $(BIN)/linux-$$arch/hmw-relay $$root/usr/bin/hmw-relay; \
+		install -D -m 0755 packaging/debian/hmw-relayctl $$root/usr/sbin/hmw-relayctl; \
+		install -D -m 0644 packaging/debian/hmw-relay.service $$root/usr/lib/systemd/system/hmw-relay.service; \
+		install -D -m 0644 packaging/debian/hmw-relay.sysusers $$root/usr/lib/sysusers.d/hmw-relay.conf; \
+		install -D -m 0644 packaging/debian/hmw-relay.default $$root/etc/default/hmw-relay; \
+		install -D -m 0644 packaging/debian/README.Debian $$root/usr/share/doc/hmw-relay/README.Debian; \
+		install -D -m 0644 packaging/debian/copyright $$root/usr/share/doc/hmw-relay/copyright; \
+		printf 'hmw-relay (%s) unstable; urgency=medium\n\n  * Release %s.\n\n -- Maurits van der Schee <maurits@vdschee.nl>  %s\n' \
+			"$(APP_VERSION)" "$(VERSION)" "$(DEB_DATE)" | gzip -9n > $$root/usr/share/doc/hmw-relay/changelog.gz; \
+		chmod 0644 $$root/usr/share/doc/hmw-relay/changelog.gz; \
+		install -d $$root/usr/share/man/man1 $$root/usr/share/man/man8; \
+		gzip -9n < packaging/debian/hmw-relay.1 > $$root/usr/share/man/man1/hmw-relay.1.gz; \
+		gzip -9n < packaging/debian/hmw-relayctl.8 > $$root/usr/share/man/man8/hmw-relayctl.8.gz; \
+		chmod 0644 $$root/usr/share/man/man1/hmw-relay.1.gz $$root/usr/share/man/man8/hmw-relayctl.8.gz; \
+		install -D -m 0644 packaging/debian/lintian-overrides $$root/usr/share/lintian/overrides/hmw-relay; \
+		install -d $$root/DEBIAN; \
+		install -m 0755 packaging/debian/postinst packaging/debian/prerm packaging/debian/postrm $$root/DEBIAN/; \
+		echo /etc/default/hmw-relay > $$root/DEBIAN/conffiles; \
+		size=$$(du -sk --exclude=DEBIAN $$root | cut -f1); \
+		sed "s/@VERSION@/$(APP_VERSION)/; s/@ARCH@/$$arch/; s/@SIZE@/$$size/" packaging/debian/control.in > $$root/DEBIAN/control; \
+		(cd $$root && find usr -type f -exec md5sum {} + | sort -k2) > $$root/DEBIAN/md5sums; \
+		dpkg-deb --root-owner-group -Zxz --build $$root $(DIST)/hmw-relay_$(APP_VERSION)_$$arch.deb || exit 1; \
+	done
 	@cd $(DIST) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS
 	@ls -l $(DIST)
 

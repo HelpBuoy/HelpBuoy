@@ -1,0 +1,28 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+	systemd-sysusers hmw-relay.conf
+	install -d -o hmw-relay -g hmw-relay -m 0700 /var/lib/hmw-relay
+fi
+
+# Same as what dh_installsystemd generates.
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ]; then
+	# was-enabled defaults to true, so a new installation enables the unit.
+	if deb-systemd-helper --quiet was-enabled 'hmw-relay.service'; then
+		deb-systemd-helper enable 'hmw-relay.service' >/dev/null || true
+	else
+		deb-systemd-helper update-state 'hmw-relay.service' >/dev/null || true
+	fi
+	if [ -d /run/systemd/system ]; then
+		systemctl --system daemon-reload >/dev/null || true
+		if [ -n "$2" ]; then
+			action=restart
+		else
+			action=start
+		fi
+		deb-systemd-invoke $action 'hmw-relay.service' >/dev/null || true
+	fi
+fi
+
+exit 0

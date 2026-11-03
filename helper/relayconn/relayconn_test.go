@@ -153,6 +153,12 @@ func (r *fakeRelay) control(sc *ssh.ServerConn, ch ssh.Channel, role control.Rol
 			cc.Send(&control.Reply{Seq: m.Seq})
 		case *control.UnregisterClient:
 			cc.Send(&control.Reply{Seq: m.Seq, Error: "unknown client"})
+		case *control.RenameClient:
+			if m.Fingerprint != "SHA256:a" || m.Name != "Anna laptop" {
+				cc.Send(&control.Reply{Seq: m.Seq, Error: "bad rename"})
+				continue
+			}
+			cc.Send(&control.Reply{Seq: m.Seq})
 		case *control.OpenRequest:
 			if m.RequestID != "r1" {
 				cc.Send(&control.Reply{Seq: m.Seq, Error: "request is not open"})
@@ -244,6 +250,9 @@ func TestOnlinePresenceCommandsAndSession(t *testing.T) {
 	if err := waitResult(t, c.UnregisterClient("SHA256:x")); err == nil || err.Error() != "unknown client" {
 		t.Errorf("unregister error = %v", err)
 	}
+	if err := waitResult(t, c.RenameClient("SHA256:a", "Anna laptop")); err != nil {
+		t.Errorf("rename: %v", err)
+	}
 	if err := waitResult(t, c.OpenRequest("nope")); err == nil {
 		t.Error("open of a closed request succeeded")
 	}
@@ -272,6 +281,8 @@ func TestOnlinePresenceCommandsAndSession(t *testing.T) {
 			}
 		case *control.UnregisterClient:
 			s = m.Seq
+		case *control.RenameClient:
+			s = m.Seq
 		case *control.OpenRequest:
 			s = m.Seq
 		}
@@ -280,7 +291,7 @@ func TestOnlinePresenceCommandsAndSession(t *testing.T) {
 		}
 		seqs[s] = true
 	}
-	if len(got) != 4 {
+	if len(got) != 5 {
 		t.Errorf("relay received %d commands", len(got))
 	}
 

@@ -2,6 +2,7 @@ package views
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -21,6 +22,7 @@ type registerPage struct {
 	comment   string
 	line      string
 	parseErr  error
+	nameFor   string // key line the name field was filled for
 
 	busy   bool
 	result string // last outcome, shown under the button
@@ -30,11 +32,12 @@ type registerPage struct {
 func (p *registerPage) init() {
 	p.key.Placeholder = "Paste the key the user sent you (ssh-ed25519 AAAA…)"
 	p.key.Mono = true
-	p.name.Placeholder = "user@machine"
-	p.name.Edit.Max = 64
+	p.name.Placeholder = "Name, e.g. Anna laptop"
+	p.name.Edit.Max = maxClientName
 }
 
-// parse re-parses the pasted text when it changed.
+// parse re-parses the pasted text when it changed. A newly found key fills
+// the name field with its comment (user@machine), which stays editable.
 func (p *registerPage) parse() {
 	text := p.key.Edit.String()
 	if text == p.parsedFor {
@@ -48,13 +51,20 @@ func (p *registerPage) parse() {
 	p.pubKey, p.comment, p.line, p.parseErr = identity.ParsePasted(text)
 	if p.parseErr != nil {
 		p.pubKey = nil
+		return
+	}
+	if p.line != p.nameFor {
+		p.nameFor = p.line
+		name := strings.TrimSpace(p.comment)
+		if !validClientName(name) {
+			name = ""
+		}
+		p.name.Edit.SetText(name)
 	}
 }
 
-// needName reports whether the key's comment can't serve as the name.
-func (p *registerPage) needName() bool {
-	return p.comment == "" || !identity.ValidName(p.comment)
-}
+// nameOK reports whether the name field holds a name the relay accepts.
+func (p *registerPage) nameOK() bool { return validClientName(p.name.Edit.String()) }
 
 // parseMessage turns a parse error into advice for the helper.
 func parseMessage(err error) string {
@@ -89,26 +99,19 @@ func (a *App) drawRegister(x, y, w float32) float32 {
 
 	if p.pubKey != nil {
 		fp := ssh.FingerprintSHA256(p.pubKey)
-		c.Text(ui.Regular, ui.SizeSmall, "NAME", x, y, ui.ColMuted)
+		c.Text(ui.Regular, ui.SizeSmall, "NAME (as helpers see it in the client list)", x, y, ui.ColMuted)
 		y += 20
-		if p.needName() {
-			if p.comment != "" {
-				y += c.Paragraph(ui.Regular, ui.SizeSmall, "The key's comment \""+p.comment+"\" can't be used as a name. Type one:", x, y, w, ui.ColWarn)
-			} else {
-				y += c.Paragraph(ui.Regular, ui.SizeSmall, "The key has no name. Type the user@machine to register it as:", x, y, w, ui.ColWarn)
-			}
+		if strings.TrimSpace(p.comment) == "" {
+			y += c.Paragraph(ui.Regular, ui.SizeSmall, "The key has no name. Type one to register it as:", x, y, w, ui.ColWarn)
 			y += 4
-			if c.TextField("reg/name", rl.NewRectangle(x, y, min(w, 360), 40), &p.name).Submitted {
-				a.register()
-			}
-			y += 48
-			if n := p.name.Edit.String(); n != "" && !identity.ValidName(n) {
-				c.Text(ui.Regular, ui.SizeSmall, "1 to 64 characters, no spaces.", x, y, ui.ColError)
-				y += 22
-			}
-		} else {
-			c.Text(ui.Bold, ui.SizeLarge, c.Ellipsize(ui.Bold, ui.SizeLarge, p.comment, w), x, y, ui.ColText)
-			y += 40
+		}
+		if c.TextField("reg/name", rl.NewRectangle(x, y, min(w, 420), 40), &p.name).Submitted {
+			a.register()
+		}
+		y += 48
+		if n := p.name.Edit.String(); n != "" && !p.nameOK() {
+			c.Text(ui.Regular, ui.SizeSmall, fmt.Sprintf("1 to %d printable characters.", maxClientName), x, y, ui.ColError)
+			y += 22
 		}
 		c.Text(ui.Regular, ui.SizeSmall, "FINGERPRINT (compare with the user on the phone)", x, y, ui.ColMuted)
 		y += 22
@@ -129,7 +132,7 @@ func (a *App) drawRegister(x, y, w float32) float32 {
 	}
 
 	y += 8
-	ready := p.pubKey != nil && (!p.needName() || identity.ValidName(p.name.Edit.String()))
+	ready := p.pubKey != nil && p.nameOK()
 	label := "Register"
 	if p.busy {
 		label = "Registering…"
@@ -186,17 +189,11 @@ func (a *App) register() {
 	if p.pubKey == nil || p.busy || a.backend == nil {
 		return
 	}
-	name := ""
-	if p.needName() {
-		name = p.name.Edit.String()
-		if !identity.ValidName(name) {
-			return
-		}
+	name := strings.TrimSpace(p.name.Edit.String())
+	if !validClientName(name) {
+		return
 	}
 	shown := name
-	if shown == "" {
-		shown = p.comment
-	}
 	p.busy, p.result = true, ""
 	a.run(a.backend.RegisterClient(p.line, name), func(err error) {
 		p.busy = false
@@ -207,5 +204,6 @@ func (a *App) register() {
 		p.result, p.failed = "Registered "+shown+".", false
 		p.key.Edit.SetText("")
 		p.name.Edit.SetText("")
+		p.nameFor = ""
 	})
 }

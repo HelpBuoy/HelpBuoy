@@ -191,6 +191,14 @@ func (c *Conn) RegisterClient(line, name string) <-chan error {
 	})
 }
 
+// RenameClient changes the name helpers see for the client with the given
+// fingerprint.
+func (c *Conn) RenameClient(fingerprint, name string) <-chan error {
+	return c.command(func(seq uint32) any {
+		return &control.RenameClient{Seq: seq, Fingerprint: fingerprint, Name: name}
+	})
+}
+
 // UnregisterClient removes the client with the given fingerprint.
 func (c *Conn) UnregisterClient(fingerprint string) <-chan error {
 	return c.command(func(seq uint32) any {

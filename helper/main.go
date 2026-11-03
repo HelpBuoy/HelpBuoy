@@ -50,7 +50,7 @@ func main() {
 	rl.SetConfigFlags(rl.FlagWindowResizable | rl.FlagWindowHighdpi | rl.FlagMsaa4xHint)
 	rl.InitWindow(1100, 700, "help-me-win helper")
 	defer rl.CloseWindow()
-	rl.SetWindowMinSize(760, 480)
+	rl.SetWindowMinSize(views.MinWidth, views.MinHeight)
 	rl.SetExitKey(rl.KeyNull) // Esc belongs to the remote session
 	if img := rl.LoadImageFromMemory(".png", iconPNG, int32(len(iconPNG))); img != nil && img.Width > 0 {
 		rl.SetWindowIcon(*img)

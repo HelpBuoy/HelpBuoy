@@ -1,0 +1,7 @@
+# Settings for the hmw-relay service. After a change:
+#   systemctl restart hmw-relay
+#
+# Address to listen on, host:port or :port. Every helper and client connects
+# to this one port. Ports below 1024 need an extra capability, see
+# /usr/lib/systemd/system/hmw-relay.service.
+HMW_RELAY_LISTEN=:5938

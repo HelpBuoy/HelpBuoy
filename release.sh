@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# sudo apt install jq zip wixl msitools gh
+# sudo apt install jq zip wixl msitools gh dpkg
 #
 # Releases a new version of help-me-win:
 #
@@ -14,8 +14,8 @@
 # goes up on every release as well. The helper's winres.json gets the same
 # version.
 #
-# The script builds everything with "make msi" (the helper and hmw-relay
-# archives, the portable client exe and the client MSI in dist/), commits the
+# The script builds everything with "make msi deb" (the helper and hmw-relay
+# archives, the client MSI and the hmw-relay Debian package in dist/), commits the
 # version bump, tags and pushes it and creates the GitHub release v<version>
 # with all files in dist/.
 set -e
@@ -61,7 +61,7 @@ echo "Releasing help-me-win $version (revision $revision)"
 
 # Build, test and package. VERSION goes into main.version of every binary and
 # into the file names in dist/.
-make vet test msi VERSION="v$version"
+make vet test msi deb VERSION="v$version"
 
 # Commit, tag, push and publish.
 git commit -q -m "Release v$version" $client $helper

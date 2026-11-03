@@ -61,14 +61,20 @@ type Window struct {
 	lblKeyNotice *ui.Static
 	lnkChange    *ui.SysLink
 	// ScreenMain
-	lblName   *ui.Static
-	btnHelp   *ui.Button
-	lblStatus *ui.Static
+	lblName    *ui.Static
+	btnHelp    *ui.Button
+	lblStatus  *ui.Static
+	lnkViewKey *ui.SysLink
 	// ScreenKeyError
 	lblKeyErr    *ui.Static
 	btnRemoveKey *ui.Button
 	// all screens
 	lnkSettings *ui.SysLink
+
+	settings    *settingsDlg // the open settings window, if any
+	dialogs     int          // other modal windows open
+	updateAsked bool         // the update in the view was offered
+	updating    string       // status while an update is downloaded
 
 	items []item
 	dpi   int
@@ -102,14 +108,14 @@ func New(iconID uint16) *Window {
 	}
 
 	w.lblHeading = static("Connect to your helper", co.SS_LEFT)
-	w.lblAddrHint = static("Type the relay address your helper gave you, for example relay.example.com:2222.", co.SS_LEFT)
+	w.lblAddrHint = static("Type the relay address your helper gave you, for example relay.example.com.", co.SS_LEFT)
 	w.edtAddr = ui.NewEdit(p, ui.OptsEdit())
 	w.btnConnect = button("&Connect", co.BS_DEFPUSHBUTTON)
 	w.lblAddrError = static("", co.SS_LEFT)
 
 	w.lblKeyIntro = static("Paste this key into a chat with your helper (for example WhatsApp).", co.SS_LEFT)
 	w.edtKey = ui.NewEdit(p, ui.OptsEdit().CtrlStyle(co.ES_MULTILINE|co.ES_READONLY|co.ES_AUTOVSCROLL))
-	w.btnCopy = button("C&opy key", co.BS_PUSHBUTTON)
+	w.btnCopy = button(copyKeyText, co.BS_PUSHBUTTON)
 	w.lblKeyFp = static("", co.SS_LEFT)
 	w.lblRelayFp = static("", co.SS_LEFT)
 	w.lblKeyNotice = static("", co.SS_LEFT)
@@ -118,6 +124,7 @@ func New(iconID uint16) *Window {
 	w.lblName = static("", co.SS_CENTER)
 	w.btnHelp = button("&Request help", co.BS_PUSHBUTTON)
 	w.lblStatus = static("", co.SS_CENTER)
+	w.lnkViewKey = link(`<a>View key</a>`)
 
 	w.lblKeyErr = static("", co.SS_LEFT)
 	w.btnRemoveKey = button("Remove &key...", co.BS_PUSHBUTTON)
@@ -142,6 +149,7 @@ func New(iconID uint16) *Window {
 		{w.lblName, 24, 44, 412, 34, fontHeading},
 		{w.btnHelp, 80, 100, 300, 84, fontBig},
 		{w.lblStatus, 24, 204, 412, 60, fontNormal},
+		{w.lnkViewKey, 290, 298, 70, 20, fontNormal},
 
 		{w.lblKeyErr, 24, 24, 412, 190, fontNormal},
 		{w.btnRemoveKey, 24, 226, 160, 32, fontNormal},
@@ -248,7 +256,7 @@ func (w *Window) events() {
 		}
 	})
 	w.btnConnect.On().BnClicked(w.connect)
-	w.btnCopy.On().BnClicked(w.copyKey)
+	w.btnCopy.On().BnClicked(func() { w.copyText(w.view.KeyLine, w.btnCopy) })
 	w.btnHelp.On().BnClicked(func() {
 		if w.view.Button == app.ButtonCancel {
 			w.ctrl.CancelRequest()
@@ -259,6 +267,7 @@ func (w *Window) events() {
 	w.btnRemoveKey.On().BnClicked(w.confirmRemoveKey)
 	w.lnkChange.On().NmClick(func(_ *win.NMLINK) { w.ctrl.ChangeAddress() })
 	w.lnkSettings.On().NmClick(func(_ *win.NMLINK) { w.showSettings() })
+	w.lnkViewKey.On().NmClick(func(_ *win.NMLINK) { w.showKey(w.wnd) })
 }
 
 func (w *Window) connect() {
@@ -386,6 +395,7 @@ func (w *Window) apply(v app.View) {
 	show(w.lblName, main)
 	show(w.btnHelp, main)
 	show(w.lblStatus, main)
+	show(w.lnkViewKey, main)
 	if main {
 		setText(w.lblName, v.Name)
 		if v.Button == app.ButtonCancel {
@@ -393,10 +403,13 @@ func (w *Window) apply(v app.View) {
 		} else {
 			setText(w.btnHelp, "&Request help")
 		}
-		w.btnHelp.Hwnd().EnableWindow(v.ButtonEnabled)
+		w.btnHelp.Hwnd().EnableWindow(v.ButtonEnabled && w.updating == "")
 		status := v.Error
 		if status == "" {
 			status = v.Notice
+		}
+		if w.updating != "" {
+			status = w.updating
 		}
 		setText(w.lblStatus, status)
 		if entered {
@@ -426,6 +439,10 @@ func (w *Window) apply(v app.View) {
 		w.rendered = true
 	}
 	w.lblStatus.Hwnd().InvalidateRect(nil, true) // its color depends on w.view
+	if w.settings != nil && v.Screen >= 0 {
+		w.settings.apply(v)
+	}
+	w.maybeOfferUpdate()
 }
 
 // bringToFront restores the window and tries to make it the foreground
@@ -446,9 +463,9 @@ func (w *Window) bringToFront() {
 	}
 }
 
-// copyKey puts the public key line on the clipboard as Unicode text.
-func (w *Window) copyKey() {
-	text := w.view.KeyLine
+// copyText puts text (the public key line) on the clipboard as Unicode
+// text and shows "Copied" on btn for a moment.
+func (w *Window) copyText(text string, btn *ui.Button) {
 	if text == "" {
 		return
 	}
@@ -464,10 +481,14 @@ func (w *Window) copyKey() {
 	if err != nil {
 		return
 	}
-	setText(w.btnCopy, "Copied")
+	setText(btn, "Copied")
 	time.AfterFunc(2*time.Second, func() {
 		if w.wnd.Hwnd() != 0 {
-			w.wnd.UiThread(func() { setText(w.btnCopy, "C&opy key") })
+			w.wnd.UiThread(func() {
+				if btn.Hwnd().IsWindow() {
+					setText(btn, copyKeyText)
+				}
+			})
 		}
 	})
 }

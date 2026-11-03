@@ -12,6 +12,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"io"
 	"log/slog"
@@ -28,12 +29,15 @@ import (
 	"github.com/mevdschee/help-me-win/client-windows/injector"
 	"github.com/mevdschee/help-me-win/client-windows/session"
 	"github.com/mevdschee/help-me-win/client-windows/ui"
+	"github.com/mevdschee/help-me-win/client-windows/update"
 	"github.com/mevdschee/help-me-win/proto/appkey"
 	pid "github.com/mevdschee/help-me-win/proto/identity"
 	"github.com/mevdschee/help-me-win/proto/screen"
 )
 
-// version is set at build time with -ldflags "-X main.version=...".
+// version is set at build time with -ldflags "-X main.version=...". Release
+// builds use "v<major.minor.build>", which turns on the update check; "dev"
+// never checks.
 var version = "dev"
 
 // iconID is the RT_GROUP_ICON resource id from resources/winres.json.
@@ -136,6 +140,9 @@ func main() {
 				return func() {}
 			}
 			return stop
+		},
+		CheckUpdate: func(ctx context.Context) (*update.Release, error) {
+			return update.Check(ctx, update.LatestReleaseURL, version)
 		},
 		AppVersion:  version,
 		UserMachine: userMachine,

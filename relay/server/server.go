@@ -348,6 +348,17 @@ func (s *Server) handle(nc net.Conn) {
 		return
 	}
 	fp := auth.Fingerprint(key)
+	// One attempt per key per second, for every role. Checked before Attach,
+	// so a refused attempt never replaces the key's existing connection.
+	if err := s.lim.AdmitKey(fp); err != nil {
+		s.log.Info("connection refused", "fp", fp, "ip", ip, "remote", remote, "reason", err.Error())
+		sc.Close()
+		go ssh.DiscardRequests(reqs)
+		for nch := range chans {
+			nch.Reject(ssh.Prohibited, "refused")
+		}
+		return
+	}
 	c := &conn{s: s, sc: sc, ip: ip, fp: fp, wake: make(chan struct{}, 1), done: make(chan struct{})}
 	rc, err := s.reg.Attach(c, fp, ip, func() (func(), error) { return s.lim.AdmitPending(fp, ip) })
 	if err != nil {

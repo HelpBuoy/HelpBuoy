@@ -26,7 +26,7 @@ type settingsPage struct {
 }
 
 func (p *settingsPage) init() {
-	p.addr.Placeholder = "relay.example.com:2222"
+	p.addr.Placeholder = "relay.example.com"
 	p.addr.Edit.Max = 260
 	p.port.Edit.Max = 5
 }
@@ -143,7 +143,7 @@ func (a *App) drawSettings(x, y, w float32) float32 {
 		c.Text(ui.Regular, ui.SizeSmall, p.portErr, x, y, ui.ColError)
 		y += 22
 	}
-	y += c.Paragraph(ui.Regular, ui.SizeSmall, "The app starts "+localrelay.ExeName()+" from its own folder, connects to it on 127.0.0.1, and stops it on exit. Clients use the public address above, which usually needs a port forward on the router.", x, y, w, ui.ColMuted)
+	y += c.Paragraph(ui.Regular, ui.SizeSmall, "The relay runs inside this app while it is open, with the same helpers, clients and host key as a standalone hmw-relay on this machine. Clients use the public address above, which usually needs a port forward on the router.", x, y, w, ui.ColMuted)
 	y += 8
 	if a.local != nil {
 		st := a.local.Status()
@@ -151,7 +151,7 @@ func (a *App) drawSettings(x, y, w float32) float32 {
 		switch st.State {
 		case localrelay.StateRunning, localrelay.StateExternal:
 			stCol = ui.ColOK
-		case localrelay.StateNotFound, localrelay.StateExited:
+		case localrelay.StateExited:
 			stCol = ui.ColError
 		}
 		if st.Err != nil {

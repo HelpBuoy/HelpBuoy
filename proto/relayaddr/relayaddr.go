@@ -11,7 +11,7 @@ import (
 )
 
 // DefaultPort is used when the user leaves the port out.
-const DefaultPort = 2222
+const DefaultPort = 5938
 
 // ErrEmpty is returned for an empty address.
 var ErrEmpty = errors.New("relay address is empty")

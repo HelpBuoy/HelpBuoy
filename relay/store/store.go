@@ -390,6 +390,27 @@ func (st *State) AddClient(keyLine, name, by string, at time.Time) (fp, regName 
 }
 
 // RemoveClient removes a client by fingerprint and returns its name.
+// RenameClient sets the name of the client with fingerprint fp, also as the
+// comment of its stored key line. It returns the old name.
+func (st *State) RenameClient(fp, name string) (string, error) {
+	i := slices.IndexFunc(st.Clients, func(c Client) bool { return sameKey(c.PublicKey, fp) })
+	if i < 0 {
+		return "", fmt.Errorf("no client with fingerprint %s", fp)
+	}
+	name, err := auth.CleanName(name, MaxClientName)
+	if err != nil {
+		return "", err
+	}
+	k, _, err := auth.ParseKey(st.Clients[i].PublicKey)
+	if err != nil {
+		return "", err
+	}
+	old := st.Clients[i].Name
+	st.Clients[i].Name = name
+	st.Clients[i].PublicKey = auth.KeyLine(k, name)
+	return old, nil
+}
+
 func (st *State) RemoveClient(fp string) (string, error) {
 	i := slices.IndexFunc(st.Clients, func(c Client) bool { return sameKey(c.PublicKey, fp) })
 	if i < 0 {

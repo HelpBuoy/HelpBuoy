@@ -20,7 +20,7 @@ import (
 )
 
 func main() {
-	relay := flag.String("relay", "localhost:2222", "relay host:port")
+	relay := flag.String("relay", "localhost:5938", "relay host:port")
 	keyDir := flag.String("key-dir", "fakeclient-key", "directory with the client key (created if missing)")
 	userMachine := flag.String("user-machine", "fake@fakeclient", "user@machine for the key comment and ClientHello")
 	request := flag.Bool("request", false, "file a help request once registered")

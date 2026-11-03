@@ -1,7 +1,7 @@
 # help-me-win: self-hosted remote support over a custom Go SSH relay
 
 A self-hosted alternative to TeamViewer QuickSupport. The relay is **a single Go binary
-(`hmw-relay`) that speaks SSH on a single port** (default 2222). Everybody, helpers and clients,
+(`hmw-relay`) that speaks SSH on a single port** (default 5938). Everybody, helpers and clients,
 connects to that same `hostname:port`. **The public key a connection authenticates with is its identity**; the SSH
 user name is ignored. Keys are long-lived: they are generated once on first start and reused
 for every session.
@@ -11,7 +11,7 @@ forwarding to real hosts. It only authenticates keys, tells helpers and clients 
 other, and splices their channels together.
 
 - **relay/**: `hmw-relay`, a plain executable that ships next to the helper app and runs
-  locally on the helper's machine as a normal user process, on one port (default `:2222`). It
+  locally on the helper's machine as a normal user process, on one port (default `:5938`). It
   keeps helpers and registered clients in a small state directory. No service, no container.
 - **helper/**: the cross-platform raylib app the *helper* runs (`raylib-go`, no cgo). Many helpers can be online at
   once, and each helper can run sessions with many clients at once.
@@ -38,14 +38,15 @@ Performance target: **as fast as RDP** for normal desktop work (section 5).
 
 - **Relay**: the `hmw-relay` executable (`hmw-relay.exe` on Windows) in the same folder as the
   helper app, on the helper's own Linux, macOS or Windows machine. It is started from a
-  terminal or by the helper app (7.1) and runs as the logged-in user. Clients reach it on that
-  machine's address, which usually means one port forward on the router (TCP 2222) and
+  terminal, or runs inside the helper app (7.1), as the logged-in user. Clients reach it on that
+  machine's address, which usually means one port forward on the router (TCP 5938) and
   allowing the OS firewall prompt on first start. An existing OpenSSH on port 22 is unrelated
   and untouched.
-- **One port for everyone**: the operator picks it once (`hmw-relay serve --listen :2222`, the
-  default). Helpers and clients all use the same `hostname:port`; there are no per-helper or
-  per-session ports. The default is above 1024, so the relay needs no root and no
-  capabilities.
+- **One port for everyone**: the operator picks it once (`hmw-relay serve --listen :5938`, the
+  default). Helpers and clients all use the same `hostname:port`, and an address typed
+  without a port means 5938, so with the default users only type the host name. There are
+  no per-helper or per-session ports. The default is above 1024, so the relay needs no root
+  and no capabilities.
 - **Runs unprivileged**: no root, no admin, no service registration, no Docker image. The
   relay runs as long as its process runs; when the machine or the process stops, clients and
   other helpers simply see the relay as unreachable until it is started again.
@@ -62,7 +63,7 @@ connection and stored in `%LOCALAPPDATA%\help-me-win\config.json`:
 
 | Field | Example | Learned |
 |---|---|---|
-| relay address | `relay.example.com:2222` | typed by the user on first start |
+| relay address | `relay.example.com` (port 5938 unless given) | typed by the user on first start |
 | relay host key | `ssh-ed25519 AAAA...` (`SHA256:3q2+7w...`) | first successful connection, pinned from then on |
 | known helpers | `alice` → `ssh-ed25519 AAAA...` | each helper's key, pinned on the first session with that helper (3.5) |
 
@@ -99,7 +100,8 @@ the key.
 ### First contact (once per client key)
 
 1. The client starts for the first time and asks for the relay's `hostname:port` (the helper
-   tells the user what to type, e.g. `relay.example.com:2222`). On this first start
+   tells the user what to type, e.g. `relay.example.com`, with `:port` only when the relay
+   doesn't use the default 5938). On this first start
    it generates its own Ed25519 key pair in
    `%LOCALAPPDATA%\help-me-win\` (section 6.1), with the comment `user@machine`, e.g.
    `anna@ANNA-LAPTOP`, so the public key line reads `ssh-ed25519 AAAAC3Nz... anna@ANNA-LAPTOP`.
@@ -170,7 +172,7 @@ help-me-win/
 ├── PLAN.md
 ├── proto/                       # shared, pure Go, no GUI deps
 │   ├── go.mod
-│   ├── relayaddr/               # parse and normalize hostname:port (default port 2222)
+│   ├── relayaddr/               # parse and normalize hostname:port (default port 5938)
 │   ├── identity/                # Ed25519 key gen, OpenSSH format, fingerprints,
 │   │                            # parsing of pasted keys
 │   ├── appkey/                  # create-once, load-only app key in OpenSSH format
@@ -240,7 +242,7 @@ only by `UnregisterClient` or `hmw-relay client remove`. Writes are temp file + 
 
 | Command | What it does |
 |---|---|
-| `hmw-relay serve [--listen :2222]` | run the relay on its single port |
+| `hmw-relay serve [--listen :5938]` | run the relay on its single port |
 | `hmw-relay helper add alice --display "Alice" 'ssh-ed25519 ...'` | add a helper with the public key copied from their helper app |
 | `hmw-relay helper remove alice` | remove a helper; takes effect immediately, open sessions are closed |
 | `hmw-relay helper list` / `client list` / `client remove SHA256:...` | inspect and revoke |
@@ -279,21 +281,24 @@ the relay's open towards the helper adds the client's name, key line and current
 
 ### 3.4 Abuse limits
 
-Limits are keyed on the authenticated key first and on the source IP only after that, so
-many legitimate clients behind one NAT or company proxy never block each other. A key counts
-as proven only after its signature has been verified in the SSH handshake.
+There are no bans and no long counting windows. Every limit is either a rate of one attempt
+per second or a cap on what is open at the same time, so nothing stays blocked after the
+abuse stops and legitimate clients behind one NAT or company proxy never lock each other
+out. A key counts as proven only after its signature has been verified in the SSH handshake.
 
-1. **Known keys** (helpers and registered clients): no rate limit and no IP limit, only the
-   role caps below. A known key that reconnects replaces its previous connection.
-2. **Per unknown key** (pending): max 1 connection, max 10 connection attempts per hour,
-   24 h idle timeout. Exceeding it blocks that key for 1 hour, not the IP.
-3. **Per source IP, for unknown keys only**: since anyone can generate keys, the IP is the
-   backstop. Max 5 distinct unknown keys per IP per hour and max 10 pending connections per
-   IP; beyond that, new unknown keys from that IP are refused for 1 hour, while known keys from
-   the same IP still get in.
-4. **Per source IP, before any key is proven** (scanners, failed handshakes, wrong
-   signatures): max 10 concurrent handshakes, 30 failed handshakes per hour, then backoff.
-5. **Relay-wide**: max 200 pending connections in total.
+1. **One connection attempt per key per second**, for every role (helpers, registered
+   clients and unknown keys). A faster attempt is refused and nothing else happens: the key's
+   existing connection is not touched. The apps reconnect with a backoff of at least a
+   second anyway.
+2. **One connection per key.** When a key connects again, the new connection replaces the
+   old one, so a client whose network dropped (laptop sleep, Wi-Fi switch) gets back in at
+   once instead of waiting for the dead connection to time out.
+3. **Before any key is proven**, per source IP: at most 10 handshakes at the same time;
+   further connections wait for a slot (handshake timeout 10 s). Failed handshakes have no
+   further consequences.
+4. **Pending connections** (unknown keys): at most 10 per source IP and 200 for the whole
+   relay at the same time, so someone generating fresh keys from one place can't take every
+   pending slot. Closing a pending connection, or registering its key, frees its slot at once.
 
 Role caps and timeouts:
 - Per helper: max 20 concurrent sessions. Per client: exactly one session at a time, enforced by the relay and again by the client.
@@ -301,8 +306,6 @@ Role caps and timeouts:
 - Control frames are length-checked before they are read: 16 KiB from clients and pending
   connections, 256 KiB from helpers, so an unauthenticated peer can't make the relay buffer
   large frames.
-- After 30 failed handshakes in an hour an IP is blocked for 1 minute, doubling up to 1 hour.
-  This also affects known keys from that IP, since no key is proven at that point.
 - JSON log to stdout and to `relay.log` in the state directory (rotated at 10 MB): auth result, role, fingerprints, source IP, session start/end,
   byte counts. Never payload.
 
@@ -508,7 +511,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
 - The registered name is the key's comment, `user@machine`.
 
 ### 6.2 First-run window
-- Step 1: "Relay address" field (`hostname:port`, port defaults to 2222 if left out),
+- Step 1: "Relay address" field (`hostname:port`, port defaults to 5938 if left out),
   **Connect**. Errors are shown inline: name not found, connection refused, timeout, not a
   help-me-win relay.
 - Step 2, once connected: relay fingerprint, the public key line in a read-only box, the key
@@ -521,7 +524,16 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
 ### 6.3 Main window
 - One big **Request help** button and the client's name (`anna@ANNA-LAPTOP`). After
   pressing it, the button becomes **Cancel request** until a helper opens it; no other status
-  text.
+  text. Two small links: **View key** (the public key line, fingerprint and **Copy key**, for
+  sending the key to a helper again) and **Settings**.
+- **Settings** shows the relay address and fingerprints and offers **Change relay address**:
+  the new relay is tried with a second connection while the old one stays in use, its host
+  key is pinned on first use, and only when it answers does the client switch (to the main
+  window if the key is registered there, otherwise to the key screen). If it fails, nothing
+  changes. Known helper pins are cleared on a switch, since helper names are only unique
+  within one relay. Not possible while a request is open or a session runs. Also: **Check for
+  updates on startup**, **Reset** (forget relay and registration, keep the key and
+  preferences) and **Remove key**.
 - **During a session** the window is minimized (`SW_MINIMIZE`), nothing else is shown.
 - **When the session ends** (the helper ended it, or Esc), the window is restored and brought
   to the front with the **Request help** button again.
@@ -551,15 +563,25 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   administrator"), no Ctrl+Alt+Del or secure desktop.
 
 ### 6.5 Distribution
-- One generic exe for everybody, nothing embedded, never needs admin. It ships two ways:
-  portable (`help-me-win_<version>_windows-amd64.exe`, run from anywhere, such as Downloads or
-  Desktop) and as a per-user MSI (`installer/help-me-win.wxs`, no UAC prompt) that installs it
-  into `%LOCALAPPDATA%\Programs\help-me-win` with a Start menu shortcut. Because the exe is
-  never patched, it can be Authenticode-signed (`osslsigncode`) once per release.
+- One generic exe for everybody, nothing embedded, never needs admin. It ships only as a
+  per-user MSI (`installer/help-me-win.wxs`, no UAC prompt) that installs it into
+  `%LOCALAPPDATA%\Programs\help-me-win` with a Start menu shortcut. Because the exe is never
+  patched, it can be Authenticode-signed (`osslsigncode`) once per release.
+- **Updates**, like otp4win: a release build asks the GitHub API for the latest release at
+  start-up, and if its MSI is newer, offers "Download and install it now?". Yes downloads
+  the MSI to the temp folder, checks its size, starts `msiexec` and closes the app. No prompt
+  during a session or with an open request. The check can be turned off in settings;
+  development builds and offline starts skip it silently. It needs the GitHub repository to
+  be public, since the release API doesn't show private releases to anonymous callers.
 - `release.sh [major|minor|build]` bumps the version in both `winres.json` files, runs
-  `make vet test msi`, commits, tags `v<version>`, pushes and creates the GitHub release
-  with everything in `dist/`. For now only Linux and Windows on amd64 are built (`OSES` and
+  `make vet test msi deb`, commits, tags `v<version>`, pushes and creates the GitHub release
+  with everything in `dist/`: the client MSI, the helper archives (with `hmw-relay`) and the
+  `hmw-relay` Debian package. For now only Linux and Windows on amd64 are built (`OSES` and
   `ARCHES` in the Makefile).
+- The relay also ships as a Debian 13 package (`make deb`, `packaging/debian/`): `hmw-relay`
+  as a hardened systemd service under its own system user with its state in
+  `/var/lib/hmw-relay`, settings in `/etc/default/hmw-relay`, and `hmw-relayctl` to run
+  admin commands as the service user.
 - All state lives in `%LOCALAPPDATA%\help-me-win`, not next to the exe, so a newer exe
   picks up the same key and registration.
 
@@ -605,14 +627,17 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   client). The settings page shows the address and fingerprints to read out to users.
 - One relay connection with the control channel, keepalive, reconnect with backoff. All of
   this helper's sessions run as channels over that one connection.
-- **Local relay**: the helper app looks for `hmw-relay` next to its own executable. With "Run
-  the relay on this machine" enabled in settings, it starts `hmw-relay serve` as a child process
-  on startup (unless one is already listening), shows its status and log tail in settings,
-  and stops it when the app exits. The app then connects to `localhost:<port>` itself, while
-  clients and other helpers use the machine's public `hostname:port`.
+- **Local relay**: the relay is compiled into the helper app (`relay/server`, the same code
+  as `hmw-relay`). With "Run the relay on this machine" enabled in settings, the app serves the
+  relay in-process while it is open (unless something already listens on the port), shows
+  its status and log tail in settings, and stops it on exit. There is no separate executable
+  to find, so `go run .` works too. It uses the same state directory as `hmw-relay serve`, so
+  the standalone relay and its admin commands share the helpers, clients and host key. The
+  app connects to `localhost:<port>` itself, while clients and other helpers use the
+  machine's public `hostname:port`.
 - **First start of a local relay**: if the relay has no helpers yet, the helper app adds its
-  own key with `hmw-relay helper add` (a local CLI call, no network), so the first helper never
-  has to copy keys around. Further helpers are added the same way by whoever runs the relay.
+  own key to the relay state directly, so the first helper never has to copy keys around.
+  Further helpers are added with `hmw-relay helper add` by whoever runs the relay.
 - **Distribution**: one archive per OS containing the helper app and `hmw-relay` side by side
   (`hmw-helper` + `hmw-relay`, or `.exe` on Windows, or inside the macOS `.app`
   bundle's `Contents/MacOS`). All built on Linux with `CGO_ENABLED=0`; the macOS `.app` is
@@ -635,27 +660,50 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   `ssh-ed25519`; an RSA or ECDSA key gets a clear "this is not a help-me-win key, ask the
   user to copy the key shown in the app" message. The app
   shows the name and the fingerprint large for comparing on the phone, plus the relay fingerprint
-  the client should be showing. Register uses the key's comment as the name,
-  editable if the comment is empty. Registrations are permanent until removed.
+  the client should be showing. The name field is
+  prefilled with the key's comment (`user@machine`) and always editable ("Anna laptop");
+  it is required when the comment is empty. Registrations are permanent until removed.
+- **Rename**: hovering a client row shows Rename and Remove; Rename (or a double-click) turns
+  the name into an inline field (Enter saves, Esc cancels) and sends `RenameClient`. The
+  relay stores the name for everyone, so every helper's list shows it. When the
+  `user@machine` the client reports differs from the name, it shows as a muted second line.
 - **Remove** a client (unregister) from the list.
 - Each opened session becomes a tab in the work area; any number at once. Closing the
   window ends all open sessions.
 
 ### 7.3 Viewer
-- The session tab draws the remote screen texture (5.5), letterbox aware, fit / 1:1,
-  monitor selector.
+View options follow Remmina's connection window.
+
+- **Fit / 1:1** per session tab, default Fit. Fit scales the remote screen into the view with
+  its aspect ratio kept. 1:1 shows it pixel for pixel (one remote pixel is one physical
+  screen pixel, also on HiDPI), centered when smaller than the view; when larger, thin
+  draggable scrollbars appear and the view scrolls by itself when the pointer comes within
+  16 px of an edge. The mouse wheel always goes to the remote side.
+- **Resize** sizes the window so the view shows the remote screen at 1:1 exactly, clamped to
+  the current monitor (then 1:1 with scrolling).
+- **Hide client list**: a chevron at the left of the tab strip collapses the client list so
+  the session gets the full width; the choice is remembered.
+- **Fullscreen** shows only the session; a floating toolbar slides in when the pointer
+  touches the top edge and hides a second after it leaves. Leaving fullscreen restores the
+  window and the client list.
+- **Host key**: Right Ctrl + F (fullscreen), S (Fit/1:1), R (resize), H (client list). These
+  combinations are never sent to the client; Right Ctrl with any other key, or with a mouse
+  button, acts as a normal Ctrl on the remote side, and tapped alone it is sent as a press
+  and release.
+- **Cursor**: while the pointer is over the view, a pointer is always drawn at the local
+  mouse position (the remote shape when known, else an arrow) and the OS cursor is hidden,
+  so moving has no network latency and the pointer never disappears, even when the client
+  reports its cursor as hidden. Elsewhere the remote cursor is drawn where the client
+  reports it.
 - Input while the mouse is over the view or the tab has keyboard focus: mouse position and
-  buttons (`rl.GetMousePosition`, `IsMouseButtonPressed/Released`), wheel
-  (`GetMouseWheelMoveV`), keys (`GetKeyPressed` / `IsKeyReleased` for every key code, mapped
-  in `helper/keymap` to W3C `code` + scan code), and characters without a physical key
-  (`GetCharPressed`) as `Text`. The local cursor is hidden over the view and the remote
-  cursor shape is drawn instead.
+  buttons, wheel, keys (mapped in `helper/keymap` to W3C codes, checked against
+  `input.Codes`), and characters without a physical key as `Text`.
+- **Toolbar**: End session, Win, Alt+Tab, monitor selector, quality (Auto / Sharp / Fast),
+  Fit / 1:1, Resize, Fullscreen, and an fps, RTT and Mbit/s readout.
 - **Ending**: **End session** in the toolbar, or closing the session's tab. Either closes the
-  inner SSH connection; no confirmation dialog.
-- Toolbar: special keys (Win, Alt+Tab, Ctrl+Esc), quality
-  (auto / sharp / fast), fps and latency readout, fullscreen.
-- When the user ends the session (Esc or exiting the client application), the tab just
-  closes; no dialog. Esc pressed in the viewer is sent to the client as a normal key.
+  inner SSH connection; no confirmation dialog. When the user ends the session (Esc or
+  exiting the client application), the tab just closes. Esc pressed in the viewer is sent to
+  the client as a normal key.
 
 ---
 
@@ -717,9 +765,10 @@ client can stay online in the background; `client-macos/` and `client-linux/` re
   open sessions for its own current request toward the helper that opened it, a helper
   can't cause a session without a request, only one helper wins when several open the same request, a second
   helper can never open a session to a client that is already in one, removed helpers and clients are refused at once, 100 helpers and 1000 clients connected at once,
-  relay restart keeps registrations, 500 registered clients behind one IP all connect
-  while that IP is blocked for unknown keys, a flood of fresh keys from one IP is cut off at the
-  per-IP limit without affecting other IPs.
+  relay restart keeps registrations, one attempt per key per second (a refused attempt
+  leaves the existing connection alone), 500 registered clients behind one IP all connect
+  while that IP's pending slots are full, a flood of fresh keys from one IP fills only that
+  IP's pending slots, and nothing stays blocked after failed handshakes.
 - Malicious relay test: a patched relay that splices a helper to the wrong client (the helper
   app must refuse the inner handshake), changes its host key (both apps must refuse), or
   announces a different key for a helper the client already knows (the client must warn
@@ -737,10 +786,9 @@ client can stay online in the background; `client-macos/` and `client-linux/` re
 
 ## 10. Open questions
 
-- Default port 2222 or 443? The port is configurable, so this is only about the default and
-  documentation: 2222 needs no privileges anywhere; 443 passes more corporate firewalls on the
-  client side but needs privileges on Linux and macOS and may still be blocked by TLS
-  inspection.
+- Default port: 5938 (the port TeamViewer uses, so firewalls that let TeamViewer out
+  usually let help-me-win out too). Above 1024, so no privileges are needed; 443 would pass
+  more corporate firewalls but needs privileges on Linux and may still meet TLS inspection.
 - Does a relay on the helper's own machine behind a home or office router need a dynamic DNS
   name in the docs, since clients store `hostname:port` once and never change it?
 - Is TOFU for the relay plus relay-vouched helpers enough, or should the client also be able

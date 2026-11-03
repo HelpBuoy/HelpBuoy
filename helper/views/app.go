@@ -37,11 +37,12 @@ type Options struct {
 
 // Layout sizes in logical pixels.
 const (
-	sidebarW   = 300
-	tabBarH    = 40
-	toolbarH   = 44
-	idleFPS    = 10
-	activeHold = 1500 * time.Millisecond // stay fast this long after input
+	sidebarW    = 300
+	tabBarH     = 40
+	toolbarH    = 44
+	listToggleW = 30 // the show/hide client list button at the left of the tab strip
+	idleFPS     = 10
+	activeHold  = 1500 * time.Millisecond // stay fast this long after input
 	// openTimeout is how long a taken request waits for its session channel.
 	openTimeout = 20 * time.Second
 )
@@ -50,6 +51,7 @@ const (
 // has its own.
 type backend interface {
 	RegisterClient(line, name string) <-chan error
+	RenameClient(fingerprint, name string) <-chan error
 	UnregisterClient(fingerprint string) <-chan error
 	OpenRequest(requestID string) <-chan error
 }
@@ -110,6 +112,7 @@ type App struct {
 	seenRequests  map[string]bool
 	confirmRemove string
 	offlineOpen   bool
+	rename        renameState
 
 	tabs       []*tab
 	active     int // index into tabs, -1 for none
@@ -120,8 +123,20 @@ type App struct {
 	lastInput  time.Time
 	fps        int32
 	fullscreen bool
+	windowed   windowGeom // window position and size before fullscreen
 	keysTo     *sessionTab
 	demo       *demo
+}
+
+// MinWidth and MinHeight are the smallest window size, in window units.
+const (
+	MinWidth  = 760
+	MinHeight = 480
+)
+
+// windowGeom is a window position and size, in window units.
+type windowGeom struct {
+	x, y, w, h int32
 }
 
 // New creates the app. Call it after rl.InitWindow.
@@ -234,7 +249,7 @@ func (a *App) startLocal() {
 	a.localAdded = 0
 	name := identity.HelperName()
 	a.local = localrelay.Start(localrelay.Options{
-		Port: a.cfg.LocalRelay.ListenPort(), HelperName: name, HelperDisplay: name, KeyLine: a.key.Line,
+		Port: a.cfg.LocalRelay.ListenPort(), Version: a.opts.Version, HelperName: name, HelperDisplay: name, KeyLine: a.key.Line,
 	})
 }
 
@@ -263,6 +278,7 @@ func (a *App) Shutdown() {
 // Frame drains the background channels, then draws one frame.
 func (a *App) Frame() {
 	a.ui.Begin()
+	a.rename.beginFrame(a.ui)
 	if a.ui.Interacted {
 		a.lastInput = a.ui.Now
 	}
@@ -281,7 +297,9 @@ func (a *App) Frame() {
 		if a.fullscreen {
 			a.setFullscreen(false)
 		}
-		a.drawSidebar()
+		if a.listShown() {
+			a.drawSidebar()
+		}
 		a.drawWorkArea()
 	}
 	if a.keysTo != nil && a.keysTo != a.activeSession() {
@@ -436,7 +454,7 @@ func (a *App) updateSessions() {
 		select {
 		case <-st.s.Done():
 			if err := st.s.Err(); err != nil && !isEnd(err) {
-				a.noteFor(st.s.Info.ClientName, "Session failed: "+err.Error())
+				a.notes[st.s.Info.Fingerprint] = note{text: "Session failed: " + err.Error(), until: time.Now().Add(8 * time.Second)}
 			}
 			a.closeTab(i)
 			i--
@@ -481,14 +499,76 @@ func (a *App) activeSession() *sessionTab {
 	return a.tabs[a.active].sess
 }
 
-// sessionFor returns the open session tab for a client name, or -1.
-func (a *App) sessionFor(name string) int {
+// sessionFor returns the open session tab for a client fingerprint, or -1.
+func (a *App) sessionFor(fp string) int {
 	for i, t := range a.tabs {
-		if t.sess != nil && t.sess.s.Info.ClientName == name {
+		if t.sess != nil && t.sess.s.Info.Fingerprint == fp {
 			return i
 		}
 	}
 	return -1
+}
+
+// sessionName is the client's current name for a session: the name in the
+// latest presence, which follows renames, or the name at session start.
+func (a *App) sessionName(st *sessionTab) string {
+	if a.presence != nil {
+		for _, c := range a.presence.Clients {
+			if c.Fingerprint == st.s.Info.Fingerprint && c.Name != "" {
+				return c.Name
+			}
+		}
+	}
+	return st.s.Info.ClientName
+}
+
+// listShown reports whether the client list is drawn. Hiding it applies
+// only while tabs are open; with none, the list is all there is to use.
+func (a *App) listShown() bool {
+	return !a.fullscreen && (!a.cfg.HideClientList || len(a.tabs) == 0)
+}
+
+// listWidth is the width the client list takes, its border included.
+func (a *App) listWidth() float32 {
+	if a.listShown() {
+		return sidebarW + 1
+	}
+	return 0
+}
+
+// toggleClientList hides or shows the client list and remembers the choice.
+func (a *App) toggleClientList() {
+	a.cfg.HideClientList = !a.cfg.HideClientList
+	a.saveConfig()
+}
+
+// resizeToClient resizes the window so the session view shows the remote
+// screen at 1:1, clamped to the current monitor, and switches the tab to
+// 1:1 (scrolling if the screen did not fit). It does nothing in fullscreen.
+func (a *App) resizeToClient(st *sessionTab) {
+	w, h := st.screen.Size()
+	if a.fullscreen || !st.screen.Ready() || w <= 0 || h <= 0 {
+		return
+	}
+	lw, _ := ui.WindowSize()
+	units := float32(1)
+	if lw > 0 && rl.GetScreenWidth() > 0 {
+		units = float32(rl.GetScreenWidth()) / lw
+	}
+	mon := rl.GetCurrentMonitor()
+	mw, mh := rl.GetMonitorWidth(mon), rl.GetMonitorHeight(mon)
+	t := resizeToClient(w, h, dpi(), units, a.listWidth(), tabBarH+1+toolbarH, mw, mh, MinWidth, MinHeight)
+	rl.SetWindowSize(t.w, t.h)
+	// Keep the window on its monitor.
+	if mw > 0 && mh > 0 {
+		mp, wp := rl.GetMonitorPosition(mon), rl.GetWindowPosition()
+		x := clampf(wp.X, mp.X+decorW/2, max(mp.X+float32(mw-t.w-decorW/2), mp.X))
+		y := clampf(wp.Y, mp.Y+decorH/2, max(mp.Y+float32(mh-t.h-decorH/2), mp.Y))
+		if x != wp.X || y != wp.Y {
+			rl.SetWindowPosition(int(x), int(y))
+		}
+	}
+	st.mode = modeOne
 }
 
 func (a *App) activate(i int) {
@@ -545,18 +625,33 @@ func (a *App) relayFingerprint() string {
 	return ssh.FingerprintSHA256(a.hostKey)
 }
 
+// setFullscreen switches the window between fullscreen (borderless, the
+// active session only) and windowed. Leaving fullscreen restores the window
+// position and size from before; the client list comes back as it was,
+// since fullscreen only stops drawing it.
 func (a *App) setFullscreen(on bool) {
 	if on == a.fullscreen {
 		return
 	}
 	a.fullscreen = on
+	if on {
+		p := rl.GetWindowPosition()
+		a.windowed = windowGeom{int32(p.X), int32(p.Y), int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight())}
+		rl.ToggleBorderlessWindowed()
+		return
+	}
 	rl.ToggleBorderlessWindowed()
+	if g := a.windowed; g.w > 0 && g.h > 0 {
+		rl.SetWindowSize(int(g.w), int(g.h))
+		rl.SetWindowPosition(int(g.x), int(g.y))
+	}
 }
 
 // drawWorkArea draws the tab bar and the active tab.
 func (a *App) drawWorkArea() {
 	w, h := ui.WindowSize()
-	area := rl.NewRectangle(sidebarW+1, 0, w-sidebarW-1, h)
+	lw := a.listWidth()
+	area := rl.NewRectangle(lw, 0, w-lw, h)
 	if len(a.tabs) == 0 {
 		c := a.ui
 		r := rl.NewRectangle(area.X, area.Y, area.Width, area.Height-24)
@@ -566,13 +661,15 @@ func (a *App) drawWorkArea() {
 	bar := rl.NewRectangle(area.X, 0, area.Width, tabBarH)
 	rl.DrawRectangleRec(bar, ui.ColBackground)
 	rl.DrawLineV(rl.NewVector2(bar.X, bar.Height), rl.NewVector2(bar.X+bar.Width, bar.Height), ui.ColBorder)
+	a.drawListToggle(rl.NewRectangle(bar.X, 0, listToggleW, tabBarH))
+	tabsX, tabsW := bar.X+listToggleW, bar.Width-listToggleW
 	tabW := float32(200)
-	if n := float32(len(a.tabs)); n*tabW > bar.Width {
-		tabW = max(bar.Width/n, 90)
+	if n := float32(len(a.tabs)); n*tabW > tabsW {
+		tabW = max(tabsW/n, 90)
 	}
 	closeAt := -1
 	for i, t := range a.tabs {
-		r := rl.NewRectangle(bar.X+float32(i)*tabW, 0, tabW, tabBarH)
+		r := rl.NewRectangle(tabsX+float32(i)*tabW, 0, tabW, tabBarH)
 		clicked, closed := a.ui.Tab(fmt.Sprintf("tab/%p", t), r, a.tabTitle(t), i == a.active, true)
 		if clicked {
 			a.activate(i)
@@ -597,6 +694,29 @@ func (a *App) drawWorkArea() {
 	}
 }
 
+// drawListToggle draws the chevron at the left of the tab strip that hides
+// or shows the client list.
+func (a *App) drawListToggle(r rl.Rectangle) {
+	c := a.ui
+	hover := c.Hover(r)
+	if hover {
+		rl.DrawRectangleRec(r, ui.ColHover)
+		c.SetCursor(rl.MouseCursorPointingHand)
+	}
+	rl.DrawLineV(rl.NewVector2(r.X+r.Width, r.Y+6), rl.NewVector2(r.X+r.Width, r.Y+r.Height-6), ui.ColBorder)
+	label, tip := "◄", "Hide the client list (Right Ctrl+H)"
+	if !a.listShown() {
+		label, tip = "►", "Show the client list (Right Ctrl+H)"
+	}
+	c.TextCentered(ui.Regular, ui.SizeSmall, label, r, ui.ColMuted)
+	if hover {
+		c.Tooltip(tip)
+	}
+	if c.Clicked("tabs/listtoggle", r) {
+		a.toggleClientList()
+	}
+}
+
 func (a *App) tabTitle(t *tab) string {
 	switch t.kind {
 	case tabRegister:
@@ -604,7 +724,7 @@ func (a *App) tabTitle(t *tab) string {
 	case tabSettings:
 		return "Settings"
 	}
-	return t.sess.s.Info.ClientName
+	return a.sessionName(t.sess)
 }
 
 // page draws a scrollable page; draw gets the content origin and width and

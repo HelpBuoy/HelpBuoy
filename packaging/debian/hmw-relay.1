@@ -1,0 +1,57 @@
+.TH HMW-RELAY 1 "" "help-me-win" "User Commands"
+.SH NAME
+hmw-relay \- relay for help-me-win self-hosted remote support
+.SH SYNOPSIS
+.B hmw-relay serve
+.RB [ \-\-listen
+.IR addr ]
+.RB [ \-\-state
+.IR dir ]
+.br
+.B hmw-relay helper add
+.I name
+.RB [ \-\-display
+.IR "display name" ]
+.I key
+.br
+.B hmw-relay helper remove
+.I name
+.br
+.B hmw-relay helper list
+.br
+.B hmw-relay client list
+.br
+.B hmw-relay client remove
+.I fingerprint
+.br
+.B hmw-relay hostkey
+.br
+.B hmw-relay version
+.SH DESCRIPTION
+.B hmw-relay
+is the SSH relay of help-me-win. Helpers and the people they help connect to
+it on one port; it authenticates their Ed25519 keys and splices their
+sessions. The screen and input run end to end over an inner SSH connection
+that the relay cannot read.
+.PP
+.B serve
+runs the relay, by default on
+.BR :5938 .
+The other commands change or show the state directory; a running relay picks
+up changes within a second.
+.SH OPTIONS
+.TP
+.BI \-\-listen " addr"
+Address to listen on, as host:port or :port.
+.TP
+.BI \-\-state " dir"
+State directory with the host key, helpers and registered clients. Default:
+.B $HMW_RELAY_STATE
+if set, else the per-user data directory.
+.SH ENVIRONMENT
+.TP
+.B HMW_RELAY_STATE
+Default state directory. The Debian service sets it to
+.IR /var/lib/hmw-relay .
+.SH SEE ALSO
+.BR hmw-relayctl (8)

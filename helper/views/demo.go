@@ -52,7 +52,7 @@ func newDemo(a *App) *demo {
 	a.key = &appkey.Key{Signer: s, Public: s.PublicKey(), Comment: "helper@demo", Line: line, Fingerprint: ssh.FingerprintSHA256(s.PublicKey())}
 	hk, _, _ := newKey("")
 	a.hostKey = hk.PublicKey()
-	a.cfg.RelayAddr = "relay.example.com:2222"
+	a.cfg.RelayAddr = "relay.example.com:5938"
 	a.status = relayconn.StatusEvent{Status: relayconn.StatusOnline, HostKey: a.hostKey}
 	a.me = "helper"
 	a.backend = d
@@ -108,6 +108,22 @@ func (d *demo) RegisterClient(line, name string) <-chan error {
 	return done(nil)
 }
 
+// RenameClient renames a demo client locally, with the relay's rules.
+func (d *demo) RenameClient(fp, name string) <-chan error {
+	name = strings.TrimSpace(name)
+	if !validClientName(name) {
+		return done(fmt.Errorf("name must be 1 to %d printable characters", maxClientName))
+	}
+	p := d.a.presence
+	for i := range p.Clients {
+		if p.Clients[i].Fingerprint == fp {
+			p.Clients[i].Name = name
+			return done(nil)
+		}
+	}
+	return done(fmt.Errorf("no client with fingerprint %s", fp))
+}
+
 func (d *demo) UnregisterClient(fp string) <-chan error {
 	p := d.a.presence
 	for i, c := range p.Clients {
@@ -131,7 +147,7 @@ func (d *demo) OpenRequest(id string) <-chan error {
 		}
 		c.Request = nil
 		c.InSessionWith = d.a.me
-		d.a.addSession(d.startSession(c.Name))
+		d.a.addSession(d.startSession(c.Name, c.Fingerprint))
 		return done(nil)
 	}
 	return done(fmt.Errorf("request is not open"))
@@ -157,7 +173,7 @@ func (d *demo) frame() {
 	}
 	for i := range p.Clients {
 		c := &p.Clients[i]
-		if c.InSessionWith == d.a.me && d.a.sessionFor(c.Name) < 0 {
+		if c.InSessionWith == d.a.me && d.a.sessionFor(c.Fingerprint) < 0 {
 			c.InSessionWith = ""
 		}
 	}
@@ -179,10 +195,10 @@ func (cs closers) Close() error {
 }
 
 // startSession runs a session against an in-process fake client.
-func (d *demo) startSession(name string) *session.Session {
+func (d *demo) startSession(name, fp string) *session.Session {
 	sa, sb := net.Pipe()
 	ia, ib := net.Pipe()
-	s := session.Run(session.Info{ClientName: name, UserMachine: name}, sa, ia, closers{sa, ia}, session.ProtoCodec{})
+	s := session.Run(session.Info{ClientName: name, UserMachine: name, Fingerprint: fp}, sa, ia, closers{sa, ia}, session.ProtoCodec{})
 	go runDemoClient(sb, ib, name)
 	d.stops = append(d.stops, s.Close)
 	return s

@@ -13,11 +13,13 @@ import (
 	"github.com/mevdschee/help-me-win/proto/wire"
 )
 
-// demoMonitors are the fake client's displays; the second has another size,
-// so switching exercises the resize path.
+// demoMonitors are the fake client's displays; they differ in size, so
+// switching exercises the resize path, and the third is larger than most
+// windows, for trying 1:1 with scrolling.
 var demoMonitors = []screen.Monitor{
 	{X: 0, Y: 0, W: 1280, H: 720, Primary: true, Name: "Built-in display"},
 	{X: 1280, Y: 0, W: 1024, H: 768, Name: "DELL P2419H"},
+	{X: 2304, Y: 0, W: 2560, H: 1440, Name: "LG QHD"},
 }
 
 // Cursor shape IDs of the demo client.
