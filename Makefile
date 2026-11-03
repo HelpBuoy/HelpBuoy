@@ -41,7 +41,7 @@ help:
 	@echo "make server   build helpbuoy-server ($(TARGETS)) into $(BIN)/"
 	@echo "make client   build the Windows client ($(ARCHES)) into $(BIN)/"
 	@echo "make desk     build the desk app ($(TARGETS)) into $(BIN)/"
-	@echo "make dist     desk/server archives in $(DIST)/ (the client ships only as the MSI)"
+	@echo "make dist     desk app archives in $(DIST)/ (the client ships only as the MSI)"
 	@echo "make msi      dist plus the client installer (needs wixl and msitools)"
 	@echo "make deb      Debian 13 package of helpbuoy-server with a systemd service (needs dpkg-deb)"
 	@echo "make icon     regenerate the lifebuoy app icon (client, copied to the desk app)"
@@ -88,20 +88,21 @@ client: $(CLIENT_SYSO)
 			-o $(BIN)/windows-$$arch/helpbuoy.exe ./client-windows || exit 1; \
 	done
 
-# Release archives: desk app and helpbuoy-server side by side per OS/arch. macOS
-# gets a zipped .app with helpbuoy-server in Contents/MacOS. The client exe is built
-# into bin/ for the MSI (make msi) and not released on its own.
-dist: server desk client
+# Release archives: the desk app per OS/arch (it runs the server built in, so
+# helpbuoy-server is not packaged with it; the server ships as the Debian
+# package, make deb). macOS gets a zipped .app. The client exe is built into
+# bin/ for the MSI (make msi) and not released on its own.
+dist: desk client
 	@rm -rf $(DIST) && mkdir -p $(DIST)
 	@for t in $(subst /,-,$(filter linux/%,$(TARGETS))); do \
-		tar -czf $(DIST)/helpbuoy-desk_$(VERSION)_$$t.tar.gz -C $(BIN)/$$t helpbuoy-desk helpbuoy-server; \
+		tar -czf $(DIST)/helpbuoy-desk_$(VERSION)_$$t.tar.gz -C $(BIN)/$$t helpbuoy-desk; \
 	done
 	@for t in $(subst /,-,$(filter windows/%,$(TARGETS))); do \
-		(cd $(BIN)/$$t && zip -q ../../$(DIST)/helpbuoy-desk_$(VERSION)_$$t.zip helpbuoy-desk.exe helpbuoy-server.exe) || exit 1; \
+		(cd $(BIN)/$$t && zip -q ../../$(DIST)/helpbuoy-desk_$(VERSION)_$$t.zip helpbuoy-desk.exe) || exit 1; \
 	done
 	@for t in $(subst /,-,$(filter darwin/%,$(TARGETS))); do \
 		GOWORK=off GO111MODULE=off go run tools/macapp/main.go -app helpbuoy-desk -id helpbuoy.desk \
-			-version $(APP_VERSION) -exe $(BIN)/$$t/helpbuoy-desk -server $(BIN)/$$t/helpbuoy-server \
+			-version $(APP_VERSION) -exe $(BIN)/$$t/helpbuoy-desk \
 			-icon desk/resources/icon.png -out $(DIST)/helpbuoy-desk_$(VERSION)_$$t.zip || exit 1; \
 	done
 	@cd $(DIST) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS

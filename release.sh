@@ -14,8 +14,8 @@
 # goes up on every release as well. The desk app's winres.json gets the same
 # version.
 #
-# The script builds everything with "make msi deb" (the desk app and helpbuoy-server
-# archives, the client MSI and the helpbuoy-server Debian package in dist/), commits the
+# The script builds everything with "make msi deb" (the desk app archives,
+# the client MSI and the helpbuoy-server Debian package in dist/), commits the
 # version bump, tags and pushes it and creates the GitHub release v<version>
 # with all files in dist/.
 set -e

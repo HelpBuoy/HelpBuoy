@@ -10,7 +10,7 @@ The server is not OpenSSH. It has no shell, no filesystem access, no file transf
 forwarding to real hosts. It only authenticates keys, tells techies and computers about each
 other, and splices their channels together.
 
-- **server/**: `helpbuoy-server`, a plain executable that ships next to the desk app and runs
+- **server/**: `helpbuoy-server`, a plain executable (also built into the desk app) that runs
   locally on the techie's machine as a normal user process, on one port (default `:5959`). It
   keeps techies and registered computers in a small state directory. No service, no container.
 - **desk/**: the cross-platform raylib app the *support techie* runs (`raylib-go`, no cgo). Many techies can be online at
@@ -594,7 +594,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   be public, since the release API doesn't show private releases to anonymous callers.
 - `release.sh [major|minor|build]` bumps the version in both `winres.json` files, runs
   `make vet test msi deb`, commits, tags `v<version>`, pushes and creates the GitHub release
-  with everything in `dist/`: the client MSI, the techie archives (with `helpbuoy-server`) and the
+  with everything in `dist/`: the client MSI, the desk app archives (without `helpbuoy-server`) and the
   `helpbuoy-server` Debian package. For now only Linux and Windows on amd64 are built (`OSES` and
   `ARCHES` in the Makefile).
 - The server also ships as a Debian 13 package (`make deb`, `packaging/debian/`): `helpbuoy-server`
@@ -671,9 +671,9 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   adds it to the server state directly (with a number after the name if that name is taken),
   so nobody has to copy keys around. Other techies are added with **Add techie** on the Techies tab
   or with `helpbuoy-server techie add` by whoever runs the server.
-- **Distribution**: one archive per OS containing the desk app and `helpbuoy-server` side by side
-  (`helpbuoy-desk` + `helpbuoy-server`, or `.exe` on Windows, or inside the macOS `.app`
-  bundle's `Contents/MacOS`). All built on Linux with `CGO_ENABLED=0`; the macOS `.app` is
+- **Distribution**: one archive per OS containing only the desk app (`helpbuoy-desk`, or
+  `.exe` on Windows, or the macOS `.app` bundle). The server is built in, so `helpbuoy-server`
+  is not packaged with it; it ships separately as the Debian package. All built on Linux with `CGO_ENABLED=0`; the macOS `.app` is
   assembled by a script (Info.plist, `.icns` written in Go from the PNG icon). No installer,
   no Docker image.
 
