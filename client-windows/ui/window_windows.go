@@ -519,7 +519,7 @@ func (w *Window) warnRelayKey(hk session.HostKeyChangedError) {
 		MainInstruction: "Warning: the identity of the relay has changed",
 		Content: "Key last time:\n" + hk.OldFingerprint + "\n\n" +
 			"Key now:\n" + hk.NewFingerprint + "\n\n" +
-			"This may be someone pretending to be your relay. help-me-win stopped connecting. " +
+			"This may be someone pretending to be your relay. Help-Me-Win stopped connecting. " +
 			"Only continue if a helper confirmed by phone that the relay has a new key " +
 			"and the new fingerprint above matches what they read to you.",
 		Buttons: []win.TASKDIALOG_BUTTON{

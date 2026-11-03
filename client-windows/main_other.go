@@ -10,6 +10,6 @@ import (
 )
 
 func main() {
-	fmt.Fprintln(os.Stderr, "help-me-win: this client runs on Windows only")
+	fmt.Fprintln(os.Stderr, "Help-Me-Win: this client runs on Windows only")
 	os.Exit(1)
 }

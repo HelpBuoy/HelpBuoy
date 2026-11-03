@@ -39,16 +39,15 @@ func (w *Window) offerUpdate(r update.Release) {
 	}
 	w.ctrl.DismissUpdate()
 	version := w.ctrl.Version()
-	msg := fmt.Sprintf("help-me-win %s is available (you have %s).\n\n"+
-		"Download and install it now? help-me-win closes during the installation.\n\n"+
-		"Update checks can be turned off in Settings.", r.Version, version)
+	msg := fmt.Sprintf("Help-Me-Win %s is available (you have %s).\n\n"+
+		"Download and install it now? Help-Me-Win closes during the installation.", r.Version, version)
 	w.dialogs++
 	ret, _ := w.wnd.Hwnd().MessageBox(msg, "Update available", co.MB_YESNO|co.MB_ICONINFORMATION)
 	w.dialogs--
 	if ret != co.ID_YES {
 		return
 	}
-	w.updating = "Downloading help-me-win " + r.Version + "..."
+	w.updating = "Downloading Help-Me-Win " + r.Version + "..."
 	w.apply(w.view)
 	go func() {
 		path, err := update.Download(context.Background(), r, os.TempDir())

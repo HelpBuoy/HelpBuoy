@@ -121,9 +121,9 @@ func (p *registerPage) nameOK() bool {
 func parseMessage(err error) string {
 	switch {
 	case errors.Is(err, identity.ErrNotEd25519):
-		return "This is not a help-me-win key. Ask the user to copy the key shown in the app."
+		return "This is not a Help-Me-Win key. Ask the user to copy the key shown in the app."
 	case errors.Is(err, identity.ErrNoKey):
-		return "No help-me-win key found in this text. Ask the user to copy the key shown in the app."
+		return "No Help-Me-Win key found in this text. Ask the user to copy the key shown in the app."
 	}
 	return err.Error()
 }

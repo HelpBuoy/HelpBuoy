@@ -28,7 +28,7 @@ func (e *HostKeyChangedError) Error() string {
 func (e *HostKeyChangedError) Unwrap() error { return ErrHostKeyChanged }
 
 // ErrNotRelay is returned when the other end is not a help-me-win relay.
-var ErrNotRelay = errors.New("not a help-me-win relay")
+var ErrNotRelay = errors.New("not a Help-Me-Win relay")
 
 // ErrRefusedKey is returned when the relay refuses the app key.
 var ErrRefusedKey = errors.New("the relay refused this key")
@@ -105,12 +105,12 @@ func Describe(err error) string {
 	case KindTimeout:
 		return "The relay did not answer in time. Check the address and your internet connection."
 	case KindNotRelay:
-		return "This address does not belong to a help-me-win relay."
+		return "This address does not belong to a Help-Me-Win relay."
 	case KindRefusedKey:
 		return "The relay refused this PC for now. Try again later."
 	case KindHostKeyChanged:
-		return "The relay's identity changed, so help-me-win stopped connecting. Ask a helper before you continue. " +
-			"Restart help-me-win to answer the warning again, or use Reset in the settings."
+		return "The relay's identity changed, so Help-Me-Win stopped connecting. Ask a helper before you continue. " +
+			"Restart Help-Me-Win to answer the warning again."
 	case KindHelperKey:
 		return "This key belongs to a helper on this relay and can't be used here."
 	case KindRelay:
