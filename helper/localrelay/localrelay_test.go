@@ -1,6 +1,8 @@
 package localrelay
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
 	"net"
 	"strings"
 	"testing"
@@ -93,6 +95,28 @@ func TestRunsInProcess(t *testing.T) {
 	}
 	r.Stop()
 	if hs := helpers(t, dir); len(hs) != 1 {
+		t.Fatalf("helpers %+v", hs)
+	}
+}
+
+// TestAddsThisHelper: a relay that already has other helpers still gets
+// this helper's key, with a number added when the name is taken.
+func TestAddsThisHelper(t *testing.T) {
+	dir := t.TempDir()
+	port := freePort(t)
+	r := Start(Options{Port: port, StateDir: dir, HelperName: "alice", KeyLine: keyLine})
+	waitState(t, r, StateRunning)
+	r.Stop()
+
+	_, priv, _ := ed25519.GenerateKey(rand.Reader)
+	signer, _ := ssh.NewSignerFromKey(priv)
+	other := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey())))
+	r = Start(Options{Port: port, StateDir: dir, HelperName: "alice", KeyLine: other})
+	if st := waitState(t, r, StateRunning); st.HelperAdded != 1 {
+		t.Fatalf("not added: %+v", st)
+	}
+	r.Stop()
+	if hs := helpers(t, dir); len(hs) != 2 || hs[1].Name != "alice2" {
 		t.Fatalf("helpers %+v", hs)
 	}
 }

@@ -2,8 +2,8 @@
 // same relay/server code as the standalone hmw-relay, compiled in, so there is
 // no separate executable to find or start. Unless something already listens
 // on the port, it serves on that port until Stop, keeps the tail of the relay
-// log for the settings page, and adds the helper's own key when the relay has
-// no helpers yet.
+// log for the settings page, and adds the helper's own key when it is not a
+// helper there yet.
 //
 // It uses the same state directory as "hmw-relay serve" (the per-user data
 // directory "hmw-relay"), so the standalone relay and its admin commands
@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/mevdschee/help-me-win/proto/datadir"
+	"github.com/mevdschee/help-me-win/relay/auth"
 	"github.com/mevdschee/help-me-win/relay/logfile"
 	"github.com/mevdschee/help-me-win/relay/server"
 	"github.com/mevdschee/help-me-win/relay/store"
@@ -64,7 +65,7 @@ type Options struct {
 	StateDir string // "" means the per-user data directory "hmw-relay"
 	Version  string // reported to apps in Hello
 
-	// The helper's own key, added when the relay has no helpers yet.
+	// The helper's own key, added when it is not a helper on the relay yet.
 	HelperName string
 	KeyLine    string // authorized_keys line; "" skips the step
 }
@@ -218,29 +219,45 @@ func (r *Relay) run() {
 	}
 }
 
-// ensureHelper adds the helper's own key when the relay has no helpers yet.
+// ensureHelper adds the helper's own key unless it already is a helper on
+// this relay. A name that another helper has gets a number appended.
 func (r *Relay) ensureHelper(dir string) {
 	if r.opts.KeyLine == "" {
 		return
 	}
-	name := r.opts.HelperName
-	if name == "" {
-		name = "helper"
+	k, _, err := auth.ParseKey(r.opts.KeyLine)
+	if err != nil {
+		r.logLine("this helper app's key: " + err.Error())
+		return
+	}
+	fp := auth.Fingerprint(k)
+	base := r.opts.HelperName
+	if base == "" {
+		base = "helper"
 	}
 	st, err := store.Open(dir)
 	if err != nil {
 		r.logLine("relay state: " + err.Error())
 		return
 	}
-	errHasHelpers := errors.New("relay already has helpers")
+	errKnown := errors.New("already a helper")
+	var name string
 	_, _, err = st.Update(func(s *store.State) error {
-		if len(s.Helpers) > 0 {
-			return errHasHelpers
+		taken := map[string]bool{}
+		for _, h := range s.Helpers {
+			if hk, _, err := auth.ParseKey(h.PublicKey); err == nil && auth.Fingerprint(hk) == fp {
+				return errKnown
+			}
+			taken[h.Name] = true
+		}
+		name = base
+		for n := 2; taken[name]; n++ {
+			name = fmt.Sprintf("%s%d", base, n)
 		}
 		return s.AddHelper(name, r.opts.KeyLine)
 	})
 	switch {
-	case errors.Is(err, errHasHelpers):
+	case errors.Is(err, errKnown):
 		return
 	case err != nil:
 		r.logLine("adding this helper app's key: " + err.Error())

@@ -10,6 +10,7 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
+	"github.com/mevdschee/help-me-win/helper/config"
 	"github.com/mevdschee/help-me-win/helper/relayconn"
 	"github.com/mevdschee/help-me-win/helper/ui"
 	"github.com/mevdschee/help-me-win/proto/control"
@@ -22,7 +23,20 @@ func (a *App) drawClientsPage(r rl.Rectangle) {
 	c := a.ui
 	rl.DrawRectangleRec(r, ui.ColPanel)
 	c.Text(ui.Bold, ui.SizeHeading, "Clients", r.X+16, r.Y+14, ui.ColText)
-	y := a.drawRelayBadge(r.X+140, r.Y+14, r.X+r.Width-16)
+	right := r.X + r.Width - 16
+	if a.demo == nil {
+		// Disconnect goes back to the connect screen; not while helping.
+		bx := right - 120
+		busy := a.sessionCount() > 0
+		if c.Button("clients/disconnect", rl.NewRectangle(bx, r.Y+14, 120, 30), "Disconnect", ui.Normal, busy) {
+			a.disconnect()
+		}
+		if busy && c.Hover(rl.NewRectangle(bx, r.Y+14, 120, 30)) {
+			c.Tooltip("End the open sessions first")
+		}
+		right = bx - 12
+	}
+	y := a.drawRelayBadge(r.X+140, r.Y+14, right)
 	list := rl.NewRectangle(r.X, y+12, r.Width, r.Y+r.Height-(y+12))
 	rl.DrawLineV(rl.NewVector2(r.X, list.Y), rl.NewVector2(r.X+r.Width, list.Y), ui.ColBorder)
 	a.drawClientList(list)
@@ -69,11 +83,11 @@ func (a *App) statusText() (text, detail string, col rl.Color) {
 		return "No key", "", ui.ColError
 	}
 	if a.conn == nil {
-		return "No relay set up", "Enter the relay address in Settings.", ui.ColMuted
+		return "Not connected", "", ui.ColMuted
 	}
-	addr := a.cfg.RelayAddr
-	if a.cfg.LocalRelay.Enabled {
-		addr = a.cfg.ConnectAddr()
+	addr := a.addr.String()
+	if config.IsLocal(a.addr) {
+		addr += " (on this computer)"
 	}
 	errText := ""
 	if a.status.Err != nil {
@@ -83,11 +97,11 @@ func (a *App) statusText() (text, detail string, col rl.Color) {
 	case relayconn.StatusOnline:
 		return "Online", addr, ui.ColOK
 	case relayconn.StatusAuthFailed:
-		return "This key is not a helper on the relay", "Send your public key (Settings) to the relay admin.", ui.ColError
+		return "This key is not a helper on the relay anymore", "Disconnect and connect again to see the key to send to the relay admin.", ui.ColError
 	case relayconn.StatusUnreachable:
 		return "Relay unreachable", errText, ui.ColError
 	case relayconn.StatusIdentityChanged:
-		return "Relay identity changed", "The relay's key differs from the pinned one. See Settings.", ui.ColError
+		return "Relay identity changed", "The relay's key differs from the pinned one. Disconnect and connect again to decide.", ui.ColError
 	}
 	if errText != "" {
 		return "Reconnecting to " + addr, errText, ui.ColWarn

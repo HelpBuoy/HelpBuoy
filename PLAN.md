@@ -65,9 +65,9 @@ connection and stored in `%LOCALAPPDATA%\help-me-win\config.json`:
 
 | Field | Example | Learned |
 |---|---|---|
-| relay address | `relay.example.com` (port 5938 unless given) | typed by the user; the relay this PC got registered on |
+| relay address | `helpme.example.com` (port 5938 unless given) | typed by the user; the relay this PC got registered on |
 | relay host key | `ssh-ed25519 AAAA...` (`SHA256:3q2+7w...`) | first successful connection, pinned from then on |
-| last address | `relay.example.com` | the last address that reached a relay, to prefill the field |
+| last address | `helpme.example.com` | the last address that reached a relay, to prefill the field |
 | known helpers | `alice` → `ssh-ed25519 AAAA...` | each helper's key, pinned on the first session with that helper (3.5) |
 
 The key is stored next to it, as its own application-specific key pair (6.1). Adding or removing a helper never touches
@@ -104,7 +104,7 @@ unique within one relay).
 ### First contact (once per client key)
 
 1. The client starts for the first time and asks for the relay's `hostname:port` (the helper
-   tells the user what to type, e.g. `relay.example.com`, with `:port` only when the relay
+   tells the user what to type, e.g. `helpme.example.com`, with `:port` only when the relay
    doesn't use the default 5938). On this first start
    it generates its own Ed25519 key pair in
    `%LOCALAPPDATA%\help-me-win\` (section 6.1), with the comment `user@machine`, e.g.
@@ -628,21 +628,33 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   macOS), generated once on first start, never regenerated automatically, removable from the app's
   settings (**Remove key**) like the client. **Copy public key** in settings, to send to the relay admin
   for `hmw-relay helper add`. No certificates.
-- Settings: relay `hostname:port` and relay host key (pinned on first connection, like the
-  client). The settings page shows the address and fingerprints to read out to users.
+- **Connect screen**, like the client's: every start shows a centered box on the grey window
+  with "Connect to your client", "Type the relay address you told the client to use, for
+  example helpme.example.com.", the address field (prefilled with the last address) and
+  **Connect**, with the hint "Type localhost to run the relay on this computer, with you as
+  its helper." Errors show in the box. The relay host key is pinned on the first
+  connection per address, like the client; a changed key brings the user back here with a
+  warning and an explicit "Trust the new key". If the relay does not know this key as a
+  helper, the box shows the public key with **Copy public key** to send to the relay admin
+  and keeps retrying, so it moves on by itself once the key is added.
+- Once online the tabs appear. **Disconnect** on the Clients tab (not while sessions are
+  open) goes back to the connect screen and stops the local relay. The Settings tab shows
+  the relay status and fingerprint to read out to users, this helper's key, and the local
+  relay's log while it runs.
 - One relay connection with the control channel, keepalive, reconnect with backoff. All of
   this helper's sessions run as channels over that one connection.
 - **Local relay**: the relay is compiled into the helper app (`relay/server`, the same code
-  as `hmw-relay`). With "Run the relay on this machine" enabled in settings, the app serves the
-  relay in-process while it is open (unless something already listens on the port), shows
-  its status and log tail in settings, and stops it on exit. There is no separate executable
+  as `hmw-relay`). Connecting to `localhost` (or `localhost:<port>`) serves the relay
+  in-process on that port until Disconnect or exit (unless something already listens on the
+  port), with its status and log tail in Settings. There is no separate executable
   to find, so `go run .` works too. It uses the same state directory as `hmw-relay serve`, so
   the standalone relay and its admin commands share the helpers, clients and host key. The
   app connects to `localhost:<port>` itself, while clients and other helpers use the
   machine's public `hostname:port`.
-- **First start of a local relay**: if the relay has no helpers yet, the helper app adds its
-  own key to the relay state directly, so the first helper never has to copy keys around.
-  Further helpers are added with `hmw-relay helper add` by whoever runs the relay.
+- **This helper on the local relay**: if this helper's key is not a helper there yet, the app
+  adds it to the relay state directly (with a number after the name if that name is taken),
+  so nobody has to copy keys around. Other helpers are added with `hmw-relay helper add` by
+  whoever runs the relay.
 - **Distribution**: one archive per OS containing the helper app and `hmw-relay` side by side
   (`hmw-helper` + `hmw-relay`, or `.exe` on Windows, or inside the macOS `.app`
   bundle's `Contents/MacOS`). All built on Linux with `CGO_ENABLED=0`; the macOS `.app` is

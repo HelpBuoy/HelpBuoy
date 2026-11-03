@@ -1,5 +1,5 @@
 // Package config stores the helper app's settings in its data directory:
-// the relay address, the pinned relay host key and the local relay options.
+// the last relay address and its pinned relay host key.
 //
 // The relay host key is trust on first use (PLAN.md 3.5): it is pinned on the
 // first successful connection and any later change is a hard error, never a
@@ -14,7 +14,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"golang.org/x/crypto/ssh"
@@ -33,27 +32,16 @@ var ErrRelayIdentityChanged = errors.New("relay identity changed")
 
 // Config is the stored helper configuration.
 type Config struct {
-	// RelayAddr is the relay's public hostname:port, as given to clients.
+	// RelayAddr is the relay address last connected to, as typed on the
+	// connect screen (normalized hostname:port). localhost means the relay
+	// that runs inside this app.
 	RelayAddr string `json:"relay_addr,omitempty"`
-	// RelayHostKey is the pinned relay host key as an authorized_keys line.
+	// RelayHostKey is the pinned host key of RelayAddr as an authorized_keys line.
 	RelayHostKey string `json:"relay_host_key,omitempty"`
-	// LocalRelay controls running hmw-relay on this machine.
-	LocalRelay LocalRelay `json:"local_relay"`
 }
 
-// LocalRelay holds the settings for running hmw-relay as a child process.
-type LocalRelay struct {
-	Enabled bool `json:"enabled"`
-	Port    int  `json:"port,omitempty"` // listen port; 0 means relayaddr.DefaultPort
-}
-
-// ListenPort returns the local relay port, applying the default.
-func (l LocalRelay) ListenPort() int {
-	if l.Port <= 0 || l.Port > 65535 {
-		return relayaddr.DefaultPort
-	}
-	return l.Port
-}
+// IsLocal reports whether a names the relay that runs inside this app.
+func IsLocal(a relayaddr.Addr) bool { return a.Host == "localhost" }
 
 // Load reads the configuration from dir. A missing file gives the defaults
 // and no error. A damaged file gives the defaults and an error, so the app can
@@ -132,16 +120,6 @@ func (c *Config) SetRelayAddr(a relayaddr.Addr) bool {
 	c.RelayAddr = s
 	c.RelayHostKey = ""
 	return true
-}
-
-// ConnectAddr returns the address the app itself connects to: the local relay
-// on 127.0.0.1 when that is enabled, otherwise the public relay address. It
-// returns "" if there is nothing to connect to.
-func (c *Config) ConnectAddr() string {
-	if c.LocalRelay.Enabled {
-		return "127.0.0.1:" + strconv.Itoa(c.LocalRelay.ListenPort())
-	}
-	return c.RelayAddr
 }
 
 // Pin applies trust on first use to key: with nothing pinned it pins key and

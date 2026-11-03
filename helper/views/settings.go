@@ -1,45 +1,23 @@
 package views
 
 import (
-	"strconv"
-	"strings"
 	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/mevdschee/help-me-win/helper/config"
 	"github.com/mevdschee/help-me-win/helper/identity"
 	"github.com/mevdschee/help-me-win/helper/localrelay"
-	"github.com/mevdschee/help-me-win/helper/relayconn"
 	"github.com/mevdschee/help-me-win/helper/ui"
-	"github.com/mevdschee/help-me-win/proto/relayaddr"
 )
 
 // settingsPage is the state of the Settings page.
 type settingsPage struct {
-	addr       ui.Field
-	addrErr    string
-	port       ui.Field
-	portErr    string
 	copiedAt   time.Time
 	confirmKey bool
-	confirmPin bool
 }
 
-// reset puts the fields back to the stored settings and clears errors and
-// open confirmations.
-func (p *settingsPage) reset(cfg *config.Config) {
-	p.addr.Edit.SetText(cfg.RelayAddr)
-	p.port.Edit.SetText(strconv.Itoa(cfg.LocalRelay.ListenPort()))
-	p.addrErr, p.portErr = "", ""
-	p.confirmKey, p.confirmPin = false, false
-}
-
-func (p *settingsPage) init() {
-	p.addr.Placeholder = "relay.example.com"
-	p.addr.Edit.Max = 260
-	p.port.Edit.Max = 5
-}
+// reset drops open confirmations.
+func (p *settingsPage) reset() { p.confirmKey = false }
 
 func section(c *ui.Context, title string, x, y, w float32) float32 {
 	y += 8
@@ -54,6 +32,9 @@ func label(c *ui.Context, text string, x, y float32) float32 {
 	return y + 20
 }
 
+// drawSettings shows what this helper knows about its relay and key, the
+// log of the relay inside this app while it runs, and Remove key. The relay
+// address is chosen on the connect screen (Disconnect on the Clients tab).
 func (a *App) drawSettings(x, y, w float32) float32 {
 	c := a.ui
 	p := &a.set
@@ -66,20 +47,6 @@ func (a *App) drawSettings(x, y, w float32) float32 {
 
 	// Relay.
 	y = section(c, "Relay", x, y, w)
-	y = label(c, "Relay address (hostname:port), the same one clients use", x, y)
-	fieldW := min(w-130, 420)
-	res := c.TextField("set/addr", rl.NewRectangle(x, y, fieldW, 38), &p.addr)
-	if res.Changed {
-		p.addrErr = ""
-	}
-	if c.Button("set/connect", rl.NewRectangle(x+fieldW+10, y, 110, 38), "Connect", ui.Primary, a.demo != nil) || res.Submitted {
-		a.applyAddr()
-	}
-	y += 46
-	if p.addrErr != "" {
-		y += c.Paragraph(ui.Regular, ui.SizeSmall, p.addrErr, x, y, w, ui.ColError)
-		y += 6
-	}
 	text, detail, col := a.statusText()
 	rl.DrawCircleV(rl.NewVector2(x+5, y+9), 4.5, col)
 	c.Text(ui.Regular, ui.SizeBody, text, x+16, y, ui.ColText)
@@ -95,24 +62,6 @@ func (a *App) drawSettings(x, y, w float32) float32 {
 		c.Text(ui.Regular, ui.SizeBody, "Not known yet; pinned on the first connection.", x, y, ui.ColMuted)
 	}
 	y += 30
-	if a.status.Status == relayconn.StatusIdentityChanged && a.demo == nil {
-		y += c.Paragraph(ui.Regular, ui.SizeSmall, "The relay at this address shows a different key than the first time. Someone may be intercepting the connection, or the relay was reinstalled. Check with the relay admin (hmw-relay hostkey) before trusting the new key.", x, y, w, ui.ColError)
-		y += 8
-		if p.confirmPin {
-			if c.Button("set/pin/confirm", rl.NewRectangle(x, y, 190, 34), "Trust the new key", ui.Danger, false) {
-				a.cfg.ForgetHostKey()
-				a.saveConfig()
-				p.confirmPin = false
-				a.connect()
-			}
-			if c.Button("set/pin/cancel", rl.NewRectangle(x+200, y, 90, 34), "Cancel", ui.Normal, false) {
-				p.confirmPin = false
-			}
-		} else if c.Button("set/pin", rl.NewRectangle(x, y, 230, 34), "Forget the pinned key…", ui.Normal, false) {
-			p.confirmPin = true
-		}
-		y += 44
-	}
 
 	// This helper's key.
 	y = section(c, "This helper", x, y, w)
@@ -133,29 +82,11 @@ func (a *App) drawSettings(x, y, w float32) float32 {
 		y += 46
 	}
 
-	// Local relay.
-	y = section(c, "Local relay", x, y, w)
-	enabled := a.cfg.LocalRelay.Enabled
-	if c.Checkbox("set/local", rl.NewRectangle(x, y, w, 28), "Run the relay on this machine", &enabled) && a.demo == nil {
-		a.setLocal(enabled)
-	}
-	y += 36
-	y = label(c, "Port", x, y)
-	pr := c.TextField("set/port", rl.NewRectangle(x, y, 100, 36), &p.port)
-	if pr.Changed {
-		p.portErr = ""
-	}
-	if c.Button("set/port/apply", rl.NewRectangle(x+110, y, 80, 36), "Apply", ui.Normal, a.demo != nil) || pr.Submitted {
-		a.applyPort()
-	}
-	y += 44
-	if p.portErr != "" {
-		c.Text(ui.Regular, ui.SizeSmall, p.portErr, x, y, ui.ColError)
-		y += 22
-	}
-	y += c.Paragraph(ui.Regular, ui.SizeSmall, "The relay runs inside this app while it is open, with the same helpers, clients and host key as a standalone hmw-relay on this machine. Clients use the public address above, which usually needs a port forward on the router.", x, y, w, ui.ColMuted)
-	y += 8
+	// The relay inside this app, while it runs.
 	if a.local != nil {
+		y = section(c, "Relay on this computer", x, y, w)
+		y += c.Paragraph(ui.Regular, ui.SizeSmall, "Clients use this computer's public address, which usually needs a port forward on the router.", x, y, w, ui.ColMuted)
+		y += 8
 		st := a.local.Status()
 		stText, stCol := st.State.String(), ui.ColMuted
 		switch st.State {
@@ -202,49 +133,6 @@ func (a *App) drawSettings(x, y, w float32) float32 {
 	y += 48
 	c.Text(ui.Regular, ui.SizeSmall, "help-me-win helper "+a.opts.Version, x, y, ui.ColMuted)
 	return y + 20
-}
-
-// applyAddr stores the typed relay address and reconnects.
-func (a *App) applyAddr() {
-	p := &a.set
-	ad, err := relayaddr.Parse(p.addr.Edit.String())
-	if err != nil {
-		p.addrErr = err.Error()
-		return
-	}
-	p.addrErr = ""
-	p.addr.Edit.SetText(ad.String())
-	a.cfg.SetRelayAddr(ad)
-	a.saveConfig()
-	a.connect()
-}
-
-// applyPort stores the local relay port and restarts the local relay.
-func (a *App) applyPort() {
-	p := &a.set
-	n, err := strconv.Atoi(strings.TrimSpace(p.port.Edit.String()))
-	if err != nil || n < 1 || n > 65535 {
-		p.portErr = "The port must be a number from 1 to 65535."
-		return
-	}
-	p.portErr = ""
-	if n == a.cfg.LocalRelay.ListenPort() {
-		return
-	}
-	a.cfg.LocalRelay.Port = n
-	a.saveConfig()
-	if a.cfg.LocalRelay.Enabled {
-		a.startLocal()
-		a.connect()
-	}
-}
-
-// setLocal turns the local relay on or off.
-func (a *App) setLocal(on bool) {
-	a.cfg.LocalRelay.Enabled = on
-	a.saveConfig()
-	a.startLocal()
-	a.connect()
 }
 
 // removeKey deletes the app key after confirmation and ends everything that

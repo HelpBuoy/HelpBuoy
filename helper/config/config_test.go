@@ -32,21 +32,27 @@ func TestLoadMissingGivesDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.RelayAddr != "" || c.RelayHostKey != "" || c.LocalRelay.Enabled {
+	if c.RelayAddr != "" || c.RelayHostKey != "" {
 		t.Errorf("defaults = %+v", c)
 	}
-	if c.LocalRelay.ListenPort() != relayaddr.DefaultPort {
-		t.Errorf("default port = %d", c.LocalRelay.ListenPort())
-	}
-	if c.ConnectAddr() != "" {
-		t.Errorf("ConnectAddr = %q", c.ConnectAddr())
+}
+
+func TestIsLocal(t *testing.T) {
+	for s, want := range map[string]bool{"localhost": true, "localhost:2300": true, "helpme.example.com": false, "127.0.0.1": false} {
+		a, err := relayaddr.Parse(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if IsLocal(a) != want {
+			t.Errorf("IsLocal(%s) = %v", s, !want)
+		}
 	}
 }
 
 func TestSaveLoadRoundTrip(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "sub")
 	k := newKey(t)
-	c := &Config{RelayAddr: "relay.example.com:5938", LocalRelay: LocalRelay{Enabled: true, Port: 2300}}
+	c := &Config{RelayAddr: "relay.example.com:5938"}
 	if _, err := c.Pin(k); err != nil {
 		t.Fatal(err)
 	}
@@ -59,9 +65,6 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	}
 	if *got != *c {
 		t.Errorf("got %+v, want %+v", got, c)
-	}
-	if got.ConnectAddr() != "127.0.0.1:2300" {
-		t.Errorf("ConnectAddr = %q", got.ConnectAddr())
 	}
 	if runtime.GOOS != "windows" {
 		fi, err := os.Stat(filepath.Join(dir, FileName))

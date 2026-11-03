@@ -25,6 +25,7 @@ import (
 	"github.com/mevdschee/help-me-win/helper/ui"
 	"github.com/mevdschee/help-me-win/proto/appkey"
 	"github.com/mevdschee/help-me-win/proto/control"
+	"github.com/mevdschee/help-me-win/proto/relayaddr"
 )
 
 // Options configure the app.
@@ -109,6 +110,12 @@ type App struct {
 	local      *localrelay.Relay
 	localAdded int
 
+	cs        connectScreen
+	addr      relayaddr.Addr // relay address of the current Connect
+	localWait bool           // the local relay is starting; the connection follows
+	reached   bool           // the current connection has been online
+	notHelper bool           // the relay refused this key before it was ever online
+
 	cmds          []pending
 	opened        map[string]time.Time // request ids this helper sent Connect for, and when
 	opening       map[string]bool      // client fingerprints with a Connect in flight
@@ -157,14 +164,13 @@ func New(opts Options) *App {
 		cfg:        &config.Config{},
 	}
 	a.reg.init()
-	a.set.init()
+	a.cs.init()
 	if opts.Demo {
 		a.demo = newDemo(a)
 	} else {
 		a.load()
 	}
-	a.set.addr.Edit.SetText(a.cfg.RelayAddr)
-	a.set.port.Edit.SetText(fmt.Sprint(a.cfg.LocalRelay.ListenPort()))
+	a.cs.addr.Edit.SetText(a.cfg.RelayAddr)
 	switch opts.Page {
 	case "register":
 		a.openPage(tabRegister)
@@ -178,8 +184,8 @@ func New(opts Options) *App {
 	return a
 }
 
-// load reads the data directory: config, key, then starts the local relay
-// and the relay connection.
+// load reads the data directory: config and key. Nothing connects until
+// the user presses Connect.
 func (a *App) load() {
 	dir := a.opts.DataDir
 	if dir == "" {
@@ -194,12 +200,6 @@ func (a *App) load() {
 	a.key, _, a.keyErr = identity.Load(dir)
 	if a.keyErr != nil {
 		a.key = nil
-		return
-	}
-	a.startLocal()
-	a.connect()
-	if a.cfg.ConnectAddr() == "" {
-		a.openPage(tabSettings)
 	}
 }
 
@@ -213,48 +213,6 @@ func (a *App) saveConfig() {
 	} else {
 		a.cfgErr = nil
 	}
-}
-
-// connect (re)starts the relay connection for the current config.
-func (a *App) connect() {
-	if a.demo != nil {
-		return
-	}
-	if a.conn != nil {
-		a.conn.Close()
-		a.conn, a.backend = nil, nil
-	}
-	a.presence, a.me = nil, ""
-	a.status = relayconn.StatusEvent{}
-	a.hostKey = nil
-	if k, err := config.ParseHostKey(a.cfg.RelayHostKey); err == nil && a.cfg.RelayHostKey != "" {
-		a.hostKey = k
-	}
-	addr := a.cfg.ConnectAddr()
-	if addr == "" || a.key == nil {
-		return
-	}
-	a.conn = relayconn.Start(relayconn.Options{Addr: addr, Signer: a.key.Signer, HostKey: a.cfg.RelayHostKey})
-	a.backend = a.conn
-}
-
-// startLocal starts or stops the local relay to match the config.
-func (a *App) startLocal() {
-	if a.demo != nil {
-		return
-	}
-	if a.local != nil {
-		a.local.Stop()
-		a.local = nil
-	}
-	if !a.cfg.LocalRelay.Enabled || a.key == nil {
-		return
-	}
-	a.localAdded = 0
-	name := identity.HelperName()
-	a.local = localrelay.Start(localrelay.Options{
-		Port: a.cfg.LocalRelay.ListenPort(), Version: a.opts.Version, HelperName: name, KeyLine: a.key.Line,
-	})
 }
 
 // Quit reports whether the app wants to exit.
@@ -294,6 +252,8 @@ func (a *App) Frame() {
 	switch {
 	case a.keyErr != nil || a.keyRemoved:
 		a.drawKeyProblem()
+	case a.demo == nil && !a.reached:
+		a.drawStart()
 	case a.fullscreen && a.activeSession() != nil:
 		w, h := ui.WindowSize()
 		a.drawSession(a.activeSession(), rl.NewRectangle(0, 0, w, h))
@@ -333,17 +293,17 @@ func (a *App) adjustFPS() {
 
 // drain handles everything that arrived from background goroutines.
 func (a *App) drain() {
-	if a.conn != nil {
-	events:
-		for {
-			select {
-			case ev := <-a.conn.Events():
-				a.handleEvent(ev)
-			default:
-				break events
-			}
+	// handleEvent may disconnect, so the connection is checked every time.
+	for a.conn != nil {
+		select {
+		case ev := <-a.conn.Events():
+			a.handleEvent(ev)
+			continue
+		default:
 		}
+		break
 	}
+	a.pollLocal()
 	if a.demo != nil {
 		a.demo.frame()
 	}
@@ -392,9 +352,14 @@ func (a *App) handleEvent(ev relayconn.Event) {
 		if ev.Hello != nil {
 			a.me = ev.Hello.Name
 		}
-		if ev.Status != relayconn.StatusOnline {
+		if ev.Status == relayconn.StatusOnline {
+			a.reached, a.notHelper = true, false
+		} else {
 			a.opening = map[string]bool{}
 			a.waiting = map[string]*waitInfo{}
+			if !a.reached {
+				a.statusBeforeOnline(ev)
+			}
 		}
 	case relayconn.HostKeyPinned:
 		a.hostKey = ev.Key
@@ -592,7 +557,7 @@ func (a *App) leaveTab(i int) {
 	case tabRegister:
 		a.reg.reset()
 	case tabSettings:
-		a.set.reset(a.cfg)
+		a.set.reset()
 	}
 }
 

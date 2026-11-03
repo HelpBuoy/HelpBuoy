@@ -20,7 +20,7 @@ import (
 )
 
 // Title is the window title.
-const Title = "help-me-win"
+const Title = "Help-Me-Win"
 
 // copyKeyText is the label of the Copy key button.
 const copyKeyText = "C&opy key"
@@ -115,7 +115,7 @@ func New(iconID uint16) *Window {
 	}
 
 	w.lblHeading = static("Connect to a helper", co.SS_LEFT)
-	w.lblAddrHint = static("Type the relay address a helper gave you, for example relay.example.com.", co.SS_LEFT)
+	w.lblAddrHint = static("Type the relay address a helper gave you, for example helpme.example.com.", co.SS_LEFT)
 	w.edtAddr = ui.NewEdit(p, ui.OptsEdit())
 	w.btnConnect = button("&Connect", co.BS_DEFPUSHBUTTON)
 	w.lblAddrError = static("", co.SS_LEFT)
