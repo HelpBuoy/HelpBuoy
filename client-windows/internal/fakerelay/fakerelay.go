@@ -1,4 +1,4 @@
-// Package fakerelay is a small stand-in for hmw-relay that speaks the control
+// Package fakerelay is a small stand-in for helpbuoy-relay that speaks the control
 // protocol towards clients. It is used by the client's tests and by the
 // fakerelay command for manual checks of the windows; it is not a relay.
 package fakerelay

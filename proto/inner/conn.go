@@ -21,5 +21,5 @@ func (c rwConn) SetWriteDeadline(t time.Time) error { return nil }
 
 type dummyAddr struct{}
 
-func (dummyAddr) Network() string { return "hmw-session" }
-func (dummyAddr) String() string  { return "hmw-session" }
+func (dummyAddr) Network() string { return "helpbuoy-session" }
+func (dummyAddr) String() string  { return "helpbuoy-session" }

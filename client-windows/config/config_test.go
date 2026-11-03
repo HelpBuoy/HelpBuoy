@@ -22,7 +22,7 @@ func TestLoadMissing(t *testing.T) {
 func TestSaveLoadRoundTrip(t *testing.T) {
 	s := Store{Dir: filepath.Join(t.TempDir(), "helpbuoy")}
 	in := &Config{
-		RelayAddress: "relay.example.com:5938",
+		RelayAddress: "relay.example.com:5939",
 		RelayHostKey: "ssh-ed25519 AAAA",
 		KnownHelpers: map[string]string{"alice": "ssh-ed25519 BBBB"},
 	}
@@ -40,7 +40,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 		t.Fatal("not registered")
 	}
 	// Overwrite works and leaves no temp files behind.
-	in.RelayAddress = "other.example.com:5938"
+	in.RelayAddress = "other.example.com:5939"
 	if err := s.Save(in); err != nil {
 		t.Fatal(err)
 	}

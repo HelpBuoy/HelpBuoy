@@ -1,7 +1,7 @@
 // Command fakerelay runs the client's fake relay for manual checks of the
 // windows, for example under Wine:
 //
-//	go run ./client-windows/internal/cmd/fakerelay -listen 127.0.0.1:5938 -register 10s
+//	go run ./client-windows/internal/cmd/fakerelay -listen 127.0.0.1:5939 -register 10s
 //
 // With -register every pending key is registered after the delay; with
 // -connect a helper with a fresh key connects that long after a registered
@@ -32,7 +32,7 @@ import (
 )
 
 func main() {
-	listen := flag.String("listen", "127.0.0.1:5938", "address to listen on")
+	listen := flag.String("listen", "127.0.0.1:5939", "address to listen on")
 	register := flag.Duration("register", 0, "register pending keys after this delay (0 = never)")
 	connect := flag.Duration("connect", 0, "connect a helper this long after a registered client comes online (0 = never)")
 	var o helperOpts

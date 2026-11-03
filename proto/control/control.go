@@ -1,12 +1,12 @@
 // Package control defines the sv-control protocol between the relay and the
 // helper and client apps, plus the SSH channel names and extra data used to
-// set up sessions. This file is the contract shared by relay/, helper/ and
+// set up sessions. This file is the contract shared by relay/, desk/ and
 // client-windows/; change it only together with all three.
 //
 // # Transport
 //
 // Every app connects to the relay over SSH with its own Ed25519 key (user
-// name "hmw", ignored). After auth it opens exactly one channel of type
+// name "helpbuoy", ignored). After auth it opens exactly one channel of type
 // ChannelControl. Messages on it are wire frames (proto/wire) whose type byte
 // is a MsgType and whose payload is the JSON encoding of the matching struct.
 //
@@ -63,9 +63,9 @@ import (
 
 // SSH names.
 const (
-	SSHUser        = "hmw"                  // user name sent by apps; the relay ignores it
-	ChannelControl = "hmw-control@helpbuoy" // one per connection, opened by the app
-	ChannelSession = "hmw-session@helpbuoy" // opened by the client, and by the relay towards the helper
+	SSHUser        = "helpbuoy"                  // user name sent by apps; the relay ignores it
+	ChannelControl = "helpbuoy-control@helpbuoy" // one per connection, opened by the app
+	ChannelSession = "helpbuoy-session@helpbuoy" // opened by the client, and by the relay towards the helper
 )
 
 // Role of a connection, decided by the relay from the key alone.
@@ -176,7 +176,7 @@ type RegisterClient struct {
 	Name      string `json:"name,omitempty"`
 }
 
-// RegisterHelper adds another helper key, like hmw-relay helper add. Name
+// RegisterHelper adds another helper key, like helpbuoy-relay helper add. Name
 // is required (1 to 64 characters, no spaces).
 type RegisterHelper struct {
 	Seq       uint32 `json:"seq"`

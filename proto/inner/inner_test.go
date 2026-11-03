@@ -149,7 +149,7 @@ func TestExtraChannelsRejected(t *testing.T) {
 		sch <- serveResult{s, err}
 	}()
 	cc, chans, reqs, err := ssh.NewClientConn(b, "inner", &ssh.ClientConfig{
-		User:            "hmw",
+		User:            "helpbuoy",
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(helper)},
 		HostKeyCallback: ssh.FixedHostKey(host.PublicKey()),
 	})

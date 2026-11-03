@@ -42,7 +42,7 @@ var (
 )
 
 const (
-	sshUser          = "hmw"
+	sshUser          = "helpbuoy"
 	keepaliveRequest = "keepalive@openssh.com"
 	maxAuthTries     = 3
 )

@@ -311,7 +311,7 @@ func TestConnectErrors(t *testing.T) {
 		{refused, KindRefused},
 		{http.Addr().String(), KindNotRelay},
 		{silent.Addr().String(), KindTimeout},
-		{"no-such-host.invalid:5938", KindNameNotFound},
+		{"no-such-host.invalid:5939", KindNameNotFound},
 	}
 	for _, tc := range cases {
 		h := newHandler()

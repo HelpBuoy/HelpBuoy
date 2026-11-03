@@ -1,7 +1,7 @@
 # helpbuoy: self-hosted remote support over a custom Go SSH relay
 
 A self-hosted alternative to TeamViewer QuickSupport. The relay is **a single Go binary
-(`hmw-relay`) that speaks SSH on a single port** (default 5938). Everybody, helpers and clients,
+(`helpbuoy-relay`) that speaks SSH on a single port** (default 5939). Everybody, helpers and clients,
 connects to that same `hostname:port`. **The public key a connection authenticates with is its identity**; the SSH
 user name is ignored. Keys are long-lived: they are generated once on first start and reused
 for every session.
@@ -10,10 +10,10 @@ The relay is not OpenSSH. It has no shell, no filesystem access, no file transfe
 forwarding to real hosts. It only authenticates keys, tells helpers and clients about each
 other, and splices their channels together.
 
-- **relay/**: `hmw-relay`, a plain executable that ships next to the helper app and runs
-  locally on the helper's machine as a normal user process, on one port (default `:5938`). It
+- **relay/**: `helpbuoy-relay`, a plain executable that ships next to the desk app and runs
+  locally on the helper's machine as a normal user process, on one port (default `:5939`). It
   keeps helpers and registered clients in a small state directory. No service, no container.
-- **helper/**: the cross-platform raylib app the *helper* runs (`raylib-go`, no cgo). Many helpers can be online at
+- **desk/**: the cross-platform raylib app the *helper* runs (`raylib-go`, no cgo). Many helpers can be online at
   once, and each helper can run sessions with many clients at once.
 - **client-windows/**: the windigo app the person *receiving* help runs. On first start it asks
   for the relay's `hostname:port` and shows its own application-specific SSH public key
@@ -38,15 +38,15 @@ Performance target: **as fast as RDP** for normal desktop work (section 5).
 
 ## 0. Deployment model and constraints
 
-- **Relay**: the `hmw-relay` executable (`hmw-relay.exe` on Windows) in the same folder as the
-  helper app, on the helper's own Linux, macOS or Windows machine. It is started from a
-  terminal, or runs inside the helper app (7.1), as the logged-in user. Clients reach it on that
-  machine's address, which usually means one port forward on the router (TCP 5938) and
+- **Relay**: the `helpbuoy-relay` executable (`helpbuoy-relay.exe` on Windows) in the same folder as the
+  desk app, on the helper's own Linux, macOS or Windows machine. It is started from a
+  terminal, or runs inside the desk app (7.1), as the logged-in user. Clients reach it on that
+  machine's address, which usually means one port forward on the router (TCP 5939) and
   allowing the OS firewall prompt on first start. An existing OpenSSH on port 22 is unrelated
   and untouched.
-- **One port for everyone**: the operator picks it once (`hmw-relay serve --listen :5938`, the
+- **One port for everyone**: the operator picks it once (`helpbuoy-relay serve --listen :5939`, the
   default). Helpers and clients all use the same `hostname:port`, and an address typed
-  without a port means 5938, so with the default users only type the host name. There are
+  without a port means 5939, so with the default users only type the host name. There are
   no per-helper or per-session ports. The default is above 1024, so the relay needs no root
   and no capabilities.
 - **Runs unprivileged**: no root, no admin, no service registration, no Docker image. The
@@ -65,7 +65,7 @@ connection and stored in `%LOCALAPPDATA%\helpbuoy\config.json`:
 
 | Field | Example | Learned |
 |---|---|---|
-| relay address | `helpme.example.com` (port 5938 unless given) | typed by the user; the relay this PC got registered on |
+| relay address | `helpme.example.com` (port 5939 unless given) | typed by the user; the relay this PC got registered on |
 | relay host key | `ssh-ed25519 AAAA...` (`SHA256:3q2+7w...`) | first successful connection, pinned from then on |
 | last address | `helpme.example.com` | the last address that reached a relay, to prefill the field |
 | known helpers | `alice` → `ssh-ed25519 AAAA...` | each helper's key, pinned on the first session with that helper (3.5) |
@@ -81,7 +81,7 @@ unique within one relay).
 ## 1. Architecture
 
 ```
- Helpers (many)                  hmw-relay host:port                       Clients (many)
+ Helpers (many)                  helpbuoy-relay host:port                       Clients (many)
 ┌──────────────┐               ┌────────────────────────────────┐               ┌──────────────────┐
 │ raylib helper│── key: alice ▶│ auth: key -> helper / client / │◀ key: anna-pc │ client (windigo) │
 │ own app key, │               │       unknown                  │               │ persistent key   │
@@ -105,20 +105,20 @@ unique within one relay).
 
 1. The client starts for the first time and asks for the relay's `hostname:port` (the helper
    tells the user what to type, e.g. `helpme.example.com`, with `:port` only when the relay
-   doesn't use the default 5938). On this first start
+   doesn't use the default 5939). On this first start
    it generates its own Ed25519 key pair in
    `%LOCALAPPDATA%\helpbuoy\` (section 6.1), with the comment `user@machine`, e.g.
    `anna@ANNA-LAPTOP`, so the public key line reads `ssh-ed25519 AAAAC3Nz... anna@ANNA-LAPTOP`.
 2. The client connects to that address with the key. It shows the relay's host key
    fingerprint and pins it (trust on first use). The key is unknown to the relay, so the
    connection is **pending**: it can't open anything, it only waits for `Registered`. If the
-   connection fails (wrong address, nothing listening, not an hmw-relay), the client says so and
+   connection fails (wrong address, nothing listening, not an helpbuoy-relay), the client says so and
    lets the user correct the address; nothing is stored yet.
 3. Once connected, the client shows the public key line (the contents of the `.pub` file)
    with a **Copy key** button and its fingerprint. The user pastes it into a chat with the
    helper (WhatsApp, Signal, mail). The key is public, so the chat needs no secrecy,
    only the assurance that the message really comes from the user.
-4. The helper pastes the key line into the helper app (7.2) and, if in doubt, compares the
+4. The helper pastes the key line into the desk app (7.2) and, if in doubt, compares the
    fingerprint with the user by phone. The client is registered under the key's comment
    (`user@machine`); there is no separate label to type. The relay stores it permanently
    as a registered client and sends the client `Registered`. The client now stores the
@@ -146,7 +146,7 @@ or ending.
    If the user refuses, the client cancels the request and the helper sees "Not allowed".
    The relay ends a request whose session hasn't started within 1 minute, so the user has
    that long to answer; the client then closes the question by itself.
-4. Once the user allows it, the client opens a `hmw-session@helpbuoy` channel for that
+4. Once the user allows it, the client opens a `helpbuoy-session@helpbuoy` channel for that
    helper. The relay opens a matching channel to the helper's connection and splices the
    two (3.6).
 5. **Inner SSH** runs over the spliced channel (section 4). The client is the SSH server with
@@ -174,11 +174,11 @@ read or alter screen data or keystrokes.
 
 ```
 helpbuoy/
-├── go.work                      # use ./proto ./relay ./helper ./client-windows
+├── go.work                      # use ./proto ./relay ./desk ./client-windows
 ├── PLAN.md
 ├── proto/                       # shared, pure Go, no GUI deps
 │   ├── go.mod
-│   ├── relayaddr/               # parse and normalize hostname:port (default port 5938)
+│   ├── relayaddr/               # parse and normalize hostname:port (default port 5939)
 │   ├── identity/                # Ed25519 key gen, OpenSSH format, fingerprints,
 │   │                            # parsing of pasted keys
 │   ├── appkey/                  # create-once, load-only app key in OpenSSH format
@@ -187,16 +187,16 @@ helpbuoy/
 │   ├── screen/                  # screen stream messages, tile codecs, tile cache
 │   ├── input/                   # input messages, W3C key codes
 │   └── wire/                    # length-prefixed framing
-├── relay/                       # hmw-relay
+├── relay/                       # helpbuoy-relay
 │   ├── go.mod
-│   ├── cmd/hmw-relay/             # "serve" plus admin subcommands (3.2)
+│   ├── cmd/helpbuoy-relay/             # "serve" plus admin subcommands (3.2)
 │   ├── hostkey/
 │   ├── store/                   # state.json: helpers, clients; atomic writes
 │   ├── auth/                    # key -> role lookup
 │   ├── registry/                # presence, pending keys, session requests
 │   ├── splice/                  # session channel pairing, large-buffer copy
 │   ├── limits/                  # per-key then per-IP limits, caps, timeouts
-├── helper/                      # raylib helper app (Linux / macOS / Windows)
+├── desk/                      # raylib desk app (Linux / macOS / Windows)
 │   ├── go.mod
 │   ├── identity/                # app key (via proto/appkey)
 │   ├── relayconn/               # login, reconnect, control channel
@@ -239,29 +239,29 @@ A key can't be both helper and client.
 
 ### 3.2 State and admin
 
-State directory in the user's data directory, next to the helper app's own data:
-`~/.local/share/hmw-relay` on Linux, `~/Library/Application Support/hmw-relay` on macOS,
-`%LOCALAPPDATA%\hmw-relay` on Windows (override with `--state`). It holds `hostkey_ed25519` (0600) and `state.json` with helpers
+State directory in the user's data directory, next to the desk app's own data:
+`~/.local/share/helpbuoy-relay` on Linux, `~/Library/Application Support/helpbuoy-relay` on macOS,
+`%LOCALAPPDATA%\helpbuoy-relay` on Windows (override with `--state`). It holds `hostkey_ed25519` (0600) and `state.json` with helpers
 (name, public key) and registered clients (key, `user@machine` name,
 registered by, registered at, last seen). Client registrations never expire; they are removed
-only by `UnregisterClient` or `hmw-relay client remove`. Writes are temp file + `fsync` + `rename`.
+only by `UnregisterClient` or `helpbuoy-relay client remove`. Writes are temp file + `fsync` + `rename`.
 
 | Command | What it does |
 |---|---|
-| `hmw-relay serve [--listen :5938]` | run the relay on its single port |
-| `hmw-relay helper add alice 'ssh-ed25519 ...'` | add a helper with the public key copied from their helper app |
-| `hmw-relay helper remove alice` | remove a helper; takes effect immediately, open sessions are closed |
-| `hmw-relay helper list` / `client list` / `client remove SHA256:...` | inspect and revoke |
-| `hmw-relay hostkey` | print the host key fingerprint, for helpers to compare with what clients show |
+| `helpbuoy-relay serve [--listen :5939]` | run the relay on its single port |
+| `helpbuoy-relay helper add alice 'ssh-ed25519 ...'` | add a helper with the public key copied from their desk app |
+| `helpbuoy-relay helper remove alice` | remove a helper; takes effect immediately, open sessions are closed |
+| `helpbuoy-relay helper list` / `client list` / `client remove SHA256:...` | inspect and revoke |
+| `helpbuoy-relay hostkey` | print the host key fingerprint, for helpers to compare with what clients show |
 
 **Helpers are plain keys**: there are no certificates. A new helper sends
-their public key line to the relay admin, who adds it with `hmw-relay helper add`. Removing it
-with `hmw-relay helper remove` is the whole revocation story. The relay watches `state.json` and
+their public key line to the relay admin, who adds it with `helpbuoy-relay helper add`. Removing it
+with `helpbuoy-relay helper remove` is the whole revocation story. The relay watches `state.json` and
 reloads it when the CLI changes it (no signals, so it works the same on Windows).
 
 ### 3.3 Control channel
 
-`hmw-control@helpbuoy`, framed messages (`proto/control`): each is a `proto/wire` frame
+`helpbuoy-control@helpbuoy`, framed messages (`proto/control`): each is a `proto/wire` frame
 whose type byte names the message and whose payload is JSON. Control traffic is small and
 rare, so JSON keeps it easy to debug; the screen and input streams use binary payloads.
 Helper commands carry a sequence number and the relay answers each with a `Reply`.
@@ -272,7 +272,7 @@ Helper commands carry a sequence number and the relay answers each with a `Reply
 | `ClientHello` | client → relay | app version, current `user@machine` (the registered name comes from the key comment) |
 | `Presence` | relay → helpers | full snapshot after every change: registered clients (`user@machine`, fingerprint, online, open or taken request with id and time, in session with whom) and helpers |
 | `RegisterClient` / `UnregisterClient` | helper → relay | public key line or fingerprint (name taken from the key comment, or given when the comment is empty) |
-| `RegisterHelper` | helper → relay | public key line and name: adds another helper, like `hmw-relay helper add` |
+| `RegisterHelper` | helper → relay | public key line and name: adds another helper, like `helpbuoy-relay helper add` |
 | `Reply` | relay → helper | answer to a helper command: sequence number and error text if it failed |
 | `Registered` | relay → client | the key is now registered (no name: that is only for helpers) |
 | `RequestHelp` | client → relay | (no content) |
@@ -284,7 +284,7 @@ Helper commands carry a sequence number and the relay answers each with a `Reply
 
 Session channels carry small SSH-encoded extra data: the client's open names the request id;
 the relay's open towards the helper adds the client's name, key line and current
-`user@machine`, so the helper app can pin the client key before the inner handshake.
+`user@machine`, so the desk app can pin the client key before the inner handshake.
 
 ### 3.4 Abuse limits
 
@@ -321,7 +321,7 @@ Role caps and timeouts:
 - **The relay is trust on first use (TOFU)**, for clients and helpers alike, like `ssh` with
   `known_hosts`. Its host key is pinned on the first successful connection. Someone who
   controls the network at exactly that moment could substitute their own relay. Mitigation:
-  the client shows the relay fingerprint, and the helper app shows it next to the key it just
+  the client shows the relay fingerprint, and the desk app shows it next to the key it just
   registered, so it can be compared on the same call. After that any change stops the
   client ("relay identity changed") and shows a warning with the old and new fingerprints,
   with Cancel as the default. Only if the user explicitly trusts the new key (after checking
@@ -333,7 +333,7 @@ Role caps and timeouts:
   helper may take control, showing its name and key fingerprint; if `alice` later
   shows up with a different key, that question also carries a warning.
 - **Client** is trusted because a helper registered its key after receiving it (or its
-  fingerprint) over a trusted channel. The helper app pins registered client keys in the inner
+  fingerprint) over a trusted channel. The desk app pins registered client keys in the inner
   handshake, independent of what the relay says.
 - **The user stays in charge**: helpers can only ask; every session needs the user's
   approval at the PC for that helper, and Esc or exiting the client application always ends the
@@ -342,7 +342,7 @@ Role caps and timeouts:
 - **Relay compromise**: sees metadata (who, when, how much) and can deny service. Because the
   relay vouches for helpers, a compromised relay *could* present a helper key of its own to a
   client that files a request. It can't do so silently for a helper the client has already
-  met (key change warning), it can't impersonate a client to a helper (the helper app pins
+  met (key change warning), it can't impersonate a client to a helper (the desk app pins
   the registered client key), and it still needs the user to file a request first. A
   passive or curious relay operator can't read sessions: the inner SSH is end-to-end.
 - **Client private key** is an unencrypted, application-specific key protected by a
@@ -350,7 +350,7 @@ Role caps and timeouts:
   it only lets an attacker
   *pose as* that PC to helpers (showing a fake screen), never control the real PC.
   The registered `user@machine` is fixed at registration; the inner `Hello` reports the
-  current user and machine, and the helper app warns if they differ (key copied to another
+  current user and machine, and the desk app warns if they differ (key copied to another
   PC or account, or the PC was renamed).
 
 ### 3.6 Splice
@@ -370,7 +370,7 @@ The spliced channel carries a complete **inner SSH connection** (`proto/inner`):
 - Inner SSH server = client app. Host key = its persistent key. Accepts public key auth only
   from the helper key announced in `SessionReady` for this session, and checks it against the
   pinned key for that helper name if there is one.
-- Inner SSH client = helper app. `HostKeyCallback` accepts only the registered key of the
+- Inner SSH client = desk app. `HostKeyCallback` accepts only the registered key of the
   client it asked for.
 - Cipher preference `aes128-gcm@openssh.com` (AES-NI, cheap even with two SSH layers), then
   `chacha20-poly1305@openssh.com`. No compression.
@@ -489,13 +489,13 @@ Linux with `GOOS=windows`. Missing calls go through `golang.org/x/sys/windows`.
 
 The client has its own key, used for nothing but helpbuoy. It is not the user's
 `~/.ssh` key: no agent, no passphrase, no discovery, and no risk that stealing it opens other
-SSH logins. Shared code in `proto/appkey`, also used by the helper app.
+SSH logins. Shared code in `proto/appkey`, also used by the desk app.
 
 - **Location**: `%LOCALAPPDATA%\helpbuoy\id_ed25519` and `id_ed25519.pub`. Local, not
   roaming, so the key never follows the user to another PC.
 - **Algorithm**: Ed25519 only (`ssh-ed25519`), the modern default of OpenSSH. It is fast,
   has small keys (the public line fits in one chat message) and has no parameter choices to
-  get wrong. Relay, inner SSH and helper app accept only Ed25519 keys.
+  get wrong. Relay, inner SSH and desk app accept only Ed25519 keys.
 - **Format**: standard OpenSSH files, exactly as `ssh-keygen -t ed25519 -N ""` would write
   them: private key `-----BEGIN OPENSSH PRIVATE KEY-----`, **not encrypted**, so the app
   starts without any prompt; public key as one `ssh-ed25519 AAAA... user@machine` line with
@@ -513,14 +513,14 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
 - **Removed only from the app**: **Remove key** on the error screen of a damaged key, with a
   confirmation that says helpers will have to register this PC again. It deletes
   `id_ed25519`, `id_ed25519.pub` and `config.json`, and the client continues with a new key. The old
-  registration can be removed in the helper app. Deleting the folder by hand has the same
+  registration can be removed in the desk app. Deleting the folder by hand has the same
   effect.
 - The key is per Windows user, so two users on one PC are two separate registered clients
   (`anna@PC1`, `bob@PC1`).
 - The registered name is the key's comment, `user@machine`.
 
 ### 6.2 Address and key screens
-- "Relay address" field (`hostname:port`, port defaults to 5938 if left out) and
+- "Relay address" field (`hostname:port`, port defaults to 5939 if left out) and
   **Connect**. With a stored address the client connects to it at start by itself, with
   the field locked while it does; the field can only be edited when that fails or after
   **Disconnect**. Errors are shown inline: name not found, connection refused, timeout, not a
@@ -582,36 +582,36 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   be public, since the release API doesn't show private releases to anonymous callers.
 - `release.sh [major|minor|build]` bumps the version in both `winres.json` files, runs
   `make vet test msi deb`, commits, tags `v<version>`, pushes and creates the GitHub release
-  with everything in `dist/`: the client MSI, the helper archives (with `hmw-relay`) and the
-  `hmw-relay` Debian package. For now only Linux and Windows on amd64 are built (`OSES` and
+  with everything in `dist/`: the client MSI, the helper archives (with `helpbuoy-relay`) and the
+  `helpbuoy-relay` Debian package. For now only Linux and Windows on amd64 are built (`OSES` and
   `ARCHES` in the Makefile).
-- The relay also ships as a Debian 13 package (`make deb`, `packaging/debian/`): `hmw-relay`
+- The relay also ships as a Debian 13 package (`make deb`, `packaging/debian/`): `helpbuoy-relay`
   as a hardened systemd service under its own system user with its state in
-  `/var/lib/hmw-relay`, settings in `/etc/default/hmw-relay`, and `hmw-relayctl` to run
+  `/var/lib/helpbuoy-relay`, settings in `/etc/default/helpbuoy-relay`, and `helpbuoy-relayctl` to run
   admin commands as the service user.
 - All state lives in `%LOCALAPPDATA%\helpbuoy`, not next to the exe, so a newer exe
   picks up the same key and registration.
 
 ---
 
-## 7. Helper app (`helper/`, raylib)
+## 7. Desk app (`desk/`, raylib)
 
 ### 7.0 Toolkit: raylib through raylib-go, without cgo
 
 - `github.com/gen2brain/raylib-go/raylib` built with `CGO_ENABLED=0`. In that mode it calls
   raylib through `purego` and embeds the raylib 6 shared library for Linux, macOS and Windows
-  on amd64 and arm64. So the helper app cross-compiles from Linux with plain `go build` for
-  every target, like `hmw-relay` and the client: no C toolchain, no Docker.
+  on amd64 and arm64. So the desk app cross-compiles from Linux with plain `go build` for
+  every target, like `helpbuoy-relay` and the client: no C toolchain, no Docker.
 - On first start the embedded library is written once to the user cache directory
   (`~/.cache/github.com/gen2brain/raylib-go/6.0/` on Linux, the equivalent under
   `%LOCALAPPDATA%` and `~/Library/Caches` elsewhere) and loaded from there. Linux needs the
   usual desktop OpenGL and X11/Wayland libraries at run time, which every desktop has.
-- **One window.** raylib has a single window per process, so the helper app is one window
+- **One window.** raylib has a single window per process, so the desk app is one window
   with a tab bar that is always visible: the fixed tabs **Clients**, **Helpers**, **Register client**,
   **Register helper** and **Relay**, then one tab per session, marked with the lifebuoy app icon and a close button
   that ends the session. Session tabs are wider than the fixed tabs. A session tab shows
   only the session, without the client list. Fullscreen applies to the active session.
-- **No raygui** (it needs cgo). `helper/ui` is a small immediate-mode widget set written for
+- **No raygui** (it needs cgo). `desk/ui` is a small immediate-mode widget set written for
   this app: label, button, list row, single-line text field with paste and selection, tabs,
   scroll area, tooltip. That is all the app needs.
 - **Text**: an embedded TTF (the Go fonts from `golang.org/x/image/font/gofont`) loaded with
@@ -639,27 +639,27 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   connection per address, like the client; a changed key brings the user back here with a
   warning and an explicit "Trust the new key". If the relay does not know this key as a
   helper, the box shows the public key with **Copy public key** to send to a helper on it
-  (Register helper tab) or its admin (`hmw-relay helper add`) and keeps retrying, so it moves on by itself once the key is added.
+  (Register helper tab) or its admin (`helpbuoy-relay helper add`) and keeps retrying, so it moves on by itself once the key is added.
 - Once online the tabs appear. The **Relay** tab shows the connection status, the address,
   the relay fingerprint to read out to users, **Disconnect** (not while sessions are open;
   back to the connect screen, stopping the local relay). There is no settings tab: nothing
   else is configurable.
 - One relay connection with the control channel, keepalive, reconnect with backoff. All of
   this helper's sessions run as channels over that one connection.
-- **Local relay**: the relay is compiled into the helper app (`relay/server`, the same code
-  as `hmw-relay`). Connecting with an empty address (or `localhost`, or `localhost:<port>`)
+- **Local relay**: the relay is compiled into the desk app (`relay/server`, the same code
+  as `helpbuoy-relay`). Connecting with an empty address (or `localhost`, or `localhost:<port>`)
   serves the relay in-process on that port until Disconnect or exit (unless something already listens on the
   port). There is no separate executable
-  to find, so `go run .` works too. It uses the same state directory as `hmw-relay serve`, so
+  to find, so `go run .` works too. It uses the same state directory as `helpbuoy-relay serve`, so
   the standalone relay and its admin commands share the helpers, clients and host key. The
   app connects to `localhost:<port>` itself, while clients and other helpers use the
   machine's public `hostname:port`.
 - **This helper on the local relay**: if this helper's key is not a helper there yet, the app
   adds it to the relay state directly (with a number after the name if that name is taken),
   so nobody has to copy keys around. Other helpers are added on the Register helper tab
-  or with `hmw-relay helper add` by whoever runs the relay.
-- **Distribution**: one archive per OS containing the helper app and `hmw-relay` side by side
-  (`hmw-helper` + `hmw-relay`, or `.exe` on Windows, or inside the macOS `.app`
+  or with `helpbuoy-relay helper add` by whoever runs the relay.
+- **Distribution**: one archive per OS containing the desk app and `helpbuoy-relay` side by side
+  (`helpbuoy-desk` + `helpbuoy-relay`, or `.exe` on Windows, or inside the macOS `.app`
   bundle's `Contents/MacOS`). All built on Linux with `CGO_ENABLED=0`; the macOS `.app` is
   assembled by a script (Info.plist, `.icns` written in Go from the PNG icon). No installer,
   no Docker image.
@@ -687,7 +687,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
 - **Register helper** (a tab) works like Register client for another helper's key line (their
   app shows it when they connect to this relay before being added): the name is one word, prefilled from the user part of the key comment,
   and the fingerprint is shown large for the phone. Any helper on a relay can add helpers;
-  removing one is still `hmw-relay helper remove`.
+  removing one is still `helpbuoy-relay helper remove`.
 - **Forms reset** when their tab is left: the Register client form and its result are
   cleared, the Settings fields go back to the saved values, and open renames, errors and
   confirmations are dropped.
@@ -723,7 +723,7 @@ View options follow Remmina's connection window.
   reports its cursor as hidden. Elsewhere the remote cursor is drawn where the client
   reports it.
 - Input while the mouse is over the view or the tab has keyboard focus: mouse position and
-  buttons, wheel, keys (mapped in `helper/keymap` to W3C codes, checked against
+  buttons, wheel, keys (mapped in `desk/keymap` to W3C codes, checked against
   `input.Codes`), and characters without a physical key as `Text`.
 - **Toolbar**: End session, Win, Alt+Tab, monitor selector, quality (Auto / Sharp / Fast),
   Fit / 1:1, Resize, Fullscreen, and an fps, RTT and Mbit/s readout.
@@ -738,25 +738,25 @@ View options follow Remmina's connection window.
 
 **Phase 0 - skeleton (1 day)** (done)
 `go.work`, four modules, CI: tests for `proto` and `relay`, cross-build of the Windows client
-from Linux, `CGO_ENABLED=0` cross-builds of the helper app (raylib-go purego) for Linux,
-macOS and Windows, release archives per OS with the helper app and `hmw-relay` side by side,
+from Linux, `CGO_ENABLED=0` cross-builds of the desk app (raylib-go purego) for Linux,
+macOS and Windows, release archives per OS with the desk app and `helpbuoy-relay` side by side,
 macOS `.app` assembled on Linux.
 
 **Phase 1 - relay core (3-4 days)** (done)
-`hmw-relay serve`, host key, state store, key-to-role auth, helpers, pending
+`helpbuoy-relay serve`, host key, state store, key-to-role auth, helpers, pending
 state, control channel, presence, session requests, splice, limits, admin CLI. Headless
 `cmd/fakehelper` and `cmd/fakeclient` in Go. Tests for every role × every channel and request
 type, helper and client removal, many helpers and many clients at once.
 
 **Phase 2 - apps on the relay (3-4 days)** (done)
 `proto/identity`, `proto/relayaddr`, `proto/appkey`, `proto/inner` with mutual pinning, fuzz
-tests. Helper app: settings, clients list, paste registration, help requests.
+tests. Desk app: settings, clients list, paste registration, help requests.
 Windows client: app key creation, loading and removal, first-run
 address entry and key window, stored configuration,
 Request help button, helper client list with request notifications, sessions with a test pattern instead of the
 screen.
 
-**Phase 3 - fast view only (5-7 days)** (done; `hmw-bench` passes the 5.1 targets on synthetic scenes)
+**Phase 3 - fast view only (5-7 days)** (done; `helpbuoy-bench` passes the 5.1 targets on synthetic scenes)
 GDI capture into DIB sections, tile damage, solid/palette/JPEG codecs, tile cache, flow control,
 helper renderer benchmark and GPU upload path. Benchmark harness
 that replays recorded screen sequences (typing, scrolling, video) and reports fps, bytes and
@@ -814,8 +814,8 @@ client can stay online in the background; `client-macos/` and `client-linux/` re
 
 ## 10. Open questions
 
-- Default port: 5938 (the port TeamViewer uses, so firewalls that let TeamViewer out
-  usually let helpbuoy out too). Above 1024, so no privileges are needed; 443 would pass
+- Default port: 5939, one above TeamViewer's 5938, so it doesn't clash with a TeamViewer
+  installed on the same machine. Above 1024, so no privileges are needed; 443 would pass
   more corporate firewalls but needs privileges on Linux and may still meet TLS inspection.
 - Does a relay on the helper's own machine behind a home or office router need a dynamic DNS
   name in the docs, since clients store `hostname:port` once and never change it?

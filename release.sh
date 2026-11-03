@@ -14,8 +14,8 @@
 # goes up on every release as well. The helper's winres.json gets the same
 # version.
 #
-# The script builds everything with "make msi deb" (the helper and hmw-relay
-# archives, the client MSI and the hmw-relay Debian package in dist/), commits the
+# The script builds everything with "make msi deb" (the helper and helpbuoy-relay
+# archives, the client MSI and the helpbuoy-relay Debian package in dist/), commits the
 # version bump, tags and pushes it and creates the GitHub release v<version>
 # with all files in dist/.
 set -e
@@ -34,7 +34,7 @@ fi
 
 # Bump the version.
 client=client-windows/resources/winres.json
-helper=helper/resources/winres.json
+helper=desk/resources/winres.json
 ver=$(jq -r '.RT_VERSION["#1"]["0000"].fixed.file_version' $client)
 IFS=. read -r major minor build revision <<<"$ver"
 case $part in

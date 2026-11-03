@@ -469,7 +469,7 @@ func TestPendingIdleTimeout(t *testing.T) {
 func TestPasswordAuthRefused(t *testing.T) {
 	e := newEnv(t, nil)
 	cfg := &ssh.ClientConfig{
-		User:            "hmw",
+		User:            "helpbuoy",
 		Auth:            []ssh.AuthMethod{ssh.Password("x"), ssh.KeyboardInteractive(func(string, string, []string, []bool) ([]string, error) { return nil, nil })},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         wait,

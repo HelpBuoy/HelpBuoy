@@ -67,7 +67,7 @@ func looseLimits() limits.Config {
 }
 
 func testLogger() *slog.Logger {
-	if os.Getenv("HMW_RELAY_TEST_LOG") != "" {
+	if os.Getenv("HELPBUOY_RELAY_TEST_LOG") != "" {
 		return slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	}
 	return slog.New(slog.DiscardHandler)

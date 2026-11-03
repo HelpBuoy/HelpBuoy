@@ -50,7 +50,7 @@ func create(dir, p string) error {
 	if err != nil {
 		return err
 	}
-	blk, err := ssh.MarshalPrivateKey(priv, "hmw-relay host key")
+	blk, err := ssh.MarshalPrivateKey(priv, "helpbuoy-relay host key")
 	if err != nil {
 		return err
 	}

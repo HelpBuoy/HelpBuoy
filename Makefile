@@ -1,7 +1,7 @@
 # helpbuoy build. Run "make help" for the targets.
 #
 # Everything builds on Linux with only the Go toolchain and CGO_ENABLED=0:
-# hmw-relay, the Windows client, and the raylib helper app (raylib-go purego,
+# helpbuoy-relay, the Windows client, and the raylib helper app (raylib-go purego,
 # which embeds the raylib shared library per OS/arch). No Docker, no C compiler.
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -25,7 +25,7 @@ comma   := ,
 space   := $(subst ,, )
 WINRES_ARCH := $(subst $(space),$(comma),$(ARCHES))
 
-HELPER_SYSO := $(foreach a,$(ARCHES),helper/rsrc_windows_$(a).syso)
+HELPER_SYSO := $(foreach a,$(ARCHES),desk/rsrc_windows_$(a).syso)
 CLIENT_SYSO := $(foreach a,$(ARCHES),client-windows/rsrc_windows_$(a).syso)
 CLIENT_ICONS := $(addprefix client-windows/resources/,icon.png icon48.png icon32.png icon16.png)
 # Four part version of the client exe, which the MSI needs for the upgrade.
@@ -38,12 +38,12 @@ help:
 	@echo "make test     run proto and relay tests"
 	@echo "make vet      go vet all modules (client for windows too)"
 	@echo "make fuzz     short fuzz run of the fuzz targets"
-	@echo "make relay    build hmw-relay ($(TARGETS)) into $(BIN)/"
+	@echo "make relay    build helpbuoy-relay ($(TARGETS)) into $(BIN)/"
 	@echo "make client   build the Windows client ($(ARCHES)) into $(BIN)/"
 	@echo "make helper   build the helper app ($(TARGETS)) into $(BIN)/"
-	@echo "make dist     helper/relay archives in $(DIST)/ (the client ships only as the MSI)"
+	@echo "make dist     desk/relay archives in $(DIST)/ (the client ships only as the MSI)"
 	@echo "make msi      dist plus the client installer (needs wixl and msitools)"
-	@echo "make deb      Debian 13 package of hmw-relay with a systemd service (needs dpkg-deb)"
+	@echo "make deb      Debian 13 package of helpbuoy-relay with a systemd service (needs dpkg-deb)"
 	@echo "make icon     regenerate the lifebuoy app icon (client, copied to the helper)"
 
 all: vet test relay client helper
@@ -52,9 +52,9 @@ test:
 	go test ./proto/... ./relay/...
 
 vet:
-	go vet ./proto/... ./relay/... ./helper/... ./client-windows/...
-	GOOS=windows go vet ./client-windows/... ./helper/...
-	GOOS=darwin go vet ./helper/...
+	go vet ./proto/... ./relay/... ./desk/... ./client-windows/...
+	GOOS=windows go vet ./client-windows/... ./desk/...
+	GOOS=darwin go vet ./desk/...
 
 fuzz:
 	go test ./proto/relayaddr -run '^$$' -fuzz FuzzParse -fuzztime 20s
@@ -70,12 +70,12 @@ define build-all
 endef
 
 relay:
-	$(call build-all,hmw-relay,./relay/cmd/hmw-relay,)
+	$(call build-all,helpbuoy-relay,./relay/cmd/helpbuoy-relay,)
 
 helper: $(HELPER_SYSO)
-	$(call build-all,hmw-helper,./helper,-H=windowsgui)
+	$(call build-all,helpbuoy-desk,./desk,-H=windowsgui)
 
-$(HELPER_SYSO): helper/resources/winres.json helper/resources/icon.png
+$(HELPER_SYSO): desk/resources/winres.json desk/resources/icon.png
 	cd helper && $(WINRES) make --in resources/winres.json --arch $(WINRES_ARCH)
 
 $(CLIENT_SYSO): client-windows/resources/winres.json $(CLIENT_ICONS)
@@ -88,21 +88,21 @@ client: $(CLIENT_SYSO)
 			-o $(BIN)/windows-$$arch/helpbuoy.exe ./client-windows || exit 1; \
 	done
 
-# Release archives: helper app and hmw-relay side by side per OS/arch. macOS
-# gets a zipped .app with hmw-relay in Contents/MacOS. The client exe is built
+# Release archives: helper app and helpbuoy-relay side by side per OS/arch. macOS
+# gets a zipped .app with helpbuoy-relay in Contents/MacOS. The client exe is built
 # into bin/ for the MSI (make msi) and not released on its own.
 dist: relay helper client
 	@rm -rf $(DIST) && mkdir -p $(DIST)
 	@for t in $(subst /,-,$(filter linux/%,$(TARGETS))); do \
-		tar -czf $(DIST)/hmw-helper_$(VERSION)_$$t.tar.gz -C $(BIN)/$$t hmw-helper hmw-relay; \
+		tar -czf $(DIST)/helpbuoy-desk_$(VERSION)_$$t.tar.gz -C $(BIN)/$$t helpbuoy-desk helpbuoy-relay; \
 	done
 	@for t in $(subst /,-,$(filter windows/%,$(TARGETS))); do \
-		(cd $(BIN)/$$t && zip -q ../../$(DIST)/hmw-helper_$(VERSION)_$$t.zip hmw-helper.exe hmw-relay.exe) || exit 1; \
+		(cd $(BIN)/$$t && zip -q ../../$(DIST)/helpbuoy-desk_$(VERSION)_$$t.zip helpbuoy-desk.exe helpbuoy-relay.exe) || exit 1; \
 	done
 	@for t in $(subst /,-,$(filter darwin/%,$(TARGETS))); do \
-		GOWORK=off GO111MODULE=off go run tools/macapp/main.go -app hmw-helper -id helpbuoy.helper \
-			-version $(APP_VERSION) -exe $(BIN)/$$t/hmw-helper -relay $(BIN)/$$t/hmw-relay \
-			-icon helper/resources/icon.png -out $(DIST)/hmw-helper_$(VERSION)_$$t.zip || exit 1; \
+		GOWORK=off GO111MODULE=off go run tools/macapp/main.go -app helpbuoy-desk -id helpbuoy.helper \
+			-version $(APP_VERSION) -exe $(BIN)/$$t/helpbuoy-desk -relay $(BIN)/$$t/helpbuoy-relay \
+			-icon desk/resources/icon.png -out $(DIST)/helpbuoy-desk_$(VERSION)_$$t.zip || exit 1; \
 	done
 	@cd $(DIST) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS
 	@ls -l $(DIST)
@@ -126,37 +126,37 @@ msi: dist
 	@cd $(DIST) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS
 	@ls -l $(DIST)
 
-# Debian 13 package of hmw-relay (packaging/debian): the binary, a hardened
-# systemd service running as the hmw-relay system user with its state in
-# /var/lib/hmw-relay, and hmw-relayctl for admin commands. One per Linux arch.
+# Debian 13 package of helpbuoy-relay (packaging/debian): the binary, a hardened
+# systemd service running as the helpbuoy-relay system user with its state in
+# /var/lib/helpbuoy-relay, and helpbuoy-relayctl for admin commands. One per Linux arch.
 DEB_ARCHES := $(patsubst linux/%,%,$(filter linux/%,$(TARGETS)))
 DEB_DATE    = $(shell date -R -d @$$(git log -1 --format=%ct 2>/dev/null || date +%s))
 deb: relay
 	@mkdir -p $(DIST)
 	@for arch in $(DEB_ARCHES); do \
 		root=$(BIN)/deb-$$arch; rm -rf $$root; \
-		install -D -m 0755 $(BIN)/linux-$$arch/hmw-relay $$root/usr/bin/hmw-relay; \
-		install -D -m 0755 packaging/debian/hmw-relayctl $$root/usr/sbin/hmw-relayctl; \
-		install -D -m 0644 packaging/debian/hmw-relay.service $$root/usr/lib/systemd/system/hmw-relay.service; \
-		install -D -m 0644 packaging/debian/hmw-relay.sysusers $$root/usr/lib/sysusers.d/hmw-relay.conf; \
-		install -D -m 0644 packaging/debian/hmw-relay.default $$root/etc/default/hmw-relay; \
-		install -D -m 0644 packaging/debian/README.Debian $$root/usr/share/doc/hmw-relay/README.Debian; \
-		install -D -m 0644 packaging/debian/copyright $$root/usr/share/doc/hmw-relay/copyright; \
-		printf 'hmw-relay (%s) unstable; urgency=medium\n\n  * Release %s.\n\n -- Maurits van der Schee <maurits@vdschee.nl>  %s\n' \
-			"$(APP_VERSION)" "$(VERSION)" "$(DEB_DATE)" | gzip -9n > $$root/usr/share/doc/hmw-relay/changelog.gz; \
-		chmod 0644 $$root/usr/share/doc/hmw-relay/changelog.gz; \
+		install -D -m 0755 $(BIN)/linux-$$arch/helpbuoy-relay $$root/usr/bin/helpbuoy-relay; \
+		install -D -m 0755 packaging/debian/helpbuoy-relayctl $$root/usr/sbin/helpbuoy-relayctl; \
+		install -D -m 0644 packaging/debian/helpbuoy-relay.service $$root/usr/lib/systemd/system/helpbuoy-relay.service; \
+		install -D -m 0644 packaging/debian/helpbuoy-relay.sysusers $$root/usr/lib/sysusers.d/helpbuoy-relay.conf; \
+		install -D -m 0644 packaging/debian/helpbuoy-relay.default $$root/etc/default/helpbuoy-relay; \
+		install -D -m 0644 packaging/debian/README.Debian $$root/usr/share/doc/helpbuoy-relay/README.Debian; \
+		install -D -m 0644 packaging/debian/copyright $$root/usr/share/doc/helpbuoy-relay/copyright; \
+		printf 'helpbuoy-relay (%s) unstable; urgency=medium\n\n  * Release %s.\n\n -- Maurits van der Schee <maurits@vdschee.nl>  %s\n' \
+			"$(APP_VERSION)" "$(VERSION)" "$(DEB_DATE)" | gzip -9n > $$root/usr/share/doc/helpbuoy-relay/changelog.gz; \
+		chmod 0644 $$root/usr/share/doc/helpbuoy-relay/changelog.gz; \
 		install -d $$root/usr/share/man/man1 $$root/usr/share/man/man8; \
-		gzip -9n < packaging/debian/hmw-relay.1 > $$root/usr/share/man/man1/hmw-relay.1.gz; \
-		gzip -9n < packaging/debian/hmw-relayctl.8 > $$root/usr/share/man/man8/hmw-relayctl.8.gz; \
-		chmod 0644 $$root/usr/share/man/man1/hmw-relay.1.gz $$root/usr/share/man/man8/hmw-relayctl.8.gz; \
-		install -D -m 0644 packaging/debian/lintian-overrides $$root/usr/share/lintian/overrides/hmw-relay; \
+		gzip -9n < packaging/debian/helpbuoy-relay.1 > $$root/usr/share/man/man1/helpbuoy-relay.1.gz; \
+		gzip -9n < packaging/debian/helpbuoy-relayctl.8 > $$root/usr/share/man/man8/helpbuoy-relayctl.8.gz; \
+		chmod 0644 $$root/usr/share/man/man1/helpbuoy-relay.1.gz $$root/usr/share/man/man8/helpbuoy-relayctl.8.gz; \
+		install -D -m 0644 packaging/debian/lintian-overrides $$root/usr/share/lintian/overrides/helpbuoy-relay; \
 		install -d $$root/DEBIAN; \
 		install -m 0755 packaging/debian/postinst packaging/debian/prerm packaging/debian/postrm $$root/DEBIAN/; \
-		echo /etc/default/hmw-relay > $$root/DEBIAN/conffiles; \
+		echo /etc/default/helpbuoy-relay > $$root/DEBIAN/conffiles; \
 		size=$$(du -sk --exclude=DEBIAN $$root | cut -f1); \
 		sed "s/@VERSION@/$(APP_VERSION)/; s/@ARCH@/$$arch/; s/@SIZE@/$$size/" packaging/debian/control.in > $$root/DEBIAN/control; \
 		(cd $$root && find usr -type f -exec md5sum {} + | sort -k2) > $$root/DEBIAN/md5sums; \
-		dpkg-deb --root-owner-group -Zxz --build $$root $(DIST)/hmw-relay_$(APP_VERSION)_$$arch.deb || exit 1; \
+		dpkg-deb --root-owner-group -Zxz --build $$root $(DIST)/helpbuoy-relay_$(APP_VERSION)_$$arch.deb || exit 1; \
 	done
 	@cd $(DIST) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS
 	@ls -l $(DIST)
@@ -166,7 +166,7 @@ icon:
 	for n in 48 32 16; do \
 		GOWORK=off GO111MODULE=off go run tools/genicon/main.go client-windows/resources/icon$$n.png $$n || exit 1; \
 	done
-	cp client-windows/resources/icon.png helper/resources/icon.png
+	cp client-windows/resources/icon.png desk/resources/icon.png
 
 clean:
-	rm -rf $(BIN) $(DIST) helper/rsrc_windows_*.syso client-windows/rsrc_windows_*.syso
+	rm -rf $(BIN) $(DIST) desk/rsrc_windows_*.syso client-windows/rsrc_windows_*.syso

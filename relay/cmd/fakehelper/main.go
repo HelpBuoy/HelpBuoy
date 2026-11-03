@@ -28,7 +28,7 @@ type options struct {
 
 func main() {
 	var o options
-	flag.StringVar(&o.relay, "relay", "localhost:5938", "relay host:port")
+	flag.StringVar(&o.relay, "relay", "localhost:5939", "relay host:port")
 	flag.StringVar(&o.keyDir, "key-dir", "fakehelper-key", "directory with the helper key (created if missing)")
 	flag.StringVar(&o.register, "register", "", "register this client key line ('ssh-ed25519 ... user@machine')")
 	flag.StringVar(&o.name, "name", "", "client name for --register when the key has no comment")

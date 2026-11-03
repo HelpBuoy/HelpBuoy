@@ -1,5 +1,5 @@
 // Package scenes generates deterministic synthetic screen sequences for the
-// encoder tests and the hmw-bench replay benchmark: typing in an editor,
+// encoder tests and the helpbuoy-bench replay benchmark: typing in an editor,
 // menus, scrolling a document, dragging a window, video and an idle screen.
 // Every scenario renders the same pixels on every run.
 package scenes

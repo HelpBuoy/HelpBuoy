@@ -1,4 +1,4 @@
-// Package server is the hmw-relay SSH server. It ties the host key, the state
+// Package server is the helpbuoy-relay SSH server. It ties the host key, the state
 // store, key-based roles, the registry, the limits and the splice together:
 // it accepts TCP connections, runs the SSH handshake, assigns each proven key
 // its role, serves the sv-control channel and pairs sv-session channels.
@@ -152,7 +152,7 @@ func New(cfg Config) (*Server, error) {
 	}, idx)
 	s.sshCfg = &ssh.ServerConfig{
 		PublicKeyCallback: auth.PublicKeyCallback,
-		ServerVersion:     "SSH-2.0-hmwrelay_" + cfg.Version,
+		ServerVersion:     "SSH-2.0-helpbuoyrelay_" + cfg.Version,
 		MaxAuthTries:      6,
 	}
 	s.sshCfg.AddHostKey(signer)

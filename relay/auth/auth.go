@@ -19,7 +19,7 @@ import (
 )
 
 // permKey is the ssh.Permissions extension that carries the authorized key.
-const permKey = "hmw-pubkey"
+const permKey = "helpbuoy-pubkey"
 
 // ErrNotEd25519 is returned for keys of any other type.
 var ErrNotEd25519 = errors.New("only ssh-ed25519 keys are accepted")
