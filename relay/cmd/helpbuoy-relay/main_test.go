@@ -143,3 +143,28 @@ func TestStateDirEnv(t *testing.T) {
 		t.Fatalf("default: %q, %v", d, err)
 	}
 }
+
+func TestTitleAndInstruction(t *testing.T) {
+	dir := t.TempDir()
+	if out := runOK(t, "title", "--state", dir); out != "\n" {
+		t.Fatalf("empty title: %q", out)
+	}
+	runOK(t, "title", "  Example Inc ", "--state", dir)
+	runOK(t, "instruction", "Call +1 234 567 890 for support", "--state", dir)
+	if out := runOK(t, "title", "--state", dir); out != "Example Inc\n" {
+		t.Fatalf("title: %q", out)
+	}
+	if out := runOK(t, "instruction", "--state", dir); out != "Call +1 234 567 890 for support\n" {
+		t.Fatalf("instruction: %q", out)
+	}
+	runFail(t, "title", strings.Repeat("x", 65), "--state", dir)
+	runFail(t, "instruction", "two\nlines", "--state", dir)
+	runFail(t, "title", "a", "b", "--state", dir)
+	runOK(t, "title", "", "--state", dir)
+	if out := runOK(t, "title", "--state", dir); out != "\n" {
+		t.Fatalf("cleared title: %q", out)
+	}
+	if out := runOK(t, "instruction", "--state", dir); out != "Call +1 234 567 890 for support\n" {
+		t.Fatalf("instruction after clearing the title: %q", out)
+	}
+}

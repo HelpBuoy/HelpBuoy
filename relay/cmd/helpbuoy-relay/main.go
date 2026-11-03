@@ -42,6 +42,8 @@ commands:
   client list                                            list registered clients
   client rename SHA256:... NAME                          rename a registered client
   client remove SHA256:...                               remove a registered client
+  title [TEXT]                                           print or set the title the apps show ("" clears it)
+  instruction [TEXT]                                     print or set the instruction line the apps show ("" clears it)
   hostkey                                                print the relay host key and fingerprint
   version                                                print the version
 
@@ -71,6 +73,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		err = clientCmd(args[1:], stdout, stderr)
 	case "hostkey":
 		err = hostkeyCmd(args[1:], stdout, stderr)
+	case "title", "instruction":
+		err = infoCmd(args[0], args[1:], stdout, stderr)
 	case "version", "--version", "-v":
 		fmt.Fprintf(stdout, "helpbuoy-relay %s\n", version)
 		return 0
@@ -312,6 +316,56 @@ func clientCmd(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprintf(stdout, "renamed client %s to %s (%s)\n", old, strings.TrimSpace(pos[1]), pos[0])
 	default:
 		return fmt.Errorf("%w: client list|rename|remove", errUsage)
+	}
+	return nil
+}
+
+// infoCmd prints or sets the title or the instruction line (what). A
+// running relay picks up the change and sends it to every app.
+func infoCmd(what string, args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet(what, flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	state := fs.String("state", "", "state directory")
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) > 1 {
+		return fmt.Errorf("%w: %s [TEXT]", errUsage, what)
+	}
+	st, err := openStore(*state)
+	if err != nil {
+		return err
+	}
+	if len(pos) == 0 {
+		idx, _, err := st.Load()
+		if err != nil {
+			return err
+		}
+		v := idx.State.Title
+		if what == "instruction" {
+			v = idx.State.Instruction
+		}
+		fmt.Fprintln(stdout, v)
+		return nil
+	}
+	idx, _, err := st.Update(func(s *store.State) error {
+		if what == "title" {
+			return s.SetInfo(pos[0], s.Instruction)
+		}
+		return s.SetInfo(s.Title, pos[0])
+	})
+	if err != nil {
+		return err
+	}
+	v := idx.State.Title
+	if what == "instruction" {
+		v = idx.State.Instruction
+	}
+	if v == "" {
+		fmt.Fprintf(stdout, "cleared the %s\n", what)
+	} else {
+		fmt.Fprintf(stdout, "set the %s to %q\n", what, v)
 	}
 	return nil
 }

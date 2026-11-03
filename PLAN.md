@@ -252,6 +252,7 @@ only by `UnregisterClient` or `helpbuoy-relay client remove`. Writes are temp fi
 | `helpbuoy-relay agent add alice 'ssh-ed25519 ...'` | add an agent with the public key copied from their desk app |
 | `helpbuoy-relay agent remove alice` | remove an agent; takes effect immediately, open sessions are closed |
 | `helpbuoy-relay agent list` / `client list` / `client remove SHA256:...` | inspect and revoke |
+| `helpbuoy-relay title ['Example Inc']` / `instruction ['Call +1 234 567 890 for support']` | print or set the title and instruction line the apps show (`''` clears); the same values agents edit on the desk app's Relay tab |
 | `helpbuoy-relay hostkey` | print the host key fingerprint, for agents to compare with what clients show |
 
 **Agents are plain keys**: there are no certificates. A new agent sends

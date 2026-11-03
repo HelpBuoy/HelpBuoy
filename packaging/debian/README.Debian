@@ -20,6 +20,8 @@ service user on the service's state:
   sudo helpbuoy-relayctl agent remove alice
   sudo helpbuoy-relayctl client list
   sudo helpbuoy-relayctl client remove SHA256:...
+  sudo helpbuoy-relayctl title 'Example Inc'
+  sudo helpbuoy-relayctl instruction 'Call +1 234 567 890 for support'
 
 The running relay picks up changes within a second. Logs are in the
 journal (journalctl -u helpbuoy-relay) and in /var/lib/helpbuoy-relay/relay.log.
