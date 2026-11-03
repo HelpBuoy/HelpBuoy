@@ -39,10 +39,12 @@ type Options struct {
 
 // Layout sizes in logical pixels.
 const (
-	tabBarH    = 40
-	toolbarH   = 44
-	idleFPS    = 10
-	activeHold = 1500 * time.Millisecond // stay fast this long after input
+	tabBarH     = 40
+	fixedTabW   = 144 // Clients, Helpers, Register client, Register helper, Relay
+	sessionTabW = 216
+	toolbarH    = 44
+	idleFPS     = 10
+	activeHold  = 1500 * time.Millisecond // stay fast this long after input
 	// openTimeout is how long a Connect waits for the user to allow it and
 	// the session channel to arrive. The relay gives up after 1 minute.
 	openTimeout = 75 * time.Second
@@ -645,15 +647,37 @@ func (a *App) drawWorkArea() {
 	bar := rl.NewRectangle(0, 0, w, tabBarH)
 	rl.DrawRectangleRec(bar, ui.ColBackground)
 	rl.DrawLineV(rl.NewVector2(0, bar.Height), rl.NewVector2(w, bar.Height), ui.ColBorder)
-	tabW := float32(180)
-	if n := float32(len(a.tabs)); n*tabW > w {
-		tabW = max(w/n, 90)
+	// Fixed tabs are narrower than session tabs; all shrink together when
+	// they do not fit.
+	widthOf := func(t *tab) float32 {
+		if t.kind == tabSession {
+			return sessionTabW
+		}
+		return fixedTabW
 	}
+	total := float32(0)
+	for _, t := range a.tabs {
+		total += widthOf(t)
+	}
+	shrink := float32(1)
+	if total > w {
+		shrink = w / total
+	}
+	x := float32(0)
+	closeAt := -1
 	for i, t := range a.tabs {
-		r := rl.NewRectangle(float32(i)*tabW, 0, tabW, tabBarH)
-		if a.ui.Tab(fmt.Sprintf("tab/%p", t), r, a.tabTitle(t), i == a.active, t.kind == tabSession) {
+		tw := max(widthOf(t)*shrink, 72)
+		clicked, closed := a.ui.Tab(fmt.Sprintf("tab/%p", t), rl.NewRectangle(x, 0, tw, tabBarH), a.tabTitle(t), i == a.active, t.kind == tabSession)
+		if clicked {
 			a.activate(i)
 		}
+		if closed {
+			closeAt = i
+		}
+		x += tw
+	}
+	if closeAt >= 0 {
+		a.closeTab(closeAt) // ends the session
 	}
 	content := rl.NewRectangle(0, tabBarH+1, w, h-tabBarH-1)
 	switch t := a.tabs[a.active]; t.kind {

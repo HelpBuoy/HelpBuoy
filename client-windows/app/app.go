@@ -216,10 +216,7 @@ func (c *Controller) screenLocked() View {
 		v.Screen = ScreenAddress
 		v.Address = c.addr
 		if v.Address == "" {
-			v.Address = c.cfg.LastAddress
-		}
-		if v.Address == "" {
-			v.Address = c.cfg.RelayAddress
+			v.Address = c.storedAddrLocked()
 		}
 		switch {
 		case c.inputErr != "":
@@ -259,13 +256,27 @@ func describeKeyError(err error) string {
 	return "The key of this PC could not be loaded or created: " + err.Error()
 }
 
-// Start loads the key and the configuration and shows the address screen.
+// Start loads the key and the configuration and connects to the last relay
+// address right away. Without one it shows the empty address screen; the
+// address can only be changed once connecting failed or after Disconnect.
 func (c *Controller) Start() {
 	c.mu.Lock()
 	c.loadLocked()
 	c.startUpdateCheckLocked()
+	if addr := c.storedAddrLocked(); addr != "" && c.key != nil && c.keyErr == nil {
+		c.startClientLocked(addr)
+	}
 	c.mu.Unlock()
 	c.update()
+}
+
+// storedAddrLocked is the address to connect to or prefill: the last one
+// that reached a relay, else the relay this PC is registered on.
+func (c *Controller) storedAddrLocked() string {
+	if c.cfg.LastAddress != "" {
+		return c.cfg.LastAddress
+	}
+	return c.cfg.RelayAddress
 }
 
 // startUpdateCheckLocked runs Deps.CheckUpdate once in the background.

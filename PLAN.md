@@ -19,8 +19,8 @@ other, and splices their channels together.
   for the relay's `hostname:port` and shows its own application-specific SSH public key
   (generated once on first start, kept in AppData) with a **Copy** button, so the user can
   send it to the helper over a chat such as WhatsApp. After the first successful connection
-  the address is stored and prefilled; every start shows the address with **Connect**, and the
-  waiting screen has a **Disconnect** button that goes back to it. Once a helper has registered that key, the client shows up as online for all
+  the address is stored and every later start connects to it by itself; the address can only
+  be changed when connecting fails or after **Disconnect** on the waiting screen. Once a helper has registered that key, the client shows up as online for all
   helpers. Helpers ask to help: a helper presses **Connect** on an online client, and the
   client asks its user whether that helper (name and key fingerprint) may take
   control. Nothing happens without that approval. Talking about the problem happens over
@@ -125,8 +125,8 @@ unique within one relay).
    relay address and relay host key (the stored configuration above) and switches to its normal window.
 5. From now on this key **is** `anna@ANNA-LAPTOP` on this relay. It stays registered until a
    helper or admin removes it: no expiry, and restarts, reboots and network changes don't
-   matter. Later starts show the address screen with the stored address prefilled; one
-   click on **Connect** and the client waits for a helper, using the pinned relay key. The key is never regenerated automatically; it is
+   matter. Later starts connect to the stored address by themselves and wait for a helper,
+   using the pinned relay key. The key is never regenerated automatically; it is
    only removed when the user explicitly does so in the app (6.1).
 
 ### Session (every time)
@@ -520,9 +520,10 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
 - The registered name is the key's comment, `user@machine`.
 
 ### 6.2 Address and key screens
-- Every start: "Relay address" field (`hostname:port`, port defaults to 5938 if left out),
-  prefilled with the last address, and **Connect**. Nothing connects before the user
-  presses it. Errors are shown inline: name not found, connection refused, timeout, not a
+- "Relay address" field (`hostname:port`, port defaults to 5938 if left out) and
+  **Connect**. With a stored address the client connects to it at start by itself, with
+  the field locked while it does; the field can only be edited when that fails or after
+  **Disconnect**. Errors are shown inline: name not found, connection refused, timeout, not a
   help-me-win relay. A changed relay key brings the user back here with the warning (3.5).
 - If the relay doesn't know this PC's key yet: relay fingerprint, the public key line in a
   read-only box, the key fingerprint, a big **Copy key** button, and "Paste this key into a
@@ -608,7 +609,8 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   usual desktop OpenGL and X11/Wayland libraries at run time, which every desktop has.
 - **One window.** raylib has a single window per process, so the helper app is one window
   with a tab bar that is always visible: the fixed tabs **Clients**, **Helpers**, **Register client**,
-  **Register helper** and **Relay**, then one tab per session, marked with a lifebuoy icon. Tabs have no close buttons. A session tab shows
+  **Register helper** and **Relay**, then one tab per session, marked with the lifebuoy app icon and a close button
+  that ends the session. Session tabs are wider than the fixed tabs. A session tab shows
   only the session, without the client list. Fullscreen applies to the active session.
 - **No raygui** (it needs cgo). `helper/ui` is a small immediate-mode widget set written for
   this app: label, button, list row, single-line text field with paste and selection, tabs,
@@ -726,8 +728,8 @@ View options follow Remmina's connection window.
   `input.Codes`), and characters without a physical key as `Text`.
 - **Toolbar**: End session, Win, Alt+Tab, monitor selector, quality (Auto / Sharp / Fast),
   Fit / 1:1, Resize, Fullscreen, and an fps, RTT and Mbit/s readout.
-- **Ending**: **End session** in the toolbar closes the inner SSH connection; no
-  confirmation dialog. When the user ends the session (Esc or
+- **Ending**: **End session** in the toolbar, or the close button on the session's tab,
+  closes the inner SSH connection; no confirmation dialog. When the user ends the session (Esc or
   exiting the client application), the tab just closes. Esc pressed in the viewer is sent to
   the client as a normal key.
 

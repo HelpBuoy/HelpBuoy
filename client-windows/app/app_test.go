@@ -183,19 +183,30 @@ func TestFirstRunToMain(t *testing.T) {
 		t.Fatalf("config %+v", cfg)
 	}
 
-	// The next start waits on the address screen, prefilled.
+	// The next start connects to the same relay by itself.
 	c.Close()
 	waitOffline(t, e.relay, e.fp())
 	c2, ui2 := e.controller()
-	c2.Start()
-	v = ui2.wait(t, "address screen", screenIs(ScreenAddress))
-	if v.Address != e.relay.Addr() || v.Connecting {
-		t.Fatalf("restart view %+v", v)
+	startAndConnect(t, c2, ui2, e.relay.Addr())
+	ui2.wait(t, "main after restart", readyMain)
+}
+
+// TestAutoConnectFails: when the stored relay can't be reached at start,
+// the address screen shows why and the address can be changed.
+func TestAutoConnectFails(t *testing.T) {
+	e := newEnv(t)
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	addr := ln.Addr().String()
+	ln.Close()
+	config.Store{Dir: e.dir}.Save(&config.Config{LastAddress: addr})
+	c, ui := e.controller()
+	c.Start()
+	v := ui.wait(t, "error", func(v View) bool { return v.Error != "" })
+	if v.Screen != ScreenAddress || v.Connecting || v.Address != addr {
+		t.Fatalf("%+v", v)
 	}
-	time.Sleep(50 * time.Millisecond)
-	if e.relay.Online(e.fp()) {
-		t.Fatal("connected without Connect")
-	}
+	c.Connect(e.relay.Addr()) // now the address can be changed
+	ui.wait(t, "key screen", screenIs(ScreenKey))
 }
 
 func registered(t *testing.T, e *env) {
@@ -273,7 +284,7 @@ func TestConnectError(t *testing.T) {
 	}
 }
 
-func TestPrefillAfterCloseBeforeRegistration(t *testing.T) {
+func TestAutoConnectBeforeRegistration(t *testing.T) {
 	e := newEnv(t)
 	c, ui := e.controller()
 	c.Start()
@@ -281,12 +292,10 @@ func TestPrefillAfterCloseBeforeRegistration(t *testing.T) {
 	ui.wait(t, "key screen", screenIs(ScreenKey))
 	c.Close()
 
+	// The next start goes back to the same relay and shows the key again.
 	c2, ui2 := e.controller()
-	c2.Start()
-	v := ui2.wait(t, "address screen", screenIs(ScreenAddress))
-	if v.Address != e.relay.Addr() {
-		t.Fatalf("prefill %q", v.Address)
-	}
+	startAndConnect(t, c2, ui2, e.relay.Addr())
+	ui2.wait(t, "key screen", screenIs(ScreenKey))
 }
 
 func TestRemoveKey(t *testing.T) {

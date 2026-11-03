@@ -116,9 +116,10 @@ func (c *Context) Checkbox(id string, r rl.Rectangle, label string, v *bool) boo
 	return false
 }
 
-// Tab draws one tab of a tab bar and reports a click on it. With icon set
-// the app icon (a lifebuoy) stands before the title, for session tabs.
-func (c *Context) Tab(id string, r rl.Rectangle, title string, active, icon bool) bool {
+// Tab draws one tab of a tab bar. A session tab has the app icon (a
+// lifebuoy) before the title and a close button on the right. It reports a
+// click on the tab and a click on its close button.
+func (c *Context) Tab(id string, r rl.Rectangle, title string, active, session bool) (clicked, closed bool) {
 	hover := c.Hover(r)
 	bg := ColBackground
 	if active {
@@ -131,22 +132,47 @@ func (c *Context) Tab(id string, r rl.Rectangle, title string, active, icon bool
 		rl.DrawRectangleRec(rl.NewRectangle(r.X, r.Y+r.Height-3, r.Width, 3), ColAccent)
 	}
 	rl.DrawLineV(rl.NewVector2(r.X+r.Width, r.Y+6), rl.NewVector2(r.X+r.Width, r.Y+r.Height-6), ColBorder)
-	textX := r.X + 12
-	if icon {
+	textX, right := r.X+12, r.X+r.Width-12
+	var closeR rl.Rectangle
+	if session {
 		c.DrawIcon(rl.NewVector2(r.X+21, r.Y+r.Height/2), 18)
-		textX += 22
+		textX += 28
+		closeR = rl.NewRectangle(r.X+r.Width-32, r.Y+(r.Height-22)/2, 22, 22)
+		right = closeR.X - 6
 	}
-	textW := r.X + r.Width - 12 - textX
+	textW := right - textX
 	font := Regular
 	col := ColMuted
 	if active {
 		font, col = Bold, ColText
 	}
 	c.TextIn(font, SizeBody, c.Ellipsize(font, SizeBody, title, textW), rl.NewRectangle(textX, r.Y, textW, r.Height), col)
+	if session {
+		over := c.Hover(closeR)
+		if over {
+			rl.DrawRectangleRounded(closeR, 0.3, 4, ColPressed)
+			c.SetCursor(rl.MouseCursorPointingHand)
+			c.Tooltip("End session")
+		}
+		drawCross(closeR, ColMuted)
+		if c.Clicked(id+"/close", closeR) {
+			return false, true
+		}
+		if over {
+			return false, false
+		}
+	}
 	if hover {
 		c.SetCursor(rl.MouseCursorPointingHand)
 	}
-	return c.Clicked(id, r)
+	return c.Clicked(id, r), false
+}
+
+// drawCross draws a small x centered in r.
+func drawCross(r rl.Rectangle, col rl.Color) {
+	cx, cy, d := r.X+r.Width/2, r.Y+r.Height/2, float32(4.5)
+	rl.DrawLineEx(rl.NewVector2(cx-d, cy-d), rl.NewVector2(cx+d, cy+d), 1.5, col)
+	rl.DrawLineEx(rl.NewVector2(cx-d, cy+d), rl.NewVector2(cx+d, cy-d), 1.5, col)
 }
 
 // BeginScroll starts a vertical scroll area at r for content of the given

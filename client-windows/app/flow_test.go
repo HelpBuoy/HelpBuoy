@@ -46,16 +46,19 @@ func waitOffline(t *testing.T, r *fakerelay.Relay, fp string) {
 	}
 }
 
-// startAndConnect starts the controller, checks that it waits on the
-// address screen with the stored address, and presses Connect.
+// startAndConnect starts the controller and checks that it connects to the
+// stored address by itself, with the address field locked meanwhile.
 func startAndConnect(t *testing.T, c *Controller, ui *fakeUI, want string) {
 	t.Helper()
 	c.Start()
-	v := ui.wait(t, "address screen", screenIs(ScreenAddress))
-	if v.Address != want || v.Connecting {
-		t.Fatalf("start view %+v, want address %q", v, want)
+	v := ui.wait(t, "auto-connect", func(v View) bool { return v.Connecting || v.Screen != ScreenAddress })
+	if v.Screen == ScreenAddress && v.Address != want {
+		t.Fatalf("connecting to %q, want %q", v.Address, want)
 	}
-	c.Connect(v.Address)
+	c.Connect("other.example.com") // ignored while connecting
+	if c.View().Screen == ScreenAddress && c.View().Address != want {
+		t.Fatal("address changed while connecting")
+	}
 }
 
 // TestOtherRelay: Disconnect, then Connect to another relay. Nothing about
@@ -143,9 +146,7 @@ func TestUpdateOfferedWhenIdle(t *testing.T) {
 		checked <- struct{}{}
 		return release, nil
 	}
-	c.Start()
-	ui.wait(t, "offer on the address screen", func(v View) bool { return v.Update == release && v.Screen == ScreenAddress })
-	c.Connect(e.relay.Addr())
+	c.Start() // connects to the stored relay by itself
 	ui.wait(t, "offer", func(v View) bool { return v.Update == release && readyMain(v) })
 
 	gate := make(chan struct{})
