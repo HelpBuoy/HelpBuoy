@@ -25,7 +25,7 @@ type slot struct {
 	pix  []byte
 }
 
-// Decoder applies frames on the helper. It owns the tile cache and buffers
+// Decoder applies frames on the agent. It owns the tile cache and buffers
 // multi-part frames. Not safe for concurrent use; it may use several
 // goroutines internally to decode the ops of one frame in parallel.
 //

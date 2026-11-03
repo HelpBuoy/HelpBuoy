@@ -25,7 +25,7 @@ func clientFP(c *fake.Conn) string {
 	return s
 }
 
-// connect sends Connect from helper h for the client with fingerprint and
+// connect sends Connect from agent h for the client with fingerprint and
 // returns the relay's error ("" on success).
 func connect(t *testing.T, h *fake.Conn, seq uint32, fingerprint, id string) string {
 	t.Helper()
@@ -35,7 +35,7 @@ func connect(t *testing.T, h *fake.Conn, seq uint32, fingerprint, id string) str
 	return mustWait[control.Reply](t, h, func(r *control.Reply) bool { return r.Seq == seq }).Error
 }
 
-// connectTo connects helper h to client c and waits for SessionReady.
+// connectTo connects agent h to client c and waits for SessionReady.
 func connectTo(t *testing.T, h, c *fake.Conn, seq uint32) string {
 	t.Helper()
 	id := control.NewRequestID()
@@ -58,11 +58,11 @@ func openSession(c *fake.Conn, id string) (ssh.Channel, error) {
 	return ch, nil
 }
 
-func acceptSession(t *testing.T, h *fake.Conn) (ssh.Channel, control.HelperSessionData) {
+func acceptSession(t *testing.T, h *fake.Conn) (ssh.Channel, control.AgentSessionData) {
 	t.Helper()
 	select {
 	case nch := <-h.Sessions:
-		d, err := control.UnmarshalHelperSessionData(nch.ExtraData())
+		d, err := control.UnmarshalAgentSessionData(nch.ExtraData())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -73,9 +73,9 @@ func acceptSession(t *testing.T, h *fake.Conn) (ssh.Channel, control.HelperSessi
 		go ssh.DiscardRequests(reqs)
 		return ch, d
 	case <-time.After(wait):
-		t.Fatal("no session channel at the helper")
+		t.Fatal("no session channel at the agent")
 	}
-	return nil, control.HelperSessionData{}
+	return nil, control.AgentSessionData{}
 }
 
 // session runs a request through to an open, spliced session.
@@ -83,16 +83,16 @@ type session struct {
 	id      string
 	cch     ssh.Channel
 	hch     ssh.Channel
-	hdata   control.HelperSessionData
+	hdata   control.AgentSessionData
 	ready   *control.SessionReady
 	client  *fake.Conn
-	helper  *fake.Conn
+	agent   *fake.Conn
 	clientK ssh.Signer
 }
 
 func startSession(t *testing.T, h *fake.Conn, c *fake.Conn, seq uint32) *session {
 	t.Helper()
-	s := &session{client: c, helper: h}
+	s := &session{client: c, agent: h}
 	s.id = control.NewRequestID()
 	if msg := connect(t, h, seq, clientFP(c), s.id); msg != "" {
 		t.Fatalf("connect: %s", msg)
@@ -120,18 +120,18 @@ func ptr[T any](v T) *T { return &v }
 
 func TestSessionSplice(t *testing.T) {
 	e := newEnv(t, nil)
-	hk := e.addHelper("alice")
-	h, _ := e.connect(hk, control.RoleHelper)
+	hk := e.addAgent("alice")
+	h, _ := e.connect(hk, control.RoleAgent)
 	c, ck := e.client("anna@PC")
 	s := startSession(t, h, c, 1)
 
-	if s.ready.RequestID != s.id || s.ready.HelperName != "alice" ||
-		s.ready.HelperKey != keyLine(hk, "") {
+	if s.ready.RequestID != s.id || s.ready.AgentName != "alice" ||
+		s.ready.AgentKey != keyLine(hk, "") {
 		t.Errorf("session ready %+v", s.ready)
 	}
 	if s.hdata.RequestID != s.id || s.hdata.ClientName != "anna@PC" || s.hdata.ClientKey != keyLine(ck, "anna@PC") ||
 		s.hdata.UserMachine != "user@machine" {
-		t.Errorf("helper session data %+v", s.hdata)
+		t.Errorf("agent session data %+v", s.hdata)
 	}
 	p := presenceWhere(t, h, func(p *control.Presence) bool { return clientInfo(p, fp(ck)).InSessionWith == "alice" })
 	if ri := clientInfo(p, fp(ck)).Request; ri == nil || ri.State != control.RequestTaken || ri.TakenBy != "alice" {
@@ -149,31 +149,31 @@ func TestSessionSplice(t *testing.T) {
 	}()
 	got := make([]byte, len(big))
 	if _, err := io.ReadFull(s.hch, got); err != nil || !bytes.Equal(got, big) {
-		t.Fatalf("client->helper: %v", err)
+		t.Fatalf("client->agent: %v", err)
 	}
 	wg.Wait()
 	s.hch.Write([]byte("input"))
 	if got := readAll(t, s.cch, 5); got != "input" {
-		t.Errorf("helper->client %q", got)
+		t.Errorf("agent->client %q", got)
 	}
 
-	// Half-close: client EOF reaches the helper, which can still answer.
+	// Half-close: client EOF reaches the agent, which can still answer.
 	s.cch.CloseWrite()
 	if n, err := s.hch.Read(make([]byte, 1)); n != 0 || err != io.EOF {
-		t.Fatalf("helper read after client EOF: %d %v", n, err)
+		t.Fatalf("agent read after client EOF: %d %v", n, err)
 	}
 	s.hch.Write([]byte("bye"))
 	if got := readAll(t, s.cch, 3); got != "bye" {
 		t.Errorf("after half-close %q", got)
 	}
 
-	// The helper closes: the client side closes too and the request ends.
+	// The agent closes: the client side closes too and the request ends.
 	s.hch.Close()
 	if _, err := io.ReadAll(s.cch); err != nil {
 		t.Errorf("client read: %v", err)
 	}
 	if _, err := s.cch.Write([]byte("x")); err == nil {
-		t.Error("client channel still writable after helper closed")
+		t.Error("client channel still writable after agent closed")
 	}
 	if st := mustWait[control.RequestStateMsg](t, c, func(m *control.RequestStateMsg) bool { return m.State != control.RequestTaken }); st.RequestID != s.id || st.State != control.RequestEnded {
 		t.Errorf("end state %+v", st)
@@ -191,26 +191,26 @@ func TestSessionSplice(t *testing.T) {
 	}
 	s.cch.Close()
 	if _, err := io.ReadAll(s.hch); err != nil {
-		t.Errorf("helper read: %v", err)
+		t.Errorf("agent read: %v", err)
 	}
 	mustWait[control.RequestStateMsg](t, c, func(m *control.RequestStateMsg) bool { return m.State == control.RequestEnded })
 }
 
-// TestFirstHelperWins: many helpers connect to one client at once; exactly
+// TestFirstAgentWins: many agents connect to one client at once; exactly
 // one gets it, the others are told the client is busy.
-func TestFirstHelperWins(t *testing.T) {
+func TestFirstAgentWins(t *testing.T) {
 	e := newEnv(t, nil)
 	const n = 12
-	helpers := make([]*fake.Conn, n)
-	for i := range helpers {
-		helpers[i] = e.helper(uniq("h"))
+	agents := make([]*fake.Conn, n)
+	for i := range agents {
+		agents[i] = e.agent(uniq("h"))
 	}
 	c, _ := e.client("anna@PC")
 	for round := range 3 {
 		ids := make([]string, n)
 		var wg sync.WaitGroup
 		start := make(chan struct{})
-		for i, h := range helpers {
+		for i, h := range agents {
 			ids[i] = control.NewRequestID()
 			wg.Add(1)
 			go func() {
@@ -222,14 +222,14 @@ func TestFirstHelperWins(t *testing.T) {
 		close(start)
 		wg.Wait()
 		winner := -1
-		for i, h := range helpers {
+		for i, h := range agents {
 			rep, err := fake.WaitFor(h, wait, func(r *control.Reply) bool { return r.Seq == uint32(100+round) })
 			if err != nil {
 				t.Fatal(err)
 			}
 			if rep.Error == "" {
 				if winner >= 0 {
-					t.Fatalf("round %d: helpers %d and %d both won", round, winner, i)
+					t.Fatalf("round %d: agents %d and %d both won", round, winner, i)
 				}
 				winner = i
 			} else if rep.Error != "client is busy" {
@@ -248,16 +248,16 @@ func TestFirstHelperWins(t *testing.T) {
 	}
 }
 
-func TestOneHelperPerClient(t *testing.T) {
+func TestOneAgentPerClient(t *testing.T) {
 	e := newEnv(t, nil)
-	h1 := e.helper("alice")
-	h2 := e.helper("bob")
+	h1 := e.agent("alice")
+	h2 := e.agent("bob")
 	c, _ := e.client("anna@PC")
 	s := startSession(t, h1, c, 1)
 
-	// The second helper can't connect while the session runs.
+	// The second agent can't connect while the session runs.
 	if msg := connect(t, h2, 1, clientFP(c), control.NewRequestID()); msg != "client is busy" {
-		t.Errorf("second helper: %q", msg)
+		t.Errorf("second agent: %q", msg)
 	}
 	// Nor reuse the running request's id.
 	if msg := connect(t, h2, 2, clientFP(c), s.id); msg != "bad request id" {
@@ -269,9 +269,9 @@ func TestOneHelperPerClient(t *testing.T) {
 	}
 	select {
 	case <-h2.Sessions:
-		t.Fatal("second helper got a session channel")
+		t.Fatal("second agent got a session channel")
 	case <-h1.Sessions:
-		t.Fatal("first helper got a second session channel")
+		t.Fatal("first agent got a second session channel")
 	case <-time.After(50 * time.Millisecond):
 	}
 	// The session still works.
@@ -283,23 +283,23 @@ func TestOneHelperPerClient(t *testing.T) {
 
 func TestSessionOnlyForOwnTakenRequest(t *testing.T) {
 	e := newEnv(t, nil)
-	h := e.helper("alice")
+	h := e.agent("alice")
 	a, _ := e.client("anna@PC")
 	b, _ := e.client("bert@PC")
 
-	// No helper connected yet: no session.
+	// No agent connected yet: no session.
 	if _, err := openSession(a, control.NewRequestID()); openReason(err) != ssh.Prohibited {
-		t.Errorf("session without a helper: %v", err)
+		t.Errorf("session without an agent: %v", err)
 	}
 	id := connectTo(t, h, a, 1)
 	// Another client can't use it.
 	if _, err := openSession(b, id); openReason(err) != ssh.Prohibited {
 		t.Errorf("session for someone else's request: %v", err)
 	}
-	// A helper can't cause a session channel by itself.
+	// An agent can't cause a session channel by itself.
 	select {
 	case <-h.Sessions:
-		t.Fatal("helper got a session without the client opening one")
+		t.Fatal("agent got a session without the client opening one")
 	case <-time.After(50 * time.Millisecond):
 	}
 	// The right client can.
@@ -313,7 +313,7 @@ func TestSessionOnlyForOwnTakenRequest(t *testing.T) {
 
 func TestSessionStartTimeout(t *testing.T) {
 	e := newEnv(t, nil)
-	h := e.helper("alice")
+	h := e.agent("alice")
 	c, _ := e.client("anna@PC")
 	id := connectTo(t, h, c, 1)
 	e.clock.Advance(time.Minute)
@@ -325,9 +325,9 @@ func TestSessionStartTimeout(t *testing.T) {
 	}
 }
 
-func TestHelperRefusesSession(t *testing.T) {
+func TestAgentRefusesSession(t *testing.T) {
 	e := newEnv(t, nil)
-	h := e.helper("alice")
+	h := e.agent("alice")
 	c, _ := e.client("anna@PC")
 	id := connectTo(t, h, c, 1)
 	go func() {
@@ -340,9 +340,9 @@ func TestHelperRefusesSession(t *testing.T) {
 	mustWait[control.RequestStateMsg](t, c, func(m *control.RequestStateMsg) bool { return m.State == control.RequestEnded })
 }
 
-func TestHelperSessionCap(t *testing.T) {
-	e := newEnv(t, func(c *server.Config) { c.MaxSessionsPerHelper = 2 })
-	h := e.helper("alice")
+func TestAgentSessionCap(t *testing.T) {
+	e := newEnv(t, func(c *server.Config) { c.MaxSessionsPerAgent = 2 })
+	h := e.agent("alice")
 	var fps []string
 	for range 3 {
 		c, _ := e.client(uniq("u@pc"))
@@ -354,30 +354,30 @@ func TestHelperSessionCap(t *testing.T) {
 	if msg := connect(t, h, 3, fps[2], control.NewRequestID()); msg == "" {
 		t.Fatal("third session accepted")
 	}
-	// Another helper can still connect.
-	if msg := connect(t, e.helper("bob"), 1, fps[2], control.NewRequestID()); msg != "" {
-		t.Errorf("other helper: %q", msg)
+	// Another agent can still connect.
+	if msg := connect(t, e.agent("bob"), 1, fps[2], control.NewRequestID()); msg != "" {
+		t.Errorf("other agent: %q", msg)
 	}
 }
 
 func TestDisconnectEndsSession(t *testing.T) {
 	e := newEnv(t, nil)
-	h := e.helper("alice")
-	h2 := e.helper("bob")
+	h := e.agent("alice")
+	h2 := e.agent("bob")
 	c, ck := e.client("anna@PC")
 	s := startSession(t, h, c, 1)
-	// The helper's whole connection goes away.
+	// The agent's whole connection goes away.
 	h.Close()
 	if _, err := io.ReadAll(s.cch); err != nil {
 		t.Errorf("client read: %v", err)
 	}
 	mustWait[control.RequestStateMsg](t, c, func(m *control.RequestStateMsg) bool { return m.State == control.RequestEnded })
 
-	// The client goes away mid-session: the helper's channel closes.
+	// The client goes away mid-session: the agent's channel closes.
 	s = startSession(t, h2, c, 1)
 	c.Close()
 	if _, err := io.ReadAll(s.hch); err != nil {
-		t.Errorf("helper read: %v", err)
+		t.Errorf("agent read: %v", err)
 	}
 	presenceWhere(t, h2, func(p *control.Presence) bool {
 		ci := clientInfo(p, fp(ck))
@@ -385,12 +385,12 @@ func TestDisconnectEndsSession(t *testing.T) {
 	})
 }
 
-func TestRemovedHelperSessionsClose(t *testing.T) {
+func TestRemovedAgentSessionsClose(t *testing.T) {
 	e := newEnv(t, nil)
-	h := e.helper("alice")
+	h := e.agent("alice")
 	c, _ := e.client("anna@PC")
 	s := startSession(t, h, c, 1)
-	e.update(func(st *store.State) error { return st.RemoveHelper("alice") })
+	e.update(func(st *store.State) error { return st.RemoveAgent("alice") })
 	if _, err := io.ReadAll(s.cch); err != nil {
 		t.Errorf("client read: %v", err)
 	}
@@ -398,21 +398,21 @@ func TestRemovedHelperSessionsClose(t *testing.T) {
 	mustWait[control.RequestStateMsg](t, c, func(m *control.RequestStateMsg) bool { return m.State == control.RequestEnded })
 }
 
-func TestHelperClientHelloIgnored(t *testing.T) {
+func TestAgentClientHelloIgnored(t *testing.T) {
 	e := newEnv(t, nil)
-	c := e.dial(e.addHelper("alice"))
+	c := e.dial(e.addAgent("alice"))
 	c.Send(&control.ClientHello{UserMachine: "x@y"})
-	if h := mustWait[control.Hello](t, c, nil); h.Role != control.RoleHelper {
+	if h := mustWait[control.Hello](t, c, nil); h.Role != control.RoleAgent {
 		t.Fatalf("hello %+v", h)
 	}
 	assertOpen(t, c)
 }
 
 // TestCancelTakenRequest: the client cancels after SessionReady (the user
-// refused the helper), before and while the session channel is being opened.
+// refused the agent), before and while the session channel is being opened.
 func TestCancelTakenRequest(t *testing.T) {
 	e := newEnv(t, nil)
-	h := e.helper("alice")
+	h := e.agent("alice")
 	c, ck := e.client("anna@PC")
 
 	id := connectTo(t, h, c, 1)
@@ -425,8 +425,8 @@ func TestCancelTakenRequest(t *testing.T) {
 		t.Errorf("session after cancel: %v", err)
 	}
 
-	// Cancel while the relay is opening the helper's channel: the helper
-	// holds the open, the client cancels, then the helper accepts. The
+	// Cancel while the relay is opening the agent's channel: the agent
+	// holds the open, the client cancels, then the agent accepts. The
 	// accepted channel is closed by the relay.
 	id = connectTo(t, h, c, 2)
 	done := make(chan error, 1)
@@ -435,7 +435,7 @@ func TestCancelTakenRequest(t *testing.T) {
 	select {
 	case nch = <-h.Sessions:
 	case <-time.After(wait):
-		t.Fatal("no session at helper")
+		t.Fatal("no session at agent")
 	}
 	c.Send(&control.CancelRequest{RequestID: id})
 	mustWait[control.RequestStateMsg](t, c, func(m *control.RequestStateMsg) bool { return m.State == control.RequestCancelled })
@@ -445,7 +445,7 @@ func TestCancelTakenRequest(t *testing.T) {
 	}
 	go ssh.DiscardRequests(reqs)
 	if _, err := io.ReadAll(ch); err != nil {
-		t.Errorf("helper channel: %v", err)
+		t.Errorf("agent channel: %v", err)
 	}
 	if err := <-done; openReason(err) != ssh.Prohibited {
 		t.Errorf("client session after cancel: %v", err)
@@ -454,13 +454,13 @@ func TestCancelTakenRequest(t *testing.T) {
 	connectTo(t, h, c, 3) // a fresh connect works
 }
 
-// TestConnectFlow: a helper connects to a client; the user refuses once,
+// TestConnectFlow: an agent connects to a client; the user refuses once,
 // then allows.
 func TestConnectFlow(t *testing.T) {
 	e := newEnv(t, nil)
-	hk := e.addHelper("alice")
-	h, _ := e.connect(hk, control.RoleHelper)
-	bob := e.helper("bob")
+	hk := e.addAgent("alice")
+	h, _ := e.connect(hk, control.RoleAgent)
+	bob := e.agent("bob")
 	c, ck := e.client("anna@PC")
 	offline := e.addClient("oma@PC")
 
@@ -480,16 +480,16 @@ func TestConnectFlow(t *testing.T) {
 		t.Fatal(msg)
 	}
 	sr := mustWait[control.SessionReady](t, c, nil)
-	if sr.RequestID != id || sr.HelperName != "alice" || sr.HelperKey != keyLine(hk, "") {
+	if sr.RequestID != id || sr.AgentName != "alice" || sr.AgentKey != keyLine(hk, "") {
 		t.Errorf("session ready %+v", sr)
 	}
 	p := presenceWhere(t, h, func(p *control.Presence) bool { return clientInfo(p, fp(ck)).Request != nil })
 	if ri := clientInfo(p, fp(ck)).Request; ri.ID != id || ri.State != control.RequestTaken || ri.TakenBy != "alice" {
 		t.Errorf("request info %+v", ri)
 	}
-	// One helper at a time.
+	// One agent at a time.
 	if msg := connect(t, bob, 1, fp(ck), control.NewRequestID()); msg != "client is busy" {
-		t.Errorf("second helper: %q", msg)
+		t.Errorf("second agent: %q", msg)
 	}
 	c.Send(&control.CancelRequest{RequestID: id})
 	mustWait[control.RequestStateMsg](t, c, func(m *control.RequestStateMsg) bool { return m.State == control.RequestCancelled })
@@ -513,7 +513,7 @@ func TestConnectFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	if hd.RequestID != id || hd.ClientName != "anna@PC" {
-		t.Errorf("helper data %+v", hd)
+		t.Errorf("agent data %+v", hd)
 	}
 	cch.Write([]byte("hi"))
 	if got := readAll(t, hch, 2); got != "hi" {
@@ -526,7 +526,7 @@ func TestConnectFlow(t *testing.T) {
 // answer within the session start timeout.
 func TestConnectNoAnswer(t *testing.T) {
 	e := newEnv(t, nil)
-	h := e.helper("alice")
+	h := e.agent("alice")
 	c, ck := e.client("anna@PC")
 	id := control.NewRequestID()
 	if msg := connect(t, h, 1, fp(ck), id); msg != "" {

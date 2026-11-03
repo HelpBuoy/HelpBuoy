@@ -1,4 +1,4 @@
-// Command helpbuoy-bench runs the client's screen encoder against the helper's
+// Command helpbuoy-bench runs the client's screen encoder against the agent's
 // decoder (screen.Decoder) end to end, on synthetic scenarios or on a
 // recording made with the client's --record option, and compares the
 // results with the targets of PLAN.md 5.1.
@@ -177,7 +177,7 @@ func run(s source, cfg runConfig) (result, error) {
 	e := encode.New(encode.Config{SwapRB: inf.bgra, Workers: cfg.workers})
 	e.SetQuality(cfg.mode)
 	dec := screen.NewDecoder()
-	helper := image.NewRGBA(image.Rect(0, 0, inf.w, inf.h))
+	agent := image.NewRGBA(image.Rect(0, 0, inf.w, inf.h))
 	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	var cur *image.RGBA
 	var seq uint32
@@ -196,7 +196,7 @@ func run(s source, cfg runConfig) (result, error) {
 				size += r.EncodedSize()
 				res.area[r.Kind] += r.W * r.H
 			}
-			if _, _, err := dec.Apply(helper, f); err != nil {
+			if _, _, err := dec.Apply(agent, f); err != nil {
 				return 0, 0, 0, fmt.Errorf("frame %d: decode: %w", seq, err)
 			}
 		}
@@ -227,7 +227,7 @@ func run(s source, cfg runConfig) (result, error) {
 		if len(lossy) > 0 {
 			res.lossyFrames++
 		}
-		psnr, err := compare(helper, cur, inf.bgra, lossy)
+		psnr, err := compare(agent, cur, inf.bgra, lossy)
 		if err != nil {
 			return res, fmt.Errorf("frame %d: %w", i, err)
 		}
@@ -244,7 +244,7 @@ func run(s source, cfg runConfig) (result, error) {
 		res.refineFrames++
 		res.refineBytes += size
 	}
-	_, err := compare(helper, cur, inf.bgra, nil)
+	_, err := compare(agent, cur, inf.bgra, nil)
 	res.exactAtEnd = err == nil && len(e.LossyRects()) == 0
 	return res, nil
 }
@@ -256,10 +256,10 @@ func maxTime(a, b time.Time) time.Time {
 	return b
 }
 
-// compare checks the helper's image against the capture: equal (ignoring
+// compare checks the agent's image against the capture: equal (ignoring
 // the capture's alpha) outside the lossy rectangles. It returns the PSNR
 // over the lossy rectangles (+Inf if there are none or they are exact).
-func compare(helper, cur *image.RGBA, bgra bool, lossy []image.Rectangle) (float64, error) {
+func compare(agent, cur *image.RGBA, bgra bool, lossy []image.Rectangle) (float64, error) {
 	w, h := cur.Rect.Dx(), cur.Rect.Dy()
 	inLossy := func(x, y int) bool {
 		for _, r := range lossy {
@@ -282,7 +282,7 @@ func compare(helper, cur *image.RGBA, bgra bool, lossy []image.Rectangle) (float
 			}
 			want[i+3] = 255
 		}
-		got := helper.Pix[y*helper.Stride:][:w*4]
+		got := agent.Pix[y*agent.Stride:][:w*4]
 		if bytes.Equal(want, got) {
 			continue
 		}

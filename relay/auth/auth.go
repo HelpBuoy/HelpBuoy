@@ -1,4 +1,4 @@
-// Package auth parses and checks the Ed25519 keys that identify helpers and
+// Package auth parses and checks the Ed25519 keys that identify agents and
 // clients, and connects the SSH public key callback to the role lookup that
 // happens after the handshake.
 //
@@ -79,7 +79,7 @@ func VerifiedKey(p *ssh.Permissions) (ssh.PublicKey, error) {
 	return ssh.ParsePublicKey([]byte(p.Extensions[permKey]))
 }
 
-// CleanName checks a helper or client name: 1 to max runes, printable, no
+// CleanName checks an agent or client name: 1 to max runes, printable, no
 // leading or trailing space. It returns the trimmed name.
 func CleanName(s string, max int) (string, error) {
 	s = strings.TrimSpace(s)

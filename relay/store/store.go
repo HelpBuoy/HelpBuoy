@@ -1,5 +1,5 @@
 // Package store keeps the relay's persistent state, state.json in the state
-// directory: the helper keys and the registered client keys.
+// directory: the agent keys and the registered client keys.
 //
 // Writes go to a temporary file that is synced and then renamed over
 // state.json, so readers always see a complete file. A lock file serializes
@@ -31,12 +31,12 @@ const (
 
 // Name length limits.
 const (
-	MaxHelperName = 64
+	MaxAgentName  = 64
 	MaxClientName = 128
 )
 
-// Helper is a helper key added by the relay admin.
-type Helper struct {
+// Agent is an agent key added by the relay admin.
+type Agent struct {
 	Name      string `json:"name"`
 	PublicKey string `json:"public_key"` // authorized_keys line
 }
@@ -52,14 +52,14 @@ type Client struct {
 
 // State is the content of state.json.
 type State struct {
-	Helpers []Helper `json:"helpers"`
+	Agents  []Agent  `json:"agents"`
 	Clients []Client `json:"clients"`
 }
 
 // Identity is what a fingerprint maps to.
 type Identity struct {
 	Role    control.Role
-	Name    string // helper name or client name; empty for pending
+	Name    string // agent name or client name; empty for pending
 	KeyLine string // authorized_keys line; empty for pending
 }
 
@@ -67,18 +67,18 @@ type Identity struct {
 // immutable once built and safe for concurrent use.
 type Index struct {
 	State   *State
-	helpers map[string]int // fingerprint -> index in State.Helpers
+	agents  map[string]int // fingerprint -> index in State.Agents
 	clients map[string]int
 	fps     []string // fingerprint of State.Clients[i]
-	hfps    []string // fingerprint of State.Helpers[i]
+	hfps    []string // fingerprint of State.Agents[i]
 }
 
 // NewIndex validates st and builds its index. st must not be changed afterwards.
 func NewIndex(st *State) (*Index, error) {
-	idx := &Index{State: st, helpers: map[string]int{}, clients: map[string]int{}}
+	idx := &Index{State: st, agents: map[string]int{}, clients: map[string]int{}}
 	names := map[string]bool{}
-	for i, h := range st.Helpers {
-		if _, err := auth.CleanName(h.Name, MaxHelperName); err != nil {
+	for i, h := range st.Agents {
+		if _, err := auth.CleanName(h.Name, MaxAgentName); err != nil {
 			return nil, fmt.Errorf("agent %q: %w", h.Name, err)
 		}
 		if names[h.Name] {
@@ -90,10 +90,10 @@ func NewIndex(st *State) (*Index, error) {
 			return nil, fmt.Errorf("agent %q: %w", h.Name, err)
 		}
 		fp := auth.Fingerprint(k)
-		if _, dup := idx.helpers[fp]; dup {
+		if _, dup := idx.agents[fp]; dup {
 			return nil, fmt.Errorf("agent %q: key %s is used by another agent", h.Name, fp)
 		}
-		idx.helpers[fp] = i
+		idx.agents[fp] = i
 		idx.hfps = append(idx.hfps, fp)
 	}
 	for i, c := range st.Clients {
@@ -102,7 +102,7 @@ func NewIndex(st *State) (*Index, error) {
 			return nil, fmt.Errorf("client %q: %w", c.Name, err)
 		}
 		fp := auth.Fingerprint(k)
-		if _, dup := idx.helpers[fp]; dup {
+		if _, dup := idx.agents[fp]; dup {
 			return nil, fmt.Errorf("client %q: key %s is an agent key", c.Name, fp)
 		}
 		if _, dup := idx.clients[fp]; dup {
@@ -116,9 +116,9 @@ func NewIndex(st *State) (*Index, error) {
 
 // Lookup returns the identity for a fingerprint. Unknown keys are pending.
 func (x *Index) Lookup(fp string) Identity {
-	if i, ok := x.helpers[fp]; ok {
-		h := x.State.Helpers[i]
-		return Identity{Role: control.RoleHelper, Name: h.Name, KeyLine: h.PublicKey}
+	if i, ok := x.agents[fp]; ok {
+		h := x.State.Agents[i]
+		return Identity{Role: control.RoleAgent, Name: h.Name, KeyLine: h.PublicKey}
 	}
 	if i, ok := x.clients[fp]; ok {
 		c := x.State.Clients[i]
@@ -127,8 +127,8 @@ func (x *Index) Lookup(fp string) Identity {
 	return Identity{Role: control.RolePending}
 }
 
-// HelperFingerprint returns the fingerprint of State.Helpers[i].
-func (x *Index) HelperFingerprint(i int) string { return x.hfps[i] }
+// AgentFingerprint returns the fingerprint of State.Agents[i].
+func (x *Index) AgentFingerprint(i int) string { return x.hfps[i] }
 
 // ClientFingerprint returns the fingerprint of State.Clients[i].
 func (x *Index) ClientFingerprint(i int) string { return x.fps[i] }
@@ -144,7 +144,7 @@ func (x *Index) Client(fp string) (Client, bool) {
 
 // Clone returns a deep copy.
 func (st *State) Clone() *State {
-	return &State{Helpers: slices.Clone(st.Helpers), Clients: slices.Clone(st.Clients)}
+	return &State{Agents: slices.Clone(st.Agents), Clients: slices.Clone(st.Clients)}
 }
 
 // Store reads and writes state.json in a directory.
@@ -304,9 +304,9 @@ func writeAtomic(path string, b []byte) error {
 	return nil
 }
 
-// AddHelper adds a helper. The key line is normalized.
-func (st *State) AddHelper(name, keyLine string) error {
-	name, err := auth.CleanName(name, MaxHelperName)
+// AddAgent adds an agent. The key line is normalized.
+func (st *State) AddAgent(name, keyLine string) error {
+	name, err := auth.CleanName(name, MaxAgentName)
 	if err != nil {
 		return err
 	}
@@ -318,7 +318,7 @@ func (st *State) AddHelper(name, keyLine string) error {
 		return err
 	}
 	fp := auth.Fingerprint(k)
-	for _, h := range st.Helpers {
+	for _, h := range st.Agents {
 		if h.Name == name {
 			return fmt.Errorf("agent %q already exists", name)
 		}
@@ -331,17 +331,17 @@ func (st *State) AddHelper(name, keyLine string) error {
 			return fmt.Errorf("key %s is registered as client %q; a key can't be both", fp, c.Name)
 		}
 	}
-	st.Helpers = append(st.Helpers, Helper{Name: name, PublicKey: auth.KeyLine(k, comment)})
+	st.Agents = append(st.Agents, Agent{Name: name, PublicKey: auth.KeyLine(k, comment)})
 	return nil
 }
 
-// RemoveHelper removes a helper by name.
-func (st *State) RemoveHelper(name string) error {
-	i := slices.IndexFunc(st.Helpers, func(h Helper) bool { return h.Name == name })
+// RemoveAgent removes an agent by name.
+func (st *State) RemoveAgent(name string) error {
+	i := slices.IndexFunc(st.Agents, func(h Agent) bool { return h.Name == name })
 	if i < 0 {
 		return fmt.Errorf("no agent %q", name)
 	}
-	st.Helpers = slices.Delete(st.Helpers, i, i+1)
+	st.Agents = slices.Delete(st.Agents, i, i+1)
 	return nil
 }
 
@@ -362,7 +362,7 @@ func (st *State) AddClient(keyLine, name, by string, at time.Time) (fp, regName 
 		return "", "", err
 	}
 	fp = auth.Fingerprint(k)
-	for _, h := range st.Helpers {
+	for _, h := range st.Agents {
 		if sameKey(h.PublicKey, fp) {
 			return "", "", fmt.Errorf("key %s is the key of agent %q; a key can't be both", fp, h.Name)
 		}

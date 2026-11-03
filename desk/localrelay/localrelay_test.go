@@ -40,7 +40,7 @@ func waitState(t *testing.T, r *Relay, want State) Status {
 	}
 }
 
-func helpers(t *testing.T, dir string) []store.Helper {
+func agents(t *testing.T, dir string) []store.Agent {
 	t.Helper()
 	st, err := store.Open(dir)
 	if err != nil {
@@ -50,17 +50,17 @@ func helpers(t *testing.T, dir string) []store.Helper {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return idx.State.Helpers
+	return idx.State.Agents
 }
 
 // TestRunsInProcess starts the relay inside the test process, checks that it
-// speaks SSH, adds the helper's key once, and stops cleanly.
+// speaks SSH, adds the agent's key once, and stops cleanly.
 func TestRunsInProcess(t *testing.T) {
 	dir := t.TempDir()
 	port := freePort(t)
-	r := Start(Options{Port: port, StateDir: dir, Version: "test", HelperName: "alice", KeyLine: keyLine})
+	r := Start(Options{Port: port, StateDir: dir, Version: "test", AgentName: "alice", KeyLine: keyLine})
 	st := waitState(t, r, StateRunning)
-	if st.HelperAdded != 1 || st.StateDir != dir {
+	if st.AgentAdded != 1 || st.StateDir != dir {
 		t.Fatalf("status %+v", st)
 	}
 
@@ -77,8 +77,8 @@ func TestRunsInProcess(t *testing.T) {
 		t.Fatalf("banner %q", buf[:n])
 	}
 
-	if hs := helpers(t, dir); len(hs) != 1 || hs[0].Name != "alice" {
-		t.Fatalf("helpers %+v", hs)
+	if hs := agents(t, dir); len(hs) != 1 || hs[0].Name != "alice" {
+		t.Fatalf("agents %+v", hs)
 	}
 	r.Stop()
 	if st := r.Status(); st.State != StateStopped {
@@ -88,36 +88,36 @@ func TestRunsInProcess(t *testing.T) {
 		t.Fatal("still listening after Stop")
 	}
 
-	// A second start finds the helper and adds nothing; the host key stays.
-	r = Start(Options{Port: port, StateDir: dir, HelperName: "bob", KeyLine: keyLine})
-	if st := waitState(t, r, StateRunning); st.HelperAdded != 0 {
+	// A second start finds the agent and adds nothing; the host key stays.
+	r = Start(Options{Port: port, StateDir: dir, AgentName: "bob", KeyLine: keyLine})
+	if st := waitState(t, r, StateRunning); st.AgentAdded != 0 {
 		t.Fatalf("added again: %+v", st)
 	}
 	r.Stop()
-	if hs := helpers(t, dir); len(hs) != 1 {
-		t.Fatalf("helpers %+v", hs)
+	if hs := agents(t, dir); len(hs) != 1 {
+		t.Fatalf("agents %+v", hs)
 	}
 }
 
-// TestAddsThisHelper: a relay that already has other helpers still gets
-// this helper's key, with a number added when the name is taken.
-func TestAddsThisHelper(t *testing.T) {
+// TestAddsThisAgent: a relay that already has other agents still gets
+// this agent's key, with a number added when the name is taken.
+func TestAddsThisAgent(t *testing.T) {
 	dir := t.TempDir()
 	port := freePort(t)
-	r := Start(Options{Port: port, StateDir: dir, HelperName: "alice", KeyLine: keyLine})
+	r := Start(Options{Port: port, StateDir: dir, AgentName: "alice", KeyLine: keyLine})
 	waitState(t, r, StateRunning)
 	r.Stop()
 
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
 	signer, _ := ssh.NewSignerFromKey(priv)
 	other := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey())))
-	r = Start(Options{Port: port, StateDir: dir, HelperName: "alice", KeyLine: other})
-	if st := waitState(t, r, StateRunning); st.HelperAdded != 1 {
+	r = Start(Options{Port: port, StateDir: dir, AgentName: "alice", KeyLine: other})
+	if st := waitState(t, r, StateRunning); st.AgentAdded != 1 {
 		t.Fatalf("not added: %+v", st)
 	}
 	r.Stop()
-	if hs := helpers(t, dir); len(hs) != 2 || hs[1].Name != "alice2" {
-		t.Fatalf("helpers %+v", hs)
+	if hs := agents(t, dir); len(hs) != 2 || hs[1].Name != "alice2" {
+		t.Fatalf("agents %+v", hs)
 	}
 }
 
@@ -139,10 +139,10 @@ func TestExternalRelay(t *testing.T) {
 		}
 	}()
 	dir := t.TempDir()
-	r := Start(Options{Port: ln.Addr().(*net.TCPAddr).Port, StateDir: dir, HelperName: "alice", KeyLine: keyLine})
+	r := Start(Options{Port: ln.Addr().(*net.TCPAddr).Port, StateDir: dir, AgentName: "alice", KeyLine: keyLine})
 	st := waitState(t, r, StateExternal)
 	r.Stop()
-	if st.HelperAdded != 1 || len(helpers(t, dir)) != 1 {
+	if st.AgentAdded != 1 || len(agents(t, dir)) != 1 {
 		t.Fatalf("status %+v", st)
 	}
 }

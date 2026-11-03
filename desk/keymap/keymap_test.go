@@ -7,7 +7,7 @@ import (
 	"github.com/mevdschee/helpbuoy/proto/input"
 )
 
-// w3c lists every W3C code the helper must be able to send: the full
+// w3c lists every W3C code the agent must be able to send: the full
 // 104/105-key PC keyboard plus F13 to F24.
 func w3c() []string {
 	var s []string

@@ -10,13 +10,13 @@ import (
 	"github.com/mevdschee/helpbuoy/proto/control"
 )
 
-// sortedHelpers returns the helpers of the presence, online first, each
+// sortedAgents returns the agents of the presence, online first, each
 // group sorted by name.
-func sortedHelpers(p *control.Presence) []control.HelperInfo {
+func sortedAgents(p *control.Presence) []control.AgentInfo {
 	if p == nil {
 		return nil
 	}
-	hs := append([]control.HelperInfo(nil), p.Helpers...)
+	hs := append([]control.AgentInfo(nil), p.Agents...)
 	sort.SliceStable(hs, func(i, j int) bool {
 		if hs[i].Online != hs[j].Online {
 			return hs[i].Online
@@ -26,14 +26,14 @@ func sortedHelpers(p *control.Presence) []control.HelperInfo {
 	return hs
 }
 
-// helping returns the clients a helper is in session with, by name.
-func helping(p *control.Presence, helper string) []string {
+// helping returns the clients an agent is in session with, by name.
+func helping(p *control.Presence, agent string) []string {
 	var names []string
 	if p == nil {
 		return nil
 	}
 	for _, c := range p.Clients {
-		if c.InSessionWith == helper {
+		if c.InSessionWith == agent {
 			names = append(names, c.Name)
 		}
 	}
@@ -41,9 +41,9 @@ func helping(p *control.Presence, helper string) []string {
 	return names
 }
 
-// drawHelpersPage draws the Helpers tab: every helper on the relay with an
+// drawAgentsPage draws the Agents tab: every agent on the relay with an
 // online dot, and whom they are helping right now.
-func (a *App) drawHelpersPage(r rl.Rectangle) {
+func (a *App) drawAgentsPage(r rl.Rectangle) {
 	c := a.ui
 	rl.DrawRectangleRec(r, ui.ColPanel)
 	c.Text(ui.Bold, ui.SizeHeading, "Agents", r.X+16, r.Y+14, ui.ColText)
@@ -52,7 +52,7 @@ func (a *App) drawHelpersPage(r rl.Rectangle) {
 	if a.presence == nil {
 		return
 	}
-	hs := sortedHelpers(a.presence)
+	hs := sortedAgents(a.presence)
 	if len(hs) == 0 {
 		c.Text(ui.Regular, ui.SizeSmall, "No agents on this relay.", list.X+16, list.Y+14, ui.ColMuted)
 		return
@@ -60,13 +60,13 @@ func (a *App) drawHelpersPage(r rl.Rectangle) {
 	off := c.BeginScroll("agents", list, float32(len(hs))*rowH)
 	y := list.Y + off
 	for _, h := range hs {
-		a.drawHelperRow(h, rl.NewRectangle(list.X, y, list.Width, rowH))
+		a.drawAgentRow(h, rl.NewRectangle(list.X, y, list.Width, rowH))
 		y += rowH
 	}
 	c.EndScroll()
 }
 
-func (a *App) drawHelperRow(h control.HelperInfo, r rl.Rectangle) {
+func (a *App) drawAgentRow(h control.AgentInfo, r rl.Rectangle) {
 	c := a.ui
 	rl.DrawLineV(rl.NewVector2(r.X+16, r.Y+r.Height), rl.NewVector2(r.X+r.Width, r.Y+r.Height), ui.ColHover)
 	x := r.X + 16

@@ -1,5 +1,5 @@
 // Package fake is a small headless implementation of the app side of the
-// sv-control protocol, used by cmd/fakehelper, cmd/fakeclient and the relay
+// sv-control protocol, used by cmd/fakeagent, cmd/fakeclient and the relay
 // tests.
 package fake
 
@@ -102,7 +102,7 @@ type Conn struct {
 	Client   *ssh.Client
 	HostKey  ssh.PublicKey
 	Ctrl     ssh.Channel
-	Sessions <-chan ssh.NewChannel // incoming sv-session channels (helpers)
+	Sessions <-chan ssh.NewChannel // incoming sv-session channels (agents)
 	Msgs     chan any              // decoded control messages; closed at end
 
 	ctrl    *control.Conn

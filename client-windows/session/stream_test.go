@@ -113,7 +113,7 @@ func startStream(t *testing.T, serveErr error) *streamFixture {
 	}
 	t.Cleanup(func() { hs.Close(); hi.Close() })
 	r := &PatternRunner{
-		Serve: func(rw io.ReadWriteCloser, hostKey ssh.Signer, helperKey ssh.PublicKey) (InnerSession, error) {
+		Serve: func(rw io.ReadWriteCloser, hostKey ssh.Signer, agentKey ssh.PublicKey) (InnerSession, error) {
 			if serveErr != nil {
 				return nil, serveErr
 			}
@@ -243,7 +243,7 @@ func TestStreamEndsWhenInnerEnds(t *testing.T) {
 			}
 		}
 	}()
-	f.inner.Close() // the helper ended the session
+	f.inner.Close() // the agent ended the session
 	select {
 	case <-f.runErr:
 	case <-time.After(2 * time.Second):

@@ -1,6 +1,6 @@
 // Package session keeps the client's connection to the relay: SSH with the
 // app key, the sv-control channel, help requests, and the session channel
-// with the inner SSH server once a helper opened the request (PLAN.md 1, 3.3,
+// with the inner SSH server once an agent opened the request (PLAN.md 1, 3.3,
 // 3.5). It has no GUI dependencies; the window gets a State snapshot after
 // every change through Handler.
 package session
@@ -32,8 +32,8 @@ const (
 	PhaseStopped    Phase = iota // not started, closed, or given up (see State.Err)
 	PhaseConnecting              // dialing, or waiting before the next attempt
 	PhasePending                 // connected, key not registered yet
-	PhaseReady                   // registered and connected, waiting for a helper
-	PhaseAsking                  // a helper wants to connect; the user is asked, then the session starts
+	PhaseReady                   // registered and connected, waiting for an agent
+	PhaseAsking                  // an agent wants to connect; the user is asked, then the session starts
 	PhaseInSession               // the session runs
 )
 
@@ -41,8 +41,8 @@ func (p Phase) String() string {
 	return [...]string{"stopped", "connecting", "pending", "ready", "asking", "in-session"}[p]
 }
 
-// Helper describes the helper of the current or last session.
-type Helper struct {
+// Agent describes the agent of the current or last session.
+type Agent struct {
 	Name        string
 	Fingerprint string
 }
@@ -56,37 +56,37 @@ type State struct {
 	// first connection), RelayFingerprint its fingerprint.
 	RelayHostKey     string
 	RelayFingerprint string
-	// RequestID of the helper's connect being asked about or running.
+	// RequestID of the agent's connect being asked about or running.
 	RequestID string
-	// Helper of the running session, or of the last one.
-	Helper Helper
+	// Agent of the running session, or of the last one.
+	Agent Agent
 }
 
 // Handler receives events from the client. Its methods are called from the
-// client's goroutines; StateChanged, Registered and HelperPinned must return
-// quickly. ConfirmHelper may block while the user decides.
+// client's goroutines; StateChanged, Registered and AgentPinned must return
+// quickly. ConfirmAgent may block while the user decides.
 type Handler interface {
 	// StateChanged reports a new snapshot. Snapshots arrive in order.
 	StateChanged(State)
 	// Registered reports that the relay knows this key as a client, and
 	// the relay host key line to pin from now on.
 	Registered(relayHostKey string)
-	// HelperPinned reports a helper key to remember for name.
-	HelperPinned(name, keyLine string)
-	// ConfirmHelper asks the user whether helper h may take control. It is
+	// AgentPinned reports an agent key to remember for name.
+	AgentPinned(name, keyLine string)
+	// ConfirmAgent asks the user whether agent h may take control. It is
 	// called for every session, before the session channel is opened.
-	// oldFingerprint is set when the helper called h.Name showed a different
+	// oldFingerprint is set when the agent called h.Name showed a different
 	// key last time ("unreadable" if the pinned key can't be parsed). ctx
 	// ends when the question is moot (the relay ended the request, or the
 	// connection was lost); the implementation should then stop asking.
-	ConfirmHelper(ctx context.Context, h Helper, oldFingerprint string) bool
+	ConfirmAgent(ctx context.Context, h Agent, oldFingerprint string) bool
 }
 
 // Runner runs one session on the client's sv-session channel: the inner SSH
 // server and the screen and input streams. It returns when the session ends
 // or ctx is cancelled (local Esc, window closed, relay connection lost).
 type Runner interface {
-	Run(ctx context.Context, ch io.ReadWriteCloser, helperKey ssh.PublicKey) error
+	Run(ctx context.Context, ch io.ReadWriteCloser, agentKey ssh.PublicKey) error
 }
 
 // Options configure a Client. Addr, Signer and Handler are required.
@@ -99,8 +99,8 @@ type Options struct {
 	// RelayHostKey is the pinned relay host key line; empty means trust on
 	// first use (the first-run window).
 	RelayHostKey string
-	// KnownHelpers maps helper names to pinned key lines.
-	KnownHelpers map[string]string
+	// KnownAgents maps agent names to pinned key lines.
+	KnownAgents map[string]string
 	// Retry keeps retrying when the very first attempt fails. Without it the
 	// client gives up after a failed first attempt, so the first-run window
 	// can show the error; after one successful connection it always retries.
@@ -113,7 +113,7 @@ type Options struct {
 	// onEsc to be called when the user presses Esc on the local keyboard and
 	// return a function that removes that hook again.
 	EscHook func(onEsc func()) (stop func())
-	// ParseKey parses a helper key line; default proto/identity.ParseLine.
+	// ParseKey parses an agent key line; default proto/identity.ParseLine.
 	ParseKey func(line string) (ssh.PublicKey, error)
 
 	DialTimeout time.Duration // TCP connect, SSH handshake and Hello; default 10 s
@@ -138,14 +138,14 @@ type Client struct {
 	stopped     bool
 	err         error
 	hostKey     ssh.PublicKey
-	helpers     map[string]string
+	agents      map[string]string
 	conn        *relayConn // nil while disconnected
 	pending     bool
 	reqID       string             // request of the SessionReady being handled, "" once it ended
-	reqEnded    context.CancelFunc // cancels the ConfirmHelper context
+	reqEnded    context.CancelFunc // cancels the ConfirmAgent context
 	sessionBusy bool               // SessionReady accepted, until the session ended
 	inSession   bool
-	helper      Helper
+	agent       Agent
 	endSession  context.CancelFunc
 }
 
@@ -193,13 +193,13 @@ func New(opts Options) *Client {
 		log = slog.Default()
 	}
 	c := &Client{
-		opts:    opts,
-		log:     log.With("relay", opts.Addr),
-		done:    make(chan struct{}),
-		helpers: make(map[string]string),
+		opts:   opts,
+		log:    log.With("relay", opts.Addr),
+		done:   make(chan struct{}),
+		agents: make(map[string]string),
 	}
-	for k, v := range opts.KnownHelpers {
-		c.helpers[k] = v
+	for k, v := range opts.KnownAgents {
+		c.agents[k] = v
 	}
 	if opts.RelayHostKey != "" {
 		if k, _, _, _, err := ssh.ParseAuthorizedKey([]byte(opts.RelayHostKey)); err == nil {
@@ -256,7 +256,7 @@ func (c *Client) stateLocked() State {
 	s := State{
 		Err:       c.err,
 		RequestID: c.reqID,
-		Helper:    c.helper,
+		Agent:     c.agent,
 	}
 	if c.hostKey != nil {
 		s.RelayHostKey = identity.KeyLine(c.hostKey, "")
@@ -321,7 +321,7 @@ func (c *Client) run() {
 		}
 		c.log.Info("relay connection ended", "err", err, "connected", reached)
 		switch k := Classify(err); {
-		case k == KindHostKeyChanged, k == KindHelperKey,
+		case k == KindHostKeyChanged, k == KindAgentKey,
 			!reachedOnce && !c.opts.Retry:
 			c.giveUp(err)
 			return
@@ -536,9 +536,9 @@ func (c *Client) connected(rc *relayConn, h *control.Hello) error {
 	var registered bool
 	c.mu.Lock()
 	switch h.Role {
-	case control.RoleHelper:
+	case control.RoleAgent:
 		c.mu.Unlock()
-		return ErrHelperKey
+		return ErrAgentKey
 	case control.RolePending:
 		c.pending = true
 	case control.RoleClient:
@@ -628,10 +628,10 @@ func (c *Client) endRequestLocked() {
 	}
 }
 
-// runSession asks the user about the helper and runs the session for one
+// runSession asks the user about the agent and runs the session for one
 // SessionReady. ask ends when the request ends.
 func (c *Client) runSession(rc *relayConn, sr control.SessionReady, ask context.Context) {
-	log := c.log.With("request", sr.RequestID, "helper", sr.HelperName)
+	log := c.log.With("request", sr.RequestID, "agent", sr.AgentName)
 	abort := func(why string, err error) {
 		log.Warn("session not started: "+why, "err", err)
 		rc.send(control.CancelRequest{RequestID: sr.RequestID})
@@ -645,16 +645,16 @@ func (c *Client) runSession(rc *relayConn, sr control.SessionReady, ask context.
 		abort("no session runner", nil)
 		return
 	}
-	key, err := c.opts.ParseKey(sr.HelperKey)
+	key, err := c.opts.ParseKey(sr.AgentKey)
 	if err != nil {
-		abort("unusable helper key", err)
+		abort("unusable agent key", err)
 		return
 	}
 	fp := ssh.FingerprintSHA256(key)
 	line := identity.KeyLine(key, "")
 
 	c.mu.Lock()
-	old := c.helpers[sr.HelperName]
+	old := c.agents[sr.AgentName]
 	c.mu.Unlock()
 	pin := old == ""
 	oldFP := ""
@@ -665,13 +665,13 @@ func (c *Client) runSession(rc *relayConn, sr control.SessionReady, ask context.
 			if perr == nil {
 				oldFP = ssh.FingerprintSHA256(oldKey)
 			}
-			log.Warn("helper key changed", "old", oldFP, "new", fp)
+			log.Warn("agent key changed", "old", oldFP, "new", fp)
 			pin = true
 		}
 	}
-	helper := Helper{Name: sr.HelperName, Fingerprint: fp}
-	if !c.opts.Handler.ConfirmHelper(ask, helper, oldFP) {
-		abort("user refused the helper", nil)
+	agent := Agent{Name: sr.AgentName, Fingerprint: fp}
+	if !c.opts.Handler.ConfirmAgent(ask, agent, oldFP) {
+		abort("user refused the agent", nil)
 		return
 	}
 	if ask.Err() != nil {
@@ -680,9 +680,9 @@ func (c *Client) runSession(rc *relayConn, sr control.SessionReady, ask context.
 	}
 	if pin {
 		c.mu.Lock()
-		c.helpers[sr.HelperName] = line
+		c.agents[sr.AgentName] = line
 		c.mu.Unlock()
-		c.opts.Handler.HelperPinned(sr.HelperName, line)
+		c.opts.Handler.AgentPinned(sr.AgentName, line)
 	}
 
 	ctx, cancel := context.WithCancel(rc.ctx)
@@ -697,7 +697,7 @@ func (c *Client) runSession(rc *relayConn, sr control.SessionReady, ask context.
 
 	c.mu.Lock()
 	c.inSession = true
-	c.helper = helper
+	c.agent = agent
 	c.endSession = cancel
 	c.mu.Unlock()
 	c.notify()

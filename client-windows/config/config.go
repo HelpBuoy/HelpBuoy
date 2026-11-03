@@ -1,7 +1,7 @@
 // Package config stores what the client learns about its relay in
 // config.json in the app's data directory (PLAN.md section 0): the relay
 // address, the pinned relay host key, the pinned key
-// of every helper met on that relay, and the hand-set performance mode. The app key lives next to it but is managed by
+// of every agent met on that relay, and the hand-set performance mode. The app key lives next to it but is managed by
 // proto/appkey.
 package config
 
@@ -25,11 +25,11 @@ type Config struct {
 	RelayAddress string `json:"relay_address,omitempty"`
 	// RelayHostKey is the pinned relay host key as an authorized_keys line.
 	RelayHostKey string `json:"relay_host_key,omitempty"`
-	// KnownHelpers maps a helper name to its pinned authorized_keys line.
-	// The pins belong to RelayAddress: helpers are vouched for by the relay
+	// KnownAgents maps an agent name to its pinned authorized_keys line.
+	// The pins belong to RelayAddress: agents are vouched for by the relay
 	// and names are only unique within one relay, so changing the relay
 	// address clears them.
-	KnownHelpers map[string]string `json:"known_helpers,omitempty"`
+	KnownAgents map[string]string `json:"known_agents,omitempty"`
 	// LastAddress is the last address that reached a relay, used to
 	// prefill the address field on the next start.
 	LastAddress string `json:"last_address,omitempty"`
@@ -50,10 +50,10 @@ func (c *Config) Clone() *Config {
 		return &Config{}
 	}
 	n := *c
-	if c.KnownHelpers != nil {
-		n.KnownHelpers = make(map[string]string, len(c.KnownHelpers))
-		for k, v := range c.KnownHelpers {
-			n.KnownHelpers[k] = v
+	if c.KnownAgents != nil {
+		n.KnownAgents = make(map[string]string, len(c.KnownAgents))
+		for k, v := range c.KnownAgents {
+			n.KnownAgents[k] = v
 		}
 	}
 	return &n

@@ -179,10 +179,10 @@ func (w *Window) Render(v app.View) {
 	w.wnd.UiThread(func() { w.apply(v) })
 }
 
-// ConfirmHelper implements app.UI with a modal dialog that asks whether the
-// helper may take control. A changed helper key gets its own dialog with an
+// ConfirmAgent implements app.UI with a modal dialog that asks whether the
+// agent may take control. A changed agent key gets its own dialog with an
 // error icon, a warning headline and Cancel as the default button.
-func (w *Window) ConfirmHelper(ctx context.Context, h session.Helper, oldFP string) bool {
+func (w *Window) ConfirmAgent(ctx context.Context, h session.Agent, oldFP string) bool {
 	if w.wnd.Hwnd() == 0 {
 		return false
 	}
@@ -217,7 +217,7 @@ func (w *Window) ConfirmHelper(ctx context.Context, h session.Helper, oldFP stri
 		}
 		cfg.DefaultButtonId = uint16(co.ID_CANCEL)
 	}
-	// When the question becomes moot (the helper gave up, the relay
+	// When the question becomes moot (the agent gave up, the relay
 	// connection was lost) the dialog is closed as if Cancel was pressed.
 	stop := context.AfterFunc(ctx, func() {
 		w.wnd.UiThread(w.closeTaskDialog)

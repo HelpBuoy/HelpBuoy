@@ -58,12 +58,12 @@ func TestDemoShapes(t *testing.T) {
 	}
 }
 
-func TestSortedHelpersAndHelping(t *testing.T) {
+func TestSortedAgentsAndHelping(t *testing.T) {
 	p := &control.Presence{
-		Helpers: []control.HelperInfo{{Name: "zoe", Online: true}, {Name: "bob"}, {Name: "Alice", Online: true}},
+		Agents:  []control.AgentInfo{{Name: "zoe", Online: true}, {Name: "bob"}, {Name: "Alice", Online: true}},
 		Clients: []control.ClientInfo{{Name: "jan@PC", InSessionWith: "zoe"}, {Name: "anna@PC", InSessionWith: "zoe"}, {Name: "piet@PC"}},
 	}
-	hs := sortedHelpers(p)
+	hs := sortedAgents(p)
 	if len(hs) != 3 || hs[0].Name != "Alice" || hs[1].Name != "zoe" || hs[2].Name != "bob" {
 		t.Fatalf("order %+v", hs)
 	}
@@ -75,14 +75,14 @@ func TestSortedHelpersAndHelping(t *testing.T) {
 	}
 }
 
-func TestHelperNames(t *testing.T) {
+func TestAgentNames(t *testing.T) {
 	for comment, want := range map[string]string{"bob@PC": "bob", "Bob Smith@pc": "", "": "", "alice": "alice"} {
-		if got := helperNameFrom(comment); got != want {
-			t.Errorf("helperNameFrom(%q) = %q, want %q", comment, got, want)
+		if got := agentNameFrom(comment); got != want {
+			t.Errorf("agentNameFrom(%q) = %q, want %q", comment, got, want)
 		}
 	}
-	if validHelperName("with space") || !validHelperName("bob") || validHelperName("") {
-		t.Error("validHelperName")
+	if validAgentName("with space") || !validAgentName("bob") || validAgentName("") {
+		t.Error("validAgentName")
 	}
 }
 

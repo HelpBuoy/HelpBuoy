@@ -1,7 +1,7 @@
 package input
 
-// Codes lists every W3C KeyboardEvent.code value the helper app can send in a
-// Key message. The helper's key map may only produce codes from this list,
+// Codes lists every W3C KeyboardEvent.code value the desk app can send in a
+// Key message. The agent's key map may only produce codes from this list,
 // and the client's injector must be able to inject every one of them; tests
 // on both sides check that, so the two apps can't drift apart.
 var Codes = []string{

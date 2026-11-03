@@ -31,13 +31,13 @@ func TestRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	idx, raw, err := s.Load()
-	if err != nil || raw != nil || len(idx.State.Helpers) != 0 {
+	if err != nil || raw != nil || len(idx.State.Agents) != 0 {
 		t.Fatalf("empty load: %v", err)
 	}
 	hk, ck := newKey(t), newKey(t)
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	_, _, err = s.Update(func(st *State) error {
-		if err := st.AddHelper("alice", auth.KeyLine(hk, "laptop")); err != nil {
+		if err := st.AddAgent("alice", auth.KeyLine(hk, "laptop")); err != nil {
 			return err
 		}
 		_, _, err := st.AddClient(auth.KeyLine(ck, "anna@PC"), "", "alice", now)
@@ -50,8 +50,8 @@ func TestRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if id := idx.Lookup(auth.Fingerprint(hk)); id.Role != control.RoleHelper || id.Name != "alice" {
-		t.Errorf("helper %+v", id)
+	if id := idx.Lookup(auth.Fingerprint(hk)); id.Role != control.RoleAgent || id.Name != "alice" {
+		t.Errorf("agent %+v", id)
 	}
 	if id := idx.Lookup(auth.Fingerprint(ck)); id.Role != control.RoleClient || id.Name != "anna@PC" {
 		t.Errorf("client %+v", id)
@@ -80,20 +80,20 @@ func TestRules(t *testing.T) {
 	st := &State{}
 	hk, ck := newKey(t), newKey(t)
 	at := time.Now()
-	if err := st.AddHelper("alice", auth.KeyLine(hk, "")); err != nil {
+	if err := st.AddAgent("alice", auth.KeyLine(hk, "")); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.AddHelper("alice", auth.KeyLine(newKey(t), "")); err == nil {
-		t.Error("duplicate helper name")
+	if err := st.AddAgent("alice", auth.KeyLine(newKey(t), "")); err == nil {
+		t.Error("duplicate agent name")
 	}
-	if err := st.AddHelper("bob", auth.KeyLine(hk, "")); err == nil {
-		t.Error("duplicate helper key")
+	if err := st.AddAgent("bob", auth.KeyLine(hk, "")); err == nil {
+		t.Error("duplicate agent key")
 	}
-	if err := st.AddHelper("with space", auth.KeyLine(newKey(t), "")); err == nil {
-		t.Error("helper name with space")
+	if err := st.AddAgent("with space", auth.KeyLine(newKey(t), "")); err == nil {
+		t.Error("agent name with space")
 	}
 	if _, _, err := st.AddClient(auth.KeyLine(hk, "x@y"), "", "alice", at); err == nil {
-		t.Error("helper key registered as client")
+		t.Error("agent key registered as client")
 	}
 	if _, _, err := st.AddClient(auth.KeyLine(ck, ""), "", "alice", at); err == nil {
 		t.Error("client without name")
@@ -104,8 +104,8 @@ func TestRules(t *testing.T) {
 	if _, _, err := st.AddClient(auth.KeyLine(ck, "again@PC"), "", "alice", at); err == nil {
 		t.Error("duplicate client")
 	}
-	if err := st.AddHelper("carol", auth.KeyLine(ck, "")); err == nil {
-		t.Error("client key added as helper")
+	if err := st.AddAgent("carol", auth.KeyLine(ck, "")); err == nil {
+		t.Error("client key added as agent")
 	}
 	if _, err := st.RemoveClient("SHA256:nope"); err == nil {
 		t.Error("removed unknown client")
@@ -113,11 +113,11 @@ func TestRules(t *testing.T) {
 	if name, err := st.RemoveClient(auth.Fingerprint(ck)); err != nil || name != "anna@PC" {
 		t.Errorf("remove client %q %v", name, err)
 	}
-	if err := st.RemoveHelper("nobody"); err == nil {
-		t.Error("removed unknown helper")
+	if err := st.RemoveAgent("nobody"); err == nil {
+		t.Error("removed unknown agent")
 	}
-	if err := st.RemoveHelper("alice"); err != nil || len(st.Helpers) != 0 {
-		t.Errorf("remove helper %v", err)
+	if err := st.RemoveAgent("alice"); err != nil || len(st.Agents) != 0 {
+		t.Errorf("remove agent %v", err)
 	}
 }
 
@@ -126,10 +126,10 @@ func TestParseRejectsBadState(t *testing.T) {
 	line := auth.KeyLine(hk, "")
 	for _, s := range []string{
 		`{`,
-		`{"helpers":[{"name":"a","public_key":"garbage"}]}`,
-		`{"helpers":[{"name":"a","display_name":"A","public_key":"` + line + `"}]}`,
-		`{"helpers":[{"name":"a","public_key":"` + line + `"},{"name":"b","public_key":"` + line + `"}]}`,
-		`{"helpers":[{"name":"a","public_key":"` + line + `"}],"clients":[{"name":"x","public_key":"` + line + `"}]}`,
+		`{"agents":[{"name":"a","public_key":"garbage"}]}`,
+		`{"agents":[{"name":"a","display_name":"A","public_key":"` + line + `"}]}`,
+		`{"agents":[{"name":"a","public_key":"` + line + `"},{"name":"b","public_key":"` + line + `"}]}`,
+		`{"agents":[{"name":"a","public_key":"` + line + `"}],"clients":[{"name":"x","public_key":"` + line + `"}]}`,
 		`{"unknown":1}`,
 	} {
 		if _, err := Parse([]byte(s)); err == nil {

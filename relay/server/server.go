@@ -48,12 +48,12 @@ type Config struct {
 	HandshakeTimeout   time.Duration // 10 s; also the time allowed to open the control channel
 	KeepaliveInterval  time.Duration // 15 s
 	KeepaliveMissed    int           // 3
-	SessionOpenTimeout time.Duration // time for a helper to accept the session channel, 30 s
-	PresenceInterval   time.Duration // minimum time between Presence snapshots to one helper, 100 ms
+	SessionOpenTimeout time.Duration // time for an agent to accept the session channel, 30 s
+	PresenceInterval   time.Duration // minimum time between Presence snapshots to one agent, 100 ms
 
-	SessionStartTimeout  time.Duration // 1 min
-	PendingIdle          time.Duration // 24 h
-	MaxSessionsPerHelper int           // 20
+	SessionStartTimeout time.Duration // 1 min
+	PendingIdle         time.Duration // 24 h
+	MaxSessionsPerAgent int           // 20
 
 	ReloadInterval time.Duration // state.json poll, 1 s
 	SweepInterval  time.Duration // expiry checks, 1 s
@@ -142,13 +142,13 @@ func New(cfg Config) (*Server, error) {
 	}
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.reg = registry.New(registry.Config{
-		Now:                  cfg.Now,
-		SessionStartTimeout:  cfg.SessionStartTimeout,
-		PendingIdle:          cfg.PendingIdle,
-		MaxSessionsPerHelper: cfg.MaxSessionsPerHelper,
-		Version:              cfg.Version,
-		Mutate:               s.mutate,
-		Log:                  cfg.Log,
+		Now:                 cfg.Now,
+		SessionStartTimeout: cfg.SessionStartTimeout,
+		PendingIdle:         cfg.PendingIdle,
+		MaxSessionsPerAgent: cfg.MaxSessionsPerAgent,
+		Version:             cfg.Version,
+		Mutate:              s.mutate,
+		Log:                 cfg.Log,
 	}, idx)
 	s.sshCfg = &ssh.ServerConfig{
 		PublicKeyCallback: auth.PublicKeyCallback,
@@ -158,7 +158,7 @@ func New(cfg Config) (*Server, error) {
 	s.sshCfg.AddHostKey(signer)
 	s.log.Info("relay started", "version", cfg.Version, "state", cfg.StateDir,
 		"hostkey", auth.Fingerprint(signer.PublicKey()),
-		"helpers", len(idx.State.Helpers), "clients", len(idx.State.Clients))
+		"agents", len(idx.State.Agents), "clients", len(idx.State.Clients))
 	s.loop(cfg.ReloadInterval, s.reload)
 	s.loop(cfg.SweepInterval, func() { s.reg.Sweep(); s.lim.Sweep() })
 	s.loop(cfg.LastSeenFlush, s.flushLastSeen)
@@ -222,7 +222,7 @@ func (s *Server) reload() {
 		s.log.Error("state reload failed, keeping the previous state", "err", err.Error())
 		return
 	}
-	s.log.Info("state reloaded", "helpers", len(idx.State.Helpers), "clients", len(idx.State.Clients))
+	s.log.Info("state reloaded", "agents", len(idx.State.Agents), "clients", len(idx.State.Clients))
 	s.reg.SetIndex(idx)
 }
 
@@ -636,18 +636,18 @@ func (c *conn) handleChannel(nch ssh.NewChannel) {
 }
 
 // Size limits for incoming control messages. Apps only send small messages;
-// helpers paste key lines, so they get a little more room.
+// agents paste key lines, so they get a little more room.
 const (
-	maxAppMessage    = 16 << 10
-	maxHelperMessage = 256 << 10
+	maxAppMessage   = 16 << 10
+	maxAgentMessage = 256 << 10
 )
 
 func (c *conn) reader(ch ssh.Channel) {
 	br := bufio.NewReaderSize(ch, 32<<10)
 	for {
 		max := maxAppMessage
-		if c.s.reg.Role(c.rc) == control.RoleHelper {
-			max = maxHelperMessage
+		if c.s.reg.Role(c.rc) == control.RoleAgent {
+			max = maxAgentMessage
 		}
 		m, err := readMessage(br, max)
 		if err != nil {
@@ -695,7 +695,7 @@ type openResult struct {
 }
 
 // handleSession serves a client's sv-session channel: it checks it against
-// the registry, opens the matching channel to the helper and splices them.
+// the registry, opens the matching channel to the agent and splices them.
 func (s *Server) handleSession(c *conn, nch ssh.NewChannel) {
 	data, err := control.UnmarshalSessionChannelData(nch.ExtraData())
 	if err != nil {
@@ -711,7 +711,7 @@ func (s *Server) handleSession(c *conn, nch ssh.NewChannel) {
 	h := hp.(*conn)
 	res := make(chan openResult, 1)
 	go func() {
-		ch, reqs, err := h.sc.OpenChannel(control.ChannelSession, control.MarshalHelperSessionData(hdata))
+		ch, reqs, err := h.sc.OpenChannel(control.ChannelSession, control.MarshalAgentSessionData(hdata))
 		res <- openResult{ch, reqs, err}
 	}()
 	var hr openResult
@@ -729,13 +729,13 @@ func (s *Server) handleSession(c *conn, nch ssh.NewChannel) {
 		}()
 	}
 	if hr.err != nil {
-		s.log.Info("session refused by agent", "fp", c.fp, "helper", h.fp, "reason", hr.err.Error())
+		s.log.Info("session refused by agent", "fp", c.fp, "agent", h.fp, "reason", hr.err.Error())
 		nch.Reject(ssh.ConnectionFailed, "agent did not accept the session")
 		sess.End(splice.Result{})
 		return
 	}
 	if sess.Ended() {
-		// Cancelled while the helper's channel was being opened.
+		// Cancelled while the agent's channel was being opened.
 		nch.Reject(ssh.Prohibited, "request was cancelled")
 		hr.ch.Close()
 		go ssh.DiscardRequests(hr.reqs)

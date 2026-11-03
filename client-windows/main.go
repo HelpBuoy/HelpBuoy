@@ -1,7 +1,7 @@
 //go:build windows
 
 // Command helpbuoy is the Windows client: the person who needs help runs
-// it, and allows a helper to take control when the helper connects.
+// it, and allows an agent to take control when the agent connects.
 //
 // Hidden flags for testing: --demo uses a key that only lives in memory and
 // a temporary settings folder, so the real key and settings are untouched,

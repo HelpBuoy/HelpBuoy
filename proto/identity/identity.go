@@ -425,7 +425,7 @@ func sanitize(s, fallback string) string {
 	return s
 }
 
-// ValidName reports whether s is acceptable as a client or helper name:
+// ValidName reports whether s is acceptable as a client or agent name:
 // 1..64 printable characters, no spaces or control characters.
 func ValidName(s string) bool {
 	if s == "" || !utf8.ValidString(s) || utf8.RuneCountInString(s) > 64 {

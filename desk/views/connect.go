@@ -16,7 +16,7 @@ import (
 )
 
 // connectScreen is the state of the first screen: the relay address and
-// Connect, and the key to send when this key is not a helper on the relay.
+// Connect, and the key to send when this key is not an agent on the relay.
 type connectScreen struct {
 	addr         ui.Field
 	err          string
@@ -35,7 +35,7 @@ func (s *connectScreen) init() {
 func (a *App) connecting() bool { return a.conn != nil || a.localWait }
 
 // startConnect is the Connect button. An empty address (or localhost)
-// starts the relay inside this app, with this helper's key added, and
+// starts the relay inside this app, with this agent's key added, and
 // connects to it.
 func (a *App) startConnect() {
 	s := &a.cs
@@ -60,7 +60,7 @@ func (a *App) startConnect() {
 	if config.IsLocal(ad) {
 		a.localAdded = 0
 		a.local = localrelay.Start(localrelay.Options{
-			Port: ad.Port, Version: a.opts.Version, HelperName: identity.HelperName(), KeyLine: a.key.Line,
+			Port: ad.Port, Version: a.opts.Version, AgentName: identity.AgentName(), KeyLine: a.key.Line,
 		})
 		a.localWait = true // the connection starts once the relay listens
 		return
@@ -94,7 +94,7 @@ func (a *App) disconnect() {
 		a.local.Stop()
 		a.local = nil
 	}
-	a.localWait, a.reached, a.notHelper = false, false, false
+	a.localWait, a.reached, a.notAgent = false, false, false
 	a.presence, a.me = nil, ""
 	a.status = relayconn.StatusEvent{}
 	a.opening = map[string]bool{}
@@ -127,7 +127,7 @@ func (a *App) pollLocal() {
 func (a *App) statusBeforeOnline(ev relayconn.StatusEvent) {
 	switch ev.Status {
 	case relayconn.StatusAuthFailed:
-		a.notHelper = true // shows the key screen; the connection keeps retrying
+		a.notAgent = true // shows the key screen; the connection keeps retrying
 	case relayconn.StatusUnreachable:
 		msg := "Nothing answered at this address."
 		if ev.Err != nil {
@@ -143,7 +143,7 @@ func (a *App) statusBeforeOnline(ev relayconn.StatusEvent) {
 }
 
 // drawStart draws the connect screen, or the key screen when the relay does
-// not know this key as a helper, in a centered box.
+// not know this key as an agent, in a centered box.
 func (a *App) drawStart() {
 	s := &a.cs
 	w, h := ui.WindowSize()
@@ -154,8 +154,8 @@ func (a *App) drawStart() {
 	rl.DrawRectangleRoundedLinesEx(box, 0.04, 8, 1, ui.ColBorder)
 	const pad = 32
 	x, y, cw := box.X+pad, box.Y+pad, box.Width-2*pad
-	if a.connecting() && a.notHelper {
-		y = a.drawNotHelper(x, y, cw)
+	if a.connecting() && a.notAgent {
+		y = a.drawNotAgent(x, y, cw)
 	} else {
 		y = a.drawConnect(x, y, cw)
 	}
@@ -210,9 +210,9 @@ func (a *App) drawConnect(x, y, w float32) float32 {
 	return y
 }
 
-// drawNotHelper is the key screen: the relay answered but does not know
-// this key as a helper. It keeps retrying, so adding the key is enough.
-func (a *App) drawNotHelper(x, y, w float32) float32 {
+// drawNotAgent is the key screen: the relay answered but does not know
+// this key as an agent. It keeps retrying, so adding the key is enough.
+func (a *App) drawNotAgent(x, y, w float32) float32 {
 	c := a.ui
 	s := &a.cs
 	c.Text(ui.Bold, ui.SizeHeading, "Send your key to get added", x, y, ui.ColText)

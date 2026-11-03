@@ -13,7 +13,7 @@ const MaxUnacked = 2
 // is full the client keeps accumulating damage and sends the newest pixels
 // once a slot frees up, so latency never builds up in SSH or TCP buffers.
 //
-// Acks are cumulative: the helper applies frames in order, so an Ack for Seq
+// Acks are cumulative: the agent applies frames in order, so an Ack for Seq
 // n also acknowledges every older frame still in flight. Sequence numbers are
 // compared with wraparound.
 //

@@ -24,12 +24,12 @@ type fakeUI struct {
 
 	mu     sync.Mutex
 	refuse bool
-	// gate, if set, holds ConfirmHelper until it is closed (then the
+	// gate, if set, holds ConfirmAgent until it is closed (then the
 	// answer is "allow") or the question becomes moot.
 	gate chan struct{}
 }
 
-// answer sets how ConfirmHelper answers from now on.
+// answer sets how ConfirmAgent answers from now on.
 func (u *fakeUI) answer(refuse bool, gate chan struct{}) {
 	u.mu.Lock()
 	u.refuse, u.gate = refuse, gate
@@ -37,7 +37,7 @@ func (u *fakeUI) answer(refuse bool, gate chan struct{}) {
 }
 
 func (u *fakeUI) Render(v View) { u.views <- v }
-func (u *fakeUI) ConfirmHelper(ctx context.Context, _ session.Helper, _ string) bool {
+func (u *fakeUI) ConfirmAgent(ctx context.Context, _ session.Agent, _ string) bool {
 	u.mu.Lock()
 	refuse, gate := u.refuse, u.gate
 	u.mu.Unlock()
@@ -218,17 +218,17 @@ func registered(t *testing.T, e *env) {
 	})
 }
 
-// connectHelper plays helper alice connecting through the fake relay.
-func connectHelper(t *testing.T, r *fakerelay.Relay, fp string) *appkey.Key {
+// connectAgent plays agent alice connecting through the fake relay.
+func connectAgent(t *testing.T, r *fakerelay.Relay, fp string) *appkey.Key {
 	t.Helper()
-	helper, _ := identity.Ephemeral("alice")
-	if _, err := r.Connect(fp, "alice", helper.Line); err != nil {
+	agent, _ := identity.Ephemeral("alice")
+	if _, err := r.Connect(fp, "alice", agent.Line); err != nil {
 		t.Fatal(err)
 	}
-	return helper
+	return agent
 }
 
-func TestHelperConnects(t *testing.T) {
+func TestAgentConnects(t *testing.T) {
 	e := newEnv(t)
 	registered(t, e)
 	c, ui := e.controller()
@@ -237,21 +237,21 @@ func TestHelperConnects(t *testing.T) {
 
 	// The user refuses: no session, still ready.
 	ui.answer(true, nil)
-	connectHelper(t, e.relay, e.fp())
+	connectAgent(t, e.relay, e.fp())
 	select {
 	case <-e.relay.Sessions():
 		t.Fatal("session despite refusal")
 	case <-time.After(100 * time.Millisecond):
 	}
 	ui.wait(t, "ready", readyMain)
-	if len(e.config().KnownHelpers) != 0 {
-		t.Fatal("refused helper pinned")
+	if len(e.config().KnownAgents) != 0 {
+		t.Fatal("refused agent pinned")
 	}
 
 	// While the user is asked the window says so.
 	gate := make(chan struct{})
 	ui.answer(false, gate)
-	helper := connectHelper(t, e.relay, e.fp())
+	agent := connectAgent(t, e.relay, e.fp())
 	ui.wait(t, "asking", func(v View) bool { return v.Screen == ScreenMain && v.Asking && v.Notice != "" })
 	close(gate)
 	sess := <-e.relay.Sessions()
@@ -259,10 +259,10 @@ func TestHelperConnects(t *testing.T) {
 	if v.Screen != ScreenMain || v.Ready {
 		t.Fatalf("session view %+v", v)
 	}
-	if got := e.config().KnownHelpers["alice"]; got != identity.KeyLine(helper.Public, "") {
+	if got := e.config().KnownAgents["alice"]; got != identity.KeyLine(agent.Public, "") {
 		t.Fatalf("pinned %q", got)
 	}
-	sess.Channel.Close() // the helper ends the session
+	sess.Channel.Close() // the agent ends the session
 	ui.wait(t, "back", func(v View) bool { return !v.InSession && readyMain(v) })
 }
 
@@ -339,7 +339,7 @@ func TestDamagedKey(t *testing.T) {
 func TestUnregisteredShowsKeyAgain(t *testing.T) {
 	e := newEnv(t)
 	registered(t, e)
-	// A relay that does not know the key (a helper removed it): pin a
+	// A relay that does not know the key (an agent removed it): pin a
 	// fresh fake relay on which the key is not registered.
 	relay2, err := fakerelay.Start("", fakerelay.Options{})
 	if err != nil {

@@ -311,14 +311,14 @@ func TestVerify(t *testing.T) {
 	line, fp := newKeyLine(t)
 	other, _ := newKeyLine(t)
 	p := &control.Presence{Clients: []control.ClientInfo{{Name: "anna@ANNA-PC", Fingerprint: fp}}}
-	d := control.HelperSessionData{RequestID: "r1", ClientName: "anna@ANNA-PC", ClientKey: line}
+	d := control.AgentSessionData{RequestID: "r1", ClientName: "anna@ANNA-PC", ClientKey: line}
 
 	info, err := Verify(d, p, true)
 	if err != nil || info.Fingerprint != fp || info.ClientKey == nil {
 		t.Fatalf("Verify = %+v, %v", info, err)
 	}
 	if _, err := Verify(d, p, false); err == nil {
-		t.Error("accepted a request this helper did not open")
+		t.Error("accepted a request this agent did not open")
 	}
 	if _, err := Verify(d, nil, true); err == nil {
 		t.Error("accepted without presence")
@@ -368,7 +368,7 @@ func covers(rs []image.Rectangle, p image.Point) bool {
 	return false
 }
 
-// read returns the next message the helper sent on the screen channel.
+// read returns the next message the agent sent on the screen channel.
 func (c *fakeClient) read(t *testing.T) (uint8, []byte) {
 	t.Helper()
 	c.screen.SetReadDeadline(time.Now().Add(5 * time.Second))

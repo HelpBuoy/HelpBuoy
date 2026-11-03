@@ -1,13 +1,13 @@
-// Package localrelay runs the relay inside the helper app (PLAN.md 7.1): the
+// Package localrelay runs the relay inside the desk app (PLAN.md 7.1): the
 // same relay/server code as the standalone helpbuoy-relay, compiled in, so there is
 // no separate executable to find or start. Unless something already listens
 // on the port, it serves on that port until Stop, keeps the tail of the relay
-// log for the settings page, and adds the helper's own key when it is not a
-// helper there yet.
+// log for the settings page, and adds the agent's own key when it is not a
+// agent there yet.
 //
 // It uses the same state directory as "helpbuoy-relay serve" (the per-user data
 // directory "helpbuoy-relay"), so the standalone relay and its admin commands
-// (helpbuoy-relay helper add, client list, ...) work on the same helpers, clients
+// (helpbuoy-relay agent add, client list, ...) work on the same agents, clients
 // and host key.
 package localrelay
 
@@ -65,9 +65,9 @@ type Options struct {
 	StateDir string // "" means the per-user data directory "helpbuoy-relay"
 	Version  string // reported to apps in Hello
 
-	// The helper's own key, added when it is not a helper on the relay yet.
-	HelperName string
-	KeyLine    string // authorized_keys line; "" skips the step
+	// The agent's own key, added when it is not an agent on the relay yet.
+	AgentName string
+	KeyLine   string // authorized_keys line; "" skips the step
 }
 
 // Status is a snapshot for the settings page.
@@ -76,9 +76,9 @@ type Status struct {
 	Err      error
 	StateDir string
 	Lines    []string // log tail, oldest first
-	// HelperAdded counts how often the helper's own key was added; the app
+	// AgentAdded counts how often the agent's own key was added; the app
 	// reconnects to the relay when it changes.
-	HelperAdded int
+	AgentAdded int
 }
 
 // Relay is a running local relay.
@@ -152,7 +152,7 @@ func (r *Relay) run() {
 	defer close(r.done)
 	dir := r.opts.StateDir
 	if dir == "" {
-		d, err := datadir.Migrate("helpbuoy-relay", "hmw-relay")
+		d, err := datadir.Dir("helpbuoy-relay")
 		if err != nil {
 			r.fail(err)
 			return
@@ -167,7 +167,7 @@ func (r *Relay) run() {
 		// Probably a standalone helpbuoy-relay on this machine; it reloads
 		// state.json by itself, so adding the key there still works.
 		r.set(StateExternal, nil)
-		r.ensureHelper(dir)
+		r.ensureAgent(dir)
 		<-r.ctx.Done()
 		r.set(StateStopped, nil)
 		return
@@ -192,7 +192,7 @@ func (r *Relay) run() {
 	log := slog.New(slog.NewJSONHandler(io.MultiWriter(lf, tailWriter{r}), nil))
 
 	// Before the server reads its state, so the key works on the first try.
-	r.ensureHelper(dir)
+	r.ensureAgent(dir)
 
 	srv, err := server.New(server.Config{StateDir: dir, Version: r.opts.Version, Log: log})
 	if err != nil {
@@ -219,9 +219,9 @@ func (r *Relay) run() {
 	}
 }
 
-// ensureHelper adds the helper's own key unless it already is a helper on
-// this relay. A name that another helper has gets a number appended.
-func (r *Relay) ensureHelper(dir string) {
+// ensureAgent adds the agent's own key unless it already is an agent on
+// this relay. A name that another agent has gets a number appended.
+func (r *Relay) ensureAgent(dir string) {
 	if r.opts.KeyLine == "" {
 		return
 	}
@@ -231,7 +231,7 @@ func (r *Relay) ensureHelper(dir string) {
 		return
 	}
 	fp := auth.Fingerprint(k)
-	base := r.opts.HelperName
+	base := r.opts.AgentName
 	if base == "" {
 		base = "agent"
 	}
@@ -244,7 +244,7 @@ func (r *Relay) ensureHelper(dir string) {
 	var name string
 	_, _, err = st.Update(func(s *store.State) error {
 		taken := map[string]bool{}
-		for _, h := range s.Helpers {
+		for _, h := range s.Agents {
 			if hk, _, err := auth.ParseKey(h.PublicKey); err == nil && auth.Fingerprint(hk) == fp {
 				return errKnown
 			}
@@ -254,7 +254,7 @@ func (r *Relay) ensureHelper(dir string) {
 		for n := 2; taken[name]; n++ {
 			name = fmt.Sprintf("%s%d", base, n)
 		}
-		return s.AddHelper(name, r.opts.KeyLine)
+		return s.AddAgent(name, r.opts.KeyLine)
 	})
 	switch {
 	case errors.Is(err, errKnown):
@@ -265,7 +265,7 @@ func (r *Relay) ensureHelper(dir string) {
 	}
 	r.logLine("added this desk app's key to the relay as " + name)
 	r.mu.Lock()
-	r.status.HelperAdded++
+	r.status.AgentAdded++
 	r.mu.Unlock()
 }
 

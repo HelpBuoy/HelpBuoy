@@ -52,8 +52,8 @@ func defaultLimits(c *server.Config) {
 // Nothing is blocked beyond that second.
 func TestKeyRate(t *testing.T) {
 	e := newEnv(t, defaultLimits)
-	hk := e.addHelper("alice")
-	h, _ := e.connect(hk, control.RoleHelper)
+	hk := e.addAgent("alice")
+	h, _ := e.connect(hk, control.RoleAgent)
 
 	// Same second: refused, and the first connection keeps working.
 	if role, _ := dialFrom(t, e, "127.0.0.1", hk); role != "" {
@@ -66,7 +66,7 @@ func TestKeyRate(t *testing.T) {
 
 	// A second later the key gets in, and the new connection replaces the old.
 	e.clock.Advance(time.Second)
-	if role, _ := dialFrom(t, e, "127.0.0.1", hk); role != control.RoleHelper {
+	if role, _ := dialFrom(t, e, "127.0.0.1", hk); role != control.RoleAgent {
 		t.Fatalf("after a second: %q", role)
 	}
 	if msg := waitClosed(t, h); msg == "" {
@@ -114,9 +114,9 @@ func TestFreshKeyFloodPerIP(t *testing.T) {
 	if role, _ := dialFrom(t, e, "127.0.0.3", fake.NewKey()); role != control.RolePending {
 		t.Fatal("other IP refused")
 	}
-	hk := e.addHelper("alice")
-	if role, _ := dialFrom(t, e, "127.0.0.2", hk); role != control.RoleHelper {
-		t.Fatalf("helper from the full IP: %q", role)
+	hk := e.addAgent("alice")
+	if role, _ := dialFrom(t, e, "127.0.0.2", hk); role != control.RoleAgent {
+		t.Fatalf("agent from the full IP: %q", role)
 	}
 	first.Close()
 	deadline := time.Now().Add(wait)
@@ -153,9 +153,9 @@ func TestManyClientsBehindFullIP(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.srv.Reload()
-	helpers := make([]*fake.Conn, 5)
-	for i := range helpers {
-		helpers[i] = e.helper(uniq("h"))
+	agents := make([]*fake.Conn, 5)
+	for i := range agents {
+		agents[i] = e.agent(uniq("h"))
 	}
 	for range 10 {
 		dialFrom(t, e, "127.0.0.2", fake.NewKey())
@@ -203,7 +203,7 @@ func TestManyClientsBehindFullIP(t *testing.T) {
 	if got := e.srv.Registry().Counts()[control.RoleClient]; got != n {
 		t.Errorf("online clients %d", got)
 	}
-	for _, h := range helpers {
+	for _, h := range agents {
 		presenceWhere(t, h, func(p *control.Presence) bool {
 			on := 0
 			for _, c := range p.Clients {
@@ -230,7 +230,7 @@ func TestPendingTotal(t *testing.T) {
 		t.Fatal("pending cap not enforced")
 	}
 	// Known keys are not counted against it.
-	e.connect(e.addHelper("alice"), control.RoleHelper)
+	e.connect(e.addAgent("alice"), control.RoleAgent)
 	e.connect(e.addClient("anna@PC"), control.RoleClient)
 	if got := e.srv.Limiter().Pending(); got != 3 {
 		t.Errorf("pending %d", got)
@@ -242,7 +242,7 @@ func TestPromotionFreesPendingSlot(t *testing.T) {
 		c.Limits = looseLimits()
 		c.Limits.PendingTotal = 1
 	})
-	h := e.helper("alice")
+	h := e.agent("alice")
 	k := fake.NewKey()
 	pc, _ := e.connect(k, control.RolePending)
 	h.Send(&control.RegisterClient{Seq: 1, PublicKey: keyLine(k, "anna@PC")})
@@ -253,10 +253,10 @@ func TestPromotionFreesPendingSlot(t *testing.T) {
 }
 
 // TestFailedHandshakesNoBan: garbage connections don't lead to any block;
-// a helper from the same address gets in right after them.
+// an agent from the same address gets in right after them.
 func TestFailedHandshakesNoBan(t *testing.T) {
 	e := newEnv(t, defaultLimits)
-	hk := e.addHelper("alice")
+	hk := e.addAgent("alice")
 	for range 50 {
 		nc, err := net.Dial("tcp", e.addr)
 		if err != nil {
@@ -266,15 +266,15 @@ func TestFailedHandshakesNoBan(t *testing.T) {
 		nc.Read(make([]byte, 512)) // wait for the relay to give up
 		nc.Close()
 	}
-	if role, _ := dialFrom(t, e, "127.0.0.1", hk); role != control.RoleHelper {
-		t.Fatalf("helper after failed handshakes: %q", role)
+	if role, _ := dialFrom(t, e, "127.0.0.1", hk); role != control.RoleAgent {
+		t.Fatalf("agent after failed handshakes: %q", role)
 	}
 }
 
-// TestManyHelpersAndClients connects 100 helpers and 1000 clients at once
-// (fewer under the race detector) and checks that every helper ends up with
+// TestManyAgentsAndClients connects 100 agents and 1000 clients at once
+// (fewer under the race detector) and checks that every agent ends up with
 // a Presence showing all of them.
-func TestManyHelpersAndClients(t *testing.T) {
+func TestManyAgentsAndClients(t *testing.T) {
 	if testing.Short() {
 		t.Skip("slow")
 	}
@@ -288,7 +288,7 @@ func TestManyHelpersAndClients(t *testing.T) {
 	if _, _, err := e.st.Update(func(st *store.State) error {
 		for i := range hkeys {
 			hkeys[i] = fake.NewKey()
-			if err := st.AddHelper(uniq("h"), keyLine(hkeys[i], "")); err != nil {
+			if err := st.AddAgent(uniq("h"), keyLine(hkeys[i], "")); err != nil {
 				return err
 			}
 		}
@@ -339,7 +339,7 @@ func TestManyHelpersAndClients(t *testing.T) {
 		t.Fatal(err)
 	}
 	counts := e.srv.Registry().Counts()
-	if counts[control.RoleHelper] != nh || counts[control.RoleClient] != nc {
+	if counts[control.RoleAgent] != nh || counts[control.RoleClient] != nc {
 		t.Fatalf("online %v", counts)
 	}
 	for _, h := range conns[:nh] {
@@ -350,7 +350,7 @@ func TestManyHelpersAndClients(t *testing.T) {
 					on++
 				}
 			}
-			for _, x := range p.Helpers {
+			for _, x := range p.Agents {
 				if x.Online {
 					on++
 				}

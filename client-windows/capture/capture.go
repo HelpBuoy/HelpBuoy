@@ -35,7 +35,7 @@ type Shape struct {
 	RGBA       []byte // W*H*4
 }
 
-// MaxShape is the largest cursor size sent to the helper (screen.MaxCursor);
+// MaxShape is the largest cursor size sent to the agent (screen.MaxCursor);
 // bigger cursors are cut to this size.
 const MaxShape = 256
 
@@ -117,7 +117,7 @@ func FindMonitor(ms []Monitor, name string, r image.Rectangle) int {
 }
 
 // ShapeID derives a cursor ID from the shape's content, so identical shapes
-// share an ID and the helper caches each image once.
+// share an ID and the agent caches each image once.
 func ShapeID(s Shape) uint32 {
 	h := fnv.New32a()
 	var hdr [16]byte

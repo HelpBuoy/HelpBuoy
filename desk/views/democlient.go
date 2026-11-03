@@ -37,14 +37,14 @@ const demoCacheSlots = 1024
 // animated "video" (JPEG tiles), solid and palette tiles, the tile cache
 // (Store and OpCacheRef), full frames split into parts, cursor shapes and
 // positions, monitor switching, quality and Refresh. Its cursor follows the
-// helper's mouse moves and otherwise wanders on its own.
+// agent's mouse moves and otherwise wanders on its own.
 type demoClient struct {
 	name    string
 	fw      *wire.Writer
 	start   time.Time
 	cur     int
 	quality screen.QualityMode
-	prev    *image.RGBA // what the helper has, apart from JPEG losses
+	prev    *image.RGBA // what the agent has, apart from JPEG losses
 	scroll  int
 	seq     uint32
 
@@ -146,7 +146,7 @@ func runDemoClient(scr, in net.Conn, name string) {
 	}
 }
 
-// readInput keeps the latest mouse position from the helper.
+// readInput keeps the latest mouse position from the agent.
 func (d *demoClient) readInput(in net.Conn) {
 	r := wire.NewReader(in)
 	for {
@@ -181,7 +181,7 @@ func (d *demoClient) sendShapes() bool {
 	return true
 }
 
-// sendCursor sends the cursor position when it changed: at the helper's
+// sendCursor sends the cursor position when it changed: at the agent's
 // mouse while it moved in the last 1.5 s, else on a slow loop.
 func (d *demoClient) sendCursor() bool {
 	m := demoMonitors[d.cur]

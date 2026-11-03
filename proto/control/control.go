@@ -1,5 +1,5 @@
 // Package control defines the sv-control protocol between the relay and the
-// helper and client apps, plus the SSH channel names and extra data used to
+// agent and client apps, plus the SSH channel names and extra data used to
 // set up sessions. This file is the contract shared by relay/, desk/ and
 // client-windows/; change it only together with all three.
 //
@@ -14,33 +14,33 @@
 //
 // Any role, right after opening the control channel:
 //
-//	app   -> relay  ClientHello (clients and pending) or nothing (helpers)
+//	app   -> relay  ClientHello (clients and pending) or nothing (agents)
 //	relay -> app    Hello{Role}
 //
-// Pending (unknown key): may only send ClientHello. When a helper registers its
+// Pending (unknown key): may only send ClientHello. When an agent registers its
 // key the relay sends Registered and from then on treats the connection as a
 // client (no reconnect needed).
 //
-// Helper commands carry a Seq; the relay answers each with Reply{Seq, Error}.
+// Agent commands carry a Seq; the relay answers each with Reply{Seq, Error}.
 // Presence is a full snapshot, sent after Hello and after every change.
 //
-// Helper keys that send ClientHello anyway get Hello{helper} and the message is ignored.
+// Agent keys that send ClientHello anyway get Hello{agent} and the message is ignored.
 // Every connection answers the global request keepalive@openssh.com (want-reply true);
 // the relay replies true, the apps drop a connection after 3 unanswered keepalives.
 //
-// Session setup (client is the inner SSH server, helper the inner client). A
-// session always starts from a helper and always needs the user's consent:
+// Session setup (client is the inner SSH server, agent the inner client). A
+// session always starts from an agent and always needs the user's consent:
 //
-//	helper -> relay   Connect{Seq, Fingerprint, RequestID}  (RequestID chosen by the helper)
-//	relay  -> helper  Reply{Seq}  or Reply{Seq, Error} when the client is offline or busy
-//	relay  -> helpers Presence (client's Request.State = taken, TakenBy = helper)
-//	relay  -> client  SessionReady{RequestID, Helper...}
-//	client asks its user whether this helper may take control. If not:
+//	agent -> relay   Connect{Seq, Fingerprint, RequestID}  (RequestID chosen by the agent)
+//	relay  -> agent  Reply{Seq}  or Reply{Seq, Error} when the client is offline or busy
+//	relay  -> agents Presence (client's Request.State = taken, TakenBy = agent)
+//	relay  -> client  SessionReady{RequestID, Agent...}
+//	client asks its user whether this agent may take control. If not:
 //	client -> relay   CancelRequest{RequestID}
-//	relay  -> client  RequestStateMsg{RequestID, cancelled}; helpers see it in Presence
+//	relay  -> client  RequestStateMsg{RequestID, cancelled}; agents see it in Presence
 //	If so:
 //	client -> relay   opens channel ChannelSession, extra data = SessionChannelData
-//	relay  -> helper  opens channel ChannelSession, extra data = HelperSessionData
+//	relay  -> agent  opens channel ChannelSession, extra data = AgentSessionData
 //	relay splices the two channels; inner SSH runs end to end.
 //
 // The relay ends a request whose session channel did not come within its
@@ -65,14 +65,14 @@ import (
 const (
 	SSHUser        = "helpbuoy"                  // user name sent by apps; the relay ignores it
 	ChannelControl = "helpbuoy-control@helpbuoy" // one per connection, opened by the app
-	ChannelSession = "helpbuoy-session@helpbuoy" // opened by the client, and by the relay towards the helper
+	ChannelSession = "helpbuoy-session@helpbuoy" // opened by the client, and by the relay towards the agent
 )
 
 // Role of a connection, decided by the relay from the key alone.
 type Role string
 
 const (
-	RoleHelper  Role = "helper"
+	RoleAgent   Role = "agent"
 	RoleClient  Role = "client"
 	RolePending Role = "pending"
 )
@@ -85,13 +85,13 @@ const (
 	MsgHello MsgType = 1
 	// client/pending -> relay
 	MsgClientHello MsgType = 2
-	// relay -> helpers
+	// relay -> agents
 	MsgPresence MsgType = 3
-	// helper -> relay
+	// agent -> relay
 	MsgRegisterClient   MsgType = 4
 	MsgUnregisterClient MsgType = 5
 	// 6 was OpenRequest
-	// relay -> helper
+	// relay -> agent
 	MsgReply MsgType = 7
 	// relay -> client
 	MsgRegistered   MsgType = 8
@@ -101,10 +101,10 @@ const (
 	MsgCancelRequest MsgType = 12
 	// relay -> any: fatal error before the relay closes the connection
 	MsgError MsgType = 13
-	// helper -> relay
-	MsgRenameClient   MsgType = 14
-	MsgConnect        MsgType = 15
-	MsgRegisterHelper MsgType = 16
+	// agent -> relay
+	MsgRenameClient  MsgType = 14
+	MsgConnect       MsgType = 15
+	MsgRegisterAgent MsgType = 16
 )
 
 // Hello is the relay's first message on every control channel.
@@ -112,8 +112,8 @@ type Hello struct {
 	Role         Role      `json:"role"`
 	RelayVersion string    `json:"relay_version"`
 	ServerTime   time.Time `json:"server_time"`
-	// Name is the helper's name, helpers only. Clients are not told the name
-	// helpers gave them; that name is only for helpers.
+	// Name is the agent's name, agents only. Clients are not told the name
+	// agents gave them; that name is only for agents.
 	Name string `json:"name,omitempty"`
 }
 
@@ -124,10 +124,10 @@ type ClientHello struct {
 	UserMachine string `json:"user_machine"` // current %USERNAME%@%COMPUTERNAME%, lower-case user
 }
 
-// Presence is a full snapshot for helpers.
+// Presence is a full snapshot for agents.
 type Presence struct {
 	Clients []ClientInfo `json:"clients"` // all registered clients, online or not
-	Helpers []HelperInfo `json:"helpers"` // all helpers, online or not
+	Agents  []AgentInfo  `json:"agents"`  // all agents, online or not
 }
 
 // ClientInfo describes one registered client.
@@ -140,28 +140,28 @@ type ClientInfo struct {
 	RegisteredAt  time.Time    `json:"registered_at"`
 	LastSeen      time.Time    `json:"last_seen"`
 	Request       *RequestInfo `json:"request,omitempty"`         // request of a Connect, nil if none
-	InSessionWith string       `json:"in_session_with,omitempty"` // helper name while a session runs
+	InSessionWith string       `json:"in_session_with,omitempty"` // agent name while a session runs
 }
 
-// RequestState of the request a helper's Connect creates.
+// RequestState of the request an agent's Connect creates.
 type RequestState string
 
 const (
-	RequestTaken     RequestState = "taken"     // a helper connected; waiting for the user, or session running
+	RequestTaken     RequestState = "taken"     // an agent connected; waiting for the user, or session running
 	RequestCancelled RequestState = "cancelled" // the user refused
 	RequestEnded     RequestState = "ended"     // its session ended, or never started in time
 )
 
-// RequestInfo is the request of a helper's Connect as helpers see it.
+// RequestInfo is the request of an agent's Connect as agents see it.
 type RequestInfo struct {
 	ID      string       `json:"id"`
 	Created time.Time    `json:"created"`
 	State   RequestState `json:"state"`
-	TakenBy string       `json:"taken_by,omitempty"` // helper name
+	TakenBy string       `json:"taken_by,omitempty"` // agent name
 }
 
-// HelperInfo describes one helper.
-type HelperInfo struct {
+// AgentInfo describes one agent.
+type AgentInfo struct {
 	Name        string `json:"name"`
 	Fingerprint string `json:"fingerprint"`
 	Online      bool   `json:"online"`
@@ -176,15 +176,15 @@ type RegisterClient struct {
 	Name      string `json:"name,omitempty"`
 }
 
-// RegisterHelper adds another helper key, like helpbuoy-relay helper add. Name
+// RegisterAgent adds another agent key, like helpbuoy-relay agent add. Name
 // is required (1 to 64 characters, no spaces).
-type RegisterHelper struct {
+type RegisterAgent struct {
 	Seq       uint32 `json:"seq"`
 	PublicKey string `json:"public_key"`
 	Name      string `json:"name"`
 }
 
-// RenameClient changes the name helpers see for a registered client (and the
+// RenameClient changes the name agents see for a registered client (and the
 // comment of its stored key line). Name may contain spaces, e.g. "Anna laptop".
 type RenameClient struct {
 	Seq         uint32 `json:"seq"`
@@ -199,7 +199,7 @@ type UnregisterClient struct {
 }
 
 // Connect starts a session with an online client, once its user allows it.
-// RequestID is chosen by the helper (16 random bytes in hex) so it can
+// RequestID is chosen by the agent (16 random bytes in hex) so it can
 // recognize the session channel that follows.
 type Connect struct {
 	Seq         uint32 `json:"seq"`
@@ -229,7 +229,7 @@ func ValidRequestID(id string) bool {
 	return true
 }
 
-// Reply answers a helper command. Error is empty on success.
+// Reply answers an agent command. Error is empty on success.
 type Reply struct {
 	Seq   uint32 `json:"seq"`
 	Error string `json:"error,omitempty"`
@@ -237,10 +237,10 @@ type Reply struct {
 
 // Registered tells a pending connection that it is now a registered client.
 // It carries no name: the name a client is registered under is only for
-// helpers.
+// agents.
 type Registered struct{}
 
-// CancelRequest refuses a helper's Connect (or ends it before the session
+// CancelRequest refuses an agent's Connect (or ends it before the session
 // channel is opened).
 type CancelRequest struct {
 	RequestID string `json:"request_id"`
@@ -252,15 +252,15 @@ type RequestStateMsg struct {
 	State     RequestState `json:"state"`
 }
 
-// SessionReady tells the client that a helper wants to connect. The client
+// SessionReady tells the client that an agent wants to connect. The client
 // asks its user and then opens the session channel, or sends CancelRequest.
-// HelperKey is the helper's authorized_keys line; the client accepts only this
-// key in the inner SSH handshake (and warns if a known helper name shows a
+// AgentKey is the agent's authorized_keys line; the client accepts only this
+// key in the inner SSH handshake (and warns if a known agent name shows a
 // different key).
 type SessionReady struct {
-	RequestID  string `json:"request_id"`
-	HelperName string `json:"helper_name"`
-	HelperKey  string `json:"helper_key"`
+	RequestID string `json:"request_id"`
+	AgentName string `json:"agent_name"`
+	AgentKey  string `json:"agent_key"`
 }
 
 // Error is sent before the relay closes a connection on purpose.
@@ -273,11 +273,11 @@ type SessionChannelData struct {
 	RequestID string
 }
 
-// HelperSessionData is the extra data of the relay's ChannelSession open
-// towards the helper. ClientKey is the client's authorized_keys line; the
-// helper pins it in the inner handshake and also checks it against its own
+// AgentSessionData is the extra data of the relay's ChannelSession open
+// towards the agent. ClientKey is the client's authorized_keys line; the
+// agent pins it in the inner handshake and also checks it against its own
 // view of the registered client.
-type HelperSessionData struct {
+type AgentSessionData struct {
 	RequestID   string
 	ClientName  string
 	ClientKey   string
@@ -294,12 +294,12 @@ func UnmarshalSessionChannelData(b []byte) (SessionChannelData, error) {
 	return d, err
 }
 
-// MarshalHelperSessionData encodes the relay's channel extra data.
-func MarshalHelperSessionData(d HelperSessionData) []byte { return ssh.Marshal(&d) }
+// MarshalAgentSessionData encodes the relay's channel extra data.
+func MarshalAgentSessionData(d AgentSessionData) []byte { return ssh.Marshal(&d) }
 
-// UnmarshalHelperSessionData parses the relay's channel extra data.
-func UnmarshalHelperSessionData(b []byte) (HelperSessionData, error) {
-	var d HelperSessionData
+// UnmarshalAgentSessionData parses the relay's channel extra data.
+func UnmarshalAgentSessionData(b []byte) (AgentSessionData, error) {
+	var d AgentSessionData
 	err := ssh.Unmarshal(b, &d)
 	return d, err
 }
@@ -319,8 +319,8 @@ func typeOf(m any) (MsgType, error) {
 		return MsgUnregisterClient, nil
 	case *RenameClient, RenameClient:
 		return MsgRenameClient, nil
-	case *RegisterHelper, RegisterHelper:
-		return MsgRegisterHelper, nil
+	case *RegisterAgent, RegisterAgent:
+		return MsgRegisterAgent, nil
 	case *Connect, Connect:
 		return MsgConnect, nil
 	case *Reply, Reply:
@@ -354,8 +354,8 @@ func newOf(t MsgType) (any, error) {
 		return &UnregisterClient{}, nil
 	case MsgRenameClient:
 		return &RenameClient{}, nil
-	case MsgRegisterHelper:
-		return &RegisterHelper{}, nil
+	case MsgRegisterAgent:
+		return &RegisterAgent{}, nil
 	case MsgConnect:
 		return &Connect{}, nil
 	case MsgReply:

@@ -30,13 +30,13 @@ func newSigner(t *testing.T) ssh.Signer {
 	return s
 }
 
-// fakeRelay is a minimal helpbuoy-relay: it knows one helper key, sends Hello and
+// fakeRelay is a minimal helpbuoy-relay: it knows one agent key, sends Hello and
 // Presence, answers commands, and opens a session channel after Connect.
 type fakeRelay struct {
 	t        *testing.T
 	ln       net.Listener
 	hostKey  ssh.Signer
-	helper   ssh.PublicKey
+	agent    ssh.PublicKey
 	presence control.Presence
 
 	mu       sync.Mutex
@@ -46,13 +46,13 @@ type fakeRelay struct {
 	payload  []byte // written on each session channel
 }
 
-func newFakeRelay(t *testing.T, helper ssh.PublicKey) *fakeRelay {
+func newFakeRelay(t *testing.T, agent ssh.PublicKey) *fakeRelay {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	r := &fakeRelay{
-		t: t, ln: ln, hostKey: newSigner(t), helper: helper,
+		t: t, ln: ln, hostKey: newSigner(t), agent: agent,
 		payload: []byte("inner ssh bytes"),
 		presence: control.Presence{Clients: []control.ClientInfo{{
 			Fingerprint: "SHA256:abc", Name: "anna@ANNA-PC", Online: true,
@@ -94,8 +94,8 @@ func (r *fakeRelay) handle(nc net.Conn) {
 	cfg := &ssh.ServerConfig{
 		PublicKeyCallback: func(_ ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 			role := string(control.RolePending)
-			if bytes.Equal(key.Marshal(), r.helper.Marshal()) {
-				role = string(control.RoleHelper)
+			if bytes.Equal(key.Marshal(), r.agent.Marshal()) {
+				role = string(control.RoleAgent)
 			}
 			return &ssh.Permissions{Extensions: map[string]string{"role": role}}, nil
 		},
@@ -135,7 +135,7 @@ func (r *fakeRelay) handle(nc net.Conn) {
 func (r *fakeRelay) control(sc *ssh.ServerConn, ch ssh.Channel, role control.Role) {
 	cc := control.NewConn(ch)
 	cc.Send(&control.Hello{Role: role, RelayVersion: "test", ServerTime: time.Now(), Name: "alice"})
-	if role != control.RoleHelper {
+	if role != control.RoleAgent {
 		return
 	}
 	cc.Send(&r.presence)
@@ -164,7 +164,7 @@ func (r *fakeRelay) control(sc *ssh.ServerConn, ch ssh.Channel, role control.Rol
 				continue
 			}
 			cc.Send(&control.Reply{Seq: m.Seq})
-			data := control.MarshalHelperSessionData(control.HelperSessionData{
+			data := control.MarshalAgentSessionData(control.AgentSessionData{
 				RequestID: m.RequestID, ClientName: "anna@ANNA-PC",
 				ClientKey: "ssh-ed25519 AAAA anna@ANNA-PC", UserMachine: "anna@ANNA-PC",
 			})
@@ -318,12 +318,12 @@ func TestReconnectAfterDrop(t *testing.T) {
 	}
 }
 
-func TestNotHelper(t *testing.T) {
+func TestNotAgent(t *testing.T) {
 	r := newFakeRelay(t, newSigner(t).PublicKey())
 	c := Start(fastOptions(r.addr(), newSigner(t)))
 	defer c.Close()
 	st := waitStatus(t, c, StatusAuthFailed)
-	if !errors.Is(st.Err, ErrNotHelper) {
+	if !errors.Is(st.Err, ErrNotAgent) {
 		t.Errorf("err = %v", st.Err)
 	}
 	if err := waitResult(t, c.Connect("SHA256:a", "r1")); !errors.Is(err, ErrNotConnected) {

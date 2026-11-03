@@ -1,5 +1,5 @@
 // Package appkey manages the application-specific Ed25519 key of the client
-// and helper apps (PLAN.md 6.1): standard OpenSSH files id_ed25519 and
+// and desk apps (PLAN.md 6.1): standard OpenSSH files id_ed25519 and
 // id_ed25519.pub in the app's data directory, not encrypted, created exactly
 // once, never regenerated or rewritten automatically, removable only by an
 // explicit Remove call from the app's UI.

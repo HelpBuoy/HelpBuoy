@@ -21,7 +21,7 @@ type roleConn struct {
 
 func roles() []roleConn {
 	return []roleConn{
-		{control.RoleHelper, func(e *env) *fake.Conn { return e.helper(uniq("helper")) }},
+		{control.RoleAgent, func(e *env) *fake.Conn { return e.agent(uniq("agent")) }},
 		{control.RoleClient, func(e *env) *fake.Conn { c, _ := e.client(uniq("user@pc")); return c }},
 		{control.RolePending, func(e *env) *fake.Conn { c, _ := e.connect(fake.NewKey(), control.RolePending); return c }},
 	}
@@ -29,11 +29,11 @@ func roles() []roleConn {
 
 func TestHello(t *testing.T) {
 	e := newEnv(t, nil)
-	hk := e.addHelper("alice")
-	_, h := e.connect(hk, control.RoleHelper)
+	hk := e.addAgent("alice")
+	_, h := e.connect(hk, control.RoleAgent)
 	if h.Name != "alice" || h.RelayVersion != "test" ||
 		!h.ServerTime.Equal(e.clock.Now()) {
-		t.Errorf("helper hello %+v", h)
+		t.Errorf("agent hello %+v", h)
 	}
 	_, h = e.connect(e.addClient("anna@PC"), control.RoleClient)
 	if h.Name != "" {
@@ -133,15 +133,15 @@ func TestMessagesPerRole(t *testing.T) {
 		m    any
 		ok   map[control.Role]bool
 	}{
-		{"ClientHello", &control.ClientHello{UserMachine: "x@y"}, map[control.Role]bool{control.RoleClient: true, control.RolePending: true, control.RoleHelper: true}},
+		{"ClientHello", &control.ClientHello{UserMachine: "x@y"}, map[control.Role]bool{control.RoleClient: true, control.RolePending: true, control.RoleAgent: true}},
 		{"CancelRequest", &control.CancelRequest{RequestID: "x"}, map[control.Role]bool{control.RoleClient: true}},
-		{"Connect", &control.Connect{Seq: 1, Fingerprint: "SHA256:x", RequestID: "x"}, map[control.Role]bool{control.RoleHelper: true}},
-		{"RegisterClient", &control.RegisterClient{Seq: 1, PublicKey: "bad"}, map[control.Role]bool{control.RoleHelper: true}},
-		{"UnregisterClient", &control.UnregisterClient{Seq: 1, Fingerprint: "SHA256:x"}, map[control.Role]bool{control.RoleHelper: true}},
-		{"RenameClient", &control.RenameClient{Seq: 1, Fingerprint: "SHA256:x", Name: "x"}, map[control.Role]bool{control.RoleHelper: true}},
-		{"RegisterHelper", &control.RegisterHelper{Seq: 1, PublicKey: "bad", Name: "x"}, map[control.Role]bool{control.RoleHelper: true}},
+		{"Connect", &control.Connect{Seq: 1, Fingerprint: "SHA256:x", RequestID: "x"}, map[control.Role]bool{control.RoleAgent: true}},
+		{"RegisterClient", &control.RegisterClient{Seq: 1, PublicKey: "bad"}, map[control.Role]bool{control.RoleAgent: true}},
+		{"UnregisterClient", &control.UnregisterClient{Seq: 1, Fingerprint: "SHA256:x"}, map[control.Role]bool{control.RoleAgent: true}},
+		{"RenameClient", &control.RenameClient{Seq: 1, Fingerprint: "SHA256:x", Name: "x"}, map[control.Role]bool{control.RoleAgent: true}},
+		{"RegisterAgent", &control.RegisterAgent{Seq: 1, PublicKey: "bad", Name: "x"}, map[control.Role]bool{control.RoleAgent: true}},
 		// Relay->app messages are never accepted from apps.
-		{"Hello", &control.Hello{Role: control.RoleHelper}, nil},
+		{"Hello", &control.Hello{Role: control.RoleAgent}, nil},
 		{"Presence", &control.Presence{}, nil},
 		{"Reply", &control.Reply{}, nil},
 		{"Registered", &control.Registered{}, nil},
@@ -158,8 +158,8 @@ func TestMessagesPerRole(t *testing.T) {
 					t.Fatal(err)
 				}
 				if mm.ok[rc.role] {
-					// Allowed: the connection stays and answers helper commands.
-					if rc.role == control.RoleHelper && mm.name != "ClientHello" {
+					// Allowed: the connection stays and answers agent commands.
+					if rc.role == control.RoleAgent && mm.name != "ClientHello" {
 						rep := mustWait[control.Reply](t, c, nil)
 						if rep.Seq != 1 || rep.Error == "" {
 							t.Errorf("%s: reply %+v, want an error for the bogus argument", mm.name, rep)
@@ -211,7 +211,7 @@ func TestNoControlChannelTimesOut(t *testing.T) {
 
 func TestPendingNotInPresence(t *testing.T) {
 	e := newEnv(t, nil)
-	h := e.helper("alice")
+	h := e.agent("alice")
 	k := fake.NewKey()
 	e.connect(k, control.RolePending)
 	// A later change produces a fresh snapshot; the pending key must not be in it.
@@ -224,9 +224,9 @@ func TestPendingNotInPresence(t *testing.T) {
 
 func TestPresenceContent(t *testing.T) {
 	e := newEnv(t, nil)
-	e.addHelper("bob") // offline helper
+	e.addAgent("bob") // offline agent
 	offline := e.addClient("zed@OFF")
-	h := e.helper("alice")
+	h := e.agent("alice")
 	c, ck := e.client("anna@PC")
 	if err := c.Send(&control.ClientHello{UserMachine: "anna@PC-NOW"}); err != nil {
 		t.Fatal(err)
@@ -235,9 +235,9 @@ func TestPresenceContent(t *testing.T) {
 		ci := clientInfo(p, fp(ck))
 		return ci != nil && ci.UserMachine == "anna@PC-NOW"
 	})
-	if len(p.Helpers) != 2 || p.Helpers[0].Name != "alice" || !p.Helpers[0].Online ||
-		p.Helpers[1].Name != "bob" || p.Helpers[1].Online {
-		t.Errorf("helpers %+v", p.Helpers)
+	if len(p.Agents) != 2 || p.Agents[0].Name != "alice" || !p.Agents[0].Online ||
+		p.Agents[1].Name != "bob" || p.Agents[1].Online {
+		t.Errorf("agents %+v", p.Agents)
 	}
 	if len(p.Clients) != 2 || p.Clients[0].Name != "anna@PC" || p.Clients[1].Name != "zed@OFF" {
 		t.Fatalf("clients %+v", p.Clients)
@@ -255,7 +255,7 @@ func TestPresenceContent(t *testing.T) {
 
 func TestPromotion(t *testing.T) {
 	e := newEnv(t, nil)
-	h := e.helper("alice")
+	h := e.agent("alice")
 	k := fake.NewKey()
 	pc, _ := e.connect(k, control.RolePending)
 
@@ -283,21 +283,21 @@ func TestPromotion(t *testing.T) {
 	if ci := clientInfo(p, fp(k)); ci.RegisteredBy != "alice" || ci.Name != "anna@PC" || ci.UserMachine != "user@machine" {
 		t.Errorf("client info %+v", ci)
 	}
-	// The same connection now acts as a client: helpers can connect to it.
+	// The same connection now acts as a client: agents can connect to it.
 	if msg := connect(t, h, 10, fp(k), control.NewRequestID()); msg != "" {
 		t.Errorf("connect to promoted client: %q", msg)
 	}
 	mustWait[control.SessionReady](t, pc, nil)
 
-	// Registering again, or registering a helper key, fails.
+	// Registering again, or registering an agent key, fails.
 	h.Send(&control.RegisterClient{Seq: 2, PublicKey: keyLine(k, "anna@PC")})
 	if rep := mustWait[control.Reply](t, h, nil); rep.Error == "" {
 		t.Error("duplicate registration accepted")
 	}
-	hk := e.addHelper("bob")
+	hk := e.addAgent("bob")
 	h.Send(&control.RegisterClient{Seq: 3, PublicKey: keyLine(hk, "bob@PC")})
 	if rep := mustWait[control.Reply](t, h, nil); rep.Error == "" {
-		t.Error("helper key registered as client")
+		t.Error("agent key registered as client")
 	}
 	// A name overrides the key comment.
 	k2 := fake.NewKey()
@@ -314,9 +314,9 @@ func TestPromotion(t *testing.T) {
 
 func TestReconnectReplaces(t *testing.T) {
 	e := newEnv(t, nil)
-	hk := e.addHelper("alice")
-	h1, _ := e.connect(hk, control.RoleHelper)
-	h2, _ := e.connect(hk, control.RoleHelper)
+	hk := e.addAgent("alice")
+	h1, _ := e.connect(hk, control.RoleAgent)
+	h2, _ := e.connect(hk, control.RoleAgent)
 	if msg := waitClosed(t, h1); !strings.Contains(msg, "replaced") {
 		t.Errorf("old connection error %q", msg)
 	}
@@ -347,12 +347,12 @@ func TestReconnectReplaces(t *testing.T) {
 
 func TestRemoval(t *testing.T) {
 	e := newEnv(t, nil)
-	hk := e.addHelper("alice")
-	h, _ := e.connect(hk, control.RoleHelper)
-	h2 := e.helper("bob")
+	hk := e.addAgent("alice")
+	h, _ := e.connect(hk, control.RoleAgent)
+	h2 := e.agent("bob")
 	c, ck := e.client("anna@PC")
 
-	// A helper removes a client: the client is disconnected at once and is
+	// An agent removes a client: the client is disconnected at once and is
 	// pending when it comes back.
 	h.Send(&control.UnregisterClient{Seq: 7, Fingerprint: fp(ck)})
 	if rep := mustWait[control.Reply](t, h, nil); rep.Seq != 7 || rep.Error != "" {
@@ -367,15 +367,15 @@ func TestRemoval(t *testing.T) {
 		t.Error("removing an unknown client succeeded")
 	}
 
-	// The admin removes a helper through state.json (as the CLI does,
+	// The admin removes an agent through state.json (as the CLI does,
 	// without telling the relay): it is kicked by the reload poll.
-	if _, _, err := e.st.Update(func(st *store.State) error { return st.RemoveHelper("alice") }); err != nil {
+	if _, _, err := e.st.Update(func(st *store.State) error { return st.RemoveAgent("alice") }); err != nil {
 		t.Fatal(err)
 	}
 	if msg := waitClosed(t, h); msg == "" {
-		t.Error("removed helper got no Error")
+		t.Error("removed agent got no Error")
 	}
-	presenceWhere(t, h2, func(p *control.Presence) bool { return len(p.Helpers) == 1 })
+	presenceWhere(t, h2, func(p *control.Presence) bool { return len(p.Agents) == 1 })
 	e.connect(hk, control.RolePending)
 
 	// The admin removes a client through state.json.
@@ -388,16 +388,16 @@ func TestRemoval(t *testing.T) {
 
 func TestStateReload(t *testing.T) {
 	e := newEnv(t, nil)
-	h := e.helper("alice")
+	h := e.agent("alice")
 	k := fake.NewKey()
 	pc, _ := e.connect(k, control.RolePending)
 	// CLI-style changes, picked up by the poll only.
 	hk := fake.NewKey()
-	if _, _, err := e.st.Update(func(st *store.State) error { return st.AddHelper("bob", keyLine(hk, "")) }); err != nil {
+	if _, _, err := e.st.Update(func(st *store.State) error { return st.AddAgent("bob", keyLine(hk, "")) }); err != nil {
 		t.Fatal(err)
 	}
-	presenceWhere(t, h, func(p *control.Presence) bool { return len(p.Helpers) == 2 })
-	e.connect(hk, control.RoleHelper)
+	presenceWhere(t, h, func(p *control.Presence) bool { return len(p.Agents) == 2 })
+	e.connect(hk, control.RoleAgent)
 	// A client added outside the control protocol promotes its pending connection.
 	if _, _, err := e.st.Update(func(st *store.State) error {
 		_, _, err := st.AddClient(keyLine(k, "anna@PC"), "", "admin", time.Now())
@@ -417,8 +417,8 @@ func TestStateReload(t *testing.T) {
 
 func TestRestartKeepsRegistrations(t *testing.T) {
 	e := newEnv(t, nil)
-	hk := e.addHelper("alice")
-	h, _ := e.connect(hk, control.RoleHelper)
+	hk := e.addAgent("alice")
+	h, _ := e.connect(hk, control.RoleAgent)
 	k := fake.NewKey()
 	h.Send(&control.RegisterClient{Seq: 1, PublicKey: keyLine(k, "anna@PC")})
 	if rep := mustWait[control.Reply](t, h, nil); rep.Error != "" {
@@ -428,7 +428,7 @@ func TestRestartKeepsRegistrations(t *testing.T) {
 	c.Close()
 	e.restart()
 	e.connect(k, control.RoleClient) // still registered after the restart
-	h, _ = e.connect(hk, control.RoleHelper)
+	h, _ = e.connect(hk, control.RoleAgent)
 	p := mustWait[control.Presence](t, h, nil)
 	ci := clientInfo(p, fp(k))
 	if ci == nil || ci.RegisteredBy != "alice" || ci.LastSeen.IsZero() {
@@ -438,7 +438,7 @@ func TestRestartKeepsRegistrations(t *testing.T) {
 
 func TestKeepaliveDropsDeadPeer(t *testing.T) {
 	e := newEnv(t, func(c *server.Config) { c.KeepaliveInterval = 30 * time.Millisecond })
-	h := e.helper("alice")
+	h := e.agent("alice")
 	ck := e.addClient("anna@PC")
 	px := newProxy(t, e.addr)
 	c, err := fake.Dial(px.addr(), ck, fake.Options{})
@@ -482,11 +482,11 @@ func TestPasswordAuthRefused(t *testing.T) {
 
 func TestRenameClient(t *testing.T) {
 	e := newEnv(t, nil)
-	h := e.helper("alice")
-	h2 := e.helper("bob")
+	h := e.agent("alice")
+	h2 := e.agent("bob")
 	_, ck := e.client("anna@PC")
 
-	// A helper renames a client: every helper's Presence shows the new name,
+	// An agent renames a client: every agent's Presence shows the new name,
 	// and the stored key line carries it as its comment.
 	h.Send(&control.RenameClient{Seq: 3, Fingerprint: fp(ck), Name: "  Anna laptop  "})
 	if rep := mustWait[control.Reply](t, h, nil); rep.Seq != 3 || rep.Error != "" {
@@ -516,26 +516,26 @@ func TestRenameClient(t *testing.T) {
 	}
 }
 
-// TestRegisterHelper: a helper adds another helper, who can then log in as
+// TestRegisterAgent: an agent adds another agent, who can then log in as
 // one; duplicates, bad names and client keys are refused.
-func TestRegisterHelper(t *testing.T) {
+func TestRegisterAgent(t *testing.T) {
 	e := newEnv(t, nil)
-	h := e.helper("alice")
+	h := e.agent("alice")
 	bk := fake.NewKey()
-	h.Send(&control.RegisterHelper{Seq: 1, PublicKey: keyLine(bk, "bob@pc"), Name: "bob"})
+	h.Send(&control.RegisterAgent{Seq: 1, PublicKey: keyLine(bk, "bob@pc"), Name: "bob"})
 	if rep := mustWait[control.Reply](t, h, func(r *control.Reply) bool { return r.Seq == 1 }); rep.Error != "" {
 		t.Fatalf("register: %s", rep.Error)
 	}
-	p := presenceWhere(t, h, func(p *control.Presence) bool { return len(p.Helpers) == 2 })
-	if p.Helpers[1].Name != "bob" || p.Helpers[1].Fingerprint != fp(bk) {
-		t.Errorf("helpers %+v", p.Helpers)
+	p := presenceWhere(t, h, func(p *control.Presence) bool { return len(p.Agents) == 2 })
+	if p.Agents[1].Name != "bob" || p.Agents[1].Fingerprint != fp(bk) {
+		t.Errorf("agents %+v", p.Agents)
 	}
-	if _, hello := e.connect(bk, control.RoleHelper); hello.Name != "bob" {
+	if _, hello := e.connect(bk, control.RoleAgent); hello.Name != "bob" {
 		t.Errorf("hello %+v", hello)
 	}
 	ck := e.addClient("anna@PC")
-	for i, m := range []*control.RegisterHelper{
-		{Seq: 2, PublicKey: keyLine(bk, ""), Name: "bob2"},           // key already a helper
+	for i, m := range []*control.RegisterAgent{
+		{Seq: 2, PublicKey: keyLine(bk, ""), Name: "bob2"},           // key already an agent
 		{Seq: 3, PublicKey: keyLine(fake.NewKey(), ""), Name: "bob"}, // name taken
 		{Seq: 4, PublicKey: keyLine(fake.NewKey(), ""), Name: "with space"},
 		{Seq: 5, PublicKey: keyLine(ck, ""), Name: "anna"}, // a client key

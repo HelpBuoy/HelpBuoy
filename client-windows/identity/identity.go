@@ -17,12 +17,8 @@ import (
 // AppName is the data directory name below %LOCALAPPDATA%.
 const AppName = "helpbuoy"
 
-// LegacyAppName is the data directory name before the rename to HelpBuoy;
-// Dir moves it to AppName on first start.
-const LegacyAppName = "help-me-win"
-
 // Dir returns the client's data directory. It does not create it.
-func Dir() (string, error) { return datadir.Migrate(AppName, LegacyAppName) }
+func Dir() (string, error) { return datadir.Dir(AppName) }
 
 // Comment returns the comment for a new key: the current user@machine.
 func Comment() string { return pid.UserMachine() }

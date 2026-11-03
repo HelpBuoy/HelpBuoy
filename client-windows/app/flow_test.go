@@ -24,12 +24,12 @@ func startRelay(t *testing.T) *fakerelay.Relay {
 	return r
 }
 
-// registeredWithHelper is registered, with a pinned helper "alice".
-func registeredWithHelper(t *testing.T, e *env) {
+// registeredWithAgent is registered, with a pinned agent "alice".
+func registeredWithAgent(t *testing.T, e *env) {
 	t.Helper()
 	registered(t, e)
 	cfg := e.config()
-	cfg.KnownHelpers = map[string]string{"alice": "ssh-ed25519 AAAA alice"}
+	cfg.KnownAgents = map[string]string{"alice": "ssh-ed25519 AAAA alice"}
 	config.Store{Dir: e.dir}.Save(cfg)
 }
 
@@ -66,7 +66,7 @@ func startAndConnect(t *testing.T, c *Controller, ui *fakeUI, want string) {
 // the old relay is forgotten until this PC is registered on the new one.
 func TestOtherRelay(t *testing.T) {
 	e := newEnv(t)
-	registeredWithHelper(t, e)
+	registeredWithAgent(t, e)
 	relay2 := startRelay(t)
 	c, ui := e.controller()
 	startAndConnect(t, c, ui, e.relay.Addr())
@@ -80,7 +80,7 @@ func TestOtherRelay(t *testing.T) {
 	if v.RelayFingerprint != ssh.FingerprintSHA256(relay2.HostKey()) || v.KeyLine != e.key.Line {
 		t.Fatalf("key view %+v", v)
 	}
-	if cfg := e.config(); cfg.RelayAddress != e.relay.Addr() || cfg.KnownHelpers["alice"] == "" || cfg.LastAddress != relay2.Addr() {
+	if cfg := e.config(); cfg.RelayAddress != e.relay.Addr() || cfg.KnownAgents["alice"] == "" || cfg.LastAddress != relay2.Addr() {
 		t.Fatalf("config changed before registration %+v", cfg)
 	}
 
@@ -88,7 +88,7 @@ func TestOtherRelay(t *testing.T) {
 	ui.wait(t, "main", readyMain)
 	cfg := e.config()
 	if cfg.RelayAddress != relay2.Addr() || cfg.RelayHostKey != identity.KeyLine(relay2.HostKey(), "") ||
-		len(cfg.KnownHelpers) != 0 {
+		len(cfg.KnownAgents) != 0 {
 		t.Fatalf("config %+v", cfg)
 	}
 
@@ -107,7 +107,7 @@ func TestDisconnect(t *testing.T) {
 	ui.wait(t, "ready", readyMain)
 
 	// End session ends only the session; the client keeps waiting.
-	connectHelper(t, e.relay, e.fp())
+	connectAgent(t, e.relay, e.fp())
 	first := <-e.relay.Sessions()
 	ui.wait(t, "in session", func(v View) bool { return v.InSession })
 	c.EndSession()
@@ -120,7 +120,7 @@ func TestDisconnect(t *testing.T) {
 	}
 
 	// During a session Disconnect ends the session too.
-	connectHelper(t, e.relay, e.fp())
+	connectAgent(t, e.relay, e.fp())
 	sess := <-e.relay.Sessions()
 	ui.wait(t, "in session", func(v View) bool { return v.InSession })
 	c.Disconnect()
@@ -167,10 +167,10 @@ func TestUpdateOfferedWhenIdle(t *testing.T) {
 
 	gate := make(chan struct{})
 	ui.answer(true, gate)
-	connectHelper(t, e.relay, e.fp())
+	connectAgent(t, e.relay, e.fp())
 	v := ui.wait(t, "asking", func(v View) bool { return v.Asking })
 	if v.Update != nil {
-		t.Fatal("offered while a helper connects")
+		t.Fatal("offered while an agent connects")
 	}
 	close(gate)
 	ui.wait(t, "offer again", func(v View) bool { return v.Update == release && readyMain(v) })

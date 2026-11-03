@@ -1,11 +1,11 @@
 // Package inner runs the end-to-end "inner" SSH connection inside the session
-// channel that the relay splices between client and helper (PLAN.md section 4).
+// channel that the relay splices between client and agent (PLAN.md section 4).
 //
 // The client app is the SSH server: its host key is its app key, and it
-// accepts public key auth only from the one helper key it was told about. The
-// helper app is the SSH client: it accepts only the client's registered key as
-// host key. Exactly two channel types are allowed, "screen" (client -> helper
-// data) and "input" (helper -> client data); everything else is rejected.
+// accepts public key auth only from the one agent key it was told about. The
+// desk app is the SSH client: it accepts only the client's registered key as
+// host key. Exactly two channel types are allowed, "screen" (client -> agent
+// data) and "input" (agent -> client data); everything else is rejected.
 package inner
 
 import (
@@ -21,7 +21,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// Channel type names inside the inner connection. The helper opens both.
+// Channel type names inside the inner connection. The agent opens both.
 const (
 	ChannelScreen = "screen"
 	ChannelInput  = "input"
@@ -114,16 +114,16 @@ type ServerSession struct {
 }
 
 // Serve runs the inner SSH server on rw (the client's sv-session channel).
-// hostKey is the client's app key; helperKey is the only accepted client key
+// hostKey is the client's app key; agentKey is the only accepted client key
 // (from control.SessionReady). It returns after the handshake and after the
-// helper has opened both the screen and input channels, or with an error.
+// agent has opened both the screen and input channels, or with an error.
 //
-// A helper that offers a different key gets an error wrapping ErrWrongKey.
+// An agent that offers a different key gets an error wrapping ErrWrongKey.
 // Global requests other than keepalive@openssh.com, all channel requests and
 // all channel types except one "screen" and one "input" are rejected. If setup
 // does not complete within 15 seconds, rw is closed and ErrTimeout returned.
-func Serve(rw io.ReadWriteCloser, hostKey ssh.Signer, helperKey ssh.PublicKey) (*ServerSession, error) {
-	if hostKey == nil || helperKey == nil {
+func Serve(rw io.ReadWriteCloser, hostKey ssh.Signer, agentKey ssh.PublicKey) (*ServerSession, error) {
+	if hostKey == nil || agentKey == nil {
 		return nil, errors.New("inner: missing key")
 	}
 	var wrongKey atomic.Bool
@@ -131,7 +131,7 @@ func Serve(rw io.ReadWriteCloser, hostKey ssh.Signer, helperKey ssh.PublicKey) (
 		Config:       ssh.Config{Ciphers: ciphers},
 		MaxAuthTries: maxAuthTries,
 		PublicKeyCallback: func(_ ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-			if !sameKey(key, helperKey) {
+			if !sameKey(key, agentKey) {
 				wrongKey.Store(true)
 				return nil, ErrWrongKey
 			}
@@ -232,7 +232,7 @@ func (s *ServerSession) Close() error { return s.close() }
 // Wait blocks until the inner connection ends.
 func (s *ServerSession) Wait() error { return s.wait() }
 
-// ClientSession is the helper app's side of an inner connection.
+// ClientSession is the desk app's side of an inner connection.
 type ClientSession struct {
 	*conn
 	screen ssh.Channel
@@ -240,8 +240,8 @@ type ClientSession struct {
 	rtt    atomic.Int64
 }
 
-// Dial runs the inner SSH client on rw (the helper's sv-session channel).
-// signer is the helper's app key; clientKey is the only accepted host key (the
+// Dial runs the inner SSH client on rw (the agent's sv-session channel).
+// signer is the agent's app key; clientKey is the only accepted host key (the
 // registered client key). It opens the screen and input channels.
 //
 // A host presenting any other key fails with an error wrapping ErrWrongKey.
@@ -370,10 +370,10 @@ func (c *ClientSession) keepalive(interval time.Duration, maxMiss int) {
 // setup, so a value is usually available within one round trip.
 func (c *ClientSession) RTT() time.Duration { return time.Duration(c.rtt.Load()) }
 
-// Screen is the stream on which the helper reads screen messages and sends acks.
+// Screen is the stream on which the agent reads screen messages and sends acks.
 func (c *ClientSession) Screen() Stream { return c.screen }
 
-// Input is the stream on which the helper sends input messages.
+// Input is the stream on which the agent sends input messages.
 func (c *ClientSession) Input() Stream { return c.input }
 
 // Close ends the inner connection.

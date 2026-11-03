@@ -1,5 +1,5 @@
-// Package views holds the helper app's screens: a tab bar that is always
-// there, with the fixed Clients, Helpers, Register client, Register helper and Relay tabs followed by
+// Package views holds the desk app's screens: a tab bar that is always
+// there, with the fixed Clients, Agents, Register client, Register agent and Relay tabs followed by
 // one tab per open session (PLAN.md section 7).
 //
 // App owns all UI state and runs on the main OS thread. Network goroutines
@@ -40,7 +40,7 @@ type Options struct {
 // Layout sizes in logical pixels.
 const (
 	tabBarH     = 40
-	fixedTabW   = 144 // Clients, Helpers, Register client, Register helper, Relay
+	fixedTabW   = 144 // Clients, Agents, Register client, Register agent, Relay
 	sessionTabW = 216
 	toolbarH    = 44
 	idleFPS     = 10
@@ -54,7 +54,7 @@ const (
 // has its own.
 type backend interface {
 	RegisterClient(line, name string) <-chan error
-	RegisterHelper(line, name string) <-chan error
+	RegisterAgent(line, name string) <-chan error
 	RenameClient(fingerprint, name string) <-chan error
 	UnregisterClient(fingerprint string) <-chan error
 	Connect(fingerprint, requestID string) <-chan error
@@ -66,9 +66,9 @@ type tabKind int
 // follow them.
 const (
 	tabClients tabKind = iota
-	tabHelpers
+	tabAgents
 	tabRegister
-	tabRegisterHelper
+	tabRegisterAgent
 	tabRelay
 	tabSession
 )
@@ -92,7 +92,7 @@ type note struct {
 	until time.Time
 }
 
-// App is the whole helper UI.
+// App is the whole agent UI.
 type App struct {
 	opts Options
 	ui   *ui.Context
@@ -111,7 +111,7 @@ type App struct {
 	status   relayconn.StatusEvent
 	hostKey  ssh.PublicKey
 	presence *control.Presence
-	me       string // our helper name from Hello
+	me       string // our agent name from Hello
 
 	local      *localrelay.Relay
 	localAdded int
@@ -120,10 +120,10 @@ type App struct {
 	addr      relayaddr.Addr // relay address of the current Connect
 	localWait bool           // the local relay is starting; the connection follows
 	reached   bool           // the current connection has been online
-	notHelper bool           // the relay refused this key before it was ever online
+	notAgent  bool           // the relay refused this key before it was ever online
 
 	cmds          []pending
-	opened        map[string]time.Time // request ids this helper sent Connect for, and when
+	opened        map[string]time.Time // request ids this agent sent Connect for, and when
 	opening       map[string]bool      // client fingerprints with a Connect in flight
 	waiting       map[string]*waitInfo // by client fingerprint: accepted Connects, until the session starts
 	notes         map[string]note      // by client fingerprint
@@ -134,7 +134,7 @@ type App struct {
 	tabs       []*tab
 	active     int          // index into tabs
 	reg        registerPage // Register client
-	regHelper  registerPage // Register helper
+	regAgent   registerPage // Register agent
 	confirmKey bool         // the Remove key confirmation on the damaged key screen
 	pageHeight map[tabKind]float32
 
@@ -162,7 +162,7 @@ func New(opts Options) *App {
 	a := &App{
 		opts:       opts,
 		ui:         ui.New(),
-		tabs:       []*tab{{kind: tabClients}, {kind: tabHelpers}, {kind: tabRegister}, {kind: tabRegisterHelper}, {kind: tabRelay}},
+		tabs:       []*tab{{kind: tabClients}, {kind: tabAgents}, {kind: tabRegister}, {kind: tabRegisterAgent}, {kind: tabRelay}},
 		opened:     map[string]time.Time{},
 		opening:    map[string]bool{},
 		waiting:    map[string]*waitInfo{},
@@ -172,7 +172,7 @@ func New(opts Options) *App {
 	}
 	a.ui.SetIcon(opts.Icon)
 	a.reg.init(false)
-	a.regHelper.init(true)
+	a.regAgent.init(true)
 	a.cs.init()
 	if opts.Demo {
 		a.demo = newDemo(a)
@@ -329,7 +329,7 @@ func (a *App) drain() {
 	}
 	a.cmds = kept
 	if a.local != nil {
-		if n := a.local.Status().HelperAdded; n != a.localAdded {
+		if n := a.local.Status().AgentAdded; n != a.localAdded {
 			a.localAdded = n
 			if a.conn != nil {
 				a.conn.Reconnect()
@@ -364,7 +364,7 @@ func (a *App) handleEvent(ev relayconn.Event) {
 			a.me = ev.Hello.Name
 		}
 		if ev.Status == relayconn.StatusOnline {
-			a.reached, a.notHelper = true, false
+			a.reached, a.notAgent = true, false
 		} else {
 			a.opening = map[string]bool{}
 			a.waiting = map[string]*waitInfo{}
@@ -412,7 +412,7 @@ func (a *App) setPresence(p *control.Presence) {
 }
 
 // incomingSession verifies a session channel from the relay and opens a tab.
-func (a *App) incomingSession(d control.HelperSessionData, ch ssh.Channel) {
+func (a *App) incomingSession(d control.AgentSessionData, ch ssh.Channel) {
 	_, opened := a.opened[d.RequestID]
 	info, err := session.Verify(d, a.presence, opened)
 	if err != nil || a.key == nil {
@@ -567,8 +567,8 @@ func (a *App) leaveTab(i int) {
 		a.confirmRemove = ""
 	case tabRegister:
 		a.reg.reset()
-	case tabRegisterHelper:
-		a.regHelper.reset()
+	case tabRegisterAgent:
+		a.regAgent.reset()
 	}
 }
 
@@ -685,12 +685,12 @@ func (a *App) drawWorkArea() {
 		a.drawSession(t.sess, content)
 	case tabClients:
 		a.drawClientsPage(content)
-	case tabHelpers:
-		a.drawHelpersPage(content)
+	case tabAgents:
+		a.drawAgentsPage(content)
 	case tabRegister:
 		a.page(tabRegister, content, a.registerPageFor(&a.reg))
-	case tabRegisterHelper:
-		a.page(tabRegisterHelper, content, a.registerPageFor(&a.regHelper))
+	case tabRegisterAgent:
+		a.page(tabRegisterAgent, content, a.registerPageFor(&a.regAgent))
 	case tabRelay:
 		a.page(tabRelay, content, a.drawRelay)
 	}
@@ -700,11 +700,11 @@ func (a *App) tabTitle(t *tab) string {
 	switch t.kind {
 	case tabClients:
 		return "Clients"
-	case tabHelpers:
+	case tabAgents:
 		return "Agents"
 	case tabRegister:
 		return "Register client"
-	case tabRegisterHelper:
+	case tabRegisterAgent:
 		return "Register agent"
 	case tabRelay:
 		return "Relay"

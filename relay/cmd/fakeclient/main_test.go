@@ -31,7 +31,7 @@ func TestFakeClientEndToEnd(t *testing.T) {
 	dir := t.TempDir()
 	hk := fake.NewKey()
 	st, _ := store.Open(dir)
-	st.Update(func(s *store.State) error { return s.AddHelper("alice", fake.KeyLine(hk.PublicKey(), "")) })
+	st.Update(func(s *store.State) error { return s.AddAgent("alice", fake.KeyLine(hk.PublicKey(), "")) })
 	srv, err := server.New(server.Config{StateDir: dir})
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +51,7 @@ func TestFakeClientEndToEnd(t *testing.T) {
 	go func() {
 		done <- run(&out, ln.Addr().String(), keyDir, "anna@PC", false, "hello from fakeclient", true)
 	}()
-	// Wait for the client's key file, then register it like a helper would.
+	// Wait for the client's key file, then register it like an agent would.
 	var pub []byte
 	for i := 0; i < 500 && len(pub) == 0; i++ {
 		pub, _ = os.ReadFile(filepath.Join(keyDir, fake.KeyFile+".pub"))

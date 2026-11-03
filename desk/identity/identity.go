@@ -1,4 +1,4 @@
-// Package identity loads the helper app's own application-specific key
+// Package identity loads the desk app's own application-specific key
 // (PLAN.md 7.1) through proto/appkey, in the data directory "helpbuoy".
 package identity
 
@@ -15,12 +15,8 @@ import (
 // AppName is the data directory name shared with the client app's layout.
 const AppName = "helpbuoy"
 
-// LegacyAppName is the data directory name before the rename to HelpBuoy;
-// Dir moves it to AppName on first start.
-const LegacyAppName = "help-me-win"
-
-// Dir returns the helper's data directory. It does not create it.
-func Dir() (string, error) { return datadir.Migrate(AppName, LegacyAppName) }
+// Dir returns the agent's data directory. It does not create it.
+func Dir() (string, error) { return datadir.Dir(AppName) }
 
 // Load loads the app key from dir, creating it on the very first start with
 // the comment user@machine. created reports whether a new key was generated.
@@ -45,9 +41,9 @@ func UserMachine() string {
 	return userName() + "@" + host
 }
 
-// HelperName returns a name for this helper on a local relay: the lower-cased
-// user part of user@machine, or "helper" if that is not a valid name.
-func HelperName() string {
+// AgentName returns a name for this agent on a local relay: the lower-cased
+// user part of user@machine, or "agent" if that is not a valid name.
+func AgentName() string {
 	um := UserMachine()
 	name := um
 	if i := strings.IndexByte(um, '@'); i >= 0 {

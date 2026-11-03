@@ -65,7 +65,7 @@ func newDemo(a *App) *demo {
 			RegisteredBy: "agent", RegisteredAt: now.Add(-30 * 24 * time.Hour), LastSeen: now.Add(-26 * time.Hour),
 		}
 	}
-	p := &control.Presence{Helpers: []control.HelperInfo{{Name: "agent", Online: true}, {Name: "bob", Online: true}}}
+	p := &control.Presence{Agents: []control.AgentInfo{{Name: "agent", Online: true}, {Name: "bob", Online: true}}}
 	anna := client("anna@ANNA-LAPTOP", true)
 	jan := client("jan@KANTOOR-PC", true)
 	oma := client("oma@WOONKAMER", true)
@@ -106,15 +106,15 @@ func (d *demo) RegisterClient(line, name string) <-chan error {
 	return done(nil)
 }
 
-// RegisterHelper adds a demo helper locally.
-func (d *demo) RegisterHelper(line, name string) <-chan error {
+// RegisterAgent adds a demo agent locally.
+func (d *demo) RegisterAgent(line, name string) <-chan error {
 	key, _, err := identity.ParseLine(line)
 	if err != nil {
 		return done(err)
 	}
 	p := d.a.presence
 	fp := ssh.FingerprintSHA256(key)
-	for _, h := range p.Helpers {
+	for _, h := range p.Agents {
 		if h.Name == name {
 			return done(fmt.Errorf("agent %q already exists", name))
 		}
@@ -122,7 +122,7 @@ func (d *demo) RegisterHelper(line, name string) <-chan error {
 			return done(fmt.Errorf("key %s is already the key of agent %q", fp, h.Name))
 		}
 	}
-	p.Helpers = append(p.Helpers, control.HelperInfo{Name: name, Fingerprint: fp})
+	p.Agents = append(p.Agents, control.AgentInfo{Name: name, Fingerprint: fp})
 	return done(nil)
 }
 

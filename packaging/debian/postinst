@@ -3,11 +3,6 @@ set -e
 
 if [ "$1" = "configure" ]; then
 	systemd-sysusers helpbuoy-relay.conf
-	# Take over the state of the package's former name, hmw-relay.
-	if [ ! -e /var/lib/helpbuoy-relay ] && [ -d /var/lib/hmw-relay ]; then
-		cp -a /var/lib/hmw-relay /var/lib/helpbuoy-relay
-		chown -R helpbuoy-relay:helpbuoy-relay /var/lib/helpbuoy-relay
-	fi
 	install -d -o helpbuoy-relay -g helpbuoy-relay -m 0700 /var/lib/helpbuoy-relay
 fi
 

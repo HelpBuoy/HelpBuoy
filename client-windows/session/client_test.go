@@ -26,14 +26,14 @@ type testHandler struct {
 	registered []string // relay host keys
 	pinned     map[string]string
 	refuse     bool
-	hold       bool // ConfirmHelper waits until its context ends
+	hold       bool // ConfirmAgent waits until its context ends
 	asked      []asked
 }
 
-// asked is one ConfirmHelper call.
+// asked is one ConfirmAgent call.
 type asked struct {
-	helper Helper
-	oldFP  string
+	agent Agent
+	oldFP string
 }
 
 func newHandler() *testHandler {
@@ -46,14 +46,14 @@ func (h *testHandler) Registered(hostKey string) {
 	h.registered = append(h.registered, hostKey)
 	h.mu.Unlock()
 }
-func (h *testHandler) HelperPinned(name, line string) {
+func (h *testHandler) AgentPinned(name, line string) {
 	h.mu.Lock()
 	h.pinned[name] = line
 	h.mu.Unlock()
 }
-func (h *testHandler) ConfirmHelper(ctx context.Context, helper Helper, oldFP string) bool {
+func (h *testHandler) ConfirmAgent(ctx context.Context, agent Agent, oldFP string) bool {
 	h.mu.Lock()
-	h.asked = append(h.asked, asked{helper, oldFP})
+	h.asked = append(h.asked, asked{agent, oldFP})
 	hold, refuse := h.hold, h.refuse
 	h.mu.Unlock()
 	if hold {
@@ -89,11 +89,11 @@ func newRunner() *fakeRunner {
 	return &fakeRunner{started: make(chan ssh.PublicKey, 4), ended: make(chan error, 4)}
 }
 
-func (r *fakeRunner) Run(ctx context.Context, ch io.ReadWriteCloser, helperKey ssh.PublicKey) error {
-	r.started <- helperKey
+func (r *fakeRunner) Run(ctx context.Context, ch io.ReadWriteCloser, agentKey ssh.PublicKey) error {
+	r.started <- agentKey
 	done := make(chan struct{})
 	go func() {
-		io.Copy(io.Discard, ch) // the helper side closing ends the session too
+		io.Copy(io.Discard, ch) // the agent side closing ends the session too
 		close(done)
 	}()
 	select {
@@ -339,12 +339,12 @@ func TestRefusedKey(t *testing.T) {
 	}
 }
 
-func startSession(t *testing.T, f *fixture, helperLine string) fakerelay.Session {
+func startSession(t *testing.T, f *fixture, agentLine string) fakerelay.Session {
 	t.Helper()
 	f.relay.Register(f.fp)
 	f.client.Start()
 	f.h.waitPhase(t, PhaseReady)
-	if _, err := f.relay.Connect(f.fp, "alice", helperLine); err != nil {
+	if _, err := f.relay.Connect(f.fp, "alice", agentLine); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -358,27 +358,27 @@ func startSession(t *testing.T, f *fixture, helperLine string) fakerelay.Session
 
 func TestSessionAndEsc(t *testing.T) {
 	f := setup(t, nil)
-	helper, helperLine := newKey(t, "alice")
-	sess := startSession(t, f, helperLine)
+	agent, agentLine := newKey(t, "alice")
+	sess := startSession(t, f, agentLine)
 	if sess.Data.RequestID == "" || sess.Fingerprint != f.fp {
 		t.Fatalf("session %+v", sess)
 	}
 	got := <-f.runner.started
-	if !sameKey(got, helper.PublicKey()) {
-		t.Fatal("runner got another helper key")
+	if !sameKey(got, agent.PublicKey()) {
+		t.Fatal("runner got another agent key")
 	}
 	s := f.h.waitPhase(t, PhaseInSession)
-	if s.Helper.Name != "alice" || s.Helper.Fingerprint != ssh.FingerprintSHA256(helper.PublicKey()) {
-		t.Fatalf("helper %+v", s.Helper)
+	if s.Agent.Name != "alice" || s.Agent.Fingerprint != ssh.FingerprintSHA256(agent.PublicKey()) {
+		t.Fatalf("agent %+v", s.Agent)
 	}
 	f.h.mu.Lock()
 	pinned := f.h.pinned["alice"]
 	f.h.mu.Unlock()
-	if pinned != identity.KeyLine(helper.PublicKey(), "") {
+	if pinned != identity.KeyLine(agent.PublicKey(), "") {
 		t.Fatalf("pinned %q", pinned)
 	}
 	// Another connect while the session runs is ignored.
-	f.relay.Connect(f.fp, "bob", helperLine)
+	f.relay.Connect(f.fp, "bob", agentLine)
 	select {
 	case <-f.relay.Sessions():
 		t.Fatal("second session during a session")
@@ -393,16 +393,16 @@ func TestSessionAndEsc(t *testing.T) {
 	}
 	<-f.escStop
 	s = f.h.waitPhase(t, PhaseReady)
-	if s.Helper.Name != "alice" {
-		t.Fatal("last helper forgotten")
+	if s.Agent.Name != "alice" {
+		t.Fatal("last agent forgotten")
 	}
 
-	// The helper can connect again.
-	f.relay.Connect(f.fp, "alice", helperLine)
+	// The agent can connect again.
+	f.relay.Connect(f.fp, "alice", agentLine)
 	sess = <-f.relay.Sessions()
 	<-f.runner.started
 	f.h.waitPhase(t, PhaseInSession)
-	// The helper ending it (closing its channel) ends it too.
+	// The agent ending it (closing its channel) ends it too.
 	sess.Channel.Close()
 	<-f.runner.ended
 	<-f.escStop
@@ -412,25 +412,25 @@ func TestSessionAndEsc(t *testing.T) {
 	if len(f.h.asked) != 2 {
 		t.Fatalf("asked %d times for 2 sessions", len(f.h.asked))
 	}
-	fp := ssh.FingerprintSHA256(helper.PublicKey())
+	fp := ssh.FingerprintSHA256(agent.PublicKey())
 	for _, a := range f.h.asked {
-		if a.helper.Name != "alice" || a.helper.Fingerprint != fp {
-			t.Fatalf("asked about %+v", a.helper)
+		if a.agent.Name != "alice" || a.agent.Fingerprint != fp {
+			t.Fatalf("asked about %+v", a.agent)
 		}
 		if a.oldFP != "" {
-			t.Fatalf("warned about an unchanged helper key: %q", a.oldFP)
+			t.Fatalf("warned about an unchanged agent key: %q", a.oldFP)
 		}
 	}
 }
 
-func TestHelperRefused(t *testing.T) {
+func TestAgentRefused(t *testing.T) {
 	f := setup(t, nil)
 	f.h.refuse = true
-	_, helperLine := newKey(t, "alice")
+	_, agentLine := newKey(t, "alice")
 	f.relay.Register(f.fp)
 	f.client.Start()
 	f.h.waitPhase(t, PhaseReady)
-	id, _ := f.relay.Connect(f.fp, "alice", helperLine)
+	id, _ := f.relay.Connect(f.fp, "alice", agentLine)
 	if c := recv[*control.CancelRequest](t, f.relay); c.RequestID != id {
 		t.Fatalf("cancelled %q, want %q", c.RequestID, id)
 	}
@@ -454,11 +454,11 @@ func TestHelperRefused(t *testing.T) {
 func TestRequestEndsWhileAsking(t *testing.T) {
 	f := setup(t, nil)
 	f.h.hold = true
-	_, helperLine := newKey(t, "alice")
+	_, agentLine := newKey(t, "alice")
 	f.relay.Register(f.fp)
 	f.client.Start()
 	f.h.waitPhase(t, PhaseReady)
-	id, _ := f.relay.Connect(f.fp, "alice", helperLine)
+	id, _ := f.relay.Connect(f.fp, "alice", agentLine)
 	s := f.h.waitPhase(t, PhaseAsking)
 	if s.RequestID != id {
 		t.Fatalf("asking about %q, want %q", s.RequestID, id)
@@ -476,8 +476,8 @@ func TestRequestEndsWhileAsking(t *testing.T) {
 
 func TestConnectionLossEndsSession(t *testing.T) {
 	f := setup(t, nil)
-	_, helperLine := newKey(t, "alice")
-	startSession(t, f, helperLine)
+	_, agentLine := newKey(t, "alice")
+	startSession(t, f, agentLine)
 	<-f.runner.started
 	f.h.waitPhase(t, PhaseInSession)
 	f.relay.Kick(f.fp)
@@ -486,9 +486,9 @@ func TestConnectionLossEndsSession(t *testing.T) {
 	f.h.waitPhase(t, PhaseReady) // reconnected
 }
 
-func TestHelperKeyChangeRefused(t *testing.T) {
+func TestAgentKeyChangeRefused(t *testing.T) {
 	_, oldLine := newKey(t, "alice")
-	f := setup(t, func(o *Options) { o.KnownHelpers = map[string]string{"alice": oldLine} })
+	f := setup(t, func(o *Options) { o.KnownAgents = map[string]string{"alice": oldLine} })
 	f.h.refuse = true
 	_, newLine := newKey(t, "alice")
 	f.relay.Register(f.fp)
@@ -510,16 +510,16 @@ func TestHelperKeyChangeRefused(t *testing.T) {
 	}
 }
 
-func TestHelperKeyChangeAccepted(t *testing.T) {
+func TestAgentKeyChangeAccepted(t *testing.T) {
 	_, oldLine := newKey(t, "alice")
-	f := setup(t, func(o *Options) { o.KnownHelpers = map[string]string{"alice": oldLine} })
-	helper, newLine := newKey(t, "alice")
+	f := setup(t, func(o *Options) { o.KnownAgents = map[string]string{"alice": oldLine} })
+	agent, newLine := newKey(t, "alice")
 	startSession(t, f, newLine)
 	<-f.runner.started
 	f.h.mu.Lock()
 	defer f.h.mu.Unlock()
 	want := ssh.FingerprintSHA256(oldKey(t, oldLine))
-	if len(f.h.asked) != 1 || f.h.asked[0].oldFP != want || f.h.pinned["alice"] != identity.KeyLine(helper.PublicKey(), "") {
+	if len(f.h.asked) != 1 || f.h.asked[0].oldFP != want || f.h.pinned["alice"] != identity.KeyLine(agent.PublicKey(), "") {
 		t.Fatalf("asked %+v, pinned %q", f.h.asked, f.h.pinned["alice"])
 	}
 }

@@ -24,7 +24,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	in := &Config{
 		RelayAddress: "relay.example.com:5959",
 		RelayHostKey: "ssh-ed25519 AAAA",
-		KnownHelpers: map[string]string{"alice": "ssh-ed25519 BBBB"},
+		KnownAgents:  map[string]string{"alice": "ssh-ed25519 BBBB"},
 	}
 	if err := s.Save(in); err != nil {
 		t.Fatal(err)
@@ -109,10 +109,10 @@ func TestRemoveKey(t *testing.T) {
 }
 
 func TestClone(t *testing.T) {
-	c := &Config{KnownHelpers: map[string]string{"a": "x"}}
+	c := &Config{KnownAgents: map[string]string{"a": "x"}}
 	n := c.Clone()
-	n.KnownHelpers["a"] = "y"
-	if c.KnownHelpers["a"] != "x" {
+	n.KnownAgents["a"] = "y"
+	if c.KnownAgents["a"] != "x" {
 		t.Fatal("clone shares map")
 	}
 }

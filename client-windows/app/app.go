@@ -1,6 +1,6 @@
 // Package app is the client's logic between the window and the relay
 // connection: which screen to show (the relay address with Connect, the key
-// to send, waiting for a helper with Disconnect), the stored configuration,
+// to send, waiting for an agent with Disconnect), the stored configuration,
 // Remove key and the update offer. It has
 // no GUI dependencies; the window renders the View it is given and forwards
 // button presses.
@@ -28,8 +28,8 @@ type Screen int
 // Screens.
 const (
 	ScreenAddress  Screen = iota // relay address and Connect; always the first screen
-	ScreenKey                    // connected, key not registered: send this key to a helper
-	ScreenMain                   // registered: waiting for a helper to connect, Disconnect
+	ScreenKey                    // connected, key not registered: send this key to an agent
+	ScreenMain                   // registered: waiting for an agent to connect, Disconnect
 	ScreenKeyError               // the app key exists but can't be used
 )
 
@@ -57,8 +57,8 @@ type View struct {
 
 	// ScreenMain
 	KeyComment string // comment of this PC's key, user@machine
-	Ready      bool   // connected and registered: helpers can connect
-	Asking     bool   // a helper wants to connect; the user is being asked
+	Ready      bool   // connected and registered: agents can connect
+	Asking     bool   // an agent wants to connect; the user is being asked
 	InSession  bool   // the window is minimized while true
 	// RelayKeyChange is set when the relay showed another key than the
 	// pinned one; the client stopped connecting (ScreenAddress). The window
@@ -69,7 +69,7 @@ type View struct {
 	KeyDir string
 
 	// Update is a newer release to offer. It is only set while the client
-	// is idle (address screen, or waiting for a helper), so the offer never
+	// is idle (address screen, or waiting for an agent), so the offer never
 	// interrupts the user.
 	Update *update.Release
 }
@@ -79,10 +79,10 @@ type UI interface {
 	// Render shows v. It is called from any goroutine, one call at a time,
 	// and must not wait for the controller.
 	Render(v View)
-	// ConfirmHelper asks whether helper h may take control. oldFingerprint
-	// is set when that helper showed a different key last time. It may
+	// ConfirmAgent asks whether agent h may take control. oldFingerprint
+	// is set when that agent showed a different key last time. It may
 	// block; when ctx ends the question is moot and it should return false.
-	ConfirmHelper(ctx context.Context, h session.Helper, oldFingerprint string) bool
+	ConfirmAgent(ctx context.Context, h session.Agent, oldFingerprint string) bool
 }
 
 // Deps are the controller's collaborators.
@@ -322,7 +322,7 @@ func (c *Controller) loadLocked() {
 }
 
 // startClientLocked replaces the running client. The relay's host key and
-// the helper pins are the stored ones when addr is the stored relay;
+// the agent pins are the stored ones when addr is the stored relay;
 // otherwise the host key is pinned on first use.
 func (c *Controller) startClientLocked(addr string) {
 	c.stopClientLocked()
@@ -331,16 +331,16 @@ func (c *Controller) startClientLocked(addr string) {
 	c.reached, c.known, c.lastErr = false, false, nil
 	c.st = session.State{Phase: session.PhaseConnecting}
 	var hostKey string
-	var helpers map[string]string
+	var agents map[string]string
 	if addr == c.cfg.RelayAddress {
-		hostKey, helpers = c.cfg.RelayHostKey, c.cfg.Clone().KnownHelpers
+		hostKey, agents = c.cfg.RelayHostKey, c.cfg.Clone().KnownAgents
 	}
-	c.client = c.newClientLocked(addr, hostKey, helpers, c.gen)
+	c.client = c.newClientLocked(addr, hostKey, agents, c.gen)
 	c.client.Start()
 }
 
 // newClientLocked returns a relay client whose events carry gen.
-func (c *Controller) newClientLocked(addr, hostKey string, helpers map[string]string, gen int) *session.Client {
+func (c *Controller) newClientLocked(addr, hostKey string, agents map[string]string, gen int) *session.Client {
 	var runner session.Runner
 	if c.d.NewRunner != nil {
 		runner = c.d.NewRunner(c.key)
@@ -351,7 +351,7 @@ func (c *Controller) newClientLocked(addr, hostKey string, helpers map[string]st
 		AppVersion:   c.d.AppVersion,
 		UserMachine:  c.d.UserMachine,
 		RelayHostKey: hostKey,
-		KnownHelpers: helpers,
+		KnownAgents:  agents,
 		Handler:      handler{c, gen},
 		Runner:       runner,
 		EscHook:      c.d.EscHook,
@@ -409,7 +409,7 @@ func (c *Controller) Disconnect() {
 }
 
 // EndSession is the End session button shown during a session: it ends
-// the session and the client keeps waiting for a helper.
+// the session and the client keeps waiting for an agent.
 func (c *Controller) EndSession() {
 	c.mu.Lock()
 	cl := c.client
@@ -531,8 +531,8 @@ func (h handler) StateChanged(s session.State) {
 }
 
 // Registered saves the relay this PC is registered on. A different relay
-// than the stored one replaces it, and the helper pins of the old relay are
-// forgotten: helper names are only unique within one relay.
+// than the stored one replaces it, and the agent pins of the old relay are
+// forgotten: agent names are only unique within one relay.
 func (h handler) Registered(relayHostKey string) {
 	c := h.c
 	c.mu.Lock()
@@ -542,7 +542,7 @@ func (h handler) Registered(relayHostKey string) {
 	}
 	c.known = true
 	if c.cfg.RelayAddress != c.addr {
-		c.cfg.KnownHelpers = nil
+		c.cfg.KnownAgents = nil
 	}
 	changed := c.cfg.RelayAddress != c.addr || c.cfg.RelayHostKey != relayHostKey
 	c.cfg.RelayAddress = c.addr
@@ -555,23 +555,23 @@ func (h handler) Registered(relayHostKey string) {
 	c.update()
 }
 
-func (h handler) HelperPinned(name, line string) {
+func (h handler) AgentPinned(name, line string) {
 	c := h.c
 	c.mu.Lock()
 	if c.gen != h.gen {
 		c.mu.Unlock()
 		return
 	}
-	if c.cfg.KnownHelpers == nil {
-		c.cfg.KnownHelpers = make(map[string]string)
+	if c.cfg.KnownAgents == nil {
+		c.cfg.KnownAgents = make(map[string]string)
 	}
-	c.cfg.KnownHelpers[name] = line
+	c.cfg.KnownAgents[name] = line
 	c.mu.Unlock()
 	c.save()
 }
 
-func (h handler) ConfirmHelper(ctx context.Context, helper session.Helper, oldFP string) bool {
-	return h.c.d.UI.ConfirmHelper(ctx, helper, oldFP)
+func (h handler) ConfirmAgent(ctx context.Context, agent session.Agent, oldFP string) bool {
+	return h.c.d.UI.ConfirmAgent(ctx, agent, oldFP)
 }
 
 // save writes the current configuration. Saves are serialized and each

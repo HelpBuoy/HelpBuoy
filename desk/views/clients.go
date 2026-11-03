@@ -412,7 +412,7 @@ func lastSeen(t, now time.Time) string {
 	return t.Format("2 Jan 2006")
 }
 
-// connectClient asks a client's user to allow a session with this helper.
+// connectClient asks a client's user to allow a session with this agent.
 func (a *App) connectClient(ci control.ClientInfo) {
 	if a.backend == nil {
 		return

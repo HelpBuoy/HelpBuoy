@@ -1,7 +1,7 @@
 // Package perf is a manual check of the GPU side of the viewer: how long the
 // render thread spends per frame uploading dirty rects of a remote screen
 // texture (render.Screen.Upload, i.e. rl.UpdateTextureRec) and drawing it.
-// It needs a window, so it is not a go test benchmark; the helper runs it
+// It needs a window, so it is not a go test benchmark; the agent runs it
 // with the hidden --upload-bench flag and prints a table.
 package perf
 

@@ -1,5 +1,5 @@
 // Command helpbuoy-relay is the helpbuoy SSH relay. It runs as a normal user
-// process next to the helper app and listens on a single port.
+// process next to the desk app and listens on a single port.
 //
 // Besides serve, its subcommands administer the state directory directly;
 // a running relay notices their changes within a second.
@@ -65,7 +65,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	switch args[0] {
 	case "serve":
 		err = serve(args[1:], stdout, stderr)
-	case "agent", "helper": // helper is the old name of agent
+	case "agent":
 		err = agentCmd(args[1:], stdout, stderr)
 	case "client":
 		err = clientCmd(args[1:], stdout, stderr)
@@ -121,7 +121,7 @@ func stateDir(s string) (string, error) {
 	if s := os.Getenv("HELPBUOY_RELAY_STATE"); s != "" {
 		return s, nil
 	}
-	return datadir.Migrate("helpbuoy-relay", "hmw-relay")
+	return datadir.Dir("helpbuoy-relay")
 }
 
 type serveConfig struct {
@@ -213,7 +213,7 @@ func agentCmd(args []string, stdout, stderr io.Writer) error {
 		if len(pos) != 2 {
 			return fmt.Errorf("%w: agent add NAME 'ssh-ed25519 ...'", errUsage)
 		}
-		_, _, err := st.Update(func(s *store.State) error { return s.AddHelper(pos[0], pos[1]) })
+		_, _, err := st.Update(func(s *store.State) error { return s.AddAgent(pos[0], pos[1]) })
 		if err != nil {
 			return err
 		}
@@ -223,7 +223,7 @@ func agentCmd(args []string, stdout, stderr io.Writer) error {
 		if len(pos) != 1 {
 			return fmt.Errorf("%w: agent remove NAME", errUsage)
 		}
-		if _, _, err := st.Update(func(s *store.State) error { return s.RemoveHelper(pos[0]) }); err != nil {
+		if _, _, err := st.Update(func(s *store.State) error { return s.RemoveAgent(pos[0]) }); err != nil {
 			return err
 		}
 		fmt.Fprintf(stdout, "removed agent %s\n", pos[0])
@@ -237,8 +237,8 @@ func agentCmd(args []string, stdout, stderr io.Writer) error {
 		}
 		tw := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
 		fmt.Fprintln(tw, "NAME\tFINGERPRINT")
-		for i, h := range idx.State.Helpers {
-			fmt.Fprintf(tw, "%s\t%s\n", h.Name, idx.HelperFingerprint(i))
+		for i, h := range idx.State.Agents {
+			fmt.Fprintf(tw, "%s\t%s\n", h.Name, idx.AgentFingerprint(i))
 		}
 		tw.Flush()
 	default:

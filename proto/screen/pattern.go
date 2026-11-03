@@ -29,7 +29,7 @@ var (
 
 // TestPattern renders the phase 2 test pattern for time t (seconds since the
 // session started): color bars, a moving box, a clock-like counter, and the
-// user@machine label, so the helper can see that frames flow and how fast.
+// user@machine label, so the agent can see that frames flow and how fast.
 //
 // The whole image is redrawn with row copies, and only the counter digits and
 // the box change from one call to the next, so Diff of two consecutive

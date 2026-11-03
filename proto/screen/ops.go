@@ -1,12 +1,12 @@
 package screen
 
 // This file is the phase 3/4 contract for encoded frames, the tile cache,
-// the cursor and the helper-side decoder. The tile codecs are in tile.go and
+// the cursor and the agent-side decoder. The tile codecs are in tile.go and
 // the Decoder in decoder.go.
 //
 // # Rect operations (OpKind)
 //
-// Ops of a frame are applied strictly in order to the helper's image:
+// Ops of a frame are applied strictly in order to the agent's image:
 //
 //	OpRaw      RGBA holds W*H*4 bytes.
 //	OpSolid    fill with Color.
@@ -21,8 +21,8 @@ package screen
 //
 // # Tile cache
 //
-// The helper keeps CacheSlots slots of pixels. It never decides anything:
-// the client's encoder owns the LRU and tells the helper with Store/Slot which
+// The agent keeps CacheSlots slots of pixels. It never decides anything:
+// the client's encoder owns the LRU and tells the agent with Store/Slot which
 // slot to (over)write and which to draw. So both sides can't disagree as long
 // as frames are applied in order, which the wire guarantees. A Refresh or a
 // new Hello clears the cache on both sides.
@@ -43,7 +43,7 @@ package screen
 //
 // The captured image never contains the cursor. CursorShape messages carry a
 // shape once per ID; CursorPos says where the cursor is (shared-monitor
-// pixels, may be outside it) and which shape it has. The helper draws it
+// pixels, may be outside it) and which shape it has. The agent draws it
 // locally, except while its own pointer is over the view and controlling.
 
 import "encoding/binary"
@@ -61,14 +61,14 @@ const (
 )
 
 // CacheSlots is the number of tile cache slots (64x64 RGBA tiles are 16 KiB,
-// so 8192 slots are at most 128 MiB on the helper).
+// so 8192 slots are at most 128 MiB on the agent).
 const CacheSlots = 8192
 
 // MaxPart is the payload size above which an encoder splits a frame into parts.
 const MaxPart = 8 << 20
 
 // CursorShape is one cursor image. ID is chosen by the client (e.g. a hash
-// of the HCURSOR plus its bitmap); the helper caches shapes by ID.
+// of the HCURSOR plus its bitmap); the agent caches shapes by ID.
 type CursorShape struct {
 	ID         uint32
 	HotX, HotY int
@@ -89,7 +89,7 @@ type SelectMonitor struct {
 	Index int
 }
 
-// QualityMode is the helper's preference for lossy coding.
+// QualityMode is the agent's preference for lossy coding.
 type QualityMode uint8
 
 const (
@@ -98,7 +98,7 @@ const (
 	QualityFast  QualityMode = 2 // prefer fps, lower JPEG quality
 )
 
-// Quality is sent by the helper when the user changes the mode.
+// Quality is sent by the agent when the user changes the mode.
 type Quality struct {
 	Mode QualityMode
 }

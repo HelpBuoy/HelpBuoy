@@ -208,11 +208,11 @@ func main() {
 }`, "\n")
 
 var prose = strings.Fields(`The relay never sees the screen: everything inside the tunnel is
-end-to-end encrypted between the client and the helper. Screen updates are sent as
+end-to-end encrypted between the client and the agent. Screen updates are sent as
 small rectangles, encoded losslessly when they contain text and user interface elements,
 and as JPEG when they look like photos or video. Regions that stop changing are refined
 so that the final image is exact. Scrolling is detected and sent as a copy of pixels the
-helper already has, so only the newly exposed strip is encoded. A cache of recently sent
+agent already has, so only the newly exposed strip is encoded. A cache of recently sent
 tiles lets the client refer to pixels by slot number when a window is shown again.`)
 
 // paragraph returns deterministic prose of n words starting at word k.

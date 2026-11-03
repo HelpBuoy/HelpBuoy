@@ -1,4 +1,4 @@
-// Package ui is the helper app's small immediate-mode widget set drawn with
+// Package ui is the desk app's small immediate-mode widget set drawn with
 // raylib (raygui needs cgo): labels, buttons, list rows, a single-line text
 // field, a checkbox, tabs and a vertical scroll area.
 //

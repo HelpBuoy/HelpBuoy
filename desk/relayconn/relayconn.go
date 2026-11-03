@@ -1,4 +1,4 @@
-// Package relayconn keeps the helper app's one SSH connection to the relay:
+// Package relayconn keeps the desk app's one SSH connection to the relay:
 // login with the app key, TOFU check of the relay host key, the sv-control
 // channel (Hello, Presence, commands and their Replies), incoming sv-session
 // channels, keepalive, and reconnecting with backoff.
@@ -28,8 +28,8 @@ type Status int
 
 const (
 	StatusConnecting      Status = iota // dialing, or waiting to retry after a lost connection
-	StatusOnline                        // logged in as a helper
-	StatusAuthFailed                    // the relay does not know this key as a helper
+	StatusOnline                        // logged in as an agent
+	StatusAuthFailed                    // the relay does not know this key as an agent
 	StatusUnreachable                   // nothing answered, or it is not an helpbuoy-relay
 	StatusIdentityChanged               // the relay's host key differs from the pinned one
 	StatusClosed                        // Close was called
@@ -55,7 +55,7 @@ func (s Status) String() string {
 
 // Errors reported by the connection and by commands.
 var (
-	ErrNotHelper    = errors.New("this key is not an agent on the relay")
+	ErrNotAgent     = errors.New("this key is not an agent on the relay")
 	ErrNotConnected = errors.New("not connected to the relay")
 	ErrTimeout      = errors.New("the relay did not answer")
 )
@@ -63,7 +63,7 @@ var (
 // Options configure a Conn.
 type Options struct {
 	Addr   string     // host:port to dial
-	Signer ssh.Signer // the helper's app key
+	Signer ssh.Signer // the agent's app key
 	// HostKey is the pinned relay host key as an authorized_keys line, or ""
 	// to pin the key of the first successful connection.
 	HostKey string
@@ -119,7 +119,7 @@ type PresenceEvent struct {
 // SessionEvent hands over an accepted sv-session channel. The receiver owns
 // Channel and must close it, also when it rejects the session.
 type SessionEvent struct {
-	Data    control.HelperSessionData
+	Data    control.AgentSessionData
 	Channel ssh.Channel
 }
 
@@ -184,10 +184,10 @@ func (c *Conn) Close() {
 	<-c.done
 }
 
-// RegisterHelper adds another helper key under name.
-func (c *Conn) RegisterHelper(line, name string) <-chan error {
+// RegisterAgent adds another agent key under name.
+func (c *Conn) RegisterAgent(line, name string) <-chan error {
 	return c.command(func(seq uint32) any {
-		return &control.RegisterHelper{Seq: seq, PublicKey: line, Name: name}
+		return &control.RegisterAgent{Seq: seq, PublicKey: line, Name: name}
 	})
 }
 
@@ -198,7 +198,7 @@ func (c *Conn) RegisterClient(line, name string) <-chan error {
 	})
 }
 
-// RenameClient changes the name helpers see for the client with the given
+// RenameClient changes the name agents see for the client with the given
 // fingerprint.
 func (c *Conn) RenameClient(fingerprint, name string) <-chan error {
 	return c.command(func(seq uint32) any {
@@ -313,7 +313,7 @@ func classify(online bool, err error) Status {
 	switch {
 	case errors.Is(err, config.ErrRelayIdentityChanged):
 		return StatusIdentityChanged
-	case errors.Is(err, ErrNotHelper):
+	case errors.Is(err, ErrNotAgent):
 		return StatusAuthFailed
 	case online:
 		return StatusConnecting // was online; retrying
@@ -324,7 +324,7 @@ func classify(online bool, err error) Status {
 }
 
 // connect runs one connection until it ends. online reports whether it got
-// as far as a helper Hello.
+// as far as an agent Hello.
 func (c *Conn) connect() (online bool, err error) {
 	ctx, cancel := context.WithTimeout(c.ctx, c.opts.HandshakeTimeout)
 	nc, err := c.opts.Dial(ctx, "tcp", c.opts.Addr)
@@ -411,8 +411,8 @@ func (c *Conn) connect() (online bool, err error) {
 	default:
 		return false, fmt.Errorf("relay sent %T before hello", first)
 	}
-	if hello.Role != control.RoleHelper {
-		return false, ErrNotHelper
+	if hello.Role != control.RoleAgent {
+		return false, ErrNotAgent
 	}
 
 	c.mu.Lock()
@@ -469,7 +469,7 @@ func (c *Conn) acceptSessions(chans <-chan ssh.NewChannel) {
 			nc.Reject(ssh.UnknownChannelType, "unsupported channel type")
 			continue
 		}
-		d, err := control.UnmarshalHelperSessionData(nc.ExtraData())
+		d, err := control.UnmarshalAgentSessionData(nc.ExtraData())
 		if err != nil {
 			nc.Reject(ssh.Prohibited, "bad session data")
 			continue

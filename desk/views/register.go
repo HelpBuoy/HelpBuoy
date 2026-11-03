@@ -12,9 +12,9 @@ import (
 	"github.com/mevdschee/helpbuoy/proto/identity"
 )
 
-// registerPage is the state of the Register client or Register helper page.
+// registerPage is the state of the Register client or Register agent page.
 type registerPage struct {
-	helper bool // Register helper; otherwise Register client
+	agent bool // Register agent; otherwise Register client
 
 	key  ui.Field
 	name ui.Field
@@ -31,13 +31,13 @@ type registerPage struct {
 	failed bool
 }
 
-func (p *registerPage) init(helper bool) {
-	p.helper = helper
+func (p *registerPage) init(agent bool) {
+	p.agent = agent
 	p.key.Mono = true
-	if helper {
+	if agent {
 		p.key.Placeholder = "Paste the key the agent sent you (ssh-ed25519 AAAA…)"
 		p.name.Placeholder = "Name, e.g. bob"
-		p.name.Edit.Max = maxHelperName
+		p.name.Edit.Max = maxAgentName
 		return
 	}
 	p.key.Placeholder = "Paste the key the user sent you (ssh-ed25519 AAAA…)"
@@ -45,24 +45,24 @@ func (p *registerPage) init(helper bool) {
 	p.name.Edit.Max = maxClientName
 }
 
-// maxHelperName is the relay's limit for helper names.
-const maxHelperName = 64
+// maxAgentName is the relay's limit for agent names.
+const maxAgentName = 64
 
-// validHelperName reports whether the relay accepts s as a helper name:
+// validAgentName reports whether the relay accepts s as an agent name:
 // 1 to 64 printable characters without spaces.
-func validHelperName(s string) bool {
-	return validClientName(s) && len(s) <= maxHelperName && !strings.ContainsAny(s, " \t")
+func validAgentName(s string) bool {
+	return validClientName(s) && len(s) <= maxAgentName && !strings.ContainsAny(s, " \t")
 }
 
-// helperNameFrom suggests a helper name from a key comment: the user part
+// agentNameFrom suggests an agent name from a key comment: the user part
 // of user@machine, lower case.
-func helperNameFrom(comment string) string {
+func agentNameFrom(comment string) string {
 	name := strings.TrimSpace(comment)
 	if i := strings.IndexByte(name, '@'); i >= 0 {
 		name = name[:i]
 	}
 	name = strings.ToLower(name)
-	if !validHelperName(name) {
+	if !validAgentName(name) {
 		return ""
 	}
 	return name
@@ -100,8 +100,8 @@ func (p *registerPage) parse() {
 	if p.line != p.nameFor {
 		p.nameFor = p.line
 		name := strings.TrimSpace(p.comment)
-		if p.helper {
-			name = helperNameFrom(p.comment)
+		if p.agent {
+			name = agentNameFrom(p.comment)
 		} else if !validClientName(name) {
 			name = ""
 		}
@@ -111,13 +111,13 @@ func (p *registerPage) parse() {
 
 // nameOK reports whether the name field holds a name the relay accepts.
 func (p *registerPage) nameOK() bool {
-	if p.helper {
-		return validHelperName(strings.TrimSpace(p.name.Edit.String()))
+	if p.agent {
+		return validAgentName(strings.TrimSpace(p.name.Edit.String()))
 	}
 	return validClientName(p.name.Edit.String())
 }
 
-// parseMessage turns a parse error into advice for the helper.
+// parseMessage turns a parse error into advice for the agent.
 func parseMessage(err error) string {
 	switch {
 	case errors.Is(err, identity.ErrNotEd25519):
@@ -129,7 +129,7 @@ func parseMessage(err error) string {
 }
 
 // registerPageFor returns the draw function of the Register client or
-// Register helper page for a.page.
+// Register agent page for a.page.
 func (a *App) registerPageFor(p *registerPage) func(x, y, w float32) float32 {
 	return func(x, y, w float32) float32 { return a.drawRegister(p, x, y, w) }
 }
@@ -140,11 +140,11 @@ func (a *App) drawRegister(p *registerPage, x, y, w float32) float32 {
 	title, intro := "Register client", "Paste the key line the user sent you in the chat. Extra words, quotes and line breaks are fine."
 	nameLabel, fpLabel := "NAME (as agents see it in the client list)", "FINGERPRINT (compare with the user on the phone)"
 	maxName, nameRule := maxClientName, "printable characters"
-	if p.helper {
-		id = "reghelper/"
+	if p.agent {
+		id = "regagent/"
 		title, intro = "Register agent", "Paste the key line the other agent sent you. Their app shows it when they connect to this relay before being added. They can then help all its clients."
 		nameLabel, fpLabel = "NAME (one word, as clients and agents see it)", "FINGERPRINT (compare with the agent on the phone)"
-		maxName, nameRule = maxHelperName, "characters without spaces"
+		maxName, nameRule = maxAgentName, "characters without spaces"
 	}
 	c.Text(ui.Bold, ui.SizeHeading, title, x, y, ui.ColText)
 	y += 34
@@ -189,7 +189,7 @@ func (a *App) drawRegister(p *registerPage, x, y, w float32) float32 {
 		}
 	}
 
-	if rfp := a.relayFingerprint(); rfp != "" && !p.helper {
+	if rfp := a.relayFingerprint(); rfp != "" && !p.agent {
 		y += 8
 		c.Text(ui.Regular, ui.SizeSmall, "RELAY FINGERPRINT the user's app should show", x, y, ui.ColMuted)
 		y += 22
@@ -237,7 +237,7 @@ func (a *App) bigFingerprint(fp string, x, y, w float32) float32 {
 }
 
 // registeredAs describes what a fingerprint is registered as on the
-// relay ("client anna@PC", "helper bob"), or "".
+// relay ("client anna@PC", "agent bob"), or "".
 func (a *App) registeredAs(fp string) string {
 	if a.presence == nil {
 		return ""
@@ -247,7 +247,7 @@ func (a *App) registeredAs(fp string) string {
 			return "client " + c.Name
 		}
 	}
-	for _, h := range a.presence.Helpers {
+	for _, h := range a.presence.Agents {
 		if h.Fingerprint == fp {
 			return "agent " + h.Name
 		}
@@ -255,7 +255,7 @@ func (a *App) registeredAs(fp string) string {
 	return ""
 }
 
-// register sends RegisterClient or RegisterHelper for the parsed key.
+// register sends RegisterClient or RegisterAgent for the parsed key.
 func (a *App) register(p *registerPage) {
 	if p.pubKey == nil || p.busy || a.backend == nil || !p.nameOK() {
 		return
@@ -264,8 +264,8 @@ func (a *App) register(p *registerPage) {
 	shown := name
 	p.busy, p.result = true, ""
 	send := a.backend.RegisterClient
-	if p.helper {
-		send = a.backend.RegisterHelper
+	if p.agent {
+		send = a.backend.RegisterAgent
 	}
 	a.run(send(p.line, name), func(err error) {
 		p.busy = false

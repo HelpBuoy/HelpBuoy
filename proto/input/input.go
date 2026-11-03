@@ -1,5 +1,5 @@
 // Package input defines the messages on the inner "input" channel, sent by
-// the helper and injected by the client. Coordinates are normalized to
+// the agent and injected by the client. Coordinates are normalized to
 // 0..65535 over the shared monitor so the two sides need not agree on size.
 //
 // # Encodings

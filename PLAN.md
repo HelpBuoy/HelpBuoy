@@ -272,7 +272,7 @@ Agent commands carry a sequence number and the relay answers each with a `Reply`
 | `ClientHello` | client → relay | app version, current `user@machine` (the registered name comes from the key comment) |
 | `Presence` | relay → agents | full snapshot after every change: registered clients (`user@machine`, fingerprint, online, open or taken request with id and time, in session with whom) and agents |
 | `RegisterClient` / `UnregisterClient` | agent → relay | public key line or fingerprint (name taken from the key comment, or given when the comment is empty) |
-| `RegisterHelper` | agent → relay | public key line and name: adds another agent, like `helpbuoy-relay agent add` |
+| `RegisterAgent` | agent → relay | public key line and name: adds another agent, like `helpbuoy-relay agent add` |
 | `Reply` | relay → agent | answer to an agent command: sequence number and error text if it failed |
 | `Registered` | relay → client | the key is now registered (no name: that is only for agents) |
 | `RequestHelp` | client → relay | (no content) |
@@ -745,7 +745,7 @@ macOS `.app` assembled on Linux.
 **Phase 1 - relay core (3-4 days)** (done)
 `helpbuoy-relay serve`, host key, state store, key-to-role auth, agents, pending
 state, control channel, presence, session requests, splice, limits, admin CLI. Headless
-`cmd/fakehelper` and `cmd/fakeclient` in Go. Tests for every role × every channel and request
+`cmd/fakeagent` and `cmd/fakeclient` in Go. Tests for every role × every channel and request
 type, agent and client removal, many agents and many clients at once.
 
 **Phase 2 - apps on the relay (3-4 days)** (done)
@@ -803,7 +803,7 @@ client can stay online in the background; `client-macos/` and `client-linux/` re
   and not connect without the user's consent).
 - Performance: the replay harness from phase 3 in CI (client encoder against agent decoder,
   no GUI), with regression thresholds; `tc netem` runs at 20 ms / 80 ms RTT and 10 / 50 Mbit/s.
-- Session end tests (`fakehelper`): End session on the agent closes the session and
+- Session end tests (`fakeagent`): End session on the agent closes the session and
   restores the client window; local Esc ends the session and no agent input is injected
   after it; injected Esc does not end the session; the next Connect asks the user again
   and gives a new session; refusing a Connect starts nothing; closing the client window ends the session and takes the client

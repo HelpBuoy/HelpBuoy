@@ -62,7 +62,7 @@ func newPipe(t *testing.T, cfg Config, w, h int) *pipe {
 	return p
 }
 
-// step encodes cur, applies the parts and checks that the helper's image
+// step encodes cur, applies the parts and checks that the agent's image
 // equals cur outside the lossy tiles. It returns the parts.
 func (p *pipe) step(cur *image.RGBA, now time.Time) []screen.Frame {
 	p.t.Helper()
@@ -503,7 +503,7 @@ func TestReset(t *testing.T) {
 	uiFill(rng, b, image.Rect(10, 10, 200, 100))
 	p.step(b, t0.Add(time.Second))
 	p.reset()
-	// The helper's image is garbage now (e.g. after a resize).
+	// The agent's image is garbage now (e.g. after a resize).
 	for i := range p.refImg.Pix {
 		p.refImg.Pix[i] = 7
 	}
@@ -554,7 +554,7 @@ func TestSizeChangeWithoutReset(t *testing.T) {
 
 // TestUndefinedAlpha feeds captures whose alpha bytes are random, as GDI
 // produces them: alpha changes alone are no damage, classification and
-// cache work on the colors only, and the helper gets A = 255.
+// cache work on the colors only, and the agent gets A = 255.
 func TestUndefinedAlpha(t *testing.T) {
 	rng := rand.New(rand.NewPCG(13, 13))
 	const w, h = 320, 256

@@ -1,4 +1,4 @@
-// Package session is the helper's side of one remote session: it checks the
+// Package session is the agent's side of one remote session: it checks the
 // session the relay hands over against the registered client, runs the inner
 // SSH client (proto/inner), applies screen frames to an *image.RGBA, acks
 // them, and sends input messages.
@@ -40,11 +40,11 @@ type Info struct {
 	Fingerprint string
 }
 
-// Verify checks a session the relay hands over: the helper must have opened
+// Verify checks a session the relay hands over: the agent must have opened
 // the request, and ClientKey must be the registered key of ClientName in the
 // last Presence. The relay is not trusted for this; the inner handshake then
 // pins the returned key.
-func Verify(d control.HelperSessionData, p *control.Presence, opened bool) (Info, error) {
+func Verify(d control.AgentSessionData, p *control.Presence, opened bool) (Info, error) {
 	if !opened {
 		return Info{}, fmt.Errorf("session for request %q, which this agent did not open", d.RequestID)
 	}
@@ -186,7 +186,7 @@ type Session struct {
 	mbps    float64
 }
 
-// requests holds the pending helper-to-client requests, merged so the UI
+// requests holds the pending agent-to-client requests, merged so the UI
 // thread never blocks: only the latest monitor choice and quality matter.
 type requests struct {
 	refresh bool
@@ -210,7 +210,7 @@ func newSession(info Info, codec Codec, closer io.Closer) *Session {
 }
 
 // Dial starts the inner SSH client on the relay's session channel ch, with
-// the helper's key and the verified client key. It returns at once; the
+// the agent's key and the verified client key. It returns at once; the
 // handshake runs in the background and its failure ends the session.
 func Dial(ch io.ReadWriteCloser, signer ssh.Signer, info Info) *Session {
 	s := newSession(info, ProtoCodec{}, ch)
@@ -462,7 +462,7 @@ func (s *Session) request(f func(*requests)) {
 	}
 }
 
-// writeScreen sends acks and the helper's requests on the screen channel.
+// writeScreen sends acks and the agent's requests on the screen channel.
 func (s *Session) writeScreen(w io.Writer) {
 	fw := wire.NewWriter(w)
 	for {

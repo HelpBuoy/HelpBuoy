@@ -36,15 +36,15 @@ type dialResult struct {
 }
 
 // setup runs Serve and Dial over a buffered net.Pipe pair with the given keys.
-func setup(t *testing.T, hostKey, helperKey ssh.Signer, wantHelper, wantClient ssh.PublicKey) (serveResult, dialResult) {
+func setup(t *testing.T, hostKey, agentKey ssh.Signer, wantAgent, wantClient ssh.PublicKey) (serveResult, dialResult) {
 	t.Helper()
 	a, b := pipe()
 	sch := make(chan serveResult, 1)
 	go func() {
-		s, err := Serve(a, hostKey, wantHelper)
+		s, err := Serve(a, hostKey, wantAgent)
 		sch <- serveResult{s, err}
 	}()
-	c, err := Dial(b, helperKey, wantClient)
+	c, err := Dial(b, agentKey, wantClient)
 	dr := dialResult{c, err}
 	var sr serveResult
 	select {
@@ -86,17 +86,17 @@ func roundTrip(t *testing.T, name string, w io.Writer, r io.Reader) {
 }
 
 func TestHandshakeAndData(t *testing.T) {
-	host, helper := newSigner(t), newSigner(t)
-	sr, dr := setup(t, host, helper, helper.PublicKey(), host.PublicKey())
+	host, agent := newSigner(t), newSigner(t)
+	sr, dr := setup(t, host, agent, agent.PublicKey(), host.PublicKey())
 	if sr.err != nil || dr.err != nil {
 		t.Fatalf("serve: %v, dial: %v", sr.err, dr.err)
 	}
 	s, c := sr.s, dr.c
 
-	roundTrip(t, "screen client->helper", s.Screen(), c.Screen())
-	roundTrip(t, "screen helper->client", c.Screen(), s.Screen())
-	roundTrip(t, "input helper->client", c.Input(), s.Input())
-	roundTrip(t, "input client->helper", s.Input(), c.Input())
+	roundTrip(t, "screen client->agent", s.Screen(), c.Screen())
+	roundTrip(t, "screen agent->client", c.Screen(), s.Screen())
+	roundTrip(t, "input agent->client", c.Input(), s.Input())
+	roundTrip(t, "input client->agent", s.Input(), c.Input())
 
 	// CloseWrite gives EOF on the other side, the reverse direction still works.
 	if err := c.Input().CloseWrite(); err != nil {
@@ -117,8 +117,8 @@ func TestHandshakeAndData(t *testing.T) {
 }
 
 func TestDialWrongClientKey(t *testing.T) {
-	host, helper, other := newSigner(t), newSigner(t), newSigner(t)
-	sr, dr := setup(t, host, helper, helper.PublicKey(), other.PublicKey())
+	host, agent, other := newSigner(t), newSigner(t), newSigner(t)
+	sr, dr := setup(t, host, agent, agent.PublicKey(), other.PublicKey())
 	if !errors.Is(dr.err, ErrWrongKey) {
 		t.Fatalf("dial err = %v, want ErrWrongKey", dr.err)
 	}
@@ -127,30 +127,30 @@ func TestDialWrongClientKey(t *testing.T) {
 	}
 }
 
-func TestServeRejectsOtherHelper(t *testing.T) {
-	host, helper, other := newSigner(t), newSigner(t), newSigner(t)
-	sr, dr := setup(t, host, other, helper.PublicKey(), host.PublicKey())
+func TestServeRejectsOtherAgent(t *testing.T) {
+	host, agent, other := newSigner(t), newSigner(t), newSigner(t)
+	sr, dr := setup(t, host, other, agent.PublicKey(), host.PublicKey())
 	if !errors.Is(sr.err, ErrWrongKey) {
 		t.Fatalf("serve err = %v, want ErrWrongKey", sr.err)
 	}
 	if dr.err == nil {
-		t.Fatal("dial succeeded with an unknown helper key")
+		t.Fatal("dial succeeded with an unknown agent key")
 	}
 }
 
 func TestExtraChannelsRejected(t *testing.T) {
-	host, helper := newSigner(t), newSigner(t)
+	host, agent := newSigner(t), newSigner(t)
 	a, b := pipe()
 	defer a.Close()
 	defer b.Close()
 	sch := make(chan serveResult, 1)
 	go func() {
-		s, err := Serve(a, host, helper.PublicKey())
+		s, err := Serve(a, host, agent.PublicKey())
 		sch <- serveResult{s, err}
 	}()
 	cc, chans, reqs, err := ssh.NewClientConn(b, "inner", &ssh.ClientConfig{
 		User:            "helpbuoy",
-		Auth:            []ssh.AuthMethod{ssh.PublicKeys(helper)},
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(agent)},
 		HostKeyCallback: ssh.FixedHostKey(host.PublicKey()),
 	})
 	if err != nil {
@@ -225,9 +225,9 @@ func waitDone(t *testing.T, name string, wait func() error) {
 }
 
 func TestCloseEndsWait(t *testing.T) {
-	host, helper := newSigner(t), newSigner(t)
+	host, agent := newSigner(t), newSigner(t)
 
-	sr, dr := setup(t, host, helper, helper.PublicKey(), host.PublicKey())
+	sr, dr := setup(t, host, agent, agent.PublicKey(), host.PublicKey())
 	if sr.err != nil || dr.err != nil {
 		t.Fatalf("serve: %v, dial: %v", sr.err, dr.err)
 	}
@@ -235,7 +235,7 @@ func TestCloseEndsWait(t *testing.T) {
 	waitDone(t, "server", sr.s.Wait)
 	waitDone(t, "client", dr.c.Wait)
 
-	sr, dr = setup(t, host, helper, helper.PublicKey(), host.PublicKey())
+	sr, dr = setup(t, host, agent, agent.PublicKey(), host.PublicKey())
 	if sr.err != nil || dr.err != nil {
 		t.Fatalf("serve: %v, dial: %v", sr.err, dr.err)
 	}
@@ -249,12 +249,12 @@ func TestServeTimeout(t *testing.T) {
 	setupTimeout = 200 * time.Millisecond
 	defer func() { setupTimeout = old }()
 
-	host, helper := newSigner(t), newSigner(t)
+	host, agent := newSigner(t), newSigner(t)
 	a, b := pipe()
 	defer b.Close()
 	// Drain whatever the server writes, never answer.
 	go io.Copy(io.Discard, b)
-	_, err := Serve(a, host, helper.PublicKey())
+	_, err := Serve(a, host, agent.PublicKey())
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("err = %v, want ErrTimeout", err)
 	}
@@ -265,16 +265,16 @@ func TestKeepaliveClosesDeadPeer(t *testing.T) {
 	keepaliveInterval, keepaliveMaxMiss = 20*time.Millisecond, 3
 	defer func() { keepaliveInterval, keepaliveMaxMiss = oldI, oldM }()
 
-	host, helper := newSigner(t), newSigner(t)
+	host, agent := newSigner(t), newSigner(t)
 	a, b := pipe()
 	stall := &stallConn{Conn: a, stall: make(chan struct{}), release: make(chan struct{})}
 	defer close(stall.release)
 	sch := make(chan serveResult, 1)
 	go func() {
-		s, err := Serve(stall, host, helper.PublicKey())
+		s, err := Serve(stall, host, agent.PublicKey())
 		sch <- serveResult{s, err}
 	}()
-	c, err := Dial(b, helper, host.PublicKey())
+	c, err := Dial(b, agent, host.PublicKey())
 	if err != nil {
 		t.Fatal(err)
 	}

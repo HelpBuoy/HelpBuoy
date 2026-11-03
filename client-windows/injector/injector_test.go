@@ -387,7 +387,7 @@ func TestAbsoluteMapping(t *testing.T) {
 	}
 	for _, c := range cases {
 		w, h := c.mon.Dx(), c.mon.Dy()
-		// The helper maps its pixel v of a w-pixel view to v/(w-1)*65535;
+		// The agent maps its pixel v of a w-pixel view to v/(w-1)*65535;
 		// with matching sizes every monitor pixel must be hit exactly.
 		for px := 0; px < w; px++ {
 			n := uint16((int64(px)*65535 + int64(w-1)/2) / int64(w-1))

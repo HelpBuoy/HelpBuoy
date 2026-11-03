@@ -129,11 +129,11 @@ func (e *env) update(fn func(*store.State) error) {
 	e.srv.Reload()
 }
 
-func (e *env) addHelper(name string) ssh.Signer {
+func (e *env) addAgent(name string) ssh.Signer {
 	e.t.Helper()
 	k := fake.NewKey()
 	e.update(func(st *store.State) error {
-		return st.AddHelper(name, fake.KeyLine(k.PublicKey(), ""))
+		return st.AddAgent(name, fake.KeyLine(k.PublicKey(), ""))
 	})
 	return k
 }
@@ -163,7 +163,7 @@ func (e *env) dial(k ssh.Signer) *fake.Conn {
 func (e *env) connect(k ssh.Signer, want control.Role) (*fake.Conn, *control.Hello) {
 	e.t.Helper()
 	c := e.dial(k)
-	if want != control.RoleHelper {
+	if want != control.RoleAgent {
 		if err := c.Send(&control.ClientHello{AppVersion: "test", UserMachine: "user@machine"}); err != nil {
 			e.t.Fatal(err)
 		}
@@ -175,9 +175,9 @@ func (e *env) connect(k ssh.Signer, want control.Role) (*fake.Conn, *control.Hel
 	return c, h
 }
 
-func (e *env) helper(name string) *fake.Conn {
+func (e *env) agent(name string) *fake.Conn {
 	e.t.Helper()
-	c, _ := e.connect(e.addHelper(name), control.RoleHelper)
+	c, _ := e.connect(e.addAgent(name), control.RoleAgent)
 	return c
 }
 

@@ -1,9 +1,9 @@
 // Command fakeclient is a headless stand-in for the Windows client, for
 // manual end-to-end checks of the relay. It connects with the key in
 // --key-dir (created if missing), prints its public key line, waits for
-// Registered, and on SessionReady (a helper connecting) opens the session
+// Registered, and on SessionReady (an agent connecting) opens the session
 // channel, writes one line into it and echoes everything it receives back.
-// With --refuse it refuses every helper instead.
+// With --refuse it refuses every agent instead.
 package main
 
 import (
@@ -23,7 +23,7 @@ func main() {
 	relay := flag.String("relay", "localhost:5959", "relay host:port")
 	keyDir := flag.String("key-dir", "fakeclient-key", "directory with the client key (created if missing)")
 	userMachine := flag.String("user-machine", "fake@fakeclient", "user@machine for the key comment and ClientHello")
-	refuse := flag.Bool("refuse", false, "refuse every helper that connects")
+	refuse := flag.Bool("refuse", false, "refuse every agent that connects")
 	message := flag.String("message", "hello from fakeclient", "line written into the session channel")
 	once := flag.Bool("once", false, "exit after the first session ends")
 	flag.Parse()
@@ -58,7 +58,7 @@ func run(w io.Writer, relay, keyDir, userMachine string, refuse bool, message st
 		case *control.RequestStateMsg:
 			fmt.Fprintf(w, "request: %s %s\n", m.RequestID, m.State)
 		case *control.SessionReady:
-			fmt.Fprintf(w, "session-ready: %s helper=%s key=%s\n", m.RequestID, m.HelperName, m.HelperKey)
+			fmt.Fprintf(w, "session-ready: %s agent=%s key=%s\n", m.RequestID, m.AgentName, m.AgentKey)
 			if refuse {
 				fmt.Fprintln(w, "session: refused")
 				if err := c.Send(&control.CancelRequest{RequestID: m.RequestID}); err != nil {

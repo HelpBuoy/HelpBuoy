@@ -1,4 +1,4 @@
-// Command fakehelper is a headless stand-in for the helper app, for manual
+// Command fakeagent is a headless stand-in for the desk app, for manual
 // end-to-end checks of the relay. It connects with the key in --key-dir
 // (created if missing), prints Presence changes, can register a client key
 // (--register), and can connect to the first online client (--connect-first).
@@ -29,26 +29,26 @@ type options struct {
 func main() {
 	var o options
 	flag.StringVar(&o.relay, "relay", "localhost:5959", "relay host:port")
-	flag.StringVar(&o.keyDir, "key-dir", "fakehelper-key", "directory with the helper key (created if missing)")
+	flag.StringVar(&o.keyDir, "key-dir", "fakeagent-key", "directory with the agent key (created if missing)")
 	flag.StringVar(&o.register, "register", "", "register this client key line ('ssh-ed25519 ... user@machine')")
 	flag.StringVar(&o.name, "name", "", "client name for --register when the key has no comment")
 	flag.BoolVar(&o.connectFirst, "connect-first", false, "connect to the first online client")
-	flag.StringVar(&o.message, "message", "hello from fakehelper", "line written into each session channel")
+	flag.StringVar(&o.message, "message", "hello from fakeagent", "line written into each session channel")
 	flag.BoolVar(&o.stdin, "stdin", false, "forward standard input into the session channel")
 	flag.BoolVar(&o.once, "once", false, "exit after the first session ends")
 	flag.Parse()
 	if err := run(os.Stdout, o); err != nil {
-		fmt.Fprintln(os.Stderr, "fakehelper:", err)
+		fmt.Fprintln(os.Stderr, "fakeagent:", err)
 		os.Exit(1)
 	}
 }
 
 func run(w io.Writer, o options) error {
-	signer, err := fake.LoadOrCreateKey(o.keyDir, "fakehelper")
+	signer, err := fake.LoadOrCreateKey(o.keyDir, "fakeagent")
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(w, "key:", fake.KeyLine(signer.PublicKey(), "fakehelper"))
+	fmt.Fprintln(w, "key:", fake.KeyLine(signer.PublicKey(), "fakeagent"))
 	fmt.Fprintln(w, "fingerprint:", ssh.FingerprintSHA256(signer.PublicKey()))
 	c, err := fake.Dial(o.relay, signer, fake.Options{})
 	if err != nil {
@@ -87,8 +87,8 @@ func run(w io.Writer, o options) error {
 		switch m := m.(type) {
 		case *control.Hello:
 			fmt.Fprintf(w, "hello: role=%s name=%q relay=%s\n", m.Role, m.Name, m.RelayVersion)
-			if m.Role != control.RoleHelper {
-				return fmt.Errorf("this key is not a helper on the relay (role %s)", m.Role)
+			if m.Role != control.RoleAgent {
+				return fmt.Errorf("this key is not an agent on the relay (role %s)", m.Role)
 			}
 			if o.register != "" {
 				s := next()
@@ -131,7 +131,7 @@ func run(w io.Writer, o options) error {
 
 func formatPresence(p *control.Presence) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "presence: %d clients, %d helpers\n", len(p.Clients), len(p.Helpers))
+	fmt.Fprintf(&b, "presence: %d clients, %d agents\n", len(p.Clients), len(p.Agents))
 	for _, c := range p.Clients {
 		state := "offline"
 		if c.Online {
@@ -145,18 +145,18 @@ func formatPresence(p *control.Presence) string {
 		}
 		fmt.Fprintf(&b, "  client %s %s %s\n", c.Name, c.Fingerprint, state)
 	}
-	for _, h := range p.Helpers {
+	for _, h := range p.Agents {
 		state := "offline"
 		if h.Online {
 			state = "online"
 		}
-		fmt.Fprintf(&b, "  helper %s %s %s\n", h.Name, h.Fingerprint, state)
+		fmt.Fprintf(&b, "  agent %s %s %s\n", h.Name, h.Fingerprint, state)
 	}
 	return b.String()
 }
 
 func session(w io.Writer, nch ssh.NewChannel, o options) {
-	d, err := control.UnmarshalHelperSessionData(nch.ExtraData())
+	d, err := control.UnmarshalAgentSessionData(nch.ExtraData())
 	if err != nil {
 		nch.Reject(ssh.Prohibited, "bad session data")
 		return

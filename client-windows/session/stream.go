@@ -27,11 +27,11 @@ type InnerSession interface {
 }
 
 // InnerServer starts the inner SSH server on the session channel.
-type InnerServer func(rw io.ReadWriteCloser, hostKey ssh.Signer, helperKey ssh.PublicKey) (InnerSession, error)
+type InnerServer func(rw io.ReadWriteCloser, hostKey ssh.Signer, agentKey ssh.PublicKey) (InnerSession, error)
 
 // ServeInner is the InnerServer of proto/inner.
-func ServeInner(rw io.ReadWriteCloser, hostKey ssh.Signer, helperKey ssh.PublicKey) (InnerSession, error) {
-	s, err := inner.Serve(rw, hostKey, helperKey)
+func ServeInner(rw io.ReadWriteCloser, hostKey ssh.Signer, agentKey ssh.PublicKey) (InnerSession, error) {
+	s, err := inner.Serve(rw, hostKey, agentKey)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func (ScreenCodec) EncodeHello(h screen.Hello) []byte        { return screen.Enc
 func (ScreenCodec) EncodeFrame(f screen.Frame) []byte        { return screen.EncodeFrame(f) }
 func (ScreenCodec) DecodeAck(b []byte) (screen.Ack, error)   { return screen.DecodeAck(b) }
 
-// InputSink receives the helper's input messages as raw wire frames.
+// InputSink receives the agent's input messages as raw wire frames.
 type InputSink interface {
 	Input(typ uint8, payload []byte)
 }
@@ -86,7 +86,7 @@ type PatternRunner struct {
 }
 
 // Run implements Runner.
-func (r *PatternRunner) Run(ctx context.Context, ch io.ReadWriteCloser, helperKey ssh.PublicKey) error {
+func (r *PatternRunner) Run(ctx context.Context, ch io.ReadWriteCloser, agentKey ssh.PublicKey) error {
 	serve := r.Serve
 	if serve == nil {
 		serve = ServeInner
@@ -97,7 +97,7 @@ func (r *PatternRunner) Run(ctx context.Context, ch io.ReadWriteCloser, helperKe
 	stop := context.AfterFunc(ctx, func() { ch.Close() })
 	defer stop()
 
-	s, err := serve(ch, r.HostKey, helperKey)
+	s, err := serve(ch, r.HostKey, agentKey)
 	if err != nil {
 		return fmt.Errorf("inner handshake: %w", err)
 	}
@@ -146,7 +146,7 @@ func (r *PatternRunner) readInput(st inner.Stream) {
 }
 
 // stream sends Hello and then frames at up to FPS, never more than
-// screen.MaxUnacked ahead of the helper's acks.
+// screen.MaxUnacked ahead of the agent's acks.
 func (r *PatternRunner) stream(ctx context.Context, st inner.Stream) error {
 	codec := r.Codec
 	if codec == nil {

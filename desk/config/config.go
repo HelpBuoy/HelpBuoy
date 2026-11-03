@@ -1,4 +1,4 @@
-// Package config stores the helper app's settings in its data directory:
+// Package config stores the desk app's settings in its data directory:
 // the last relay address and its pinned relay host key.
 //
 // The relay host key is trust on first use (PLAN.md 3.5): it is pinned on the
@@ -22,15 +22,15 @@ import (
 )
 
 // FileName is the settings file inside the data directory. The client app
-// uses config.json in the same kind of directory, so the helper uses its own
+// uses config.json in the same kind of directory, so the agent uses its own
 // name to never read or overwrite the client's file.
-const FileName = "helper.json"
+const FileName = "agent.json"
 
 // ErrRelayIdentityChanged is returned when the relay presents a host key that
 // differs from the pinned one.
 var ErrRelayIdentityChanged = errors.New("relay identity changed")
 
-// Config is the stored helper configuration.
+// Config is the stored agent configuration.
 type Config struct {
 	// RelayAddr is the relay address last connected to, as typed on the
 	// connect screen (normalized hostname:port). localhost means the relay

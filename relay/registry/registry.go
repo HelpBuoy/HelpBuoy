@@ -1,6 +1,6 @@
 // Package registry is the relay's in-memory state machine: online
 // connections and their roles, help requests and sessions, and the Presence
-// snapshot for helpers. It knows nothing about SSH; connections are Peers
+// snapshot for agents. It knows nothing about SSH; connections are Peers
 // that queue control messages. The server package feeds it decoded control
 // messages and opens the session channels it asks for.
 //
@@ -29,7 +29,7 @@ import (
 type Peer interface {
 	// Send queues a control message for the connection's control channel.
 	Send(m any)
-	// NotifyPresence tells a helper connection that the Presence snapshot
+	// NotifyPresence tells an agent connection that the Presence snapshot
 	// changed; the connection fetches it with Registry.Presence.
 	NotifyPresence()
 	// Kick sends an Error with reason and closes the connection.
@@ -38,11 +38,11 @@ type Peer interface {
 
 // Config configures a Registry. Zero durations and counts take the defaults.
 type Config struct {
-	Now                  func() time.Time
-	SessionStartTimeout  time.Duration // a taken request must get its session channel within this (1 min)
-	PendingIdle          time.Duration // pending connections are closed after this (24 h)
-	MaxSessionsPerHelper int           // 20
-	Version              string        // relay version for Hello
+	Now                 func() time.Time
+	SessionStartTimeout time.Duration // a taken request must get its session channel within this (1 min)
+	PendingIdle         time.Duration // pending connections are closed after this (24 h)
+	MaxSessionsPerAgent int           // 20
+	Version             string        // relay version for Hello
 	// Mutate persists a change to the stored state. The implementation must
 	// call SetIndex with the new state before it returns.
 	Mutate func(fn func(*store.State) error) error
@@ -79,7 +79,7 @@ type request struct {
 	client  *Conn
 	created time.Time
 	state   control.RequestState
-	helper  *Conn
+	agent   *Conn
 	takenAt time.Time
 	sess    *Session
 }
@@ -122,8 +122,8 @@ func New(cfg Config, idx *store.Index) *Registry {
 	if cfg.PendingIdle == 0 {
 		cfg.PendingIdle = 24 * time.Hour
 	}
-	if cfg.MaxSessionsPerHelper == 0 {
-		cfg.MaxSessionsPerHelper = 20
+	if cfg.MaxSessionsPerAgent == 0 {
+		cfg.MaxSessionsPerAgent = 20
 	}
 	if cfg.Log == nil {
 		cfg.Log = slog.New(slog.DiscardHandler)
@@ -211,9 +211,9 @@ func (r *Registry) detachLocked(c *Conn) {
 		if c.req != nil {
 			r.endRequestLocked(c.req, control.RequestCancelled, false)
 		}
-	case control.RoleHelper:
+	case control.RoleAgent:
 		for _, req := range r.requests {
-			if req.helper == c {
+			if req.agent == c {
 				r.endRequestLocked(req, control.RequestEnded, true)
 			}
 		}
@@ -222,7 +222,7 @@ func (r *Registry) detachLocked(c *Conn) {
 }
 
 // OpenControl is called when the connection's control channel is open. It
-// queues Hello and, for helpers, the first Presence.
+// queues Hello and, for agents, the first Presence.
 func (r *Registry) OpenControl(c *Conn) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -238,11 +238,11 @@ func (r *Registry) OpenControl(c *Conn) error {
 		RelayVersion: r.cfg.Version,
 		ServerTime:   r.cfg.Now().UTC(),
 	}
-	if c.role == control.RoleHelper {
-		h.Name = c.name // clients are not told the name helpers gave them
+	if c.role == control.RoleAgent {
+		h.Name = c.name // clients are not told the name agents gave them
 	}
 	c.peer.Send(h)
-	if c.role == control.RoleHelper {
+	if c.role == control.RoleAgent {
 		c.peer.NotifyPresence()
 	}
 	return nil
@@ -255,11 +255,11 @@ func send(c *Conn, m any) {
 	}
 }
 
-// changedLocked marks the Presence snapshot stale and tells the helpers.
+// changedLocked marks the Presence snapshot stale and tells the agents.
 func (r *Registry) changedLocked() {
 	r.gen++
 	for _, c := range r.conns {
-		if c.role == control.RoleHelper && c.control {
+		if c.role == control.RoleAgent && c.control {
 			c.peer.NotifyPresence()
 		}
 	}
@@ -290,7 +290,7 @@ func (r *Registry) PresenceSnapshot() control.Presence {
 func (r *Registry) presenceLocked() control.Presence {
 	now := r.cfg.Now().UTC()
 	st := r.idx.State
-	p := control.Presence{Clients: []control.ClientInfo{}, Helpers: []control.HelperInfo{}}
+	p := control.Presence{Clients: []control.ClientInfo{}, Agents: []control.AgentInfo{}}
 	for i, sc := range st.Clients {
 		fp := r.idx.ClientFingerprint(i)
 		ci := control.ClientInfo{
@@ -309,10 +309,10 @@ func (r *Registry) presenceLocked() control.Presence {
 			ci.UserMachine = c.userMachine
 			if q := c.req; q != nil {
 				ri := &control.RequestInfo{ID: q.id, Created: q.created.UTC(), State: q.state}
-				if q.helper != nil {
-					ri.TakenBy = q.helper.name
+				if q.agent != nil {
+					ri.TakenBy = q.agent.name
 					if q.sess != nil && q.sess.started {
-						ci.InSessionWith = q.helper.name
+						ci.InSessionWith = q.agent.name
 					}
 				}
 				ci.Request = ri
@@ -320,18 +320,18 @@ func (r *Registry) presenceLocked() control.Presence {
 		}
 		p.Clients = append(p.Clients, ci)
 	}
-	for i, h := range st.Helpers {
-		fp := r.idx.HelperFingerprint(i)
+	for i, h := range st.Agents {
+		fp := r.idx.AgentFingerprint(i)
 		c := r.conns[fp]
-		p.Helpers = append(p.Helpers, control.HelperInfo{
+		p.Agents = append(p.Agents, control.AgentInfo{
 			Name: h.Name, Fingerprint: fp,
-			Online: c != nil && c.role == control.RoleHelper,
+			Online: c != nil && c.role == control.RoleAgent,
 		})
 	}
 	slices.SortFunc(p.Clients, func(a, b control.ClientInfo) int {
 		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.Fingerprint, b.Fingerprint))
 	})
-	slices.SortFunc(p.Helpers, func(a, b control.HelperInfo) int { return cmp.Compare(a.Name, b.Name) })
+	slices.SortFunc(p.Agents, func(a, b control.AgentInfo) int { return cmp.Compare(a.Name, b.Name) })
 	return p
 }
 
@@ -384,8 +384,8 @@ func (r *Registry) Handle(c *Conn, m any) error {
 		return r.registerClient(c, m)
 	case *control.UnregisterClient:
 		return r.unregisterClient(c, m)
-	case *control.RegisterHelper:
-		return r.registerHelper(c, m)
+	case *control.RegisterAgent:
+		return r.registerAgent(c, m)
 	case *control.RenameClient:
 		return r.renameClient(c, m)
 	}
@@ -395,8 +395,8 @@ func (r *Registry) Handle(c *Conn, m any) error {
 func (r *Registry) clientHello(c *Conn, m *control.ClientHello) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if c.role == control.RoleHelper {
-		return nil // helpers have no ClientHello; ignored per the contract
+	if c.role == control.RoleAgent {
+		return nil // agents have no ClientHello; ignored per the contract
 	}
 	um := auth.Truncate(m.UserMachine, 256)
 	if um != c.userMachine {
@@ -442,29 +442,29 @@ func (r *Registry) endRequestLocked(q *request, state control.RequestState, noti
 		}
 	}
 	attrs := []any{"event", string(state), "id", q.id, "client", q.client.fp}
-	if q.helper != nil {
-		attrs = append(attrs, "helper", q.helper.name)
+	if q.agent != nil {
+		attrs = append(attrs, "agent", q.agent.name)
 	}
 	r.log.Info("request", attrs...)
 	r.changedLocked()
 }
 
-func (r *Registry) helperSessionsLocked(h *Conn) int {
+func (r *Registry) agentSessionsLocked(h *Conn) int {
 	n := 0
 	for _, q := range r.requests {
-		if q.helper == h {
+		if q.agent == h {
 			n++
 		}
 	}
 	return n
 }
 
-// connect starts a session from helper c: a request, taken by c, that waits
+// connect starts a session from agent c: a request, taken by c, that waits
 // for the client's user to allow it.
 func (r *Registry) connect(c *Conn, m *control.Connect) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if c.role != control.RoleHelper {
+	if c.role != control.RoleAgent {
 		return fmt.Errorf("%w: Connect from %s", ErrNotAllowed, c.role)
 	}
 	fail := func(msg string) error {
@@ -480,29 +480,29 @@ func (r *Registry) connect(c *Conn, m *control.Connect) error {
 		return fail("client is not online")
 	case cl.req != nil:
 		return fail("client is busy")
-	case r.helperSessionsLocked(c) >= r.cfg.MaxSessionsPerHelper:
-		return fail(fmt.Sprintf("too many sessions (max %d)", r.cfg.MaxSessionsPerHelper))
+	case r.agentSessionsLocked(c) >= r.cfg.MaxSessionsPerAgent:
+		return fail(fmt.Sprintf("too many sessions (max %d)", r.cfg.MaxSessionsPerAgent))
 	}
 	now := r.cfg.Now()
-	q := &request{id: m.RequestID, client: cl, created: now, state: control.RequestTaken, helper: c, takenAt: now}
+	q := &request{id: m.RequestID, client: cl, created: now, state: control.RequestTaken, agent: c, takenAt: now}
 	r.requests[q.id] = q
 	cl.req = q
 	send(c, &control.Reply{Seq: m.Seq})
 	send(cl, &control.SessionReady{
-		RequestID:  q.id,
-		HelperName: c.name,
-		HelperKey:  c.keyLine,
+		RequestID: q.id,
+		AgentName: c.name,
+		AgentKey:  c.keyLine,
 	})
-	r.log.Info("request", "event", "connect", "id", q.id, "client", cl.fp, "helper", c.name)
+	r.log.Info("request", "event", "connect", "id", q.id, "client", cl.fp, "agent", c.name)
 	r.changedLocked()
 	return nil
 }
 
-// helperName returns c's helper name, or an error if c is not a helper.
-func (r *Registry) helperName(c *Conn, what string) (string, error) {
+// agentName returns c's agent name, or an error if c is not an agent.
+func (r *Registry) agentName(c *Conn, what string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if c.role != control.RoleHelper {
+	if c.role != control.RoleAgent {
 		return "", fmt.Errorf("%w: %s from %s", ErrNotAllowed, what, c.role)
 	}
 	return c.name, nil
@@ -525,13 +525,13 @@ func (r *Registry) mutate(fn func(*store.State) error) error {
 	return r.cfg.Mutate(fn)
 }
 
-// registerHelper adds a helper key on behalf of helper c.
-func (r *Registry) registerHelper(c *Conn, m *control.RegisterHelper) error {
-	by, err := r.helperName(c, "RegisterHelper")
+// registerAgent adds an agent key on behalf of agent c.
+func (r *Registry) registerAgent(c *Conn, m *control.RegisterAgent) error {
+	by, err := r.agentName(c, "RegisterAgent")
 	if err != nil {
 		return err
 	}
-	err = r.mutate(func(st *store.State) error { return st.AddHelper(m.Name, m.PublicKey) })
+	err = r.mutate(func(st *store.State) error { return st.AddAgent(m.Name, m.PublicKey) })
 	if err == nil {
 		r.log.Info("agent added", "name", strings.TrimSpace(m.Name), "by", by)
 	}
@@ -540,7 +540,7 @@ func (r *Registry) registerHelper(c *Conn, m *control.RegisterHelper) error {
 }
 
 func (r *Registry) registerClient(c *Conn, m *control.RegisterClient) error {
-	by, err := r.helperName(c, "RegisterClient")
+	by, err := r.agentName(c, "RegisterClient")
 	if err != nil {
 		return err
 	}
@@ -558,7 +558,7 @@ func (r *Registry) registerClient(c *Conn, m *control.RegisterClient) error {
 }
 
 func (r *Registry) renameClient(c *Conn, m *control.RenameClient) error {
-	by, err := r.helperName(c, "RenameClient")
+	by, err := r.agentName(c, "RenameClient")
 	if err != nil {
 		return err
 	}
@@ -576,7 +576,7 @@ func (r *Registry) renameClient(c *Conn, m *control.RenameClient) error {
 }
 
 func (r *Registry) unregisterClient(c *Conn, m *control.UnregisterClient) error {
-	by, err := r.helperName(c, "UnregisterClient")
+	by, err := r.agentName(c, "UnregisterClient")
 	if err != nil {
 		return err
 	}
@@ -594,14 +594,14 @@ func (r *Registry) unregisterClient(c *Conn, m *control.UnregisterClient) error 
 }
 
 // BeginSession checks that client connection c may open the session channel
-// for requestID: its current request, taken by a helper, with no session yet.
-// It returns the session, the helper's peer and the extra data for the
-// channel to the helper. The caller opens that channel and then calls
+// for requestID: its current request, taken by an agent, with no session yet.
+// It returns the session, the agent's peer and the extra data for the
+// channel to the agent. The caller opens that channel and then calls
 // Started, or End if it could not.
-func (r *Registry) BeginSession(c *Conn, requestID string) (*Session, Peer, control.HelperSessionData, error) {
+func (r *Registry) BeginSession(c *Conn, requestID string) (*Session, Peer, control.AgentSessionData, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	var none control.HelperSessionData
+	var none control.AgentSessionData
 	if c.detached || c.role != control.RoleClient {
 		return nil, nil, none, fmt.Errorf("only registered clients open sessions")
 	}
@@ -609,7 +609,7 @@ func (r *Registry) BeginSession(c *Conn, requestID string) (*Session, Peer, cont
 	if q == nil || q.id != requestID {
 		return nil, nil, none, fmt.Errorf("no such request")
 	}
-	if q.state != control.RequestTaken || q.helper == nil || q.helper.detached {
+	if q.state != control.RequestTaken || q.agent == nil || q.agent.detached {
 		return nil, nil, none, fmt.Errorf("request is not taken")
 	}
 	if q.sess != nil {
@@ -617,7 +617,7 @@ func (r *Registry) BeginSession(c *Conn, requestID string) (*Session, Peer, cont
 	}
 	s := &Session{r: r, req: q, start: r.cfg.Now()}
 	q.sess = s
-	return s, q.helper.peer, control.HelperSessionData{
+	return s, q.agent.peer, control.AgentSessionData{
 		RequestID:   q.id,
 		ClientName:  c.name,
 		ClientKey:   c.keyLine,
@@ -638,7 +638,7 @@ func (s *Session) Started(closeFn func()) bool {
 	}
 	s.started = true
 	s.closeFn = closeFn
-	r.log.Info("session", "event", "start", "id", s.req.id, "client", s.req.client.fp, "helper", s.req.helper.name)
+	r.log.Info("session", "event", "start", "id", s.req.id, "client", s.req.client.fp, "agent", s.req.agent.name)
 	r.changedLocked()
 	return true
 }
@@ -655,7 +655,7 @@ func (s *Session) End(res splice.Result) {
 	r := s.r
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.log.Info("session", "event", "end", "id", s.req.id, "client", s.req.client.fp, "helper", s.req.helper.name,
+	r.log.Info("session", "event", "end", "id", s.req.id, "client", s.req.client.fp, "agent", s.req.agent.name,
 		"client_to_agent", res.AToB, "agent_to_client", res.BToA,
 		"duration", r.cfg.Now().Sub(s.start).String())
 	s.ended = true

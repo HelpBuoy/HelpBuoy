@@ -35,11 +35,11 @@ type Session struct {
 type Options struct {
 	// AutoRegister registers every pending key after this delay; 0 = never.
 	AutoRegister time.Duration
-	// AutoConnect connects helper HelperName (key HelperKey) this long
+	// AutoConnect connects agent AgentName (key AgentKey) this long
 	// after a registered client comes online; 0 = never.
 	AutoConnect time.Duration
-	HelperName  string
-	HelperKey   string
+	AgentName   string
+	AgentKey    string
 	Logger      *slog.Logger
 }
 
@@ -173,9 +173,9 @@ func (r *Relay) Kick(fp string) {
 	}
 }
 
-// Connect plays a helper connecting to fp: it sends SessionReady with a new
+// Connect plays an agent connecting to fp: it sends SessionReady with a new
 // request id and returns that id.
-func (r *Relay) Connect(fp, helperName, helperKey string) (string, error) {
+func (r *Relay) Connect(fp, agentName, agentKey string) (string, error) {
 	id := control.NewRequestID()
 	r.mu.Lock()
 	c := r.conns[fp]
@@ -187,9 +187,9 @@ func (r *Relay) Connect(fp, helperName, helperKey string) (string, error) {
 		return "", errors.New("fakerelay: client not online")
 	}
 	return id, c.ctl.Send(control.SessionReady{
-		RequestID:  id,
-		HelperName: helperName,
-		HelperKey:  helperKey,
+		RequestID: id,
+		AgentName: agentName,
+		AgentKey:  agentKey,
 	})
 }
 
@@ -197,7 +197,7 @@ func (r *Relay) Connect(fp, helperName, helperKey string) (string, error) {
 func (r *Relay) autoConnect(fp string) {
 	if r.opts.AutoConnect > 0 {
 		time.AfterFunc(r.opts.AutoConnect, func() {
-			r.Connect(fp, r.opts.HelperName, r.opts.HelperKey)
+			r.Connect(fp, r.opts.AgentName, r.opts.AgentKey)
 		})
 	}
 }

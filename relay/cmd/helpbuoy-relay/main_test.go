@@ -27,7 +27,7 @@ func TestRunExitCodes(t *testing.T) {
 		{[]string{"serve", "extra"}, 1},
 		{[]string{"serve", "--state", t.TempDir(), "--listen", "bad address"}, 1},
 		{[]string{"agent"}, 2},
-		{[]string{"helper", "bogus", "--state", t.TempDir()}, 2},
+		{[]string{"agent", "bogus", "--state", t.TempDir()}, 2},
 		{[]string{"agent", "add", "x", "--state", t.TempDir()}, 2},
 		{[]string{"client", "remove", "--state", t.TempDir()}, 2},
 		{[]string{"hostkey", "extra", "--state", t.TempDir()}, 2},
@@ -94,12 +94,12 @@ func TestAdmin(t *testing.T) {
 	runOK(t, "agent", "add", "alice", hl, "--state", dir)
 	runFail(t, "agent", "add", "alice", hl, "--state", dir)
 	runFail(t, "agent", "add", "bob", "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQC7", "--state", dir)
-	out := runOK(t, "helper", "list", "--state", dir)
+	out := runOK(t, "agent", "list", "--state", dir)
 	if !strings.Contains(out, "alice") || !strings.Contains(out, hfp) {
-		t.Errorf("helper list:\n%s", out)
+		t.Errorf("agent list:\n%s", out)
 	}
 
-	// Clients are registered by helpers through the relay; simulate that.
+	// Clients are registered by agents through the relay; simulate that.
 	cl, cfp := keyLine(t, "anna@PC")
 	st, _ := store.Open(dir)
 	if _, _, err := st.Update(func(s *store.State) error {
@@ -119,8 +119,8 @@ func TestAdmin(t *testing.T) {
 	if out := runOK(t, "client", "list", "--state", dir); strings.Contains(out, cfp) {
 		t.Error("client still listed")
 	}
-	runOK(t, "helper", "remove", "alice", "--state", dir)
-	runFail(t, "helper", "remove", "alice", "--state", dir)
+	runOK(t, "agent", "remove", "alice", "--state", dir)
+	runFail(t, "agent", "remove", "alice", "--state", dir)
 
 	out1 := runOK(t, "hostkey", "--state", dir)
 	out2 := runOK(t, "hostkey", "--state", dir)

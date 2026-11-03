@@ -4,9 +4,9 @@
 //	go run ./client-windows/internal/cmd/fakerelay -listen 127.0.0.1:5959 -register 10s
 //
 // With -register every pending key is registered after the delay; with
-// -connect a helper with a fresh key connects that long after a registered
-// client comes online. Once the user allows it, the helper runs the inner SSH client, decodes and acks the frames like the
-// helper app and ends the session after -session. With -png the decoded
+// -connect an agent with a fresh key connects that long after a registered
+// client comes online. Once the user allows it, the agent runs the inner SSH client, decodes and acks the frames like the
+// desk app and ends the session after -session. With -png the decoded
 // screen, cursor included, is written to a PNG file every 2 s and at the end.
 package main
 
@@ -34,25 +34,25 @@ import (
 func main() {
 	listen := flag.String("listen", "127.0.0.1:5959", "address to listen on")
 	register := flag.Duration("register", 0, "register pending keys after this delay (0 = never)")
-	connect := flag.Duration("connect", 0, "connect a helper this long after a registered client comes online (0 = never)")
-	var o helperOpts
+	connect := flag.Duration("connect", 0, "connect an agent this long after a registered client comes online (0 = never)")
+	var o agentOpts
 	flag.DurationVar(&o.length, "session", 10*time.Second, "end sessions after this long")
-	flag.StringVar(&o.png, "png", "", "write the helper's view of the screen to this PNG file")
+	flag.StringVar(&o.png, "png", "", "write the agent's view of the screen to this PNG file")
 	flag.DurationVar(&o.selectAfter, "select-after", 0, "ask for monitor -select after this long (0 = never)")
 	flag.IntVar(&o.selectIndex, "select", 0, "monitor index for -select-after")
 	flag.DurationVar(&o.refresh, "refresh-after", 0, "ask for a refresh after this long (0 = never)")
 	flag.BoolVar(&o.verbose, "v", false, "print every frame and cursor move")
 	flag.Parse()
 
-	helper, err := identity.Ephemeral("alice")
+	agent, err := identity.Ephemeral("alice")
 	if err != nil {
 		log.Fatal(err)
 	}
 	r, err := fakerelay.Start(*listen, fakerelay.Options{
 		AutoRegister: *register,
 		AutoConnect:  *connect,
-		HelperName:   "alice",
-		HelperKey:    helper.Line,
+		AgentName:    "alice",
+		AgentKey:     agent.Line,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -65,7 +65,7 @@ func main() {
 	}()
 	go func() {
 		for s := range r.Sessions() {
-			go watch(s, helper.Signer, o)
+			go watch(s, agent.Signer, o)
 		}
 	}()
 	sig := make(chan os.Signal, 1)
@@ -74,8 +74,8 @@ func main() {
 	r.Close()
 }
 
-// helperOpts are the helper behaviours of a fake session.
-type helperOpts struct {
+// agentOpts are the agent behaviours of a fake session.
+type agentOpts struct {
 	length      time.Duration
 	png         string
 	selectAfter time.Duration
@@ -84,10 +84,10 @@ type helperOpts struct {
 	verbose     bool
 }
 
-// watch acts as the helper of one session: it decodes and acks frames
+// watch acts as the agent of one session: it decodes and acks frames
 // until the session is d old, then ends it and, with -png, writes the last
 // image with the cursor drawn in.
-func watch(s fakerelay.Session, signer ssh.Signer, o helperOpts) {
+func watch(s fakerelay.Session, signer ssh.Signer, o agentOpts) {
 	defer s.Channel.Close()
 	cs, err := inner.Dial(s.Channel, signer, s.Key)
 	if err != nil {
@@ -219,7 +219,7 @@ func watch(s fakerelay.Session, signer ssh.Signer, o helperOpts) {
 }
 
 // writePNG writes img with the cursor shape drawn at p. Screen pixels are
-// made opaque, as the helper draws them; a count of pixels that arrived
+// made opaque, as the agent draws them; a count of pixels that arrived
 // with another alpha is printed, since the protocol says A = 255.
 func writePNG(path string, img *image.RGBA, c screen.CursorShape, p screen.CursorPos) error {
 	out := image.NewRGBA(img.Rect)

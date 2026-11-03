@@ -4,8 +4,6 @@ Architecture: @ARCH@
 Maintainer: Maurits van der Schee <maurits@vdschee.nl>
 Installed-Size: @SIZE@
 Depends: systemd | systemd-standalone-sysusers
-Conflicts: hmw-relay
-Replaces: hmw-relay
 Section: net
 Priority: optional
 Homepage: https://github.com/mevdschee/helpbuoy

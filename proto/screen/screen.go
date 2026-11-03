@@ -1,5 +1,5 @@
 // Package screen defines the messages on the inner "screen" channel, the
-// tile codecs, the helper-side Decoder and the phase 2 test pattern. Frames
+// tile codecs, the agent-side Decoder and the phase 2 test pattern. Frames
 // are wire frames (proto/wire) with a binary payload.
 //
 // # Encodings
@@ -44,14 +44,14 @@ import (
 
 // Message type bytes.
 const (
-	MsgHello         uint8 = 1 // client -> helper
-	MsgFrame         uint8 = 2 // client -> helper
-	MsgAck           uint8 = 3 // helper -> client
-	MsgRefresh       uint8 = 4 // helper -> client: send a full frame (lossless)
-	MsgCursor        uint8 = 5 // client -> helper: a cursor shape (CursorShape)
-	MsgCursorPos     uint8 = 6 // client -> helper: cursor position and shape id (CursorPos)
-	MsgSelectMonitor uint8 = 7 // helper -> client: share another monitor (SelectMonitor)
-	MsgQuality       uint8 = 8 // helper -> client: quality preference (Quality)
+	MsgHello         uint8 = 1 // client -> agent
+	MsgFrame         uint8 = 2 // client -> agent
+	MsgAck           uint8 = 3 // agent -> client
+	MsgRefresh       uint8 = 4 // agent -> client: send a full frame (lossless)
+	MsgCursor        uint8 = 5 // client -> agent: a cursor shape (CursorShape)
+	MsgCursorPos     uint8 = 6 // client -> agent: cursor position and shape id (CursorPos)
+	MsgSelectMonitor uint8 = 7 // agent -> client: share another monitor (SelectMonitor)
+	MsgQuality       uint8 = 8 // agent -> client: quality preference (Quality)
 )
 
 // Limits enforced by the decoders.
@@ -68,7 +68,7 @@ const (
 var ErrMalformed = errors.New("screen: malformed message")
 
 // Hello describes the client's screen. It is sent at session start and again
-// whenever the shared monitor or its size changes; the helper then resizes its
+// whenever the shared monitor or its size changes; the agent then resizes its
 // image and the next frame is a full frame.
 type Hello struct {
 	Hostname    string
@@ -87,7 +87,7 @@ type Monitor struct {
 	Name       string
 }
 
-// Rect is one operation of a frame, applied in order to the helper's image.
+// Rect is one operation of a frame, applied in order to the agent's image.
 // Kind selects which fields are used; see OpKind. The zero Kind is OpRaw, so
 // phase 2 code that only fills RGBA keeps working.
 type Rect struct {
@@ -101,14 +101,14 @@ type Rect struct {
 	Store      bool    // after drawing this op, store its W*H pixels in cache slot Slot (OpRaw, OpSolid, OpPalette, OpJPEG)
 }
 
-// Frame is one screen update; it is applied atomically by the helper. A
+// Frame is one screen update; it is applied atomically by the agent. A
 // frame too large for one wire frame is sent as several parts with the same
-// Seq: every part but the last has More set, and the helper applies nothing
+// Seq: every part but the last has More set, and the agent applies nothing
 // until the last part arrived. Only the last part is acked.
 //
 // Full marks the first frame after the encoder was reset (session start,
 // Refresh, new Hello): it repaints the whole screen and uses no cache slot it
-// didn't store itself. After the helper asks for a Refresh it resets its
+// didn't store itself. After the agent asks for a Refresh it resets its
 // decoder and skips (but still acks) frames until one with Full arrives, so
 // frames already in flight can't hit the cleared cache.
 type Frame struct {
