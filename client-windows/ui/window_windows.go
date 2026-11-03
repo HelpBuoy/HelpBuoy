@@ -30,9 +30,8 @@ const copyKeyText = "C&opy key"
 // long words, they cut them off).
 const dialogWidth = 320
 
-// Client area size in 96-DPI units, without the footer with the relay's
-// title and instruction, which adds footerH when shown.
-const clientW, clientH, footerH = 460, 330, 76
+// Client area size in 96-DPI units.
+const clientW, clientH = 460, 330
 
 // fontKind selects one of the window's fonts.
 type fontKind int
@@ -80,10 +79,9 @@ type Window struct {
 	lblKeyErr    *ui.Static
 	btnRemoveKey *ui.Button
 
-	// Footer on every screen: the relay's title and instruction line.
+	// The relay's title and instruction line, on the waiting screen.
 	lblInfoTitle *ui.Static
 	lblInfoText  *ui.Static
-	footer       bool   // the footer is shown and the window is footerH taller
 	dialogs      int    // modal windows open
 	updateAsked  bool   // the update in the view was offered
 	relayAsked   string // new relay fingerprint the user was warned about
@@ -160,16 +158,15 @@ func New(iconID uint16) *Window {
 		{w.lblKeyNotice, 24, 234, 412, 40, fontNormal},
 		{w.lnkChange, 24, 298, 260, 20, fontNormal},
 
-		{w.lblComment, 24, 44, 412, 34, fontHeading},
-		{w.lblWaiting, 24, 104, 412, 40, fontBig},
-		{w.lblStatus, 24, 160, 412, 80, fontNormal},
-		{w.btnDisconnect, 150, 258, 160, 32, fontNormal},
+		{w.lblComment, 24, 20, 412, 30, fontHeading},
+		{w.lblWaiting, 24, 62, 412, 40, fontBig},
+		{w.lblStatus, 24, 108, 412, 54, fontNormal},
+		{w.btnDisconnect, 150, 168, 160, 32, fontNormal},
+		{w.lblInfoTitle, 24, 232, 412, 28, fontHeading},
+		{w.lblInfoText, 24, 264, 412, 50, fontNormal},
 
 		{w.lblKeyErr, 24, 24, 412, 190, fontNormal},
 		{w.btnRemoveKey, 24, 226, 160, 32, fontNormal},
-
-		{w.lblInfoTitle, 24, clientH + 4, 412, 28, fontHeading},
-		{w.lblInfoText, 24, clientH + 34, 412, 38, fontNormal},
 	}
 	w.events()
 	return w
@@ -383,11 +380,7 @@ func (w *Window) resizeClient() {
 	}
 	frameW := (wr.Right - wr.Left) - (cr.Right - cr.Left)
 	frameH := (wr.Bottom - wr.Top) - (cr.Bottom - cr.Top)
-	ch := clientH
-	if w.footer {
-		ch += footerH
-	}
-	h.SetWindowPos(0, win.POINT{}, win.SIZE{Cx: w.scale(clientW) + frameW, Cy: w.scale(ch) + frameH},
+	h.SetWindowPos(0, win.POINT{}, win.SIZE{Cx: w.scale(clientW) + frameW, Cy: w.scale(clientH) + frameH},
 		co.SWP_NOZORDER|co.SWP_NOMOVE|co.SWP_NOACTIVATE)
 }
 
@@ -504,9 +497,9 @@ func (w *Window) apply(v app.View) {
 			"an agent will have to register this PC again.")
 	}
 
-	footer := v.Screen >= 0 && (v.Title != "" || v.Instruction != "")
-	show(w.lblInfoTitle, footer)
-	show(w.lblInfoText, footer)
+	info := v.Title != "" || v.Instruction != ""
+	show(w.lblInfoTitle, info)
+	show(w.lblInfoText, info)
 	setText(w.lblInfoTitle, v.Title)
 	setText(w.lblInfoText, v.Instruction)
 	caption := Title
@@ -514,10 +507,6 @@ func (w *Window) apply(v app.View) {
 		caption = v.Title + " - " + Title
 	}
 	setText(w.wnd, caption)
-	if footer != w.footer {
-		w.footer = footer
-		w.resizeClient()
-	}
 
 	// During a session the window gets out of the way; afterwards it comes
 	// back.

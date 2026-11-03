@@ -30,10 +30,6 @@ type Config struct {
 	// and names are only unique within one relay, so changing the relay
 	// address clears them.
 	KnownAgents map[string]string `json:"known_agents,omitempty"`
-	// RelayTitle and RelayInstruction are the title and instruction line
-	// RelayAddress last sent, shown even while it can't be reached.
-	RelayTitle       string `json:"relay_title,omitempty"`
-	RelayInstruction string `json:"relay_instruction,omitempty"`
 	// LastAddress is the last address that reached a relay, used to
 	// prefill the address field on the next start.
 	LastAddress string `json:"last_address,omitempty"`

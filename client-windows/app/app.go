@@ -197,7 +197,7 @@ func (c *Controller) View() View {
 
 func (c *Controller) viewLocked() View {
 	v := c.screenLocked()
-	if v.Screen != ScreenKeyError {
+	if v.Screen == ScreenMain {
 		v.Title, v.Instruction = c.relayInfoLocked()
 		if v.Title == "" {
 			v.Title = control.DefaultTitle
@@ -213,14 +213,11 @@ func (c *Controller) viewLocked() View {
 	return v
 }
 
-// relayInfoLocked returns the title and instruction to show: what the
-// relay sent on this connection, or else what the stored relay sent last.
+// relayInfoLocked returns the title and instruction the relay sent on this
+// connection; they are never stored.
 func (c *Controller) relayInfoLocked() (string, string) {
 	if c.info != nil {
 		return c.info[0], c.info[1]
-	}
-	if c.addr == "" || c.addr == c.cfg.RelayAddress {
-		return c.cfg.RelayTitle, c.cfg.RelayInstruction
 	}
 	return "", ""
 }
@@ -573,15 +570,10 @@ func (h handler) Registered(relayHostKey string) {
 	c.known = true
 	if c.cfg.RelayAddress != c.addr {
 		c.cfg.KnownAgents = nil
-		c.cfg.RelayTitle, c.cfg.RelayInstruction = "", ""
 	}
 	changed := c.cfg.RelayAddress != c.addr || c.cfg.RelayHostKey != relayHostKey
 	c.cfg.RelayAddress = c.addr
 	c.cfg.RelayHostKey = relayHostKey
-	if c.info != nil && (c.cfg.RelayTitle != c.info[0] || c.cfg.RelayInstruction != c.info[1]) {
-		c.cfg.RelayTitle, c.cfg.RelayInstruction = c.info[0], c.info[1]
-		changed = true
-	}
 	c.mu.Unlock()
 	if changed {
 		c.log.Info("registered on the relay", "relay", c.addr)
@@ -605,8 +597,7 @@ func (h handler) AgentPinned(name, line string) {
 	c.save()
 }
 
-// RelayInfo shows the relay's title and instruction, and stores them when
-// this is the relay the PC is registered on.
+// RelayInfo shows the relay's title and instruction.
 func (h handler) RelayInfo(title, instruction string) {
 	c := h.c
 	c.mu.Lock()
@@ -615,14 +606,7 @@ func (h handler) RelayInfo(title, instruction string) {
 		return
 	}
 	c.info = &[2]string{title, instruction}
-	save := c.addr == c.cfg.RelayAddress && (c.cfg.RelayTitle != title || c.cfg.RelayInstruction != instruction)
-	if save {
-		c.cfg.RelayTitle, c.cfg.RelayInstruction = title, instruction
-	}
 	c.mu.Unlock()
-	if save {
-		c.save()
-	}
 	c.update()
 }
 

@@ -544,13 +544,13 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   not send it to the client (neither `Hello` nor `Registered` carry it). That name is only
   for agents.
 - There is no settings window.
-- **Relay title and instruction**: the window shows the relay's title and instruction line
-  (set by an agent on the desk app's Relay tab or with `helpbuoy-relay title`/`instruction`)
-  in a footer on every screen, and the title also goes in the window caption ("Example
-  Inc - HelpBuoy"). An empty one shows a generic default: "Remote support" and "Contact
-  your support agent by phone or chat, for example WhatsApp." The
-  client stores the values of the relay it is registered on, so the footer, typically a
-  phone number to call, still shows when that relay can't be reached.
+- **Relay title and instruction**: the waiting screen shows the relay's title and
+  instruction line (set by an agent on the desk app's Relay tab or with
+  `helpbuoy-relay title`/`instruction`) below Disconnect, and the title also goes in the
+  window caption ("Example Inc - HelpBuoy"). They always come from the relay on the
+  current connection; the client does not store them. An empty one shows a generic
+  default: "Remote support" and "Contact your support agent by phone or chat, for example
+  WhatsApp."
 - **During a session** the window is minimized (`SW_MINIMIZE`), nothing else is shown.
 - **When the session ends** (the agent ended it, or Esc), the window is restored and brought
   to the front, waiting for the next agent.
