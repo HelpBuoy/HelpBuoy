@@ -53,8 +53,8 @@ func TestParseServeDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.listen != ":5939" {
-		t.Errorf("listen = %q, want :5939", cfg.listen)
+	if cfg.listen != ":5959" {
+		t.Errorf("listen = %q, want :5959", cfg.listen)
 	}
 	if !strings.HasSuffix(cfg.state, "helpbuoy-relay") {
 		t.Errorf("state = %q, want a path ending in helpbuoy-relay", cfg.state)

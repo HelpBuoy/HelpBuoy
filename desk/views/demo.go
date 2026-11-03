@@ -52,7 +52,7 @@ func newDemo(a *App) *demo {
 	a.key = &appkey.Key{Signer: s, Public: s.PublicKey(), Comment: "helper@demo", Line: line, Fingerprint: ssh.FingerprintSHA256(s.PublicKey())}
 	hk, _, _ := newKey("")
 	a.hostKey = hk.PublicKey()
-	a.cfg.RelayAddr = "helpme.example.com:5939"
+	a.cfg.RelayAddr = "helpme.example.com:5959"
 	a.status = relayconn.StatusEvent{Status: relayconn.StatusOnline, HostKey: a.hostKey}
 	a.me = "helper"
 	a.backend = d

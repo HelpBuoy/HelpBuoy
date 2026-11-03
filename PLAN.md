@@ -1,7 +1,7 @@
 # helpbuoy: self-hosted remote support over a custom Go SSH relay
 
 A self-hosted alternative to TeamViewer QuickSupport. The relay is **a single Go binary
-(`helpbuoy-relay`) that speaks SSH on a single port** (default 5939). Everybody, helpers and clients,
+(`helpbuoy-relay`) that speaks SSH on a single port** (default 5959). Everybody, helpers and clients,
 connects to that same `hostname:port`. **The public key a connection authenticates with is its identity**; the SSH
 user name is ignored. Keys are long-lived: they are generated once on first start and reused
 for every session.
@@ -11,7 +11,7 @@ forwarding to real hosts. It only authenticates keys, tells helpers and clients 
 other, and splices their channels together.
 
 - **relay/**: `helpbuoy-relay`, a plain executable that ships next to the desk app and runs
-  locally on the helper's machine as a normal user process, on one port (default `:5939`). It
+  locally on the helper's machine as a normal user process, on one port (default `:5959`). It
   keeps helpers and registered clients in a small state directory. No service, no container.
 - **desk/**: the cross-platform raylib app the *helper* runs (`raylib-go`, no cgo). Many helpers can be online at
   once, and each helper can run sessions with many clients at once.
@@ -41,12 +41,12 @@ Performance target: **as fast as RDP** for normal desktop work (section 5).
 - **Relay**: the `helpbuoy-relay` executable (`helpbuoy-relay.exe` on Windows) in the same folder as the
   desk app, on the helper's own Linux, macOS or Windows machine. It is started from a
   terminal, or runs inside the desk app (7.1), as the logged-in user. Clients reach it on that
-  machine's address, which usually means one port forward on the router (TCP 5939) and
+  machine's address, which usually means one port forward on the router (TCP 5959) and
   allowing the OS firewall prompt on first start. An existing OpenSSH on port 22 is unrelated
   and untouched.
-- **One port for everyone**: the operator picks it once (`helpbuoy-relay serve --listen :5939`, the
+- **One port for everyone**: the operator picks it once (`helpbuoy-relay serve --listen :5959`, the
   default). Helpers and clients all use the same `hostname:port`, and an address typed
-  without a port means 5939, so with the default users only type the host name. There are
+  without a port means 5959, so with the default users only type the host name. There are
   no per-helper or per-session ports. The default is above 1024, so the relay needs no root
   and no capabilities.
 - **Runs unprivileged**: no root, no admin, no service registration, no Docker image. The
@@ -65,7 +65,7 @@ connection and stored in `%LOCALAPPDATA%\helpbuoy\config.json`:
 
 | Field | Example | Learned |
 |---|---|---|
-| relay address | `helpme.example.com` (port 5939 unless given) | typed by the user; the relay this PC got registered on |
+| relay address | `helpme.example.com` (port 5959 unless given) | typed by the user; the relay this PC got registered on |
 | relay host key | `ssh-ed25519 AAAA...` (`SHA256:3q2+7w...`) | first successful connection, pinned from then on |
 | last address | `helpme.example.com` | the last address that reached a relay, to prefill the field |
 | known helpers | `alice` → `ssh-ed25519 AAAA...` | each helper's key, pinned on the first session with that helper (3.5) |
@@ -105,7 +105,7 @@ unique within one relay).
 
 1. The client starts for the first time and asks for the relay's `hostname:port` (the helper
    tells the user what to type, e.g. `helpme.example.com`, with `:port` only when the relay
-   doesn't use the default 5939). On this first start
+   doesn't use the default 5959). On this first start
    it generates its own Ed25519 key pair in
    `%LOCALAPPDATA%\helpbuoy\` (section 6.1), with the comment `user@machine`, e.g.
    `anna@ANNA-LAPTOP`, so the public key line reads `ssh-ed25519 AAAAC3Nz... anna@ANNA-LAPTOP`.
@@ -178,7 +178,7 @@ helpbuoy/
 ├── PLAN.md
 ├── proto/                       # shared, pure Go, no GUI deps
 │   ├── go.mod
-│   ├── relayaddr/               # parse and normalize hostname:port (default port 5939)
+│   ├── relayaddr/               # parse and normalize hostname:port (default port 5959)
 │   ├── identity/                # Ed25519 key gen, OpenSSH format, fingerprints,
 │   │                            # parsing of pasted keys
 │   ├── appkey/                  # create-once, load-only app key in OpenSSH format
@@ -248,7 +248,7 @@ only by `UnregisterClient` or `helpbuoy-relay client remove`. Writes are temp fi
 
 | Command | What it does |
 |---|---|
-| `helpbuoy-relay serve [--listen :5939]` | run the relay on its single port |
+| `helpbuoy-relay serve [--listen :5959]` | run the relay on its single port |
 | `helpbuoy-relay helper add alice 'ssh-ed25519 ...'` | add a helper with the public key copied from their desk app |
 | `helpbuoy-relay helper remove alice` | remove a helper; takes effect immediately, open sessions are closed |
 | `helpbuoy-relay helper list` / `client list` / `client remove SHA256:...` | inspect and revoke |
@@ -520,7 +520,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
 - The registered name is the key's comment, `user@machine`.
 
 ### 6.2 Address and key screens
-- "Relay address" field (`hostname:port`, port defaults to 5939 if left out) and
+- "Relay address" field (`hostname:port`, port defaults to 5959 if left out) and
   **Connect**. With a stored address the client connects to it at start by itself, with
   the field locked while it does; the field can only be edited when that fails or after
   **Disconnect**. Errors are shown inline: name not found, connection refused, timeout, not a
@@ -814,7 +814,7 @@ client can stay online in the background; `client-macos/` and `client-linux/` re
 
 ## 10. Open questions
 
-- Default port: 5939, one above TeamViewer's 5938, so it doesn't clash with a TeamViewer
+- Default port: 5959, clear of TeamViewer's 5938, so it doesn't clash with a TeamViewer
   installed on the same machine. Above 1024, so no privileges are needed; 443 would pass
   more corporate firewalls but needs privileges on Linux and may still meet TLS inspection.
 - Does a relay on the helper's own machine behind a home or office router need a dynamic DNS

@@ -20,7 +20,7 @@ import (
 )
 
 func main() {
-	relay := flag.String("relay", "localhost:5939", "relay host:port")
+	relay := flag.String("relay", "localhost:5959", "relay host:port")
 	keyDir := flag.String("key-dir", "fakeclient-key", "directory with the client key (created if missing)")
 	userMachine := flag.String("user-machine", "fake@fakeclient", "user@machine for the key comment and ClientHello")
 	refuse := flag.Bool("refuse", false, "refuse every helper that connects")

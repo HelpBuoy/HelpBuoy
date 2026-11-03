@@ -52,7 +52,7 @@ func TestIsLocal(t *testing.T) {
 func TestSaveLoadRoundTrip(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "sub")
 	k := newKey(t)
-	c := &Config{RelayAddr: "relay.example.com:5939"}
+	c := &Config{RelayAddr: "relay.example.com:5959"}
 	if _, err := c.Pin(k); err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestSetRelayAddrForgetsPin(t *testing.T) {
 	if !c.SetRelayAddr(a) {
 		t.Fatal("no change reported")
 	}
-	if c.RelayAddr != "relay.example.com:5939" {
+	if c.RelayAddr != "relay.example.com:5959" {
 		t.Errorf("addr = %q", c.RelayAddr)
 	}
 	c.Pin(newKey(t))

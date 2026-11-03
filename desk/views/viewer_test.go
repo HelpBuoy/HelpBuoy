@@ -87,7 +87,7 @@ func TestHelperNames(t *testing.T) {
 }
 
 func TestFieldText(t *testing.T) {
-	for in, want := range map[string]string{"localhost": "", "localhost:2300": "localhost:2300", "helpme.example.com": "helpme.example.com:5939"} {
+	for in, want := range map[string]string{"localhost": "", "localhost:2300": "localhost:2300", "helpme.example.com": "helpme.example.com:5959"} {
 		ad, err := relayaddr.Parse(in)
 		if err != nil {
 			t.Fatal(err)

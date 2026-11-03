@@ -4,4 +4,4 @@
 # Address to listen on, host:port or :port. Every helper and client connects
 # to this one port. Ports below 1024 need an extra capability, see
 # /usr/lib/systemd/system/helpbuoy-relay.service.
-HELPBUOY_RELAY_LISTEN=:5939
+HELPBUOY_RELAY_LISTEN=:5959

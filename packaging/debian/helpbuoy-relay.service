@@ -9,7 +9,7 @@ Type=exec
 User=helpbuoy-relay
 Group=helpbuoy-relay
 Environment=HELPBUOY_RELAY_STATE=/var/lib/helpbuoy-relay
-Environment=HELPBUOY_RELAY_LISTEN=:5939
+Environment=HELPBUOY_RELAY_LISTEN=:5959
 EnvironmentFile=-/etc/default/helpbuoy-relay
 ExecStart=/usr/bin/helpbuoy-relay serve --listen ${HELPBUOY_RELAY_LISTEN}
 Restart=on-failure

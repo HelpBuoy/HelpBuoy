@@ -35,7 +35,7 @@ var version = "dev"
 const usage = `usage: helpbuoy-relay <command> [flags]
 
 commands:
-  serve [--listen :5939] [--state DIR]                   run the relay
+  serve [--listen :5959] [--state DIR]                   run the relay
   helper add NAME 'ssh-ed25519 ...'   add a helper key
   helper remove NAME                                     remove a helper
   helper list                                            list helpers
