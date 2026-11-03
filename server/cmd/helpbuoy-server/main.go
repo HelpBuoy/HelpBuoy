@@ -36,17 +36,18 @@ var version = "dev"
 const usage = `usage: helpbuoy-server <command> [flags]
 
 commands:
-  serve [--listen :5959] [--state DIR]                   run the server
-  techie add NAME 'ssh-ed25519 ...'                       add a techie key
-  techie remove NAME                                      remove a techie
-  techie list                                             list techies
-  computer list                                            list registered computers
-  computer rename SHA256:... NAME                          rename a registered computer
-  computer remove SHA256:...                               remove a registered computer
-  title [TEXT]                                           print or set the title the apps show ("" for none)
-  instruction [TEXT]                                     print or set the instruction line the apps show ("" for the default)
-  hostkey                                                print the server host key and fingerprint
-  version                                                print the version
+  serve [--listen :5959] [--state DIR]   run the server
+  techie list                            list techies
+  techie add NAME 'ssh-ed25519 ...'      add a techie key
+  techie remove NAME                     remove a techie
+  computer list                          list registered computers
+  computer add 'ssh-ed25519 ...' [NAME]  register a computer key (NAME defaults to the key comment)
+  computer rename SHA256:... NAME        rename a registered computer
+  computer remove SHA256:...             remove a registered computer
+  title [TEXT]                           print or set the title the apps show ("" for none)
+  instruction [TEXT]                     print or set the instruction line the apps show ("" for the default)
+  hostkey                                print the server host key and fingerprint
+  version                                print the version
 
 Every command except version takes --state DIR (default: $HELPBUOY_SERVER_STATE,
 else the per-user data directory).
@@ -72,10 +73,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		err = techieCmd(args[1:], stdout, stderr)
 	case "computer":
 		err = computerCmd(args[1:], stdout, stderr)
-	case "hostkey":
-		err = hostkeyCmd(args[1:], stdout, stderr)
 	case "title", "instruction":
 		err = infoCmd(args[0], args[1:], stdout, stderr)
+	case "hostkey":
+		err = hostkeyCmd(args[1:], stdout, stderr)
 	case "version", "--version", "-v":
 		fmt.Fprintf(stdout, "helpbuoy-server %s\n", version)
 		return 0
@@ -200,7 +201,7 @@ func openStore(state string) (*store.Store, error) {
 
 func techieCmd(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("%w: techie add|remove|list", errUsage)
+		return fmt.Errorf("%w: techie list|add|remove", errUsage)
 	}
 	fs := flag.NewFlagSet("techie "+args[0], flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -214,6 +215,20 @@ func techieCmd(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	switch args[0] {
+	case "list":
+		if len(pos) != 0 {
+			return fmt.Errorf("%w: techie list", errUsage)
+		}
+		idx, _, err := st.Load()
+		if err != nil {
+			return err
+		}
+		tw := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(tw, "NAME\tFINGERPRINT")
+		for i, h := range idx.State.Techies {
+			fmt.Fprintf(tw, "%s\t%s\n", h.Name, idx.TechieFingerprint(i))
+		}
+		tw.Flush()
 	case "add":
 		if len(pos) != 2 {
 			return fmt.Errorf("%w: techie add NAME 'ssh-ed25519 ...'", errUsage)
@@ -232,29 +247,15 @@ func techieCmd(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 		fmt.Fprintf(stdout, "removed techie %s\n", pos[0])
-	case "list":
-		if len(pos) != 0 {
-			return fmt.Errorf("%w: techie list", errUsage)
-		}
-		idx, _, err := st.Load()
-		if err != nil {
-			return err
-		}
-		tw := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(tw, "NAME\tFINGERPRINT")
-		for i, h := range idx.State.Techies {
-			fmt.Fprintf(tw, "%s\t%s\n", h.Name, idx.TechieFingerprint(i))
-		}
-		tw.Flush()
 	default:
-		return fmt.Errorf("%w: techie add|remove|list", errUsage)
+		return fmt.Errorf("%w: techie list|add|remove", errUsage)
 	}
 	return nil
 }
 
 func computerCmd(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("%w: computer list|rename|remove", errUsage)
+		return fmt.Errorf("%w: computer list|add|rename|remove", errUsage)
 	}
 	fs := flag.NewFlagSet("computer "+args[0], flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -287,20 +288,24 @@ func computerCmd(args []string, stdout, stderr io.Writer) error {
 				c.RegisteredAt.Local().Format(time.DateTime), seen)
 		}
 		tw.Flush()
-	case "remove":
-		if len(pos) != 1 {
-			return fmt.Errorf("%w: computer remove SHA256:...", errUsage)
+	case "add":
+		if len(pos) < 1 || len(pos) > 2 {
+			return fmt.Errorf("%w: computer add 'ssh-ed25519 ...' [NAME]", errUsage)
 		}
-		var name string
+		name := ""
+		if len(pos) == 2 {
+			name = pos[1]
+		}
+		var fp string
 		_, _, err := st.Update(func(s *store.State) error {
 			var err error
-			name, err = s.RemoveComputer(pos[0])
+			fp, name, err = s.AddComputer(pos[0], name, "admin", time.Now())
 			return err
 		})
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(stdout, "removed computer %s (%s)\n", name, pos[0])
+		fmt.Fprintf(stdout, "added computer %s (%s)\n", name, fp)
 	case "rename":
 		if len(pos) != 2 {
 			return fmt.Errorf("%w: computer rename SHA256:... NAME", errUsage)
@@ -315,8 +320,22 @@ func computerCmd(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 		fmt.Fprintf(stdout, "renamed computer %s to %s (%s)\n", old, strings.TrimSpace(pos[1]), pos[0])
+	case "remove":
+		if len(pos) != 1 {
+			return fmt.Errorf("%w: computer remove SHA256:...", errUsage)
+		}
+		var name string
+		_, _, err := st.Update(func(s *store.State) error {
+			var err error
+			name, err = s.RemoveComputer(pos[0])
+			return err
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "removed computer %s (%s)\n", name, pos[0])
 	default:
-		return fmt.Errorf("%w: computer list|rename|remove", errUsage)
+		return fmt.Errorf("%w: computer list|add|rename|remove", errUsage)
 	}
 	return nil
 }

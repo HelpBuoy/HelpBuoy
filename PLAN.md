@@ -244,14 +244,19 @@ State directory in the user's data directory, next to the desk app's own data:
 `%LOCALAPPDATA%\helpbuoy-server` on Windows (override with `--state`). It holds `hostkey_ed25519` (0600) and `state.json` with techies
 (name, public key) and registered computers (key, `user@machine` name,
 registered by, registered at, last seen). Computer registrations never expire; they are removed
-only by `UnregisterComputer` or `helpbuoy-server computer remove`. Writes are temp file + `fsync` + `rename`.
+only by `UnregisterComputer` or `helpbuoy-server computer remove`. They are added by
+`RegisterComputer` or `helpbuoy-server computer add`. Writes are temp file + `fsync` + `rename`.
 
 | Command | What it does |
 |---|---|
 | `helpbuoy-server serve [--listen :5959]` | run the server on its single port |
+| `helpbuoy-server techie list` | list techies with their fingerprints |
 | `helpbuoy-server techie add alice 'ssh-ed25519 ...'` | add a techie with the public key copied from their desk app |
 | `helpbuoy-server techie remove alice` | remove a techie; takes effect immediately, open sessions are closed |
-| `helpbuoy-server techie list` / `computer list` / `computer remove SHA256:...` | inspect and revoke |
+| `helpbuoy-server computer list` | list registered computers: name, fingerprint, registered by and at, last seen |
+| `helpbuoy-server computer add 'ssh-ed25519 ...' ['Anna laptop']` | register a computer key, like Register computer in the desk app; the name defaults to the key comment, and "registered by" is `admin` |
+| `helpbuoy-server computer rename SHA256:... 'Anna laptop'` | rename a registered computer; the same as Rename in the desk app, every techie sees the new name |
+| `helpbuoy-server computer remove SHA256:...` | remove a registered computer; an online computer is disconnected |
 | `helpbuoy-server title ['Example Inc']` / `instruction ['Call +1 234 567 890 for support']` | print or set the title and instruction line the apps show (`''` clears); the same values techies edit on the desk app's Server tab |
 | `helpbuoy-server hostkey` | print the host key fingerprint, for techies to compare with what computers show |
 

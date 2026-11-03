@@ -120,6 +120,22 @@ func TestAdmin(t *testing.T) {
 	if out := runOK(t, "computer", "list", "--state", dir); strings.Contains(out, cfp) {
 		t.Error("computer still listed")
 	}
+
+	// computer add: the name defaults to the key comment, a key without a
+	// comment needs one, and a key is added only once and never as both roles.
+	if out := runOK(t, "computer", "add", cl, "--state", dir); !strings.Contains(out, "anna@PC") || !strings.Contains(out, cfp) {
+		t.Errorf("computer add:\n%s", out)
+	}
+	runFail(t, "computer", "add", cl, "--state", dir)
+	runFail(t, "computer", "add", hl, "--state", dir)
+	bl, bfp := keyLine(t, "")
+	runFail(t, "computer", "add", bl, "--state", dir)
+	runOK(t, "computer", "add", bl, "Bob desktop", "--state", dir)
+	out = runOK(t, "computer", "list", "--state", dir)
+	if !strings.Contains(out, "Bob desktop") || !strings.Contains(out, bfp) || !strings.Contains(out, "admin") {
+		t.Errorf("computer list after add:\n%s", out)
+	}
+	runFail(t, "computer", "add", "--state", dir)
 	runOK(t, "techie", "remove", "alice", "--state", dir)
 	runFail(t, "techie", "remove", "alice", "--state", dir)
 
