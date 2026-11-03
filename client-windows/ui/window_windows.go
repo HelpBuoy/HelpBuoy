@@ -114,13 +114,13 @@ func New(iconID uint16) *Window {
 		return ui.NewSysLink(p, ui.OptsSysLink().Text(text).Size(1, 1).CtrlStyle(0))
 	}
 
-	w.lblHeading = static("Connect to a helper", co.SS_LEFT)
-	w.lblAddrHint = static("Type the relay address a helper gave you, for example helpme.example.com.", co.SS_LEFT)
+	w.lblHeading = static("Connect to an agent", co.SS_LEFT)
+	w.lblAddrHint = static("Type the relay address an agent gave you, for example helpme.example.com.", co.SS_LEFT)
 	w.edtAddr = ui.NewEdit(p, ui.OptsEdit())
 	w.btnConnect = button("&Connect", co.BS_DEFPUSHBUTTON)
 	w.lblAddrError = static("", co.SS_LEFT)
 
-	w.lblKeyIntro = static("Paste this key into a chat with a helper (for example WhatsApp).", co.SS_LEFT)
+	w.lblKeyIntro = static("Paste this key into a chat with an agent (for example WhatsApp).", co.SS_LEFT)
 	w.edtKey = ui.NewEdit(p, ui.OptsEdit().CtrlStyle(co.ES_MULTILINE|co.ES_READONLY|co.ES_AUTOVSCROLL))
 	w.btnCopy = button(copyKeyText, co.BS_PUSHBUTTON)
 	w.lblKeyFp = static("", co.SS_LEFT)
@@ -209,8 +209,8 @@ func (w *Window) ConfirmHelper(ctx context.Context, h session.Helper, oldFP stri
 		cfg.MainInstruction = "Warning: the key of " + quoted + " has changed"
 		cfg.Content = "Key last time:\n" + oldFP + "\n\n" +
 			"Key now:\n" + h.Fingerprint + "\n\n" +
-			"This may be someone pretending to be a helper. Do not continue " +
-			"unless the helper confirmed by phone that they have a new key."
+			"This may be someone pretending to be an agent. Do not continue " +
+			"unless the agent confirmed by phone that they have a new key."
 		cfg.Buttons = []win.TASKDIALOG_BUTTON{
 			{Id: co.ID_CANCEL, Text: "&Cancel"},
 			{Id: co.ID_OK, Text: "Allow &anyway"},
@@ -437,7 +437,7 @@ func (w *Window) apply(v app.View) {
 		setText(w.lblRelayFp, "Relay fingerprint: "+v.RelayFingerprint)
 		notice := v.Notice
 		if notice == "" {
-			notice = "Waiting for a helper to add this key. This window changes by itself when that is done."
+			notice = "Waiting for an agent to add this key. This window changes by itself when that is done."
 		}
 		setText(w.lblKeyNotice, notice)
 		if entered {
@@ -454,7 +454,7 @@ func (w *Window) apply(v app.View) {
 		setText(w.lblComment, v.KeyComment)
 		waiting := ""
 		if v.Ready {
-			waiting = "Waiting for a helper"
+			waiting = "Waiting for an agent"
 		}
 		setText(w.lblWaiting, waiting)
 		status := v.Error
@@ -462,7 +462,7 @@ func (w *Window) apply(v app.View) {
 			status = v.Notice
 		}
 		if status == "" && v.Ready {
-			status = "A helper can now ask to connect. You will be asked first, " +
+			status = "An agent can now ask to connect. You will be asked first, " +
 				"and pressing Esc always takes back control."
 		}
 		if w.updating != "" {
@@ -485,7 +485,7 @@ func (w *Window) apply(v app.View) {
 	if keyErr {
 		setText(w.lblKeyErr, v.Error+"\n\nFolder: "+v.KeyDir+
 			"\n\nThe key is never replaced on its own. Remove key deletes it and makes a new one; "+
-			"a helper will have to register this PC again.")
+			"an agent will have to register this PC again.")
 	}
 
 	// During a session the window gets out of the way; afterwards it comes
@@ -533,7 +533,7 @@ func (w *Window) warnRelayKey(hk session.HostKeyChangedError) {
 		Content: "Key last time:\n" + hk.OldFingerprint + "\n\n" +
 			"Key now:\n" + hk.NewFingerprint + "\n\n" +
 			"This may be someone pretending to be your relay. HelpBuoy stopped connecting. " +
-			"Only continue if a helper confirmed by phone that the relay has a new key " +
+			"Only continue if an agent confirmed by phone that the relay has a new key " +
 			"and the new fingerprint above matches what they read to you.",
 		Buttons: []win.TASKDIALOG_BUTTON{
 			{Id: co.ID_CANCEL, Text: "&Cancel"},
@@ -600,7 +600,7 @@ func (w *Window) copyText(text string, btn *ui.Button) {
 func (w *Window) confirmRemoveKey() {
 	if !ui.MsgOkCancel(w.wnd, Title, "Remove the key of this PC?",
 		"This deletes the key and the settings of this app. A new key is made, and your "+
-			"helper will have to register this PC again before you can ask for help.",
+			"agent will have to register this PC again before you can ask for help.",
 		"&Remove key") {
 		return
 	}

@@ -34,7 +34,7 @@ var ErrNotRelay = errors.New("not a HelpBuoy relay")
 var ErrRefusedKey = errors.New("the relay refused this key")
 
 // ErrHelperKey is returned when the key belongs to a helper on this relay.
-var ErrHelperKey = errors.New("this key is a helper key on this relay")
+var ErrHelperKey = errors.New("this key is an agent key on this relay")
 
 // RelayError is a message the relay sent with control.Error before closing.
 type RelayError struct{ Message string }
@@ -109,10 +109,10 @@ func Describe(err error) string {
 	case KindRefusedKey:
 		return "The relay refused this PC for now. Try again later."
 	case KindHostKeyChanged:
-		return "The relay's identity changed, so HelpBuoy stopped connecting. Ask a helper before you continue. " +
+		return "The relay's identity changed, so HelpBuoy stopped connecting. Ask an agent before you continue. " +
 			"Restart HelpBuoy to answer the warning again."
 	case KindHelperKey:
-		return "This key belongs to a helper on this relay and can't be used here."
+		return "This key belongs to an agent on this relay and can't be used here."
 	case KindRelay:
 		var re *RelayError
 		errors.As(err, &re)

@@ -50,7 +50,7 @@ func (a *App) statusText() (text, detail string, col rl.Color) {
 	case relayconn.StatusOnline:
 		return "Online", addr, ui.ColOK
 	case relayconn.StatusAuthFailed:
-		return "This key is not a helper on the relay anymore", "Disconnect and connect again to see the key to send to the relay admin.", ui.ColError
+		return "This key is not an agent on the relay anymore", "Disconnect and connect again to see the key to send to the relay admin.", ui.ColError
 	case relayconn.StatusUnreachable:
 		return "Relay unreachable", errText, ui.ColError
 	case relayconn.StatusIdentityChanged:

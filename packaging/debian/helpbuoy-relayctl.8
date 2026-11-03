@@ -16,8 +16,8 @@ The running relay picks up changes within a second.
 .SH EXAMPLES
 .nf
 sudo helpbuoy-relayctl hostkey
-sudo helpbuoy-relayctl helper add alice 'ssh\-ed25519 AAAA...'
-sudo helpbuoy-relayctl helper list
+sudo helpbuoy-relayctl agent add alice 'ssh\-ed25519 AAAA...'
+sudo helpbuoy-relayctl agent list
 sudo helpbuoy-relayctl client list
 sudo helpbuoy-relayctl client remove SHA256:...
 .fi
@@ -27,6 +27,6 @@ sudo helpbuoy-relayctl client remove SHA256:...
 Listen address of the service.
 .TP
 .I /var/lib/helpbuoy-relay
-Host key, helpers, registered clients and relay.log.
+Host key, agents, registered clients and relay.log.
 .SH SEE ALSO
 .BR helpbuoy-relay (1)

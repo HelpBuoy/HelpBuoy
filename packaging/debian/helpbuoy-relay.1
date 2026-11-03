@@ -8,14 +8,14 @@ helpbuoy-relay \- relay for helpbuoy self-hosted remote support
 .RB [ \-\-state
 .IR dir ]
 .br
-.B helpbuoy-relay helper add
+.B helpbuoy-relay agent add
 .I name
 .I key
 .br
-.B helpbuoy-relay helper remove
+.B helpbuoy-relay agent remove
 .I name
 .br
-.B helpbuoy-relay helper list
+.B helpbuoy-relay agent list
 .br
 .B helpbuoy-relay client list
 .br
@@ -27,7 +27,7 @@ helpbuoy-relay \- relay for helpbuoy self-hosted remote support
 .B helpbuoy-relay version
 .SH DESCRIPTION
 .B helpbuoy-relay
-is the SSH relay of helpbuoy. Helpers and the people they help connect to
+is the SSH relay of helpbuoy. Agents and the people they help connect to
 it on one port; it authenticates their Ed25519 keys and splices their
 sessions. The screen and input run end to end over an inner SSH connection
 that the relay cannot read.
@@ -43,7 +43,7 @@ up changes within a second.
 Address to listen on, as host:port or :port.
 .TP
 .BI \-\-state " dir"
-State directory with the host key, helpers and registered clients. Default:
+State directory with the host key, agents and registered clients. Default:
 .B $HELPBUOY_RELAY_STATE
 if set, else the per-user data directory.
 .SH ENVIRONMENT

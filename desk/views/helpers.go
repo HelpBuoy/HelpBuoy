@@ -46,7 +46,7 @@ func helping(p *control.Presence, helper string) []string {
 func (a *App) drawHelpersPage(r rl.Rectangle) {
 	c := a.ui
 	rl.DrawRectangleRec(r, ui.ColPanel)
-	c.Text(ui.Bold, ui.SizeHeading, "Helpers", r.X+16, r.Y+14, ui.ColText)
+	c.Text(ui.Bold, ui.SizeHeading, "Agents", r.X+16, r.Y+14, ui.ColText)
 	list := rl.NewRectangle(r.X, r.Y+56, r.Width, r.Height-56)
 	rl.DrawLineV(rl.NewVector2(r.X, list.Y), rl.NewVector2(r.X+r.Width, list.Y), ui.ColBorder)
 	if a.presence == nil {
@@ -54,10 +54,10 @@ func (a *App) drawHelpersPage(r rl.Rectangle) {
 	}
 	hs := sortedHelpers(a.presence)
 	if len(hs) == 0 {
-		c.Text(ui.Regular, ui.SizeSmall, "No helpers on this relay.", list.X+16, list.Y+14, ui.ColMuted)
+		c.Text(ui.Regular, ui.SizeSmall, "No agents on this relay.", list.X+16, list.Y+14, ui.ColMuted)
 		return
 	}
-	off := c.BeginScroll("helpers", list, float32(len(hs))*rowH)
+	off := c.BeginScroll("agents", list, float32(len(hs))*rowH)
 	y := list.Y + off
 	for _, h := range hs {
 		a.drawHelperRow(h, rl.NewRectangle(list.X, y, list.Width, rowH))

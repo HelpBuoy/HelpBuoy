@@ -44,17 +44,17 @@ func newKey(comment string) (ssh.Signer, string, error) {
 
 func newDemo(a *App) *demo {
 	d := &demo{a: a}
-	s, line, err := newKey("helper@demo")
+	s, line, err := newKey("agent@demo")
 	if err != nil {
 		a.keyErr = err
 		return d
 	}
-	a.key = &appkey.Key{Signer: s, Public: s.PublicKey(), Comment: "helper@demo", Line: line, Fingerprint: ssh.FingerprintSHA256(s.PublicKey())}
+	a.key = &appkey.Key{Signer: s, Public: s.PublicKey(), Comment: "agent@demo", Line: line, Fingerprint: ssh.FingerprintSHA256(s.PublicKey())}
 	hk, _, _ := newKey("")
 	a.hostKey = hk.PublicKey()
 	a.cfg.RelayAddr = "helpme.example.com:5959"
 	a.status = relayconn.StatusEvent{Status: relayconn.StatusOnline, HostKey: a.hostKey}
-	a.me = "helper"
+	a.me = "agent"
 	a.backend = d
 
 	now := time.Now()
@@ -62,10 +62,10 @@ func newDemo(a *App) *demo {
 		k, _, _ := newKey(name)
 		return control.ClientInfo{
 			Fingerprint: ssh.FingerprintSHA256(k.PublicKey()), Name: name, Online: online,
-			RegisteredBy: "helper", RegisteredAt: now.Add(-30 * 24 * time.Hour), LastSeen: now.Add(-26 * time.Hour),
+			RegisteredBy: "agent", RegisteredAt: now.Add(-30 * 24 * time.Hour), LastSeen: now.Add(-26 * time.Hour),
 		}
 	}
-	p := &control.Presence{Helpers: []control.HelperInfo{{Name: "helper", Online: true}, {Name: "bob", Online: true}}}
+	p := &control.Presence{Helpers: []control.HelperInfo{{Name: "agent", Online: true}, {Name: "bob", Online: true}}}
 	anna := client("anna@ANNA-LAPTOP", true)
 	jan := client("jan@KANTOOR-PC", true)
 	oma := client("oma@WOONKAMER", true)
@@ -116,10 +116,10 @@ func (d *demo) RegisterHelper(line, name string) <-chan error {
 	fp := ssh.FingerprintSHA256(key)
 	for _, h := range p.Helpers {
 		if h.Name == name {
-			return done(fmt.Errorf("helper %q already exists", name))
+			return done(fmt.Errorf("agent %q already exists", name))
 		}
 		if h.Fingerprint == fp {
-			return done(fmt.Errorf("key %s is already the key of helper %q", fp, h.Name))
+			return done(fmt.Errorf("key %s is already the key of agent %q", fp, h.Name))
 		}
 	}
 	p.Helpers = append(p.Helpers, control.HelperInfo{Name: name, Fingerprint: fp})

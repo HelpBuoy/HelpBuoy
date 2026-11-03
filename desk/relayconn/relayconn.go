@@ -55,7 +55,7 @@ func (s Status) String() string {
 
 // Errors reported by the connection and by commands.
 var (
-	ErrNotHelper    = errors.New("this key is not a helper on the relay")
+	ErrNotHelper    = errors.New("this key is not an agent on the relay")
 	ErrNotConnected = errors.New("not connected to the relay")
 	ErrTimeout      = errors.New("the relay did not answer")
 )

@@ -3,8 +3,8 @@
 # relay (/var/lib/helpbuoy-relay), as the helpbuoy-relay user, so files it writes stay
 # readable by the service. Examples:
 #
-#   sudo helpbuoy-relayctl helper add alice 'ssh-ed25519 AAAA...'
-#   sudo helpbuoy-relayctl helper list
+#   sudo helpbuoy-relayctl agent add alice 'ssh-ed25519 AAAA...'
+#   sudo helpbuoy-relayctl agent list
 #   sudo helpbuoy-relayctl client list
 #   sudo helpbuoy-relayctl hostkey
 #

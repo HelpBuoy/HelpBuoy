@@ -26,9 +26,9 @@ func TestRunExitCodes(t *testing.T) {
 		{[]string{"serve", "--nope"}, 1},
 		{[]string{"serve", "extra"}, 1},
 		{[]string{"serve", "--state", t.TempDir(), "--listen", "bad address"}, 1},
-		{[]string{"helper"}, 2},
+		{[]string{"agent"}, 2},
 		{[]string{"helper", "bogus", "--state", t.TempDir()}, 2},
-		{[]string{"helper", "add", "x", "--state", t.TempDir()}, 2},
+		{[]string{"agent", "add", "x", "--state", t.TempDir()}, 2},
 		{[]string{"client", "remove", "--state", t.TempDir()}, 2},
 		{[]string{"hostkey", "extra", "--state", t.TempDir()}, 2},
 	}
@@ -91,9 +91,9 @@ func runFail(t *testing.T, args ...string) string {
 func TestAdmin(t *testing.T) {
 	dir := t.TempDir()
 	hl, hfp := keyLine(t, "alice-laptop")
-	runOK(t, "helper", "add", "alice", hl, "--state", dir)
-	runFail(t, "helper", "add", "alice", hl, "--state", dir)
-	runFail(t, "helper", "add", "bob", "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQC7", "--state", dir)
+	runOK(t, "agent", "add", "alice", hl, "--state", dir)
+	runFail(t, "agent", "add", "alice", hl, "--state", dir)
+	runFail(t, "agent", "add", "bob", "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQC7", "--state", dir)
 	out := runOK(t, "helper", "list", "--state", dir)
 	if !strings.Contains(out, "alice") || !strings.Contains(out, hfp) {
 		t.Errorf("helper list:\n%s", out)
@@ -109,7 +109,7 @@ func TestAdmin(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A key can't be both.
-	runFail(t, "helper", "add", "carol", cl, "--state", dir)
+	runFail(t, "agent", "add", "carol", cl, "--state", dir)
 	out = runOK(t, "client", "list", "--state", dir)
 	if !strings.Contains(out, "anna@PC") || !strings.Contains(out, cfp) || !strings.Contains(out, "never") {
 		t.Errorf("client list:\n%s", out)

@@ -233,7 +233,7 @@ func (c *Controller) screenLocked() View {
 	case p == session.PhaseReady:
 		v.Screen, v.Ready = ScreenMain, true
 	case p == session.PhaseAsking:
-		v.Screen, v.Asking, v.Notice = ScreenMain, true, "A helper wants to connect."
+		v.Screen, v.Asking, v.Notice = ScreenMain, true, "An agent wants to connect."
 	case p == session.PhaseInSession:
 		v.Screen, v.InSession = ScreenMain, true
 	case !c.reached:

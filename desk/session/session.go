@@ -46,7 +46,7 @@ type Info struct {
 // pins the returned key.
 func Verify(d control.HelperSessionData, p *control.Presence, opened bool) (Info, error) {
 	if !opened {
-		return Info{}, fmt.Errorf("session for request %q, which this helper did not open", d.RequestID)
+		return Info{}, fmt.Errorf("session for request %q, which this agent did not open", d.RequestID)
 	}
 	key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(d.ClientKey))
 	if err != nil {

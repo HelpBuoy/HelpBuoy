@@ -533,7 +533,7 @@ func (r *Registry) registerHelper(c *Conn, m *control.RegisterHelper) error {
 	}
 	err = r.mutate(func(st *store.State) error { return st.AddHelper(m.Name, m.PublicKey) })
 	if err == nil {
-		r.log.Info("helper added", "name", strings.TrimSpace(m.Name), "by", by)
+		r.log.Info("agent added", "name", strings.TrimSpace(m.Name), "by", by)
 	}
 	r.reply(c, m.Seq, err)
 	return nil
@@ -656,7 +656,7 @@ func (s *Session) End(res splice.Result) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.log.Info("session", "event", "end", "id", s.req.id, "client", s.req.client.fp, "helper", s.req.helper.name,
-		"client_to_helper", res.AToB, "helper_to_client", res.BToA,
+		"client_to_agent", res.AToB, "agent_to_client", res.BToA,
 		"duration", r.cfg.Now().Sub(s.start).String())
 	s.ended = true
 	r.endRequestLocked(s.req, control.RequestEnded, true)

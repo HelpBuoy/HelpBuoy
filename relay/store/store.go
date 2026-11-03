@@ -79,19 +79,19 @@ func NewIndex(st *State) (*Index, error) {
 	names := map[string]bool{}
 	for i, h := range st.Helpers {
 		if _, err := auth.CleanName(h.Name, MaxHelperName); err != nil {
-			return nil, fmt.Errorf("helper %q: %w", h.Name, err)
+			return nil, fmt.Errorf("agent %q: %w", h.Name, err)
 		}
 		if names[h.Name] {
-			return nil, fmt.Errorf("helper %q is listed twice", h.Name)
+			return nil, fmt.Errorf("agent %q is listed twice", h.Name)
 		}
 		names[h.Name] = true
 		k, _, err := auth.ParseKey(h.PublicKey)
 		if err != nil {
-			return nil, fmt.Errorf("helper %q: %w", h.Name, err)
+			return nil, fmt.Errorf("agent %q: %w", h.Name, err)
 		}
 		fp := auth.Fingerprint(k)
 		if _, dup := idx.helpers[fp]; dup {
-			return nil, fmt.Errorf("helper %q: key %s is used by another helper", h.Name, fp)
+			return nil, fmt.Errorf("agent %q: key %s is used by another agent", h.Name, fp)
 		}
 		idx.helpers[fp] = i
 		idx.hfps = append(idx.hfps, fp)
@@ -103,7 +103,7 @@ func NewIndex(st *State) (*Index, error) {
 		}
 		fp := auth.Fingerprint(k)
 		if _, dup := idx.helpers[fp]; dup {
-			return nil, fmt.Errorf("client %q: key %s is a helper key", c.Name, fp)
+			return nil, fmt.Errorf("client %q: key %s is an agent key", c.Name, fp)
 		}
 		if _, dup := idx.clients[fp]; dup {
 			return nil, fmt.Errorf("client %q: key %s is registered twice", c.Name, fp)
@@ -311,7 +311,7 @@ func (st *State) AddHelper(name, keyLine string) error {
 		return err
 	}
 	if strings.ContainsAny(name, " \t") {
-		return errors.New("helper name must not contain spaces")
+		return errors.New("agent name must not contain spaces")
 	}
 	k, comment, err := auth.ParseKey(keyLine)
 	if err != nil {
@@ -320,10 +320,10 @@ func (st *State) AddHelper(name, keyLine string) error {
 	fp := auth.Fingerprint(k)
 	for _, h := range st.Helpers {
 		if h.Name == name {
-			return fmt.Errorf("helper %q already exists", name)
+			return fmt.Errorf("agent %q already exists", name)
 		}
 		if sameKey(h.PublicKey, fp) {
-			return fmt.Errorf("key %s is already the key of helper %q", fp, h.Name)
+			return fmt.Errorf("key %s is already the key of agent %q", fp, h.Name)
 		}
 	}
 	for _, c := range st.Clients {
@@ -339,7 +339,7 @@ func (st *State) AddHelper(name, keyLine string) error {
 func (st *State) RemoveHelper(name string) error {
 	i := slices.IndexFunc(st.Helpers, func(h Helper) bool { return h.Name == name })
 	if i < 0 {
-		return fmt.Errorf("no helper %q", name)
+		return fmt.Errorf("no agent %q", name)
 	}
 	st.Helpers = slices.Delete(st.Helpers, i, i+1)
 	return nil
@@ -364,7 +364,7 @@ func (st *State) AddClient(keyLine, name, by string, at time.Time) (fp, regName 
 	fp = auth.Fingerprint(k)
 	for _, h := range st.Helpers {
 		if sameKey(h.PublicKey, fp) {
-			return "", "", fmt.Errorf("key %s is the key of helper %q; a key can't be both", fp, h.Name)
+			return "", "", fmt.Errorf("key %s is the key of agent %q; a key can't be both", fp, h.Name)
 		}
 	}
 	for _, c := range st.Clients {

@@ -701,11 +701,11 @@ func (a *App) tabTitle(t *tab) string {
 	case tabClients:
 		return "Clients"
 	case tabHelpers:
-		return "Helpers"
+		return "Agents"
 	case tabRegister:
 		return "Register client"
 	case tabRegisterHelper:
-		return "Register helper"
+		return "Register agent"
 	case tabRelay:
 		return "Relay"
 	}
@@ -741,9 +741,9 @@ func (a *App) drawKeyProblem() {
 	if a.keyRemoved {
 		c.Text(ui.Bold, ui.SizeHeading, "The key was removed", x, y, ui.ColText)
 		y += 36
-		y += c.Paragraph(ui.Regular, ui.SizeBody, "Start the app again to create a new key. The relay admin, or another helper on the Register helper tab, then adds the new key.", x, y, width, ui.ColMuted)
+		y += c.Paragraph(ui.Regular, ui.SizeBody, "Start the app again to create a new key. The relay admin, or another agent on the Register agent tab, then adds the new key.", x, y, width, ui.ColMuted)
 	} else {
-		c.Text(ui.Bold, ui.SizeHeading, "The helper key can't be used", x, y, ui.ColText)
+		c.Text(ui.Bold, ui.SizeHeading, "The agent key can't be used", x, y, ui.ColText)
 		y += 36
 		y += c.Paragraph(ui.Regular, ui.SizeBody, a.keyErr.Error(), x, y, width, ui.ColError)
 		if a.dir != "" {
@@ -752,7 +752,7 @@ func (a *App) drawKeyProblem() {
 		}
 		if errors.Is(a.keyErr, appkey.ErrDamaged) && a.dir != "" {
 			y += 12
-			y += c.Paragraph(ui.Regular, ui.SizeBody, "The key is never replaced on its own. Remove key deletes it and makes a new one on the next start; the relay admin or another helper must then add the new key.", x, y, width, ui.ColMuted)
+			y += c.Paragraph(ui.Regular, ui.SizeBody, "The key is never replaced on its own. Remove key deletes it and makes a new one on the next start; the relay admin or another agent must then add the new key.", x, y, width, ui.ColMuted)
 			y += 16
 			if a.confirmKey {
 				if c.Button("keyproblem/confirm", rl.NewRectangle(x, y, 160, 36), "Remove key", ui.Danger, false) {

@@ -227,20 +227,20 @@ func (r *Relay) ensureHelper(dir string) {
 	}
 	k, _, err := auth.ParseKey(r.opts.KeyLine)
 	if err != nil {
-		r.logLine("this helper app's key: " + err.Error())
+		r.logLine("this desk app's key: " + err.Error())
 		return
 	}
 	fp := auth.Fingerprint(k)
 	base := r.opts.HelperName
 	if base == "" {
-		base = "helper"
+		base = "agent"
 	}
 	st, err := store.Open(dir)
 	if err != nil {
 		r.logLine("relay state: " + err.Error())
 		return
 	}
-	errKnown := errors.New("already a helper")
+	errKnown := errors.New("already an agent")
 	var name string
 	_, _, err = st.Update(func(s *store.State) error {
 		taken := map[string]bool{}
@@ -260,10 +260,10 @@ func (r *Relay) ensureHelper(dir string) {
 	case errors.Is(err, errKnown):
 		return
 	case err != nil:
-		r.logLine("adding this helper app's key: " + err.Error())
+		r.logLine("adding this desk app's key: " + err.Error())
 		return
 	}
-	r.logLine("added this helper app's key to the relay as " + name)
+	r.logLine("added this desk app's key to the relay as " + name)
 	r.mu.Lock()
 	r.status.HelperAdded++
 	r.mu.Unlock()

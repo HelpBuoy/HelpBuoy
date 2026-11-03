@@ -1,7 +1,7 @@
 # Settings for the helpbuoy-relay service. After a change:
 #   systemctl restart helpbuoy-relay
 #
-# Address to listen on, host:port or :port. Every helper and client connects
+# Address to listen on, host:port or :port. Every agent and client connects
 # to this one port. Ports below 1024 need an extra capability, see
 # /usr/lib/systemd/system/helpbuoy-relay.service.
 HELPBUOY_RELAY_LISTEN=:5959

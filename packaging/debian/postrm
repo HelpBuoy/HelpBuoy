@@ -14,7 +14,7 @@ if [ "$1" = "purge" ]; then
 		deb-systemd-helper purge 'helpbuoy-relay.service' >/dev/null || true
 		deb-systemd-helper unmask 'helpbuoy-relay.service' >/dev/null || true
 	fi
-	# Purge removes the relay's host key, helpers and registered clients.
+	# Purge removes the relay's host key, agents and registered clients.
 	# The helpbuoy-relay system user is kept, as is usual in Debian.
 	rm -rf /var/lib/helpbuoy-relay
 fi

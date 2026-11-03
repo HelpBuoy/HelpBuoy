@@ -35,7 +35,7 @@ func (p *registerPage) init(helper bool) {
 	p.helper = helper
 	p.key.Mono = true
 	if helper {
-		p.key.Placeholder = "Paste the key the helper sent you (ssh-ed25519 AAAA…)"
+		p.key.Placeholder = "Paste the key the agent sent you (ssh-ed25519 AAAA…)"
 		p.name.Placeholder = "Name, e.g. bob"
 		p.name.Edit.Max = maxHelperName
 		return
@@ -138,12 +138,12 @@ func (a *App) drawRegister(p *registerPage, x, y, w float32) float32 {
 	c := a.ui
 	id := "reg/"
 	title, intro := "Register client", "Paste the key line the user sent you in the chat. Extra words, quotes and line breaks are fine."
-	nameLabel, fpLabel := "NAME (as helpers see it in the client list)", "FINGERPRINT (compare with the user on the phone)"
+	nameLabel, fpLabel := "NAME (as agents see it in the client list)", "FINGERPRINT (compare with the user on the phone)"
 	maxName, nameRule := maxClientName, "printable characters"
 	if p.helper {
 		id = "reghelper/"
-		title, intro = "Register helper", "Paste the key line the other helper sent you. Their app shows it when they connect to this relay before being added. They can then help all its clients."
-		nameLabel, fpLabel = "NAME (one word, as clients and helpers see it)", "FINGERPRINT (compare with the helper on the phone)"
+		title, intro = "Register agent", "Paste the key line the other agent sent you. Their app shows it when they connect to this relay before being added. They can then help all its clients."
+		nameLabel, fpLabel = "NAME (one word, as clients and agents see it)", "FINGERPRINT (compare with the agent on the phone)"
 		maxName, nameRule = maxHelperName, "characters without spaces"
 	}
 	c.Text(ui.Bold, ui.SizeHeading, title, x, y, ui.ColText)
@@ -249,7 +249,7 @@ func (a *App) registeredAs(fp string) string {
 	}
 	for _, h := range a.presence.Helpers {
 		if h.Fingerprint == fp {
-			return "helper " + h.Name
+			return "agent " + h.Name
 		}
 	}
 	return ""

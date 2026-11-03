@@ -55,7 +55,7 @@ func HelperName() string {
 	}
 	name = strings.ToLower(name)
 	if !validName(name) {
-		return "helper"
+		return "agent"
 	}
 	return name
 }
@@ -87,5 +87,5 @@ func userName() string {
 			return strings.ToLower(s)
 		}
 	}
-	return "helper"
+	return "agent"
 }

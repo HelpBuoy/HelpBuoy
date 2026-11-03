@@ -720,7 +720,7 @@ func (s *Server) handleSession(c *conn, nch ssh.NewChannel) {
 	case hr = <-res:
 		timer.Stop()
 	case <-timer.C:
-		hr.err = errors.New("helper did not answer")
+		hr.err = errors.New("agent did not answer")
 		go func() {
 			if late := <-res; late.err == nil {
 				late.ch.Close()
@@ -729,8 +729,8 @@ func (s *Server) handleSession(c *conn, nch ssh.NewChannel) {
 		}()
 	}
 	if hr.err != nil {
-		s.log.Info("session refused by helper", "fp", c.fp, "helper", h.fp, "reason", hr.err.Error())
-		nch.Reject(ssh.ConnectionFailed, "helper did not accept the session")
+		s.log.Info("session refused by agent", "fp", c.fp, "helper", h.fp, "reason", hr.err.Error())
+		nch.Reject(ssh.ConnectionFailed, "agent did not accept the session")
 		sess.End(splice.Result{})
 		return
 	}

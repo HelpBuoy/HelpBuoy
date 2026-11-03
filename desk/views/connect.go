@@ -183,7 +183,7 @@ func (a *App) drawConnect(x, y, w float32) float32 {
 		a.startConnect()
 	}
 	y += 44
-	y += c.Paragraph(ui.Regular, ui.SizeSmall, "Leave empty to run a local relay on this computer, with you as its helper.", x, y, w, ui.ColMuted)
+	y += c.Paragraph(ui.Regular, ui.SizeSmall, "Leave empty to run a local relay on this computer, with you as its agent.", x, y, w, ui.ColMuted)
 	if s.err != "" {
 		y += 10
 		y += c.Paragraph(ui.Regular, ui.SizeSmall, s.err, x, y, w, ui.ColError)
@@ -217,7 +217,7 @@ func (a *App) drawNotHelper(x, y, w float32) float32 {
 	s := &a.cs
 	c.Text(ui.Bold, ui.SizeHeading, "Send your key to get added", x, y, ui.ColText)
 	y += 36
-	y += c.Paragraph(ui.Regular, ui.SizeBody, "The relay at "+a.addr.String()+" does not know this helper yet. Send this public key to a helper on it (Register helper tab) or to its admin (helpbuoy-relay helper add).", x, y, w, ui.ColMuted)
+	y += c.Paragraph(ui.Regular, ui.SizeBody, "The relay at "+a.addr.String()+" does not know this agent yet. Send this public key to an agent on it (Register agent tab) or to its admin (helpbuoy-relay agent add).", x, y, w, ui.ColMuted)
 	y += 12
 	for _, l := range c.Wrap(ui.Mono, ui.SizeSmall, a.key.Line, w) {
 		c.Text(ui.Mono, ui.SizeSmall, l, x, y, ui.ColText)

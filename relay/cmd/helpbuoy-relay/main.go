@@ -36,9 +36,9 @@ const usage = `usage: helpbuoy-relay <command> [flags]
 
 commands:
   serve [--listen :5959] [--state DIR]                   run the relay
-  helper add NAME 'ssh-ed25519 ...'   add a helper key
-  helper remove NAME                                     remove a helper
-  helper list                                            list helpers
+  agent add NAME 'ssh-ed25519 ...'                       add an agent key
+  agent remove NAME                                      remove an agent
+  agent list                                             list agents
   client list                                            list registered clients
   client rename SHA256:... NAME                          rename a registered client
   client remove SHA256:...                               remove a registered client
@@ -65,8 +65,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	switch args[0] {
 	case "serve":
 		err = serve(args[1:], stdout, stderr)
-	case "helper":
-		err = helperCmd(args[1:], stdout, stderr)
+	case "agent", "helper": // helper is the old name of agent
+		err = agentCmd(args[1:], stdout, stderr)
 	case "client":
 		err = clientCmd(args[1:], stdout, stderr)
 	case "hostkey":
@@ -193,11 +193,11 @@ func openStore(state string) (*store.Store, error) {
 	return store.Open(dir)
 }
 
-func helperCmd(args []string, stdout, stderr io.Writer) error {
+func agentCmd(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("%w: helper add|remove|list", errUsage)
+		return fmt.Errorf("%w: agent add|remove|list", errUsage)
 	}
-	fs := flag.NewFlagSet("helper "+args[0], flag.ContinueOnError)
+	fs := flag.NewFlagSet("agent "+args[0], flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	state := fs.String("state", "", "state directory")
 	pos, err := parse(fs, args[1:])
@@ -211,25 +211,25 @@ func helperCmd(args []string, stdout, stderr io.Writer) error {
 	switch args[0] {
 	case "add":
 		if len(pos) != 2 {
-			return fmt.Errorf("%w: helper add NAME 'ssh-ed25519 ...'", errUsage)
+			return fmt.Errorf("%w: agent add NAME 'ssh-ed25519 ...'", errUsage)
 		}
 		_, _, err := st.Update(func(s *store.State) error { return s.AddHelper(pos[0], pos[1]) })
 		if err != nil {
 			return err
 		}
 		k, _, _ := auth.ParseKey(pos[1])
-		fmt.Fprintf(stdout, "added helper %s (%s)\n", pos[0], auth.Fingerprint(k))
+		fmt.Fprintf(stdout, "added agent %s (%s)\n", pos[0], auth.Fingerprint(k))
 	case "remove":
 		if len(pos) != 1 {
-			return fmt.Errorf("%w: helper remove NAME", errUsage)
+			return fmt.Errorf("%w: agent remove NAME", errUsage)
 		}
 		if _, _, err := st.Update(func(s *store.State) error { return s.RemoveHelper(pos[0]) }); err != nil {
 			return err
 		}
-		fmt.Fprintf(stdout, "removed helper %s\n", pos[0])
+		fmt.Fprintf(stdout, "removed agent %s\n", pos[0])
 	case "list":
 		if len(pos) != 0 {
-			return fmt.Errorf("%w: helper list", errUsage)
+			return fmt.Errorf("%w: agent list", errUsage)
 		}
 		idx, _, err := st.Load()
 		if err != nil {
@@ -242,7 +242,7 @@ func helperCmd(args []string, stdout, stderr io.Writer) error {
 		}
 		tw.Flush()
 	default:
-		return fmt.Errorf("%w: helper add|remove|list", errUsage)
+		return fmt.Errorf("%w: agent add|remove|list", errUsage)
 	}
 	return nil
 }
