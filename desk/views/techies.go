@@ -3,6 +3,7 @@ package views
 import (
 	"sort"
 	"strings"
+	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
@@ -67,8 +68,12 @@ func (a *App) drawTechiesPage(r rl.Rectangle) {
 	c.EndScroll()
 }
 
+// drawTechieRow draws one techie: name, a status line, and Remove on hover
+// for every techie but yourself, confirmed with a second click.
 func (a *App) drawTechieRow(h control.TechieInfo, r rl.Rectangle) {
 	c := a.ui
+	id := "techie/" + h.Fingerprint
+	hover, _ := c.Row(id, r, ui.ColPanel, false)
 	rl.DrawLineV(rl.NewVector2(r.X+16, r.Y+r.Height), rl.NewVector2(r.X+r.Width, r.Y+r.Height), ui.ColHover)
 	x := r.X + 16
 	nameCol := ui.ColText
@@ -79,9 +84,19 @@ func (a *App) drawTechieRow(h control.TechieInfo, r rl.Rectangle) {
 		rl.DrawCircleLines(int32(x+4), int32(r.Y+17), 4, ui.ColBorder)
 	}
 	x += 16
-	w := r.X + r.Width - x - 16
+
+	me := h.Name == a.me
+	confirming := a.confirmRemove == h.Fingerprint
+	actionW := float32(0)
+	switch {
+	case confirming:
+		actionW = 150
+	case hover && !me:
+		actionW = 70
+	}
+	w := r.X + r.Width - x - actionW - 16
 	name := h.Name
-	if h.Name == a.me {
+	if me {
 		name += " (you)"
 	}
 	c.Text(ui.Regular, ui.SizeBody, c.Ellipsize(ui.Regular, ui.SizeBody, name, w), x, r.Y+8, nameCol)
@@ -92,5 +107,44 @@ func (a *App) drawTechieRow(h control.TechieInfo, r rl.Rectangle) {
 	case !h.Online:
 		sub = "Offline · " + h.Fingerprint
 	}
+	if n, ok := a.notes[h.Fingerprint]; ok {
+		sub, subCol = n.text, ui.ColError
+		if hover {
+			c.Tooltip(n.text)
+		}
+	}
+	if confirming {
+		sub, subCol = "Remove this techie?", ui.ColError
+	}
 	c.Text(ui.Regular, ui.SizeSmall, c.Ellipsize(ui.Regular, ui.SizeSmall, sub, w), x, r.Y+30, subCol)
+
+	ax := r.X + r.Width - actionW - 8
+	ay := r.Y + (r.Height-30)/2
+	switch {
+	case confirming:
+		if c.Button(id+"/confirm", rl.NewRectangle(ax, ay, 74, 30), "Remove", ui.Danger, false) {
+			a.unregisterTechie(h)
+		}
+		if c.Button(id+"/cancel", rl.NewRectangle(ax+80, ay, 68, 30), "Cancel", ui.Flat, false) {
+			a.confirmRemove = ""
+		}
+	case hover && !me:
+		if c.Button(id+"/remove", rl.NewRectangle(ax, ay, 66, 30), "Remove", ui.Flat, !a.online()) {
+			a.confirmRemove = h.Fingerprint
+		}
+	}
+}
+
+// unregisterTechie removes another techie from the server.
+func (a *App) unregisterTechie(h control.TechieInfo) {
+	a.confirmRemove = ""
+	if a.backend == nil {
+		return
+	}
+	fp := h.Fingerprint
+	a.run(a.backend.UnregisterTechie(h.Name), func(err error) {
+		if err != nil {
+			a.notes[fp] = note{text: "Could not remove: " + err.Error(), until: time.Now().Add(6 * time.Second)}
+		}
+	})
 }

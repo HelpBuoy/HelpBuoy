@@ -197,6 +197,13 @@ func (c *Conn) RegisterTechie(line, name string) <-chan error {
 	})
 }
 
+// UnregisterTechie removes the techie with the given name.
+func (c *Conn) UnregisterTechie(name string) <-chan error {
+	return c.command(func(seq uint32) any {
+		return &control.UnregisterTechie{Seq: seq, Name: name}
+	})
+}
+
 // RegisterComputer registers a computer key line; name overrides the comment.
 func (c *Conn) RegisterComputer(line, name string) <-chan error {
 	return c.command(func(seq uint32) any {

@@ -257,7 +257,7 @@ only by `UnregisterComputer` or `helpbuoy-server computer remove`. Writes are te
 
 **Techies are plain keys**: there are no certificates. A new techie sends
 their public key line to the server admin, who adds it with `helpbuoy-server techie add`. Removing it
-with `helpbuoy-server techie remove` is the whole revocation story. The server watches `state.json` and
+with `helpbuoy-server techie remove` (or Remove on the desk app's Techies tab) is the whole revocation story. The server watches `state.json` and
 reloads it when the CLI changes it (no signals, so it works the same on Windows).
 
 ### 3.3 Control channel
@@ -275,6 +275,7 @@ Techie commands carry a sequence number and the server answers each with a `Repl
 | `Presence` | server → techies | full snapshot after every change: registered computers (`user@machine`, fingerprint, online, open or taken request with id and time, in session with whom) and techies |
 | `RegisterComputer` / `UnregisterComputer` | techie → server | public key line or fingerprint (name taken from the key comment, or given when the comment is empty) |
 | `RegisterTechie` | techie → server | public key line and name: adds another techie, like `helpbuoy-server techie add` |
+| `UnregisterTechie` | techie → server | name: removes another techie, like `helpbuoy-server techie remove`; an online techie is disconnected, and a techie cannot remove itself |
 | `SetServerInfo` | techie → server | new title (up to 64 characters) and instruction line (up to 160), one line each, empty to clear; stored in `state.json` |
 | `Reply` | server → techie | answer to a techie command: sequence number and error text if it failed |
 | `Registered` | server → computer | the key is now registered (no name: that is only for techies) |
@@ -704,8 +705,10 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   it is required when the comment is empty. Registrations are permanent until removed.
 - **Register techie** works like Register computer for another techie's key line (their
   app shows it when they connect to this server before being added): the name is one word, prefilled from the user part of the key comment,
-  and the fingerprint is shown large for the phone. Any techie on a server can add techies;
-  removing one is still `helpbuoy-server techie remove`.
+  and the fingerprint is shown large for the phone. Any techie on a server can add techies.
+- **Remove techie**: hovering a techie row on the Techies tab shows Remove (not on your own
+  row); it asks "Remove this techie?" with Remove and Cancel, like removing a computer, and sends
+  `UnregisterTechie`. The removed techie is disconnected at once, ending its sessions.
 - **Forms reset** when their tab is closed (or replaced): the Register form and its result
   are cleared. Leaving the Computers tab drops open renames and confirmations.
 - **Rename**: hovering a computer row shows Rename and Remove; Rename (or a double-click) turns

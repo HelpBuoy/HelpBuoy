@@ -140,6 +140,7 @@ func TestMessagesPerRole(t *testing.T) {
 		{"UnregisterComputer", &control.UnregisterComputer{Seq: 1, Fingerprint: "SHA256:x"}, map[control.Role]bool{control.RoleTechie: true}},
 		{"RenameComputer", &control.RenameComputer{Seq: 1, Fingerprint: "SHA256:x", Name: "x"}, map[control.Role]bool{control.RoleTechie: true}},
 		{"RegisterTechie", &control.RegisterTechie{Seq: 1, PublicKey: "bad", Name: "x"}, map[control.Role]bool{control.RoleTechie: true}},
+		{"UnregisterTechie", &control.UnregisterTechie{Seq: 1, Name: "nobody"}, map[control.Role]bool{control.RoleTechie: true}},
 		{"SetServerInfo", &control.SetServerInfo{Seq: 1, Title: "bad\x00title"}, map[control.Role]bool{control.RoleTechie: true}},
 		// Server->app messages are never accepted from apps.
 		{"Hello", &control.Hello{Role: control.RoleTechie}, nil},
@@ -368,6 +369,27 @@ func TestRemoval(t *testing.T) {
 	if rep := mustWait[control.Reply](t, h, nil); rep.Error == "" {
 		t.Error("removing an unknown computer succeeded")
 	}
+
+	// A techie cannot remove itself, nor an unknown techie; removing another
+	// techie disconnects it at once.
+	h.Send(&control.UnregisterTechie{Seq: 9, Name: "alice"})
+	if rep := mustWait[control.Reply](t, h, nil); rep.Seq != 9 || rep.Error == "" {
+		t.Fatalf("removing yourself: reply %+v", rep)
+	}
+	h.Send(&control.UnregisterTechie{Seq: 10, Name: "nobody"})
+	if rep := mustWait[control.Reply](t, h, nil); rep.Error == "" {
+		t.Error("removing an unknown techie succeeded")
+	}
+	h3k := e.addTechie("carol")
+	h3, _ := e.connect(h3k, control.RoleTechie)
+	h.Send(&control.UnregisterTechie{Seq: 11, Name: "carol"})
+	if rep := mustWait[control.Reply](t, h, nil); rep.Seq != 11 || rep.Error != "" {
+		t.Fatalf("reply %+v", rep)
+	}
+	if msg := waitClosed(t, h3); msg == "" {
+		t.Error("removed techie got no Error")
+	}
+	e.connect(h3k, control.RolePending)
 
 	// The admin removes a techie through state.json (as the CLI does,
 	// without telling the server): it is kicked by the reload poll.

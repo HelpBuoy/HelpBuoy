@@ -398,6 +398,8 @@ func (r *Registry) Handle(c *Conn, m any) error {
 		return r.unregisterComputer(c, m)
 	case *control.RegisterTechie:
 		return r.registerTechie(c, m)
+	case *control.UnregisterTechie:
+		return r.unregisterTechie(c, m)
 	case *control.RenameComputer:
 		return r.renameComputer(c, m)
 	case *control.SetServerInfo:
@@ -548,6 +550,25 @@ func (r *Registry) registerTechie(c *Conn, m *control.RegisterTechie) error {
 	err = r.mutate(func(st *store.State) error { return st.AddTechie(m.Name, m.PublicKey) })
 	if err == nil {
 		r.log.Info("techie added", "name", strings.TrimSpace(m.Name), "by", by)
+	}
+	r.reply(c, m.Seq, err)
+	return nil
+}
+
+// unregisterTechie removes another techie on behalf of techie c; the removed
+// techie is disconnected when the new state is installed.
+func (r *Registry) unregisterTechie(c *Conn, m *control.UnregisterTechie) error {
+	by, err := r.techieName(c, "UnregisterTechie")
+	if err != nil {
+		return err
+	}
+	if m.Name == by {
+		err = errors.New("you cannot remove yourself")
+	} else {
+		err = r.mutate(func(st *store.State) error { return st.RemoveTechie(m.Name) })
+	}
+	if err == nil {
+		r.log.Info("techie removed", "name", m.Name, "by", by)
 	}
 	r.reply(c, m.Seq, err)
 	return nil

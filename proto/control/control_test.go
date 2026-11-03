@@ -20,6 +20,7 @@ func TestRoundTripAll(t *testing.T) {
 		&RegisterComputer{Seq: 1, PublicKey: "ssh-ed25519 AAAA anna@pc1"},
 		&UnregisterComputer{Seq: 2, Fingerprint: "SHA256:x"},
 		&RegisterTechie{Seq: 5, PublicKey: "ssh-ed25519 AAAA bob@pc2", Name: "bob"},
+		&UnregisterTechie{Seq: 6, Name: "bob"},
 		&RenameComputer{Seq: 4, Fingerprint: "SHA256:x", Name: "Anna laptop"},
 		&Connect{Seq: 4, Fingerprint: "SHA256:x", RequestID: "r2"},
 		&Reply{Seq: 3, Error: "request is not open"},

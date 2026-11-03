@@ -60,6 +60,7 @@ const (
 type backend interface {
 	RegisterComputer(line, name string) <-chan error
 	RegisterTechie(line, name string) <-chan error
+	UnregisterTechie(name string) <-chan error
 	RenameComputer(fingerprint, name string) <-chan error
 	UnregisterComputer(fingerprint string) <-chan error
 	Connect(fingerprint, requestID string) <-chan error
@@ -136,8 +137,8 @@ type App struct {
 	opened        map[string]time.Time // request ids this techie sent Connect for, and when
 	opening       map[string]bool      // computer fingerprints with a Connect in flight
 	waiting       map[string]*waitInfo // by computer fingerprint: accepted Connects, until the session starts
-	notes         map[string]note      // by computer fingerprint
-	confirmRemove string
+	notes         map[string]note      // by computer or techie fingerprint
+	confirmRemove string               // computer or techie fingerprint awaiting Remove confirmation
 	offlineOpen   bool
 	rename        renameState
 
@@ -610,6 +611,8 @@ func (a *App) leaveTab(i int) {
 		if a.rename.fp != "" {
 			a.endRename()
 		}
+		a.confirmRemove = ""
+	case tabTechies:
 		a.confirmRemove = ""
 	}
 }

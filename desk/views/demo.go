@@ -133,6 +133,21 @@ func (d *demo) RegisterTechie(line, name string) <-chan error {
 	return done(nil)
 }
 
+// UnregisterTechie removes a demo techie locally, with the server's rules.
+func (d *demo) UnregisterTechie(name string) <-chan error {
+	p := d.a.presence
+	if name == d.a.me {
+		return done(fmt.Errorf("you cannot remove yourself"))
+	}
+	for i, h := range p.Techies {
+		if h.Name == name {
+			p.Techies = append(p.Techies[:i], p.Techies[i+1:]...)
+			return done(nil)
+		}
+	}
+	return done(fmt.Errorf("no techie named %q", name))
+}
+
 // RenameComputer renames a demo computer locally, with the server's rules.
 func (d *demo) RenameComputer(fp, name string) <-chan error {
 	name = strings.TrimSpace(name)

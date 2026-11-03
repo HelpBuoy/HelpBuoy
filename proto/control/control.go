@@ -105,10 +105,11 @@ const (
 	// server -> any: fatal error before the server closes the connection
 	MsgError MsgType = 13
 	// techie -> server
-	MsgRenameComputer MsgType = 14
-	MsgConnect        MsgType = 15
-	MsgRegisterTechie MsgType = 16
-	MsgSetServerInfo  MsgType = 18
+	MsgRenameComputer   MsgType = 14
+	MsgConnect          MsgType = 15
+	MsgRegisterTechie   MsgType = 16
+	MsgSetServerInfo    MsgType = 18
+	MsgUnregisterTechie MsgType = 19
 	// server -> any
 	MsgServerInfo MsgType = 17
 )
@@ -224,6 +225,13 @@ type RenameComputer struct {
 type UnregisterComputer struct {
 	Seq         uint32 `json:"seq"`
 	Fingerprint string `json:"fingerprint"`
+}
+
+// UnregisterTechie removes another techie, like helpbuoy-server techie remove;
+// an online techie is disconnected. A techie cannot remove itself.
+type UnregisterTechie struct {
+	Seq  uint32 `json:"seq"`
+	Name string `json:"name"`
 }
 
 // Connect starts a session with an online computer, once its user allows it.
@@ -349,6 +357,8 @@ func typeOf(m any) (MsgType, error) {
 		return MsgRenameComputer, nil
 	case *RegisterTechie, RegisterTechie:
 		return MsgRegisterTechie, nil
+	case *UnregisterTechie, UnregisterTechie:
+		return MsgUnregisterTechie, nil
 	case *Connect, Connect:
 		return MsgConnect, nil
 	case *ServerInfo, ServerInfo:
@@ -388,6 +398,8 @@ func newOf(t MsgType) (any, error) {
 		return &RenameComputer{}, nil
 	case MsgRegisterTechie:
 		return &RegisterTechie{}, nil
+	case MsgUnregisterTechie:
+		return &UnregisterTechie{}, nil
 	case MsgConnect:
 		return &Connect{}, nil
 	case MsgServerInfo:
