@@ -31,8 +31,8 @@ CLIENT_ICONS := $(addprefix client-windows/resources/,icon.png icon48.png icon32
 # Four part versions of the Windows exes, which the MSIs need for the upgrade.
 FILE_VERSION = $(shell jq -r '.RT_VERSION[]["0000"].fixed.file_version' client-windows/resources/winres.json)
 DESK_FILE_VERSION = $(shell jq -r '.RT_VERSION[]["0000"].fixed.file_version' desk/resources/winres.json)
-MSI := $(DIST)/helpbuoy_$(VERSION)_windows-amd64.msi
-DESK_MSI := $(DIST)/helpbuoy-desk_$(VERSION)_windows-amd64.msi
+MSI := $(DIST)/helpbuoy_$(APP_VERSION)_amd64.msi
+DESK_MSI := $(DIST)/helpbuoy-desk_$(APP_VERSION)_amd64.msi
 
 .PHONY: help all test vet fuzz server client client-linux desk dist msi deb deb-client deb-desk icon clean
 

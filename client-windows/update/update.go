@@ -35,7 +35,7 @@ type Release struct {
 	MsiSize int64
 }
 
-// msiPrefix starts the client MSI's name (helpbuoy_v1.2.3_windows-amd64.msi),
+// msiPrefix starts the client MSI's name (helpbuoy_1.2.3_amd64.msi),
 // which sets it apart from the desk app's MSI in the same release.
 const msiPrefix = "helpbuoy_"
 
