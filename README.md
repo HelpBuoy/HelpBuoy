@@ -8,4 +8,7 @@ Self-hosted remote support for Windows, a small alternative to TeamViewer QuickS
 
 A session only carries the screen (client to agent) and mouse and keyboard input (agent to client). See [PLAN.md](PLAN.md) for the design.
 
-To try it locally, run `./run.sh`: it starts a relay, the desk app and the Windows client in wine, with all state in `.run/` (`./run.sh reset` clears it).
+## Scripts
+
+- `./run.sh`: builds and starts a relay, the desk app and the Windows client (in wine) on this machine for testing. All state lives in `.run/`; `./run.sh reset` clears it.
+- `./release.sh [major|minor]`: bumps the version (build number by default), builds and tests everything, then tags, pushes and creates the GitHub release with the client MSI, the desk app archives and the relay Debian package.
