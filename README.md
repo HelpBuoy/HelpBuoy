@@ -1,4 +1,4 @@
-# help-me-win
+# Help-Me-Win
 
 Self-hosted remote support for Windows, a small alternative to TeamViewer QuickSupport.
 
