@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -35,6 +36,9 @@ type Options struct {
 	Demo    bool   // fake server data, no network, nothing written to disk
 	Page    string // start page: "register", "server" or "session" (demo)
 	Icon    []byte // the app icon (PNG), shown on session tabs
+	// Screenshot, if set, saves a frame as PNG to this path once the window
+	// has settled, then quits (screenshot.sh, for the README).
+	Screenshot string
 }
 
 // Layout sizes in logical pixels.
@@ -145,12 +149,14 @@ type App struct {
 	confirmKey bool         // the Remove key confirmation on the damaged key screen
 	pageHeight map[tabKind]float32
 
-	lastInput  time.Time
-	fps        int32
-	fullscreen bool
-	windowed   windowGeom // window position and size before fullscreen
-	keysTo     *sessionTab
-	demo       *demo
+	lastInput     time.Time
+	fps           int32
+	fullscreen    bool
+	windowed      windowGeom // window position and size before fullscreen
+	keysTo        *sessionTab
+	demo          *demo
+	frames        int  // frames drawn, for Options.Screenshot
+	screenshotErr bool // Options.Screenshot could not be written
 }
 
 // MinWidth and MinHeight are the smallest window size, in window units.
@@ -287,9 +293,39 @@ func (a *App) Frame() {
 		a.keysTo = nil
 	}
 	a.ui.End()
+	a.maybeScreenshot()
 	rl.EndDrawing()
 	a.adjustFPS()
 }
+
+// screenshotFrame is the frame Options.Screenshot captures, late enough for
+// the demo data, fonts and window size to have settled.
+const screenshotFrame = 30
+
+// maybeScreenshot saves the frame drawn so far, before the buffer swap, when
+// Options.Screenshot asks for it.
+func (a *App) maybeScreenshot() {
+	if a.opts.Screenshot == "" {
+		return
+	}
+	a.frames++
+	if a.frames != screenshotFrame {
+		return
+	}
+	rl.DrawRenderBatchActive()
+	img := rl.LoadImageFromScreen()
+	if img == nil || !rl.ExportImage(*img, a.opts.Screenshot) {
+		fmt.Fprintln(os.Stderr, "screenshot: could not write", a.opts.Screenshot)
+		a.screenshotErr = true
+	}
+	if img != nil {
+		rl.UnloadImage(img)
+	}
+	a.quit = true
+}
+
+// ScreenshotFailed reports whether Options.Screenshot could not be written.
+func (a *App) ScreenshotFailed() bool { return a.screenshotErr }
 
 // adjustFPS runs at the monitor's refresh rate while a session is open, the
 // user is interacting, or the mouse is over the window, and at idleFPS
