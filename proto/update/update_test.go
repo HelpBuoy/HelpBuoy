@@ -47,7 +47,7 @@ func TestParseRelease(t *testing.T) {
 			{"name": "helpbuoy-desk_0.3.0_amd64.msi", "browser_download_url": "https://github.com/mevdschee/helpbuoy/releases/download/v0.3.0/helpbuoy-desk_0.3.0_amd64.msi", "size": 4509696},
 			{"name": "helpbuoy_0.3.0_amd64.msi", "browser_download_url": "https://github.com/mevdschee/helpbuoy/releases/download/v0.3.0/helpbuoy_0.3.0_amd64.msi", "size": 3912192}
 		]}`)
-	r, ok := ParseRelease(data)
+	r, ok := ParseRelease(data, ClientMSI)
 	if !ok {
 		t.Fatal("no release found")
 	}
@@ -55,6 +55,12 @@ func TestParseRelease(t *testing.T) {
 		MsiURL: "https://github.com/mevdschee/helpbuoy/releases/download/v0.3.0/helpbuoy_0.3.0_amd64.msi"}
 	if r != want {
 		t.Errorf("got %+v", r)
+	}
+	r, ok = ParseRelease(data, DeskMSI)
+	want = Release{Version: "0.3.0", MsiName: "helpbuoy-desk_0.3.0_amd64.msi", MsiSize: 4509696,
+		MsiURL: "https://github.com/mevdschee/helpbuoy/releases/download/v0.3.0/helpbuoy-desk_0.3.0_amd64.msi"}
+	if !ok || r != want {
+		t.Errorf("desk: got %+v, %v", r, ok)
 	}
 
 	for name, bad := range map[string]string{
@@ -65,7 +71,7 @@ func TestParseRelease(t *testing.T) {
 		"not https":  `{"tag_name": "v0.3.0", "assets": [{"name": "helpbuoy_a.msi", "browser_download_url": "http://x/a.msi"}]}`,
 		"invalid":    `not json`,
 	} {
-		if _, ok := ParseRelease([]byte(bad)); ok {
+		if _, ok := ParseRelease([]byte(bad), ClientMSI); ok {
 			t.Errorf("%s: expected no release", name)
 		}
 	}
@@ -82,19 +88,19 @@ func TestCheck(t *testing.T) {
 	defer srv.Close()
 	ctx := context.Background()
 
-	r, err := Check(ctx, srv.URL, "v0.2.0")
+	r, err := Check(ctx, srv.URL, "v0.2.0", ClientMSI)
 	if err != nil || r == nil || r.Version != "0.3.0" || techie != "helpbuoy/v0.2.0" {
 		t.Fatalf("got %+v, %v, techie %q", r, err, techie)
 	}
-	if r, err := Check(ctx, srv.URL, "v0.3.0"); r != nil || err != nil {
+	if r, err := Check(ctx, srv.URL, "v0.3.0", ClientMSI); r != nil || err != nil {
 		t.Fatalf("same version: %+v, %v", r, err)
 	}
 	techie = ""
-	if r, err := Check(ctx, srv.URL, "dev"); r != nil || err != nil || techie != "" {
+	if r, err := Check(ctx, srv.URL, "dev", ClientMSI); r != nil || err != nil || techie != "" {
 		t.Fatalf("dev build checked: %+v, %v", r, err)
 	}
 	status = http.StatusNotFound // a private repository
-	if r, err := Check(ctx, srv.URL, "v0.2.0"); r != nil || err == nil {
+	if r, err := Check(ctx, srv.URL, "v0.2.0", ClientMSI); r != nil || err == nil {
 		t.Fatalf("404: %+v, %v", r, err)
 	}
 }

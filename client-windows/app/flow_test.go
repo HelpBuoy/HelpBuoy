@@ -11,7 +11,7 @@ import (
 	"github.com/mevdschee/helpbuoy/client-windows/config"
 	"github.com/mevdschee/helpbuoy/client-windows/identity"
 	"github.com/mevdschee/helpbuoy/client-windows/internal/fakeserver"
-	"github.com/mevdschee/helpbuoy/client-windows/update"
+	"github.com/mevdschee/helpbuoy/proto/update"
 )
 
 func startServer(t *testing.T) *fakeserver.Server {
@@ -152,17 +152,80 @@ func TestDisconnect(t *testing.T) {
 	waitOffline(t, server2, e.fp())
 }
 
+// TestUpdateBeforeConnect: at the start a newer release is offered before
+// connecting; declining it connects.
+func TestUpdateBeforeConnect(t *testing.T) {
+	e := newEnv(t)
+	registered(t, e)
+	release := &update.Release{Version: "9.9.9", MsiURL: "https://x/a.msi"}
+	unblock := make(chan struct{})
+	checked := make(chan struct{}, 2)
+	c, ui := e.controller()
+	c.d.UpdateWait = time.Minute
+	c.d.CheckUpdate = func(context.Context) (*update.Release, error) {
+		checked <- struct{}{}
+		<-unblock
+		return release, nil
+	}
+	c.Start()
+	v := ui.wait(t, "checking", func(v View) bool { return v.CheckingUpdate })
+	if v.Screen != ScreenAddress || !v.Connecting || v.Address != e.server.Addr() || v.Update != nil {
+		t.Fatalf("checking view %+v", v)
+	}
+	c.Connect("other.example.com") // ignored while checking
+	close(unblock)
+	v = ui.wait(t, "offer", func(v View) bool { return v.Update == release })
+	if v.Screen != ScreenAddress || v.Connecting || v.CheckingUpdate || v.Address != e.server.Addr() {
+		t.Fatalf("offer view %+v", v)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if e.server.Online(e.fp()) {
+		t.Fatal("connected before the offer was answered")
+	}
+	c.DismissUpdate()
+	ui.wait(t, "ready", func(v View) bool { return readyMain(v) && v.Update == nil })
+	if len(checked) != 1 {
+		t.Fatal("not checked once")
+	}
+}
+
+// TestUpdateCheckNothingNew: the start connects once the check finds nothing.
+func TestUpdateCheckNothingNew(t *testing.T) {
+	for name, err := range map[string]error{"none": nil, "offline": io.ErrUnexpectedEOF} {
+		t.Run(name, func(t *testing.T) {
+			e := newEnv(t)
+			registered(t, e)
+			unblock := make(chan struct{})
+			c, ui := e.controller()
+			c.d.UpdateWait = time.Minute
+			c.d.CheckUpdate = func(context.Context) (*update.Release, error) {
+				<-unblock
+				return nil, err
+			}
+			c.Start()
+			ui.wait(t, "checking", func(v View) bool { return v.CheckingUpdate })
+			close(unblock)
+			ui.wait(t, "ready", readyMain)
+		})
+	}
+}
+
+// TestUpdateOfferedWhenIdle: a slow check does not hold up connecting; its
+// release is offered once the computer is idle.
 func TestUpdateOfferedWhenIdle(t *testing.T) {
 	e := newEnv(t)
 	registered(t, e)
 	release := &update.Release{Version: "9.9.9", MsiURL: "https://x/a.msi"}
-	checked := make(chan struct{}, 1)
+	unblock := make(chan struct{})
 	c, ui := e.controller()
+	c.d.UpdateWait = 20 * time.Millisecond
 	c.d.CheckUpdate = func(context.Context) (*update.Release, error) {
-		checked <- struct{}{}
+		<-unblock
 		return release, nil
 	}
-	c.Start() // connects to the stored server by itself
+	c.Start()
+	ui.wait(t, "ready without the check", readyMain)
+	close(unblock)
 	ui.wait(t, "offer", func(v View) bool { return v.Update == release && readyMain(v) })
 
 	gate := make(chan struct{})
@@ -176,7 +239,4 @@ func TestUpdateOfferedWhenIdle(t *testing.T) {
 	ui.wait(t, "offer again", func(v View) bool { return v.Update == release && readyMain(v) })
 	c.DismissUpdate()
 	ui.wait(t, "dismissed", func(v View) bool { return v.Update == nil })
-	if len(checked) != 1 {
-		t.Fatal("not checked once")
-	}
 }

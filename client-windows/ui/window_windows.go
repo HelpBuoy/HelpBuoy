@@ -296,6 +296,8 @@ func (w *Window) events() {
 		hdc.SetBkMode(co.BKMODE_TRANSPARENT)
 		errColor := win.RGB(170, 20, 20)
 		switch h := p.HwndControl(); {
+		case h == w.lblAddrError.Hwnd() && (w.view.CheckingUpdate || w.updating != ""):
+			hdc.SetTextColor(win.GetSysColor(co.COLOR_GRAYTEXT))
 		case h == w.lblAddrError.Hwnd(), h == w.lblKeyErr.Hwnd():
 			hdc.SetTextColor(errColor)
 		case h == w.lblStatus.Hwnd() && w.view.Error != "":
@@ -315,7 +317,7 @@ func (w *Window) events() {
 	})
 	// Enter in the address field.
 	w.wnd.On().WmCommandAccelMenu(uint16(co.ID_OK), func() {
-		if w.view.Screen == app.ScreenAddress && !w.view.Connecting {
+		if w.view.Screen == app.ScreenAddress && !w.view.Connecting && w.updating == "" {
 			w.connect()
 		}
 	})
@@ -436,11 +438,17 @@ func (w *Window) apply(v app.View) {
 		if entered && v.Address != "" {
 			w.edtAddr.SetText(v.Address)
 		}
-		w.edtAddr.Hwnd().EnableWindow(!v.Connecting)
-		w.btnConnect.Hwnd().EnableWindow(!v.Connecting)
-		if v.Connecting {
+		w.edtAddr.Hwnd().EnableWindow(!v.Connecting && w.updating == "")
+		w.btnConnect.Hwnd().EnableWindow(!v.Connecting && w.updating == "")
+		if w.updating != "" {
+			setText(w.lblAddrError, w.updating)
+		} else if v.Connecting {
 			setText(w.btnConnect, "Connecting...")
-			setText(w.lblAddrError, "")
+			if v.CheckingUpdate {
+				setText(w.lblAddrError, "Checking for updates...")
+			} else {
+				setText(w.lblAddrError, "")
+			}
 		} else {
 			setText(w.btnConnect, "&Connect")
 			setText(w.lblAddrError, v.Error)
@@ -535,6 +543,7 @@ func (w *Window) apply(v app.View) {
 		w.rendered = true
 	}
 	w.lblStatus.Hwnd().InvalidateRect(nil, true) // its color depends on w.view
+	w.lblAddrError.Hwnd().InvalidateRect(nil, true)
 	w.maybeOfferUpdate()
 	w.maybeWarnServerKey()
 }

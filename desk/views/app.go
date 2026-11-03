@@ -8,6 +8,7 @@
 package views
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -27,6 +28,7 @@ import (
 	"github.com/mevdschee/helpbuoy/proto/appkey"
 	"github.com/mevdschee/helpbuoy/proto/control"
 	"github.com/mevdschee/helpbuoy/proto/serveraddr"
+	"github.com/mevdschee/helpbuoy/proto/update"
 )
 
 // Options configure the app.
@@ -39,6 +41,10 @@ type Options struct {
 	// Screenshot, if set, saves a frame as PNG to this path once the window
 	// has settled, then quits (screenshot.sh, for the README).
 	Screenshot string
+	// CheckUpdate looks for a newer release at the start; nil never checks.
+	// The stored server is connected to once it is done, or after
+	// updateWait. Errors (offline, the API refusing) are ignored.
+	CheckUpdate func(ctx context.Context) (*update.Release, error)
 }
 
 // Layout sizes in logical pixels.
@@ -128,6 +134,7 @@ type App struct {
 	localAdded int
 
 	cs        connectScreen
+	upd       updater
 	addr      serveraddr.Addr // server address of the current Connect
 	localWait bool            // the local server is starting; the connection follows
 	reached   bool            // the current connection has been online
@@ -197,6 +204,12 @@ func New(opts Options) *App {
 	if ad, err := serveraddr.Parse(a.cfg.ServerAddr); err == nil {
 		a.cs.addr.Edit.SetText(fieldText(ad))
 	}
+	if a.demo == nil && opts.Screenshot == "" {
+		// Like the client: connect to the server used last time, once the
+		// update check is done. A pinned host key means it was reached.
+		a.upd.autoConnect = a.cfg.ServerAddr != "" && a.cfg.ServerHostKey != "" && a.key != nil && a.keyErr == nil
+		a.startUpdate()
+	}
 	switch opts.Page {
 	case "register":
 		a.openRegister(tabRegister)
@@ -210,8 +223,7 @@ func New(opts Options) *App {
 	return a
 }
 
-// load reads the data directory: config and key. Nothing connects until
-// the user presses Connect.
+// load reads the data directory: config and key.
 func (a *App) load() {
 	dir := a.opts.DataDir
 	if dir == "" {
@@ -360,6 +372,7 @@ func (a *App) drain() {
 		break
 	}
 	a.pollLocal()
+	a.pollUpdate()
 	if a.demo != nil {
 		a.demo.frame()
 	}

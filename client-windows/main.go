@@ -29,10 +29,10 @@ import (
 	"github.com/mevdschee/helpbuoy/client-windows/injector"
 	"github.com/mevdschee/helpbuoy/client-windows/session"
 	"github.com/mevdschee/helpbuoy/client-windows/ui"
-	"github.com/mevdschee/helpbuoy/client-windows/update"
 	"github.com/mevdschee/helpbuoy/proto/appkey"
 	pid "github.com/mevdschee/helpbuoy/proto/identity"
 	"github.com/mevdschee/helpbuoy/proto/screen"
+	"github.com/mevdschee/helpbuoy/proto/update"
 )
 
 // version is set at build time with -ldflags "-X main.version=...". Release
@@ -142,7 +142,7 @@ func main() {
 			return stop
 		},
 		CheckUpdate: func(ctx context.Context) (*update.Release, error) {
-			return update.Check(ctx, update.LatestReleaseURL, version)
+			return update.Check(ctx, update.LatestReleaseURL, version, update.ClientMSI)
 		},
 		AppVersion:  version,
 		UserMachine: userMachine,

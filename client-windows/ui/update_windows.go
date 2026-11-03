@@ -12,12 +12,13 @@ import (
 	"github.com/rodrigocfd/windigo/co"
 	"github.com/rodrigocfd/windigo/ui"
 
-	"github.com/mevdschee/helpbuoy/client-windows/update"
+	"github.com/mevdschee/helpbuoy/proto/update"
 )
 
 // maybeOfferUpdate offers the release in the current view, once, when no
 // dialog is open. The controller only puts a release in the view while the
-// computer is idle (no request, no session).
+// computer is idle (no request, no session). At the start it holds back
+// connecting until the offer is declined.
 func (w *Window) maybeOfferUpdate() {
 	r := w.view.Update
 	if r == nil || w.updateAsked || w.dialogs > 0 || w.wnd.Hwnd() == 0 {
@@ -31,13 +32,13 @@ func (w *Window) maybeOfferUpdate() {
 }
 
 // offerUpdate asks whether to install r, then downloads it, starts msiexec
-// and closes the app, which ends any session and disconnects.
+// and closes the app, which ends any session and disconnects. Declining, or
+// a failed installation, dismisses the offer, which lets the start connect.
 func (w *Window) offerUpdate(r update.Release) {
 	if w.view.Update == nil {
 		w.updateAsked = false // no longer idle; offer it when it is again
 		return
 	}
-	w.ctrl.DismissUpdate()
 	version := w.ctrl.Version()
 	msg := fmt.Sprintf("HelpBuoy %s is available (you have %s).\n\n"+
 		"Download and install it now? HelpBuoy closes during the installation.", r.Version, version)
@@ -45,6 +46,7 @@ func (w *Window) offerUpdate(r update.Release) {
 	ret, _ := w.wnd.Hwnd().MessageBox(msg, "Update available", co.MB_YESNO|co.MB_ICONINFORMATION)
 	w.dialogs--
 	if ret != co.ID_YES {
+		w.ctrl.DismissUpdate()
 		return
 	}
 	w.updating = "Downloading HelpBuoy " + r.Version + "..."
@@ -65,6 +67,7 @@ func (w *Window) offerUpdate(r update.Release) {
 				w.updating = ""
 				w.apply(w.view)
 				ui.MsgError(w.wnd, Title, "The update could not be installed", err.Error())
+				w.ctrl.DismissUpdate()
 				return
 			}
 			w.wnd.Hwnd().PostMessage(co.WM_CLOSE, 0, 0)

@@ -14,6 +14,7 @@
 package main
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/mevdschee/helpbuoy/desk/perf"
 	"github.com/mevdschee/helpbuoy/desk/views"
+	"github.com/mevdschee/helpbuoy/proto/update"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -73,7 +75,15 @@ func main() {
 		return
 	}
 
-	app := views.New(views.Options{DataDir: *dataDir, Version: version, Demo: *demo, Page: *page, Icon: iconPNG, Screenshot: *screenshot})
+	opts := views.Options{DataDir: *dataDir, Version: version, Demo: *demo, Page: *page, Icon: iconPNG, Screenshot: *screenshot}
+	if runtime.GOOS == "windows" {
+		// Only Windows updates itself (MSI); the Debian package is updated
+		// with the system's packages.
+		opts.CheckUpdate = func(ctx context.Context) (*update.Release, error) {
+			return update.Check(ctx, update.LatestReleaseURL, version, update.DeskMSI)
+		}
+	}
+	app := views.New(opts)
 	for !rl.WindowShouldClose() && !app.Quit() {
 		app.Frame()
 	}

@@ -17,10 +17,10 @@ import (
 
 	"github.com/mevdschee/helpbuoy/client-windows/config"
 	"github.com/mevdschee/helpbuoy/client-windows/session"
-	"github.com/mevdschee/helpbuoy/client-windows/update"
 	"github.com/mevdschee/helpbuoy/proto/appkey"
 	"github.com/mevdschee/helpbuoy/proto/control"
 	"github.com/mevdschee/helpbuoy/proto/serveraddr"
+	"github.com/mevdschee/helpbuoy/proto/update"
 )
 
 // Screen is one of the window's layouts.
@@ -45,6 +45,9 @@ type View struct {
 	// ScreenAddress
 	Address    string // prefilled or current address
 	Connecting bool   // a Connect attempt is running
+	// CheckingUpdate is set while the start looks for a newer release
+	// before connecting to Address (Connecting is set too).
+	CheckingUpdate bool
 	// Error is an inline error (ScreenAddress, ScreenKeyError).
 	Error string
 
@@ -77,7 +80,8 @@ type View struct {
 
 	// Update is a newer release to offer. It is only set while the computer
 	// is idle (address screen, or waiting for a techie), so the offer never
-	// interrupts the user.
+	// interrupts the user. At the start it is offered before connecting:
+	// the window calls DismissUpdate when the user declines, which connects.
 	Update *update.Release
 }
 
@@ -107,13 +111,21 @@ type Deps struct {
 	AppVersion  string
 	UserMachine string
 	// CheckUpdate looks for a newer release; nil never checks. It is called
-	// once in the background by Start.
+	// once in the background by Start, which waits up to UpdateWait for it
+	// before connecting to the stored address.
 	// Errors (offline, the API refusing) are ignored: next start tries again.
 	CheckUpdate func(ctx context.Context) (*update.Release, error)
+	// UpdateWait is how long Start waits for CheckUpdate before it connects
+	// anyway; 0 means DefaultUpdateWait. A later result is offered when the
+	// computer is idle.
+	UpdateWait time.Duration
 	// Tune adjusts the session options, for tests.
 	Tune   func(*session.Options)
 	Logger *slog.Logger
 }
+
+// DefaultUpdateWait is how long the start waits for the update check.
+const DefaultUpdateWait = 5 * time.Second
 
 // Controller connects the window, the configuration and the server computer.
 // Its methods are meant to be called from the UI thread; they never block on
@@ -141,6 +153,11 @@ type Controller struct {
 	newRelease    *update.Release // newer release, until offered
 	updateStarted bool
 	updateCancel  context.CancelFunc
+	// pendingAddr is the stored address Start connects to once the update
+	// check is done and any offer was declined.
+	pendingAddr string
+	checking    bool        // Start waits for the update check
+	waitTimer   *time.Timer // ends the wait for the update check
 
 	saveMu sync.Mutex
 
@@ -235,6 +252,8 @@ func (c *Controller) screenLocked() View {
 
 	lost := "The connection to the server was lost. Trying again..."
 	switch p := c.st.Phase; {
+	case c.computer == nil && c.checking:
+		v.Screen, v.Address, v.Connecting, v.CheckingUpdate = ScreenAddress, c.pendingAddr, true, true
 	case c.computer == nil:
 		v.Screen = ScreenAddress
 		v.Address = c.addr
@@ -279,18 +298,50 @@ func describeKeyError(err error) string {
 	return "The key of this PC could not be loaded or created: " + err.Error()
 }
 
-// Start loads the key and the configuration and connects to the last server
-// address right away. Without one it shows the empty address screen; the
-// address can only be changed once connecting failed or after Disconnect.
+// Start loads the key and the configuration, checks for a newer release and
+// then connects to the last server address. A newer release is offered
+// first; it connects when the user declines it (DismissUpdate) or when the
+// check takes longer than UpdateWait. Without a stored address it shows the
+// empty address screen; the address can only be changed once connecting
+// failed or after Disconnect.
 func (c *Controller) Start() {
 	c.mu.Lock()
 	c.loadLocked()
-	c.startUpdateCheckLocked()
-	if addr := c.storedAddrLocked(); addr != "" && c.key != nil && c.keyErr == nil {
+	addr := c.storedAddrLocked()
+	if addr == "" || c.key == nil || c.keyErr != nil {
+		addr = ""
+	}
+	if c.startUpdateCheckLocked() && addr != "" {
+		c.pendingAddr, c.checking = addr, true
+		wait := c.d.UpdateWait
+		if wait <= 0 {
+			wait = DefaultUpdateWait
+		}
+		c.waitTimer = time.AfterFunc(wait, func() {
+			c.mu.Lock()
+			if c.checking {
+				c.log.Info("update check is slow; connecting")
+				c.checking = false
+				c.connectPendingLocked()
+			}
+			c.mu.Unlock()
+			c.update()
+		})
+	} else if addr != "" {
 		c.startComputerLocked(addr)
 	}
 	c.mu.Unlock()
 	c.update()
+}
+
+// connectPendingLocked connects to the address Start held back, unless the
+// user connected or closed the app meanwhile.
+func (c *Controller) connectPendingLocked() {
+	addr := c.pendingAddr
+	c.pendingAddr = ""
+	if addr != "" && !c.closed && c.computer == nil && c.key != nil {
+		c.startComputerLocked(addr)
+	}
 }
 
 // storedAddrLocked is the address to connect to or prefill: the last one
@@ -302,10 +353,12 @@ func (c *Controller) storedAddrLocked() string {
 	return c.cfg.ServerAddress
 }
 
-// startUpdateCheckLocked runs Deps.CheckUpdate once in the background.
-func (c *Controller) startUpdateCheckLocked() {
+// startUpdateCheckLocked runs Deps.CheckUpdate once in the background and
+// reports whether it started. When the check ends while Start waits for it,
+// it connects, unless there is a release to offer first.
+func (c *Controller) startUpdateCheckLocked() bool {
 	if c.d.CheckUpdate == nil || c.updateStarted {
-		return
+		return false
 	}
 	c.updateStarted = true
 	ctx, cancel := context.WithCancel(context.Background())
@@ -314,21 +367,28 @@ func (c *Controller) startUpdateCheckLocked() {
 		r, err := c.d.CheckUpdate(ctx)
 		if err != nil {
 			c.log.Info("update check failed", "err", err)
-			return
+		} else if r != nil {
+			c.log.Info("update available", "version", r.Version)
 		}
-		if r == nil {
-			return
-		}
-		c.log.Info("update available", "version", r.Version)
 		c.mu.Lock()
 		if c.closed {
 			c.mu.Unlock()
 			return
 		}
-		c.newRelease = r
+		waited := c.checking
+		c.checking = false
+		if c.waitTimer != nil {
+			c.waitTimer.Stop()
+		}
+		if err == nil && r != nil {
+			c.newRelease = r // offered now; DismissUpdate connects
+		} else if waited {
+			c.connectPendingLocked()
+		}
 		c.mu.Unlock()
 		c.update()
 	}()
+	return true
 }
 
 func (c *Controller) loadLocked() {
@@ -399,7 +459,7 @@ func (c *Controller) stopComputerLocked() {
 // Connect is the Connect button on the address screen.
 func (c *Controller) Connect(text string) {
 	c.mu.Lock()
-	if c.closed || c.key == nil || c.computer != nil {
+	if c.closed || c.key == nil || c.computer != nil || c.checking {
 		c.mu.Unlock()
 		return
 	}
@@ -410,6 +470,7 @@ func (c *Controller) Connect(text string) {
 		c.inputErr = capitalize(err.Error()) + "."
 	} else {
 		c.inputErr = ""
+		c.pendingAddr, c.checking = "", false
 		c.startComputerLocked(a.String())
 	}
 	c.mu.Unlock()
@@ -468,6 +529,7 @@ func (c *Controller) RemoveKey() error {
 	err := c.d.RemoveKey()
 	if err == nil {
 		c.addr, c.inputErr, c.lastErr = "", "", nil
+		c.pendingAddr, c.checking = "", false
 		c.loadLocked()
 	}
 	c.mu.Unlock()
@@ -482,6 +544,10 @@ func (c *Controller) Close() {
 	if c.updateCancel != nil {
 		c.updateCancel()
 	}
+	if c.waitTimer != nil {
+		c.waitTimer.Stop()
+	}
+	c.pendingAddr, c.checking = "", false
 	if c.computer != nil {
 		c.closing = c.computer.Done()
 	}
@@ -507,11 +573,13 @@ func (c *Controller) WaitClosed(d time.Duration) {
 // Version is the app version, for the update offer.
 func (c *Controller) Version() string { return c.d.AppVersion }
 
-// DismissUpdate is called once View.Update was offered, whatever the user
-// answered, so it is not offered again in this run.
+// DismissUpdate is called when the user declined View.Update, or its
+// installation failed, so it is not offered again in this run. When the
+// start held back connecting for the offer, it connects now.
 func (c *Controller) DismissUpdate() {
 	c.mu.Lock()
 	c.newRelease = nil
+	c.connectPendingLocked()
 	c.mu.Unlock()
 	c.update()
 }

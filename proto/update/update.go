@@ -1,6 +1,6 @@
-// Package update checks GitHub for a newer release of the computer and
-// downloads its MSI. It has no GUI dependencies; the window asks the user
-// and starts msiexec.
+// Package update checks GitHub for a newer release of an app (the Windows
+// client or the desk app) and downloads its MSI. It has no GUI dependencies;
+// the app asks the user and starts msiexec.
 package update
 
 import (
@@ -35,13 +35,17 @@ type Release struct {
 	MsiSize int64
 }
 
-// msiPrefix starts the client MSI's name (helpbuoy_1.2.3_amd64.msi),
-// which sets it apart from the desk app's MSI in the same release.
-const msiPrefix = "helpbuoy_"
+// The MSI name prefixes in a release: helpbuoy_1.2.3_amd64.msi for the
+// Windows client and helpbuoy-desk_1.2.3_amd64.msi for the desk app.
+const (
+	ClientMSI = "helpbuoy_"
+	DeskMSI   = "helpbuoy-desk_"
+)
 
-// ParseRelease reads a GitHub "latest release" response and finds the client
-// MSI served over https. Drafts and prereleases are ignored.
-func ParseRelease(data []byte) (Release, bool) {
+// ParseRelease reads a GitHub "latest release" response and finds the MSI
+// whose name starts with prefix (ClientMSI or DeskMSI), served over https.
+// Drafts and prereleases are ignored.
+func ParseRelease(data []byte, prefix string) (Release, bool) {
 	var r struct {
 		TagName    string `json:"tag_name"`
 		Draft      bool   `json:"draft"`
@@ -57,7 +61,7 @@ func ParseRelease(data []byte) (Release, bool) {
 	}
 	for _, a := range r.Assets {
 		name := strings.ToLower(a.Name)
-		if strings.HasPrefix(name, msiPrefix) && strings.HasSuffix(name, ".msi") && strings.HasPrefix(a.URL, "https://") {
+		if strings.HasPrefix(name, prefix) && strings.HasSuffix(name, ".msi") && strings.HasPrefix(a.URL, "https://") {
 			return Release{
 				Version: strings.TrimPrefix(r.TagName, "v"),
 				MsiURL:  a.URL, MsiName: a.Name, MsiSize: a.Size,
@@ -115,10 +119,11 @@ func parseVersion(s string) ([]int, bool) {
 }
 
 // Check asks url (normally LatestReleaseURL) for the latest release and
-// returns it if it is newer than version, or nil. A development version
+// returns it if it has an MSI named with prefix and is newer than version,
+// or nil. A development version
 // never checks. Network and HTTP errors are returned; callers that only
 // want to try again next time can ignore them.
-func Check(ctx context.Context, url, version string) (*Release, error) {
+func Check(ctx context.Context, url, version, prefix string) (*Release, error) {
 	if !IsRelease(version) {
 		return nil, nil
 	}
@@ -142,7 +147,7 @@ func Check(ctx context.Context, url, version string) (*Release, error) {
 	if err != nil {
 		return nil, err
 	}
-	r, ok := ParseRelease(data)
+	r, ok := ParseRelease(data, prefix)
 	if !ok || !Newer(r.Version, version) {
 		return nil, nil
 	}
