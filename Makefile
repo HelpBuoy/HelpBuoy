@@ -1,7 +1,7 @@
 # helpbuoy build. Run "make help" for the targets.
 #
 # Everything builds on Linux with only the Go toolchain and CGO_ENABLED=0:
-# helpbuoy-server, the Windows client, and the raylib desk app (raylib-go purego,
+# helpbuoy-server, the Windows and Linux clients, and the raylib desk app (raylib-go purego,
 # which embeds the raylib shared library per OS/arch). No Docker, no C compiler.
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -32,7 +32,7 @@ CLIENT_ICONS := $(addprefix client-windows/resources/,icon.png icon48.png icon32
 FILE_VERSION = $(shell jq -r '.RT_VERSION[]["0000"].fixed.file_version' client-windows/resources/winres.json)
 MSI := $(DIST)/helpbuoy_$(VERSION)_windows-amd64.msi
 
-.PHONY: help all test vet fuzz server client desk dist msi deb icon clean
+.PHONY: help all test vet fuzz server client client-linux desk dist msi deb icon clean
 
 help:
 	@echo "make test     run proto and server tests"
@@ -40,19 +40,20 @@ help:
 	@echo "make fuzz     short fuzz run of the fuzz targets"
 	@echo "make server   build helpbuoy-server ($(TARGETS)) into $(BIN)/"
 	@echo "make client   build the Windows client ($(ARCHES)) into $(BIN)/"
+	@echo "make client-linux  build the static X11 Linux client ($(ARCHES)) into $(BIN)/"
 	@echo "make desk     build the desk app ($(TARGETS)) into $(BIN)/"
-	@echo "make dist     desk app archives in $(DIST)/ (the client ships only as the MSI)"
+	@echo "make dist     desk app and Linux client archives in $(DIST)/ (the Windows client ships as the MSI)"
 	@echo "make msi      dist plus the client installer (needs wixl and msitools)"
 	@echo "make deb      Debian 13 package of helpbuoy-server with a systemd service (needs dpkg-deb)"
 	@echo "make icon     regenerate the lifebuoy app icon (client, copied to the desk app)"
 
-all: vet test server client desk
+all: vet test server client client-linux desk
 
 test:
-	go test ./proto/... ./server/...
+	go test ./proto/... ./server/... ./client-linux/...
 
 vet:
-	go vet ./proto/... ./server/... ./desk/... ./client-windows/...
+	go vet ./proto/... ./server/... ./desk/... ./client-windows/... ./client-linux/...
 	GOOS=windows go vet ./client-windows/... ./desk/...
 	GOOS=darwin go vet ./desk/...
 
@@ -88,14 +89,27 @@ client: $(CLIENT_SYSO)
 			-o $(BIN)/windows-$$arch/helpbuoy.exe ./client-windows || exit 1; \
 	done
 
+# The Linux client: one static binary that speaks X11 itself (jezek/xgb),
+# so it runs on any Linux desktop without installing anything.
+client-linux:
+	@for arch in $(ARCHES); do \
+		echo "helpbuoy linux/$$arch"; \
+		GOOS=linux GOARCH=$$arch go build $(GOFLAGS) -ldflags "$(LDFLAGS)" \
+			-o $(BIN)/linux-$$arch/helpbuoy ./client-linux || exit 1; \
+	done
+
 # Release archives: the desk app per OS/arch (it runs the server built in, so
 # helpbuoy-server is not packaged with it; the server ships as the Debian
-# package, make deb). macOS gets a zipped .app. The client exe is built into
-# bin/ for the MSI (make msi) and not released on its own.
-dist: desk client
+# package, make deb). macOS gets a zipped .app. The Windows client exe is
+# built into bin/ for the MSI (make msi) and not released on its own; the
+# Linux client is released as a tarball with the single static binary.
+dist: desk client client-linux
 	@rm -rf $(DIST) && mkdir -p $(DIST)
 	@for t in $(subst /,-,$(filter linux/%,$(TARGETS))); do \
 		tar -czf $(DIST)/helpbuoy-desk_$(VERSION)_$$t.tar.gz -C $(BIN)/$$t helpbuoy-desk; \
+	done
+	@for arch in $(ARCHES); do \
+		tar -czf $(DIST)/helpbuoy_$(VERSION)_linux-$$arch.tar.gz -C $(BIN)/linux-$$arch helpbuoy; \
 	done
 	@for t in $(subst /,-,$(filter windows/%,$(TARGETS))); do \
 		(cd $(BIN)/$$t && zip -q ../../$(DIST)/helpbuoy-desk_$(VERSION)_$$t.zip helpbuoy-desk.exe) || exit 1; \
