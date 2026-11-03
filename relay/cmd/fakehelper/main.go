@@ -1,7 +1,7 @@
 // Command fakehelper is a headless stand-in for the helper app, for manual
 // end-to-end checks of the relay. It connects with the key in --key-dir
 // (created if missing), prints Presence changes, can register a client key
-// (--register), and can open the first open help request (--open-first).
+// (--register), and can connect to the first online client (--connect-first).
 // Session channels from the relay are accepted: it writes one line into
 // each, prints what it receives, and with --stdin also forwards standard
 // input.
@@ -23,7 +23,7 @@ import (
 
 type options struct {
 	relay, keyDir, register, name, message string
-	openFirst, stdin, once                 bool
+	connectFirst, stdin, once              bool
 }
 
 func main() {
@@ -32,7 +32,7 @@ func main() {
 	flag.StringVar(&o.keyDir, "key-dir", "fakehelper-key", "directory with the helper key (created if missing)")
 	flag.StringVar(&o.register, "register", "", "register this client key line ('ssh-ed25519 ... user@machine')")
 	flag.StringVar(&o.name, "name", "", "client name for --register when the key has no comment")
-	flag.BoolVar(&o.openFirst, "open-first", false, "open the first open help request")
+	flag.BoolVar(&o.connectFirst, "connect-first", false, "connect to the first online client")
 	flag.StringVar(&o.message, "message", "hello from fakehelper", "line written into each session channel")
 	flag.BoolVar(&o.stdin, "stdin", false, "forward standard input into the session channel")
 	flag.BoolVar(&o.once, "once", false, "exit after the first session ends")
@@ -71,7 +71,7 @@ func run(w io.Writer, o options) error {
 
 	var seq uint32
 	next := func() uint32 { return atomic.AddUint32(&seq, 1) }
-	opened := false
+	connected := false
 	last := ""
 	for {
 		var m any
@@ -102,13 +102,13 @@ func run(w io.Writer, o options) error {
 				last = s
 				fmt.Fprint(w, s)
 			}
-			if o.openFirst && !opened {
+			if o.connectFirst && !connected {
 				for _, ci := range m.Clients {
-					if ci.Request != nil && ci.Request.State == control.RequestOpen {
-						opened = true
-						s := next()
-						fmt.Fprintf(w, "open: seq=%d request=%s client=%s\n", s, ci.Request.ID, ci.Name)
-						if err := c.Send(&control.OpenRequest{Seq: s, RequestID: ci.Request.ID}); err != nil {
+					if ci.Online && ci.Request == nil {
+						connected = true
+						s, id := next(), control.NewRequestID()
+						fmt.Fprintf(w, "connect: seq=%d request=%s client=%s\n", s, id, ci.Name)
+						if err := c.Send(&control.Connect{Seq: s, Fingerprint: ci.Fingerprint, RequestID: id}); err != nil {
 							return err
 						}
 						break

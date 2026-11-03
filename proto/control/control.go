@@ -24,37 +24,34 @@
 // Helper commands carry a Seq; the relay answers each with Reply{Seq, Error}.
 // Presence is a full snapshot, sent after Hello and after every change.
 //
-// Help requests (client side):
-//
-//	client -> relay   RequestHelp
-//	relay  -> client  RequestStateMsg{ID, open}       (always; the client needs the ID to cancel)
-//	                  or RequestStateMsg{"", rejected} when the client already has an open
-//	                  request or a running session
-//	client -> relay   CancelRequest{ID}               (allowed while open or taken; a taken
-//	                  request whose session hasn't started yet is ended, and the helper sees it
-//	                  in Presence; the relay answers RequestStateMsg{ID, cancelled})
-//	relay  -> client  RequestStateMsg{ID, taken|expired|ended} as the request changes
-//
 // Helper keys that send ClientHello anyway get Hello{helper} and the message is ignored.
 // Every connection answers the global request keepalive@openssh.com (want-reply true);
 // the relay replies true, the apps drop a connection after 3 unanswered keepalives.
 //
-// Session setup (client is the inner SSH server, helper the inner client):
+// Session setup (client is the inner SSH server, helper the inner client). A
+// session always starts from a helper and always needs the user's consent:
 //
-//	client -> relay   RequestHelp
-//	relay  -> helpers Presence (client's Request.State = open)
-//	helper -> relay   OpenRequest{Seq, RequestID}   (first helper wins)
-//	relay  -> helper  Reply{Seq}  or Reply{Seq, Error: "request is not open"}
+//	helper -> relay   Connect{Seq, Fingerprint, RequestID}  (RequestID chosen by the helper)
+//	relay  -> helper  Reply{Seq}  or Reply{Seq, Error} when the client is offline or busy
+//	relay  -> helpers Presence (client's Request.State = taken, TakenBy = helper)
 //	relay  -> client  SessionReady{RequestID, Helper...}
+//	client asks its user whether this helper may take control. If not:
+//	client -> relay   CancelRequest{RequestID}
+//	relay  -> client  RequestStateMsg{RequestID, cancelled}; helpers see it in Presence
+//	If so:
 //	client -> relay   opens channel ChannelSession, extra data = SessionChannelData
 //	relay  -> helper  opens channel ChannelSession, extra data = HelperSessionData
 //	relay splices the two channels; inner SSH runs end to end.
 //
+// The relay ends a request whose session channel did not come within its
+// session start timeout (1 min) and tells the client RequestStateMsg{ended}.
 // A session ends when either side closes its session channel; the relay then
 // closes the other one and updates Presence.
 package control
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -93,30 +90,29 @@ const (
 	// helper -> relay
 	MsgRegisterClient   MsgType = 4
 	MsgUnregisterClient MsgType = 5
-	MsgOpenRequest      MsgType = 6
+	// 6 was OpenRequest
 	// relay -> helper
 	MsgReply MsgType = 7
 	// relay -> client
 	MsgRegistered   MsgType = 8
 	MsgRequestState MsgType = 9
 	MsgSessionReady MsgType = 10
-	// client -> relay
-	MsgRequestHelp   MsgType = 11
+	// client -> relay (11 was RequestHelp)
 	MsgCancelRequest MsgType = 12
 	// relay -> any: fatal error before the relay closes the connection
 	MsgError MsgType = 13
 	// helper -> relay
 	MsgRenameClient MsgType = 14
+	MsgConnect      MsgType = 15
 )
 
 // Hello is the relay's first message on every control channel.
 type Hello struct {
-	Role          Role      `json:"role"`
-	RelayVersion  string    `json:"relay_version"`
-	ServerTime    time.Time `json:"server_time"`
-	Name          string    `json:"name,omitempty"`           // helper name or registered client user@machine
-	DisplayName   string    `json:"display_name,omitempty"`   // helpers only
-	RequestExpiry Duration  `json:"request_expiry,omitempty"` // how long an unopened request stays open
+	Role         Role      `json:"role"`
+	RelayVersion string    `json:"relay_version"`
+	ServerTime   time.Time `json:"server_time"`
+	Name         string    `json:"name,omitempty"`         // helper name or registered client user@machine
+	DisplayName  string    `json:"display_name,omitempty"` // helpers only
 }
 
 // ClientHello is sent by clients and pending connections right after opening
@@ -141,23 +137,20 @@ type ClientInfo struct {
 	RegisteredBy  string       `json:"registered_by"`
 	RegisteredAt  time.Time    `json:"registered_at"`
 	LastSeen      time.Time    `json:"last_seen"`
-	Request       *RequestInfo `json:"request,omitempty"`         // open or taken request, nil if none
+	Request       *RequestInfo `json:"request,omitempty"`         // request of a Connect, nil if none
 	InSessionWith string       `json:"in_session_with,omitempty"` // helper name while a session runs
 }
 
-// RequestState of a help request.
+// RequestState of the request a helper's Connect creates.
 type RequestState string
 
 const (
-	RequestOpen      RequestState = "open"
-	RequestTaken     RequestState = "taken"     // a helper opened it; session starting or running
-	RequestCancelled RequestState = "cancelled" // by the user
-	RequestExpired   RequestState = "expired"
-	RequestEnded     RequestState = "ended"    // its session ended
-	RequestRejected  RequestState = "rejected" // RequestHelp refused: already open or in session
+	RequestTaken     RequestState = "taken"     // a helper connected; waiting for the user, or session running
+	RequestCancelled RequestState = "cancelled" // the user refused
+	RequestEnded     RequestState = "ended"     // its session ended, or never started in time
 )
 
-// RequestInfo is a help request as helpers see it.
+// RequestInfo is the request of a helper's Connect as helpers see it.
 type RequestInfo struct {
 	ID      string       `json:"id"`
 	Created time.Time    `json:"created"`
@@ -196,10 +189,35 @@ type UnregisterClient struct {
 	Fingerprint string `json:"fingerprint"`
 }
 
-// OpenRequest takes an open help request.
-type OpenRequest struct {
-	Seq       uint32 `json:"seq"`
-	RequestID string `json:"request_id"`
+// Connect starts a session with an online client, once its user allows it.
+// RequestID is chosen by the helper (16 random bytes in hex) so it can
+// recognize the session channel that follows.
+type Connect struct {
+	Seq         uint32 `json:"seq"`
+	Fingerprint string `json:"fingerprint"`
+	RequestID   string `json:"request_id"`
+}
+
+// NewRequestID returns a random request id for Connect.
+func NewRequestID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(b)
+}
+
+// ValidRequestID accepts ids as NewRequestID makes them: 32 lower-case hex digits.
+func ValidRequestID(id string) bool {
+	if len(id) != 32 {
+		return false
+	}
+	for _, ch := range id {
+		if (ch < '0' || ch > '9') && (ch < 'a' || ch > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // Reply answers a helper command. Error is empty on success.
@@ -213,23 +231,23 @@ type Registered struct {
 	Name string `json:"name"` // registered user@machine
 }
 
-// RequestHelp files a help request. It has no content on purpose.
-type RequestHelp struct{}
-
-// CancelRequest cancels the client's open request.
+// CancelRequest refuses a helper's Connect (or ends it before the session
+// channel is opened).
 type CancelRequest struct {
 	RequestID string `json:"request_id"`
 }
 
-// RequestStateMsg tells the client what happened to its request.
+// RequestStateMsg tells the client that a request ended.
 type RequestStateMsg struct {
 	RequestID string       `json:"request_id"`
 	State     RequestState `json:"state"`
 }
 
-// SessionReady tells the client to open the session channel now. HelperKey is
-// the helper's authorized_keys line; the client accepts only this key in the
-// inner SSH handshake (and warns if a known helper name shows a different key).
+// SessionReady tells the client that a helper wants to connect. The client
+// asks its user and then opens the session channel, or sends CancelRequest.
+// HelperKey is the helper's authorized_keys line; the client accepts only this
+// key in the inner SSH handshake (and warns if a known helper name shows a
+// different key).
 type SessionReady struct {
 	RequestID         string `json:"request_id"`
 	HelperName        string `json:"helper_name"`
@@ -278,21 +296,6 @@ func UnmarshalHelperSessionData(b []byte) (HelperSessionData, error) {
 	return d, err
 }
 
-// Duration is a time.Duration that encodes as a JSON string like "1h0m0s".
-type Duration time.Duration
-
-func (d Duration) MarshalJSON() ([]byte, error) { return json.Marshal(time.Duration(d).String()) }
-
-func (d *Duration) UnmarshalJSON(b []byte) error {
-	var s string
-	if err := json.Unmarshal(b, &s); err != nil {
-		return err
-	}
-	v, err := time.ParseDuration(s)
-	*d = Duration(v)
-	return err
-}
-
 // typeOf maps message structs to their type byte.
 func typeOf(m any) (MsgType, error) {
 	switch m.(type) {
@@ -308,8 +311,8 @@ func typeOf(m any) (MsgType, error) {
 		return MsgUnregisterClient, nil
 	case *RenameClient, RenameClient:
 		return MsgRenameClient, nil
-	case *OpenRequest, OpenRequest:
-		return MsgOpenRequest, nil
+	case *Connect, Connect:
+		return MsgConnect, nil
 	case *Reply, Reply:
 		return MsgReply, nil
 	case *Registered, Registered:
@@ -318,8 +321,6 @@ func typeOf(m any) (MsgType, error) {
 		return MsgRequestState, nil
 	case *SessionReady, SessionReady:
 		return MsgSessionReady, nil
-	case *RequestHelp, RequestHelp:
-		return MsgRequestHelp, nil
 	case *CancelRequest, CancelRequest:
 		return MsgCancelRequest, nil
 	case *Error, Error:
@@ -343,8 +344,8 @@ func newOf(t MsgType) (any, error) {
 		return &UnregisterClient{}, nil
 	case MsgRenameClient:
 		return &RenameClient{}, nil
-	case MsgOpenRequest:
-		return &OpenRequest{}, nil
+	case MsgConnect:
+		return &Connect{}, nil
 	case MsgReply:
 		return &Reply{}, nil
 	case MsgRegistered:
@@ -353,8 +354,6 @@ func newOf(t MsgType) (any, error) {
 		return &RequestStateMsg{}, nil
 	case MsgSessionReady:
 		return &SessionReady{}, nil
-	case MsgRequestHelp:
-		return &RequestHelp{}, nil
 	case MsgCancelRequest:
 		return &CancelRequest{}, nil
 	case MsgError:

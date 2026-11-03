@@ -3,9 +3,9 @@
 //
 //	go run ./client-windows/internal/cmd/fakerelay -listen 127.0.0.1:5938 -register 10s
 //
-// With -register every pending key is registered after the delay; with -take
-// every help request is taken after the delay by a helper with a fresh key,
-// which runs the inner SSH client, decodes and acks the frames like the
+// With -register every pending key is registered after the delay; with
+// -connect a helper with a fresh key connects that long after a registered
+// client comes online. Once the user allows it, the helper runs the inner SSH client, decodes and acks the frames like the
 // helper app and ends the session after -session. With -png the decoded
 // screen, cursor included, is written to a PNG file every 2 s and at the end.
 package main
@@ -35,7 +35,7 @@ func main() {
 	listen := flag.String("listen", "127.0.0.1:5938", "address to listen on")
 	register := flag.Duration("register", 0, "register pending keys after this delay (0 = never)")
 	name := flag.String("name", "anna@ANNA-LAPTOP", "name for registered keys")
-	take := flag.Duration("take", 0, "take help requests after this delay (0 = never)")
+	connect := flag.Duration("connect", 0, "connect a helper this long after a registered client comes online (0 = never)")
 	var o helperOpts
 	flag.DurationVar(&o.length, "session", 10*time.Second, "end sessions after this long")
 	flag.StringVar(&o.png, "png", "", "write the helper's view of the screen to this PNG file")
@@ -52,7 +52,7 @@ func main() {
 	r, err := fakerelay.Start(*listen, fakerelay.Options{
 		AutoRegister: *register,
 		AutoName:     *name,
-		AutoTake:     *take,
+		AutoConnect:  *connect,
 		HelperName:   "alice",
 		HelperKey:    helper.Line,
 	})

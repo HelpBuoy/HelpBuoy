@@ -32,7 +32,7 @@ func TestHello(t *testing.T) {
 	hk := e.addHelper("alice")
 	_, h := e.connect(hk, control.RoleHelper)
 	if h.Name != "alice" || h.DisplayName != "Display alice" || h.RelayVersion != "test" ||
-		time.Duration(h.RequestExpiry) != time.Hour || !h.ServerTime.Equal(e.clock.Now()) {
+		!h.ServerTime.Equal(e.clock.Now()) {
 		t.Errorf("helper hello %+v", h)
 	}
 	_, h = e.connect(e.addClient("anna@PC"), control.RoleClient)
@@ -134,9 +134,8 @@ func TestMessagesPerRole(t *testing.T) {
 		ok   map[control.Role]bool
 	}{
 		{"ClientHello", &control.ClientHello{UserMachine: "x@y"}, map[control.Role]bool{control.RoleClient: true, control.RolePending: true, control.RoleHelper: true}},
-		{"RequestHelp", &control.RequestHelp{}, map[control.Role]bool{control.RoleClient: true}},
 		{"CancelRequest", &control.CancelRequest{RequestID: "x"}, map[control.Role]bool{control.RoleClient: true}},
-		{"OpenRequest", &control.OpenRequest{Seq: 1, RequestID: "x"}, map[control.Role]bool{control.RoleHelper: true}},
+		{"Connect", &control.Connect{Seq: 1, Fingerprint: "SHA256:x", RequestID: "x"}, map[control.Role]bool{control.RoleHelper: true}},
 		{"RegisterClient", &control.RegisterClient{Seq: 1, PublicKey: "bad"}, map[control.Role]bool{control.RoleHelper: true}},
 		{"UnregisterClient", &control.UnregisterClient{Seq: 1, Fingerprint: "SHA256:x"}, map[control.Role]bool{control.RoleHelper: true}},
 		{"RenameClient", &control.RenameClient{Seq: 1, Fingerprint: "SHA256:x", Name: "x"}, map[control.Role]bool{control.RoleHelper: true}},
@@ -285,11 +284,11 @@ func TestPromotion(t *testing.T) {
 	if ci := clientInfo(p, fp(k)); ci.RegisteredBy != "alice" || ci.Name != "anna@PC" || ci.UserMachine != "user@machine" {
 		t.Errorf("client info %+v", ci)
 	}
-	// The same connection now acts as a client.
-	pc.Send(&control.RequestHelp{})
-	if st := mustWait[control.RequestStateMsg](t, pc, nil); st.State != control.RequestOpen {
-		t.Errorf("request state %+v", st)
+	// The same connection now acts as a client: helpers can connect to it.
+	if msg := connect(t, h, 10, fp(k), control.NewRequestID()); msg != "" {
+		t.Errorf("connect to promoted client: %q", msg)
 	}
+	mustWait[control.SessionReady](t, pc, nil)
 
 	// Registering again, or registering a helper key, fails.
 	h.Send(&control.RegisterClient{Seq: 2, PublicKey: keyLine(k, "anna@PC")})
@@ -324,8 +323,10 @@ func TestReconnectReplaces(t *testing.T) {
 
 	ck := e.addClient("anna@PC")
 	c1, _ := e.connect(ck, control.RoleClient)
-	c1.Send(&control.RequestHelp{})
-	mustWait[control.RequestStateMsg](t, c1, nil)
+	if msg := connect(t, h2, 1, fp(ck), control.NewRequestID()); msg != "" {
+		t.Fatal(msg)
+	}
+	mustWait[control.SessionReady](t, c1, nil)
 	c2, _ := e.connect(ck, control.RoleClient)
 	waitClosed(t, c1)
 	// The old connection's request went away with it.

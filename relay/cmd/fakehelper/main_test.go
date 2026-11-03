@@ -54,12 +54,11 @@ func TestFakeHelperEndToEnd(t *testing.T) {
 	done := make(chan error, 1)
 	go func() {
 		done <- run(&out, options{relay: ln.Addr().String(), keyDir: keyDir, register: fake.KeyLine(ck.PublicKey(), "anna@PC"),
-			openFirst: true, message: "hello from fakehelper", once: true})
+			connectFirst: true, message: "hello from fakehelper", once: true})
 	}()
 	if _, err := fake.WaitFor[control.Registered](c, 5*time.Second, nil); err != nil {
 		t.Fatal(err)
 	}
-	c.Send(&control.RequestHelp{})
 	ready, err := fake.WaitFor[control.SessionReady](c, 5*time.Second, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +84,7 @@ func TestFakeHelperEndToEnd(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("fakehelper did not finish")
 	}
-	for _, want := range []string{"hello: role=helper", "reply: seq=1 ok", "open: seq=2", "session: open", "recv: hi there", "session: closed"} {
+	for _, want := range []string{"hello: role=helper", "reply: seq=1 ok", "connect: seq=2", "session: open", "recv: hi there", "session: closed"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
 		}

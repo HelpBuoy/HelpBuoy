@@ -6,6 +6,7 @@
 package ui
 
 import (
+	"context"
 	"time"
 	"unicode/utf16"
 	"unsafe"
@@ -15,6 +16,7 @@ import (
 	"github.com/rodrigocfd/windigo/win"
 
 	"github.com/mevdschee/help-me-win/client-windows/app"
+	"github.com/mevdschee/help-me-win/client-windows/session"
 )
 
 // Title is the window title.
@@ -62,7 +64,7 @@ type Window struct {
 	lnkChange    *ui.SysLink
 	// ScreenMain
 	lblName    *ui.Static
-	btnHelp    *ui.Button
+	lblWaiting *ui.Static
 	lblStatus  *ui.Static
 	lnkViewKey *ui.SysLink
 	// ScreenKeyError
@@ -74,6 +76,7 @@ type Window struct {
 	settings    *settingsDlg // the open settings window, if any
 	dialogs     int          // other modal windows open
 	updateAsked bool         // the update in the view was offered
+	relayAsked  string       // new relay fingerprint the user was warned about
 	updating    string       // status while an update is downloaded
 
 	items []item
@@ -122,7 +125,7 @@ func New(iconID uint16) *Window {
 	w.lnkChange = link(`<a>Use a different relay address</a>`)
 
 	w.lblName = static("", co.SS_CENTER)
-	w.btnHelp = button("&Request help", co.BS_PUSHBUTTON)
+	w.lblWaiting = static("", co.SS_CENTER)
 	w.lblStatus = static("", co.SS_CENTER)
 	w.lnkViewKey = link(`<a>View key</a>`)
 
@@ -147,8 +150,8 @@ func New(iconID uint16) *Window {
 		{w.lnkChange, 24, 298, 260, 20, fontNormal},
 
 		{w.lblName, 24, 44, 412, 34, fontHeading},
-		{w.btnHelp, 80, 100, 300, 84, fontBig},
-		{w.lblStatus, 24, 204, 412, 60, fontNormal},
+		{w.lblWaiting, 24, 112, 412, 34, fontBig},
+		{w.lblStatus, 24, 164, 412, 80, fontNormal},
 		{w.lnkViewKey, 290, 298, 70, 20, fontNormal},
 
 		{w.lblKeyErr, 24, 24, 412, 190, fontNormal},
@@ -176,22 +179,81 @@ func (w *Window) Render(v app.View) {
 	w.wnd.UiThread(func() { w.apply(v) })
 }
 
-// ConfirmHelperKeyChange implements app.UI with a modal dialog.
-func (w *Window) ConfirmHelperKeyChange(name, oldFP, newFP string) bool {
+// ConfirmHelper implements app.UI with a modal dialog that asks whether the
+// helper may take control. A changed helper key gets its own dialog with an
+// error icon, a warning headline and Cancel as the default button.
+func (w *Window) ConfirmHelper(ctx context.Context, h session.Helper, oldFP string) bool {
 	if w.wnd.Hwnd() == 0 {
 		return false
 	}
+	who := h.DisplayName
+	if who == "" {
+		who = h.Name
+	}
+	helper := "Helper: " + who
+	if h.DisplayName != "" && h.DisplayName != h.Name {
+		helper += " (" + h.Name + ")"
+	}
+	cfg := win.TASKDIALOGCONFIG{
+		WindowTitle: Title,
+		Flags:       co.TDF_ALLOW_DIALOG_CANCELLATION | co.TDF_POSITION_RELATIVE_TO_WINDOW,
+	}
+	if oldFP == "" {
+		cfg.HMainIcon = win.TdcIconTdi(co.TDICON_WARNING)
+		cfg.MainInstruction = "Allow " + who + " to take control of this computer?"
+		cfg.Content = helper + "\nKey fingerprint: " + h.Fingerprint + "\n\n" +
+			"Only allow this if you asked this person for help. You can take back " +
+			"control at any time by pressing Esc."
+		cfg.Buttons = []win.TASKDIALOG_BUTTON{
+			{Id: co.ID_OK, Text: "&Allow"},
+			{Id: co.ID_CANCEL, Text: "&Cancel"},
+		}
+		cfg.DefaultButtonId = uint16(co.ID_OK)
+	} else {
+		cfg.HMainIcon = win.TdcIconTdi(co.TDICON_ERROR)
+		cfg.MainInstruction = "Warning: the key of " + who + " has changed"
+		cfg.Content = helper + "\n" +
+			"Key last time: " + oldFP + "\n" +
+			"Key now: " + h.Fingerprint + "\n\n" +
+			"This may be someone pretending to be your helper. Do not continue " +
+			"unless your helper confirmed by phone that they have a new key."
+		cfg.Buttons = []win.TASKDIALOG_BUTTON{
+			{Id: co.ID_CANCEL, Text: "&Cancel"},
+			{Id: co.ID_OK, Text: "Allow &anyway"},
+		}
+		cfg.DefaultButtonId = uint16(co.ID_CANCEL)
+	}
+	// When the question becomes moot (the helper gave up, the relay
+	// connection was lost) the dialog is closed as if Cancel was pressed.
+	stop := context.AfterFunc(ctx, func() {
+		w.wnd.UiThread(w.closeTaskDialog)
+	})
+	defer stop()
 	var ok bool
 	w.wnd.UiThread(func() {
+		if ctx.Err() != nil {
+			return
+		}
 		w.bringToFront()
-		ok = ui.MsgOkCancel(w.wnd, Title,
-			"The key of helper "+name+" has changed",
-			"This helper used a different key last time. If you did not expect this, "+
-				"ask your helper by phone before you continue.\n\n"+
-				"Before: "+oldFP+"\nNow: "+newFP,
-			"&Continue anyway")
+		cfg.HwndParent = w.wnd.Hwnd()
+		id, err := win.TaskDialogIndirect(&cfg)
+		ok = err == nil && id == co.ID_OK && ctx.Err() == nil
 	})
 	return ok
+}
+
+// closeTaskDialog closes the task dialog owned by the main window, if one
+// is open; task dialogs treat WM_CLOSE as Cancel.
+func (w *Window) closeTaskDialog() {
+	main := w.wnd.Hwnd()
+	if main == 0 {
+		return
+	}
+	if dlg := main.GetLastActivePopup(); dlg != 0 && dlg != main {
+		if cls, err := dlg.GetClassName(); err == nil && cls == "#32770" {
+			dlg.PostMessage(co.WM_CLOSE, 0, 0)
+		}
+	}
 }
 
 func (w *Window) events() {
@@ -257,13 +319,6 @@ func (w *Window) events() {
 	})
 	w.btnConnect.On().BnClicked(w.connect)
 	w.btnCopy.On().BnClicked(func() { w.copyText(w.view.KeyLine, w.btnCopy) })
-	w.btnHelp.On().BnClicked(func() {
-		if w.view.Button == app.ButtonCancel {
-			w.ctrl.CancelRequest()
-		} else {
-			w.ctrl.RequestHelp()
-		}
-	})
 	w.btnRemoveKey.On().BnClicked(w.confirmRemoveKey)
 	w.lnkChange.On().NmClick(func(_ *win.NMLINK) { w.ctrl.ChangeAddress() })
 	w.lnkSettings.On().NmClick(func(_ *win.NMLINK) { w.showSettings() })
@@ -393,28 +448,28 @@ func (w *Window) apply(v app.View) {
 
 	main := v.Screen == app.ScreenMain
 	show(w.lblName, main)
-	show(w.btnHelp, main)
+	show(w.lblWaiting, main)
 	show(w.lblStatus, main)
 	show(w.lnkViewKey, main)
 	if main {
 		setText(w.lblName, v.Name)
-		if v.Button == app.ButtonCancel {
-			setText(w.btnHelp, "&Cancel request")
-		} else {
-			setText(w.btnHelp, "&Request help")
+		waiting := ""
+		if v.Ready {
+			waiting = "Waiting for your helper"
 		}
-		w.btnHelp.Hwnd().EnableWindow(v.ButtonEnabled && w.updating == "")
+		setText(w.lblWaiting, waiting)
 		status := v.Error
 		if status == "" {
 			status = v.Notice
+		}
+		if status == "" && v.Ready {
+			status = "Your helper can now ask to connect. You will be asked first, " +
+				"and pressing Esc always takes back control."
 		}
 		if w.updating != "" {
 			status = w.updating
 		}
 		setText(w.lblStatus, status)
-		if entered {
-			w.btnHelp.Focus()
-		}
 	}
 
 	keyErr := v.Screen == app.ScreenKeyError
@@ -428,7 +483,7 @@ func (w *Window) apply(v app.View) {
 	show(w.lnkSettings, v.Screen >= app.ScreenAddress && v.Screen <= app.ScreenMain)
 
 	// During a session the window gets out of the way; afterwards it comes
-	// back with the Request help button.
+	// back.
 	if v.InSession && !prev.InSession {
 		w.wnd.Hwnd().ShowWindow(co.SW_MINIMIZE)
 	} else if !v.InSession && prev.InSession {
@@ -443,6 +498,51 @@ func (w *Window) apply(v app.View) {
 		w.settings.apply(v)
 	}
 	w.maybeOfferUpdate()
+	w.maybeWarnRelayKey()
+}
+
+// maybeWarnRelayKey shows the relay key change warning once per new key.
+func (w *Window) maybeWarnRelayKey() {
+	hk := w.view.RelayKeyChange
+	if hk == nil || w.relayAsked == hk.NewFingerprint || w.settings != nil || w.dialogs > 0 || w.wnd.Hwnd() == 0 {
+		return
+	}
+	w.relayAsked = hk.NewFingerprint
+	change := *hk
+	// Ask outside the current message handler, like the update offer.
+	go w.wnd.UiThread(func() { w.warnRelayKey(change) })
+}
+
+// warnRelayKey asks whether to trust the relay's new key. Cancel, the
+// default, keeps the client stopped.
+func (w *Window) warnRelayKey(hk session.HostKeyChangedError) {
+	if w.view.RelayKeyChange == nil || w.view.RelayKeyChange.NewFingerprint != hk.NewFingerprint {
+		return
+	}
+	w.bringToFront()
+	cfg := win.TASKDIALOGCONFIG{
+		HwndParent:      w.wnd.Hwnd(),
+		WindowTitle:     Title,
+		Flags:           co.TDF_ALLOW_DIALOG_CANCELLATION | co.TDF_POSITION_RELATIVE_TO_WINDOW,
+		HMainIcon:       win.TdcIconTdi(co.TDICON_ERROR),
+		MainInstruction: "Warning: the identity of the relay has changed",
+		Content: "Key last time: " + hk.OldFingerprint + "\n" +
+			"Key now: " + hk.NewFingerprint + "\n\n" +
+			"This may be someone pretending to be your relay. help-me-win stopped connecting. " +
+			"Only continue if your helper confirmed by phone that the relay has a new key " +
+			"and the new fingerprint above matches what they read to you.",
+		Buttons: []win.TASKDIALOG_BUTTON{
+			{Id: co.ID_CANCEL, Text: "&Cancel"},
+			{Id: co.ID_OK, Text: "&Trust the new key"},
+		},
+		DefaultButtonId: uint16(co.ID_CANCEL),
+	}
+	w.dialogs++
+	id, err := win.TaskDialogIndirect(&cfg)
+	w.dialogs--
+	if err == nil && id == co.ID_OK {
+		w.ctrl.TrustRelayKey(hk.NewFingerprint)
+	}
 }
 
 // bringToFront restores the window and tries to make it the foreground

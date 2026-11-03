@@ -51,7 +51,6 @@ type Config struct {
 	SessionOpenTimeout time.Duration // time for a helper to accept the session channel, 30 s
 	PresenceInterval   time.Duration // minimum time between Presence snapshots to one helper, 100 ms
 
-	RequestExpiry        time.Duration // 1 h
 	SessionStartTimeout  time.Duration // 1 min
 	PendingIdle          time.Duration // 24 h
 	MaxSessionsPerHelper int           // 20
@@ -144,7 +143,6 @@ func New(cfg Config) (*Server, error) {
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.reg = registry.New(registry.Config{
 		Now:                  cfg.Now,
-		RequestExpiry:        cfg.RequestExpiry,
 		SessionStartTimeout:  cfg.SessionStartTimeout,
 		PendingIdle:          cfg.PendingIdle,
 		MaxSessionsPerHelper: cfg.MaxSessionsPerHelper,

@@ -1,7 +1,7 @@
 //go:build windows
 
 // Command help-me-win is the Windows client: the person who needs help runs
-// it and presses Request help.
+// it, and allows a helper to take control when the helper connects.
 //
 // Hidden flags for testing: --demo uses a key that only lives in memory and
 // a temporary settings folder, so the real key and settings are untouched,

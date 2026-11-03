@@ -67,9 +67,7 @@ func newDemo(a *App) *demo {
 	}
 	p := &control.Presence{Helpers: []control.HelperInfo{{Name: "helper", DisplayName: "Helper", Online: true}, {Name: "bob", DisplayName: "Bob", Online: true}}}
 	anna := client("anna@ANNA-LAPTOP", true)
-	anna.Request = &control.RequestInfo{ID: "demo-1", Created: now.Add(-3 * time.Minute), State: control.RequestOpen}
 	jan := client("jan@KANTOOR-PC", true)
-	jan.Request = &control.RequestInfo{ID: "demo-2", Created: now.Add(-40 * time.Second), State: control.RequestOpen}
 	oma := client("oma@WOONKAMER", true)
 	oma.Request = &control.RequestInfo{ID: "demo-3", Created: now.Add(-10 * time.Minute), State: control.RequestTaken, TakenBy: "bob"}
 	oma.InSessionWith = "bob"
@@ -135,30 +133,33 @@ func (d *demo) UnregisterClient(fp string) <-chan error {
 	return done(fmt.Errorf("unknown client"))
 }
 
-func (d *demo) OpenRequest(id string) <-chan error {
+// Connect starts a demo session right away, as if the user allowed it.
+func (d *demo) Connect(fp, _ string) <-chan error {
 	p := d.a.presence
 	for i := range p.Clients {
 		c := &p.Clients[i]
-		if c.Request == nil || c.Request.ID != id {
+		if c.Fingerprint != fp {
 			continue
 		}
-		if c.Request.State != control.RequestOpen {
-			return done(fmt.Errorf("request is not open"))
+		if !c.Online {
+			return done(fmt.Errorf("client is not online"))
 		}
-		c.Request = nil
+		if c.Request != nil || c.InSessionWith != "" {
+			return done(fmt.Errorf("client is busy"))
+		}
 		c.InSessionWith = d.a.me
 		d.a.addSession(d.startSession(c.Name, c.Fingerprint))
 		return done(nil)
 	}
-	return done(fmt.Errorf("request is not open"))
+	return done(fmt.Errorf("client is not online"))
 }
 
-// openFirstRequest opens the first open request, for --page session.
-func (d *demo) openFirstRequest() {
+// connectFirst connects to the first online client, for --page session.
+func (d *demo) connectFirst() {
 	online, _ := sortedClients(d.a.presence)
 	for _, c := range online {
-		if c.Request != nil && c.Request.State == control.RequestOpen {
-			d.a.openRequest(c)
+		if c.Request == nil && c.InSessionWith == "" {
+			d.a.connectClient(c)
 			return
 		}
 	}

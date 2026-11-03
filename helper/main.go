@@ -56,7 +56,6 @@ func main() {
 		rl.SetWindowIcon(*img)
 		rl.UnloadImage(img)
 	}
-	views.SetNotifyIcon(iconPNG)
 	if uploadBench {
 		perf.Run(os.Stdout)
 		return

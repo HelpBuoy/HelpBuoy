@@ -7,7 +7,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net"
 	"sync"
@@ -39,12 +38,12 @@ type Options struct {
 	// AutoName is the name used by AutoRegister (default "demo@PC"); the
 	// real relay takes it from the comment of the pasted key line.
 	AutoName string
-	// AutoTake takes every open request after this delay and sends
-	// SessionReady with HelperName and HelperKey; 0 = never.
-	AutoTake   time.Duration
-	HelperName string
-	HelperKey  string
-	Logger     *slog.Logger
+	// AutoConnect connects helper HelperName (key HelperKey) this long
+	// after a registered client comes online; 0 = never.
+	AutoConnect time.Duration
+	HelperName  string
+	HelperKey   string
+	Logger      *slog.Logger
 }
 
 // Relay is a running fake relay.
@@ -60,7 +59,6 @@ type Relay struct {
 	mu         sync.Mutex
 	registered map[string]string // fingerprint -> name
 	conns      map[string]*conn  // online, by fingerprint
-	nextReq    int
 	refuseAll  bool
 }
 
@@ -146,6 +144,7 @@ func (r *Relay) Register(fp, name string) {
 	r.mu.Unlock()
 	if c != nil && !was {
 		c.ctl.Send(control.Registered{Name: name})
+		r.autoConnect(fp)
 	}
 }
 
@@ -177,27 +176,34 @@ func (r *Relay) Kick(fp string) {
 	}
 }
 
-// Take marks the open request of fp as taken and sends SessionReady.
-func (r *Relay) Take(fp, helperName, helperKey string) error {
+// Connect plays a helper connecting to fp: it sends SessionReady with a new
+// request id and returns that id.
+func (r *Relay) Connect(fp, helperName, helperKey string) (string, error) {
+	id := control.NewRequestID()
 	r.mu.Lock()
 	c := r.conns[fp]
-	var id string
 	if c != nil {
-		id, c.reqID = c.reqID, ""
+		c.reqID = id
 	}
 	r.mu.Unlock()
-	if id == "" {
-		return errors.New("fakerelay: no open request")
+	if c == nil {
+		return "", errors.New("fakerelay: client not online")
 	}
-	if err := c.ctl.Send(control.RequestStateMsg{RequestID: id, State: control.RequestTaken}); err != nil {
-		return err
-	}
-	return c.ctl.Send(control.SessionReady{
+	return id, c.ctl.Send(control.SessionReady{
 		RequestID:         id,
 		HelperName:        helperName,
 		HelperDisplayName: "Helper " + helperName,
 		HelperKey:         helperKey,
 	})
+}
+
+// autoConnect schedules a Connect for AutoConnect.
+func (r *Relay) autoConnect(fp string) {
+	if r.opts.AutoConnect > 0 {
+		time.AfterFunc(r.opts.AutoConnect, func() {
+			r.Connect(fp, r.opts.HelperName, r.opts.HelperKey)
+		})
+	}
 }
 
 func (r *Relay) serve() {
@@ -304,7 +310,9 @@ func (r *Relay) control(c *conn) {
 	if err := c.ctl.Send(hello); err != nil {
 		return
 	}
-	if !registered && r.opts.AutoRegister > 0 {
+	if registered {
+		r.autoConnect(c.fp)
+	} else if r.opts.AutoRegister > 0 {
 		time.AfterFunc(r.opts.AutoRegister, func() {
 			name := r.opts.AutoName
 			if name == "" {
@@ -319,18 +327,6 @@ func (r *Relay) control(c *conn) {
 			return
 		}
 		switch m := m.(type) {
-		case *control.RequestHelp:
-			r.mu.Lock()
-			r.nextReq++
-			id := fmt.Sprintf("req-%d", r.nextReq)
-			c.reqID = id
-			r.mu.Unlock()
-			c.ctl.Send(control.RequestStateMsg{RequestID: id, State: control.RequestOpen})
-			if r.opts.AutoTake > 0 {
-				time.AfterFunc(r.opts.AutoTake, func() {
-					r.Take(c.fp, r.opts.HelperName, r.opts.HelperKey)
-				})
-			}
 		case *control.CancelRequest:
 			r.mu.Lock()
 			if c.reqID == m.RequestID {

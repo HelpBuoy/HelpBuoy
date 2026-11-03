@@ -13,6 +13,20 @@ import (
 // the pinned one. It is a hard error: the client stops connecting.
 var ErrHostKeyChanged = errors.New("relay identity changed")
 
+// HostKeyChangedError is the ErrHostKeyChanged a relay caused by showing
+// another host key than the pinned one.
+type HostKeyChangedError struct {
+	OldFingerprint string // pinned
+	NewFingerprint string // shown by the relay now
+	NewKeyLine     string // authorized_keys line of the new key, to pin it if the user trusts it
+}
+
+func (e *HostKeyChangedError) Error() string {
+	return ErrHostKeyChanged.Error() + ": was " + e.OldFingerprint + ", now " + e.NewFingerprint
+}
+
+func (e *HostKeyChangedError) Unwrap() error { return ErrHostKeyChanged }
+
 // ErrNotRelay is returned when the other end is not a help-me-win relay.
 var ErrNotRelay = errors.New("not a help-me-win relay")
 
@@ -95,7 +109,8 @@ func Describe(err error) string {
 	case KindRefusedKey:
 		return "The relay refused this PC for now. Try again later."
 	case KindHostKeyChanged:
-		return "The relay's identity changed. Ask your helper before you continue; to connect anyway, use Reset in the settings."
+		return "The relay's identity changed, so help-me-win stopped connecting. Ask your helper before you continue. " +
+			"Restart help-me-win to answer the warning again, or use Reset in the settings."
 	case KindHelperKey:
 		return "This key belongs to a helper on this relay and can't be used here."
 	case KindRelay:

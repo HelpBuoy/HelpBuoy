@@ -35,7 +35,7 @@ func registeredWithHelper(t *testing.T, e *env) {
 }
 
 func readyMain(v View) bool {
-	return v.Screen == ScreenMain && v.ButtonEnabled && v.Button == ButtonRequest
+	return v.Screen == ScreenMain && v.Ready
 }
 
 func waitOffline(t *testing.T, r *fakerelay.Relay, fp string) {
@@ -77,9 +77,10 @@ func TestChangeRelayRegistered(t *testing.T) {
 	}
 	waitOffline(t, e.relay, e.fp())
 
-	// The new relay works: a request goes there.
-	c.RequestHelp()
-	ui.wait(t, "cancel button", func(v View) bool { return v.Button == ButtonCancel && v.ButtonEnabled })
+	// The new relay works: a helper there can connect.
+	connectHelper(t, relay2, e.fp())
+	<-relay2.Sessions()
+	ui.wait(t, "in session", func(v View) bool { return v.InSession })
 }
 
 func TestChangeRelayPending(t *testing.T) {
@@ -170,8 +171,9 @@ func TestChangeRelayFailureKeepsOldRelay(t *testing.T) {
 	if !readyMain(v) {
 		t.Fatalf("%+v", v)
 	}
-	c.RequestHelp()
-	ui.wait(t, "old relay still works", func(v View) bool { return v.Button == ButtonCancel && v.ButtonEnabled })
+	connectHelper(t, e.relay, e.fp())
+	<-e.relay.Sessions()
+	ui.wait(t, "old relay still works", func(v View) bool { return v.InSession })
 }
 
 func TestChangeRelayCancelled(t *testing.T) {
@@ -204,28 +206,20 @@ func TestChangeRelayBlocked(t *testing.T) {
 	c.Start()
 	ui.wait(t, "ready", readyMain)
 
-	c.RequestHelp()
-	v := ui.wait(t, "requested", func(v View) bool { return v.Button == ButtonCancel && v.ButtonEnabled })
-	if !strings.Contains(v.Relay.Blocked, "Cancel") {
-		t.Fatalf("not blocked during a request: %+v", v.Relay)
+	gate := make(chan struct{})
+	ui.answer(false, gate)
+	connectHelper(t, e.relay, e.fp())
+	v := ui.wait(t, "asking", func(v View) bool { return v.Relay.Blocked != "" })
+	if !strings.Contains(v.Relay.Blocked, "connecting") {
+		t.Fatalf("not blocked while a helper connects: %+v", v.Relay)
 	}
 	c.ChangeRelay(relay2.Addr()) // ignored
 	time.Sleep(50 * time.Millisecond)
 	if relay2.Online(e.fp()) || c.View().Relay.Connecting {
-		t.Fatal("changed during a request")
+		t.Fatal("changed while a helper connects")
 	}
 
-	helper, _ := identity.Ephemeral("alice")
-	var err error
-	for i := 0; i < 100; i++ {
-		if err = e.relay.Take(e.fp(), "alice", helper.Line); err == nil {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
+	close(gate)
 	sess := <-e.relay.Sessions()
 	v = ui.wait(t, "in session", func(v View) bool { return v.InSession })
 	if !strings.Contains(v.Relay.Blocked, "session") {
@@ -268,16 +262,17 @@ func TestUpdateOfferedWhenIdle(t *testing.T) {
 		checked <- struct{}{}
 		return release, nil
 	}
-	c.RequestHelp() // nothing yet; no client
 	c.Start()
 	ui.wait(t, "offer", func(v View) bool { return v.Update == release && readyMain(v) })
 
-	c.RequestHelp()
-	v := ui.wait(t, "requested", func(v View) bool { return v.Button == ButtonCancel })
+	gate := make(chan struct{})
+	ui.answer(true, gate)
+	connectHelper(t, e.relay, e.fp())
+	v := ui.wait(t, "asking", func(v View) bool { return v.Screen == ScreenMain && !v.Ready })
 	if v.Update != nil {
-		t.Fatal("offered while a request is open")
+		t.Fatal("offered while a helper connects")
 	}
-	c.CancelRequest()
+	close(gate)
 	ui.wait(t, "offer again", func(v View) bool { return v.Update == release && readyMain(v) })
 	c.DismissUpdate()
 	ui.wait(t, "dismissed", func(v View) bool { return v.Update == nil })

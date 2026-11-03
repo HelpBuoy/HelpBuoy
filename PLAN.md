@@ -20,9 +20,10 @@ other, and splices their channels together.
   (generated once on first start, kept in AppData) with a **Copy** button, so the user can
   send it to the helper over a chat such as WhatsApp. After the first successful connection
   the address is stored, and later starts go straight to the relay. Once a helper has registered that key, the client shows up as online for all
-  helpers. A session only ever starts from the client: the user presses **Request help**,
-  and helpers see the request and can open a session for it. Talking about the problem
-  happens over WhatsApp or the phone, not in the apps.
+  helpers. Helpers ask to help: a helper presses **Connect** on an online client, and the
+  client asks its user whether that helper (display name and key fingerprint) may take
+  control. Nothing happens without that approval. Talking about the problem happens over
+  WhatsApp or the phone, not in the apps.
   A client is helped by **one helper at a time**; a helper can help many clients at once.
 
 What a session can do, and nothing more:
@@ -52,8 +53,8 @@ Performance target: **as fast as RDP** for normal desktop work (section 5).
   other helpers simply see the relay as unreachable until it is started again.
 - **Identity = key**. The relay maps each public key to exactly one of: helper, registered
   client, or unknown. User names in the SSH handshake are ignored (clients send `sv`).
-- **One group per relay**: every helper on a relay sees every registered client and every
-  help request. Separate groups of helpers use separate relays.
+- **One group per relay**: every helper on a relay sees every registered client and can ask
+  to connect to it. Separate groups of helpers use separate relays.
 
 ### Stored client configuration
 
@@ -81,12 +82,12 @@ the key.
 ┌──────────────┐               ┌────────────────────────────────┐               ┌──────────────────┐
 │ raylib helper│── key: alice ▶│ auth: key -> helper / client / │◀ key: anna-pc │ client (windigo) │
 │ own app key, │               │       unknown                  │               │ persistent key   │
-│ added by     │◀── presence ──│ registry: online helpers,      │◀─ requests ── │ (own app key)    │
+│ added by     │◀── presence ──│ registry: online helpers,      │── connect ──▶ │ (own app key)    │
 │ relay admin  │── register ──▶│   online clients               │               │ sv-control       │
-│              │── open     ──▶│ help requests                  │               │                  │
+│              │── connect  ──▶│ pending connects               │◀─ allow/deny ─│ asks its user    │
 │ accepts      │◀─ sv-session ─│ splice: one channel pair per   │◀─ sv-session ─│ opens a session  │
-│ sv-session   │               │   helper<->client session      │               │ per opened       │
-│ (one per     │               │                                │               │ helper           │
+│ sv-session   │               │   helper<->client session      │               │ once the user    │
+│ (one per     │               │                                │               │ allowed it       │
 │ client)      │               └────────────────────────────────┘               │                  │
 │ inner SSH    │ ═════════════ inner SSH through each spliced channel ═══════════│ inner SSH server │
 │ client, pins │     channels: screen (client→helper), input (helper→client)     │ host key = its   │
@@ -133,27 +134,29 @@ or ending.
 
 1. Client and helpers are connected to the relay with their persistent keys. Helpers see
    `anna@ANNA-LAPTOP` in their list of connected clients.
-2. **The user presses Request help** in the client, usually while on the phone or in a
-   WhatsApp chat with the helper. Helpers can't start a session on their own; there is no
-   Connect button on the helper side.
-3. **Helpers see the request** on that client's row in the helper app (7.2), with a
-   notification if the app isn't focused, and **Open session**. Requests stay visible to
-   helpers who come online later. The first helper to open it takes it; for the others the
-   row just loses its button. The user can **Cancel** an open request; requests nobody opens
-   expire after 1 hour.
-4. The client opens a `hmw-session@help-me-win` channel for that helper. The relay opens a
-   matching channel to the helper's connection and splices the two (3.6).
+2. **The helper presses Connect** on the client's row (7.2), usually while on the phone or
+   in a WhatsApp chat with the user. The relay creates a request taken by that helper and
+   sends the client `SessionReady`. Other helpers see the client as busy; if two helpers
+   connect at the same moment, the first one wins.
+3. **The client asks the user** whether that helper may take control, showing the helper's
+   display name, name and key fingerprint, with a separate warning if the key changed (3.5).
+   If the user refuses, the client cancels the request and the helper sees "Not allowed".
+   The relay ends a request whose session hasn't started within 1 minute, so the user has
+   that long to answer; the client then closes the question by itself.
+4. Once the user allows it, the client opens a `hmw-session@help-me-win` channel for that
+   helper. The relay opens a matching channel to the helper's connection and splices the
+   two (3.6).
 5. **Inner SSH** runs over the spliced channel (section 4). The client is the SSH server with
    its persistent key as host key, the helper is the SSH client with its own key, which the relay
    announced in `SessionReady`. Both check the other end's key (3.5).
 6. **The client window minimizes**, without any banner or status text, so the helper sees
    the user's desktop and can do the work.
 7. **The helper ends the session** when done, with **End session** in the viewer or by
-   closing the session's tab. The client window comes back, ready for the next request.
-8. If more is needed later, the user presses **Request help** again: a new request and a new
-   session.
-9. **One helper per client.** While a session runs, no other helper can connect to that
-   client, and the client can't file a new request.
+   closing the session's tab. The client window comes back, waiting for the next helper.
+8. If more is needed later, the helper presses **Connect** again and the user is asked
+   again: every session needs the user's approval.
+9. **One helper per client.** While a helper is connecting or a session runs, no other
+   helper can connect to that client.
 10. **Other ways a session ends**: Esc on the client's own keyboard (the user takes back
    control), exiting the client application (which also takes the client offline), or
    revoking the client key. There is no Disconnect button on the client. The relay
@@ -222,7 +225,7 @@ The relay is deny-by-default. The role comes from the key alone.
 | Role | Key is | Allowed |
 |---|---|---|
 | **helper** | listed as a helper key in `state.json` (plain Ed25519 public key, no certificates) | one `sv-control` channel; incoming `sv-session` channels; control messages |
-| **client** | registered | one `sv-control` channel; one open help request at a time; outgoing `sv-session` channels, only toward the helper that opened its current request, and only one session at a time |
+| **client** | registered | one `sv-control` channel; one helper connecting or in session at a time; outgoing `sv-session` channels, only toward the helper whose `Connect` its user allowed, and only one session at a time |
 | **pending** | unknown | nothing but receiving `Registered`; not shown to any helper (helpers register keys from the pasted key line, never from a list); idle timeout 24 h |
 
 Not implemented at all: `session`, `shell`, `exec`, `subsystem`, `pty`, `direct-tcpip`,
@@ -315,19 +318,22 @@ Role caps and timeouts:
   `known_hosts`. Its host key is pinned on the first successful connection. Someone who
   controls the network at exactly that moment could substitute their own relay. Mitigation:
   the client shows the relay fingerprint, and the helper app shows it next to the key it just
-  registered, so it can be compared on the same call. After that any change is a hard error
-  ("relay identity changed"), never a silent update.
+  registered, so it can be compared on the same call. After that any change stops the
+  client ("relay identity changed") and shows a warning with the old and new fingerprints,
+  with Cancel as the default. Only if the user explicitly trusts the new key (after checking
+  it with the helper by phone) is it pinned; never a silent update.
 - **Helpers are vouched for by the relay.** Without certificates the client has no
   independent way to know the helpers, so it accepts the helper key the (pinned) relay
   announces in `SessionReady`. On top of that, each helper's key is pinned per helper name
-  the first time (TOFU again): if `alice` later shows up with a different key, the client
-  warns before connecting. The client's settings show the last helper's name and key
+  the first time (TOFU again). Before every session the client asks the user whether the
+  helper may take control, showing its display name and key fingerprint; if `alice` later
+  shows up with a different key, that question also carries a warning. The client's settings show the last helper's name and key
   fingerprint; the main window stays free of status text.
 - **Client** is trusted because a helper registered its key after receiving it (or its
   fingerprint) over a trusted channel. The helper app pins registered client keys in the inner
   handshake, independent of what the relay says.
-- **The user stays in charge**: every session starts from a request the user made
-  at the PC, helpers can't initiate anything, and Esc or exiting the client application always ends the
+- **The user stays in charge**: helpers can only ask; every session needs the user's
+  approval at the PC for that helper, and Esc or exiting the client application always ends the
   session locally, even if the relay misbehaves.
 - **Pending keys** are never shown to anyone.
 - **Relay compromise**: sees metadata (who, when, how much) and can deny service. Because the
@@ -522,21 +528,22 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   with the address prefilled.
 
 ### 6.3 Main window
-- One big **Request help** button and the client's name (`anna@ANNA-LAPTOP`). After
-  pressing it, the button becomes **Cancel request** until a helper opens it; no other status
-  text. Two small links: **View key** (the public key line, fingerprint and **Copy key**, for
+- The client's name (`anna@ANNA-LAPTOP`) and "Waiting for your helper", with one line
+  saying the user will be asked first and that Esc takes back control. There is nothing to
+  press: the helper connects, and the client asks the question from section 1 (Session,
+  step 3) in a modal dialog. Two small links: **View key** (the public key line, fingerprint and **Copy key**, for
   sending the key to a helper again) and **Settings**.
 - **Settings** shows the relay address and fingerprints and offers **Change relay address**:
   the new relay is tried with a second connection while the old one stays in use, its host
   key is pinned on first use, and only when it answers does the client switch (to the main
   window if the key is registered there, otherwise to the key screen). If it fails, nothing
   changes. Known helper pins are cleared on a switch, since helper names are only unique
-  within one relay. Not possible while a request is open or a session runs. Also: **Check for
+  within one relay. Not possible while a helper is connecting or a session runs. Also: **Check for
   updates on startup**, **Reset** (forget relay and registration, keep the key and
   preferences) and **Remove key**.
 - **During a session** the window is minimized (`SW_MINIMIZE`), nothing else is shown.
 - **When the session ends** (the helper ended it, or Esc), the window is restored and brought
-  to the front with the **Request help** button again.
+  to the front, waiting for the next helper.
 - No tray icon and no automatic start in the first version. The client runs while its window
   is open (minimizing is fine). Exiting the application (closing the window, also from the
   taskbar while minimized) ends any session and disconnects from the relay. The user starts the exe when they need help.
@@ -609,10 +616,8 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   `rl.LoadFontFromMemory` at the monitor's scale; the window uses `FLAG_WINDOW_HIGHDPI` and
   `FLAG_WINDOW_RESIZABLE`.
 - **Idle CPU**: with no session open the loop runs at a low frame rate (about 10 fps), enough
-  to show new requests promptly, since raylib can't be woken from another goroutine; during a
+  to show presence changes promptly, since raylib can't be woken from another goroutine; during a
   session or while the user is interacting it runs at the monitor's refresh rate.
-- **Notifications** use the OS directly through `github.com/gen2brain/beeep` (pure Go), since
-  raylib has none.
 - **Threading**: raylib calls stay on the main goroutine (`runtime.LockOSThread`); network and
   decoding goroutines hand results over through channels drained once per frame.
 
@@ -644,16 +649,15 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   assembled by a script (Info.plist, `.icns` written in Go from the PNG icon). No installer,
   no Docker image.
 
-### 7.2 Client list and requests
+### 7.2 Client list and connecting
 - **Connected clients** is the left column of the window: one row per online client
   (`user@machine`). Registered clients that are offline are in a collapsed "Offline" section
   below.
-- **Requests**: when a client presses Request help (its `Presence` entry gets an open request), its row is highlighted
-  with the time of the request and an **Open session** button. A notification
-  (`beeep`) is shown only for new requests and only when the window isn't focused; clicking it brings the app to the front on that client. When another helper
-  opens it, or the user cancels it, the button just disappears.
-- A row without an open request has no button: a session can only be opened for a request
-  the user made.
+- **Connect**: every online client that nobody is helping has a **Connect** button. It
+  sends `Connect` with a fresh request id; the row then says "Waiting for the user to allow
+  the session…" until the session channel arrives (a tab opens) or the request goes away,
+  which shows "Not allowed: the user refused or did not answer". Rows of clients another
+  helper is connecting to or helping show that instead of the button.
 - **Register client** (a page in the work area): a text field for the key line the user sent in the chat. It tolerates
   what chat apps do to pasted text: line breaks, leading/trailing spaces, quotes, non-breaking
   spaces, and a preceding message ("here is my key: ssh-ed25519 ..."). Accepts only
@@ -762,23 +766,24 @@ client can stay online in the background; `client-macos/` and `client-linux/` re
   and the next start generates a new key, tile codecs (decode(encode(x)) == x for lossless), cache consistency between encoder
   and decoder.
 - `relay`: Go tests with `x/crypto/ssh` clients: pending key can do nothing, client can only
-  open sessions for its own current request toward the helper that opened it, a helper
-  can't cause a session without a request, only one helper wins when several open the same request, a second
+  open sessions for a `Connect` it was sent, toward that helper, a helper can't cause a
+  session without the client opening one, only one helper wins when several connect at once, a second
   helper can never open a session to a client that is already in one, removed helpers and clients are refused at once, 100 helpers and 1000 clients connected at once,
   relay restart keeps registrations, one attempt per key per second (a refused attempt
   leaves the existing connection alone), 500 registered clients behind one IP all connect
   while that IP's pending slots are full, a flood of fresh keys from one IP fills only that
   IP's pending slots, and nothing stays blocked after failed handshakes.
 - Malicious relay test: a patched relay that splices a helper to the wrong client (the helper
-  app must refuse the inner handshake), changes its host key (both apps must refuse), or
+  app must refuse the inner handshake), changes its host key (both apps must refuse; the client warns and only reconnects if the
+  user trusts the new key), or
   announces a different key for a helper the client already knows (the client must warn
   and not connect without the user's consent).
 - Performance: the replay harness from phase 3 in CI (client encoder against helper decoder,
   no GUI), with regression thresholds; `tc netem` runs at 20 ms / 80 ms RTT and 10 / 50 Mbit/s.
 - Session end tests (`fakehelper`): End session on the helper closes the session and
   restores the client window; local Esc ends the session and no helper input is injected
-  after it; injected Esc does not end the session; the next Request help is a new request
-  with a new session; closing the client window ends the session and takes the client
+  after it; injected Esc does not end the session; the next Connect asks the user again
+  and gives a new session; refusing a Connect starts nothing; closing the client window ends the session and takes the client
   offline.
 - Windows: capture and key-map tests on a `windows-latest` runner; manual matrix of Windows 11
   at 100/150/200% scaling, multiple monitors, RDP session, elevated window (including Esc while an elevated window has focus), and a side-by-side

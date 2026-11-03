@@ -49,7 +49,7 @@ func TestFakeClientEndToEnd(t *testing.T) {
 	var out syncBuf
 	done := make(chan error, 1)
 	go func() {
-		done <- run(&out, ln.Addr().String(), keyDir, "anna@PC", true, "hello from fakeclient", true)
+		done <- run(&out, ln.Addr().String(), keyDir, "anna@PC", false, "hello from fakeclient", true)
 	}()
 	// Wait for the client's key file, then register it like a helper would.
 	var pub []byte
@@ -62,12 +62,12 @@ func TestFakeClientEndToEnd(t *testing.T) {
 		t.Fatalf("register: %v %+v", err, rep)
 	}
 	p, err := fake.WaitFor(h, 5*time.Second, func(p *control.Presence) bool {
-		return len(p.Clients) == 1 && p.Clients[0].Request != nil
+		return len(p.Clients) == 1 && p.Clients[0].Online
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.Send(&control.OpenRequest{Seq: 2, RequestID: p.Clients[0].Request.ID})
+	h.Send(&control.Connect{Seq: 2, Fingerprint: p.Clients[0].Fingerprint, RequestID: control.NewRequestID()})
 	var nch ssh.NewChannel
 	select {
 	case nch = <-h.Sessions:
@@ -98,7 +98,7 @@ func TestFakeClientEndToEnd(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("fakeclient did not finish")
 	}
-	for _, want := range []string{"key: ssh-ed25519 ", "hello: role=pending", "registered: anna@PC", "request: ", "session-ready: ", "recv: ping", "session: closed"} {
+	for _, want := range []string{"key: ssh-ed25519 ", "hello: role=pending", "registered: anna@PC", "session-ready: ", "recv: ping", "session: closed"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
 		}

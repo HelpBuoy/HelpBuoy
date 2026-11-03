@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,13 +20,35 @@ import (
 )
 
 type fakeUI struct {
-	views   chan View
-	confirm bool
+	views chan View
+
+	mu     sync.Mutex
+	refuse bool
+	// gate, if set, holds ConfirmHelper until it is closed (then the
+	// answer is "allow") or the question becomes moot.
+	gate chan struct{}
+}
+
+// answer sets how ConfirmHelper answers from now on.
+func (u *fakeUI) answer(refuse bool, gate chan struct{}) {
+	u.mu.Lock()
+	u.refuse, u.gate = refuse, gate
+	u.mu.Unlock()
 }
 
 func (u *fakeUI) Render(v View) { u.views <- v }
-func (u *fakeUI) ConfirmHelperKeyChange(string, string, string) bool {
-	return u.confirm
+func (u *fakeUI) ConfirmHelper(ctx context.Context, _ session.Helper, _ string) bool {
+	u.mu.Lock()
+	refuse, gate := u.refuse, u.gate
+	u.mu.Unlock()
+	if gate != nil {
+		select {
+		case <-gate:
+		case <-ctx.Done():
+			return false
+		}
+	}
+	return !refuse
 }
 
 // wait returns the first rendered View for which ok is true.
@@ -150,8 +173,8 @@ func TestFirstRunToMain(t *testing.T) {
 	}
 
 	e.relay.Register(e.fp(), "anna@PC")
-	v = ui.wait(t, "main screen", func(v View) bool { return v.Screen == ScreenMain && v.ButtonEnabled })
-	if v.Name != "anna@PC" || v.Button != ButtonRequest || v.Notice != "" || v.Error != "" {
+	v = ui.wait(t, "main screen", func(v View) bool { return v.Screen == ScreenMain && v.Ready })
+	if v.Name != "anna@PC" || v.Notice != "" || v.Error != "" {
 		t.Fatalf("main view %+v", v)
 	}
 	cfg := e.config()
@@ -175,42 +198,52 @@ func registered(t *testing.T, e *env) {
 	})
 }
 
-func TestRequestCancelAndSession(t *testing.T) {
+// connectHelper plays helper alice connecting through the fake relay.
+func connectHelper(t *testing.T, r *fakerelay.Relay, fp string) *appkey.Key {
+	t.Helper()
+	helper, _ := identity.Ephemeral("alice")
+	if _, err := r.Connect(fp, "alice", helper.Line); err != nil {
+		t.Fatal(err)
+	}
+	return helper
+}
+
+func TestHelperConnects(t *testing.T) {
 	e := newEnv(t)
 	registered(t, e)
 	c, ui := e.controller()
 	c.Start()
-	ui.wait(t, "ready", func(v View) bool { return v.Screen == ScreenMain && v.ButtonEnabled })
+	ui.wait(t, "ready", readyMain)
 
-	c.RequestHelp()
-	ui.wait(t, "cancel button", func(v View) bool { return v.Button == ButtonCancel && v.ButtonEnabled })
-	c.CancelRequest()
-	ui.wait(t, "request button", func(v View) bool { return v.Button == ButtonRequest && v.ButtonEnabled })
+	// The user refuses: no session, still ready.
+	ui.answer(true, nil)
+	connectHelper(t, e.relay, e.fp())
+	select {
+	case <-e.relay.Sessions():
+		t.Fatal("session despite refusal")
+	case <-time.After(100 * time.Millisecond):
+	}
+	ui.wait(t, "ready", readyMain)
+	if len(e.config().KnownHelpers) != 0 {
+		t.Fatal("refused helper pinned")
+	}
 
-	c.RequestHelp()
-	ui.wait(t, "cancel button", func(v View) bool { return v.Button == ButtonCancel && v.ButtonEnabled })
-	// Wait until the relay has the request open.
-	var err error
-	helper, _ := identity.Ephemeral("alice")
-	for i := 0; i < 100; i++ {
-		if err = e.relay.Take(e.fp(), "alice", helper.Line); err == nil {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
+	// While the user is asked the window says so.
+	gate := make(chan struct{})
+	ui.answer(false, gate)
+	helper := connectHelper(t, e.relay, e.fp())
+	ui.wait(t, "asking", func(v View) bool { return v.Screen == ScreenMain && !v.Ready && v.Notice != "" })
+	close(gate)
 	sess := <-e.relay.Sessions()
 	v := ui.wait(t, "in session", func(v View) bool { return v.InSession })
-	if v.Screen != ScreenMain || v.ButtonEnabled {
+	if v.Screen != ScreenMain || v.Ready {
 		t.Fatalf("session view %+v", v)
 	}
 	if got := e.config().KnownHelpers["alice"]; got != identity.KeyLine(helper.Public, "") {
 		t.Fatalf("pinned %q", got)
 	}
 	sess.Channel.Close() // the helper ends the session
-	ui.wait(t, "back", func(v View) bool { return !v.InSession && v.ButtonEnabled && v.Button == ButtonRequest })
+	ui.wait(t, "back", func(v View) bool { return !v.InSession && readyMain(v) })
 	if in := c.Info(); !strings.HasPrefix(in.LastHelper, "alice (SHA256:") {
 		t.Fatalf("last helper %q", in.LastHelper)
 	}
@@ -328,11 +361,42 @@ func TestUnregisteredShowsKeyAgain(t *testing.T) {
 		t.Fatal("no notice")
 	}
 	relay2.Register(e.fp(), "anna@PC")
-	ui.wait(t, "main", func(v View) bool { return v.Screen == ScreenMain && v.ButtonEnabled })
+	ui.wait(t, "main", func(v View) bool { return v.Screen == ScreenMain && v.Ready })
 }
 
 func TestCapitalize(t *testing.T) {
 	if capitalize("relay address is empty") != "Relay address is empty" || capitalize("") != "" {
 		t.Fatal()
+	}
+}
+
+func TestRelayKeyChanged(t *testing.T) {
+	e := newEnv(t)
+	e.relay.Register(e.fp(), "anna@PC")
+	old, _ := identity.Ephemeral("old relay")
+	config.Store{Dir: e.dir}.Save(&config.Config{
+		RelayAddress: e.relay.Addr(),
+		RelayHostKey: old.Line,
+		Name:         "anna@PC",
+	})
+	c, ui := e.controller()
+	c.Start()
+	v := ui.wait(t, "warning", func(v View) bool { return v.RelayKeyChange != nil })
+	newFP := ssh.FingerprintSHA256(e.relay.HostKey())
+	if v.RelayKeyChange.OldFingerprint != old.Fingerprint || v.RelayKeyChange.NewFingerprint != newFP || v.Error == "" {
+		t.Fatalf("view %+v", v)
+	}
+	if e.relay.Online(e.fp()) {
+		t.Fatal("connected despite the changed key")
+	}
+	c.TrustRelayKey("SHA256:something-else") // a stale answer does nothing
+	time.Sleep(50 * time.Millisecond)
+	if c.View().RelayKeyChange == nil {
+		t.Fatal("stale answer accepted")
+	}
+	c.TrustRelayKey(newFP)
+	ui.wait(t, "ready", readyMain)
+	if got := e.config().RelayHostKey; got != identity.KeyLine(e.relay.HostKey(), "") {
+		t.Fatalf("pinned %q", got)
 	}
 }

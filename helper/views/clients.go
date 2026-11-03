@@ -97,7 +97,7 @@ func (a *App) drawStatus(x, y, w float32) float32 {
 }
 
 // sortedClients splits the presence into online and offline clients, each
-// sorted by name, with open requests first among the online ones.
+// sorted by name.
 func sortedClients(p *control.Presence) (online, offline []control.ClientInfo) {
 	if p == nil {
 		return nil, nil
@@ -109,11 +109,7 @@ func sortedClients(p *control.Presence) (online, offline []control.ClientInfo) {
 			offline = append(offline, c)
 		}
 	}
-	isOpen := func(c control.ClientInfo) bool { return c.Request != nil && c.Request.State == control.RequestOpen }
 	sort.SliceStable(online, func(i, j int) bool {
-		if isOpen(online[i]) != isOpen(online[j]) {
-			return isOpen(online[i])
-		}
 		return strings.ToLower(online[i].Name) < strings.ToLower(online[j].Name)
 	})
 	sort.SliceStable(offline, func(i, j int) bool {
@@ -122,10 +118,7 @@ func sortedClients(p *control.Presence) (online, offline []control.ClientInfo) {
 	return online, offline
 }
 
-const (
-	rowH        = 52
-	requestRowH = 64
-)
+const rowH = 52
 
 func (a *App) drawClientList(r rl.Rectangle) {
 	c := a.ui
@@ -137,11 +130,7 @@ func (a *App) drawClientList(r rl.Rectangle) {
 	if a.presence == nil {
 		return
 	}
-	contentH := float32(0)
-	for _, ci := range online {
-		contentH += a.rowHeight(ci)
-	}
-	contentH += 40
+	contentH := float32(len(online))*rowH + 40
 	if a.offlineOpen {
 		contentH += float32(len(offline)) * rowH
 	}
@@ -153,9 +142,8 @@ func (a *App) drawClientList(r rl.Rectangle) {
 		contentH += 44
 	}
 	for _, ci := range online {
-		h := a.rowHeight(ci)
-		a.drawClientRow(ci, rl.NewRectangle(0, y, r.Width, h))
-		y += h
+		a.drawClientRow(ci, rl.NewRectangle(0, y, r.Width, rowH))
+		y += rowH
 	}
 	if len(offline) > 0 {
 		hr := rl.NewRectangle(0, y, r.Width, 40)
@@ -183,30 +171,17 @@ func (a *App) drawClientList(r rl.Rectangle) {
 	c.EndScroll()
 }
 
-func (a *App) rowHeight(ci control.ClientInfo) float32 {
-	if ci.Request != nil && ci.Request.State == control.RequestOpen {
-		return requestRowH
-	}
-	return rowH
-}
-
-// drawClientRow draws one client: name, a status line, and depending on the
-// state an Open session button or a Remove action.
+// drawClientRow draws one client: name, a status line, a Connect button for
+// online clients nobody is helping, and Rename and Remove on hover.
 func (a *App) drawClientRow(ci control.ClientInfo, r rl.Rectangle) {
 	c := a.ui
 	id := "client/" + ci.Fingerprint
-	open := ci.Online && ci.Request != nil && ci.Request.State == control.RequestOpen
-	bg := ui.ColPanel
-	if open {
-		bg = ui.ColRequest
-	}
 	tabIdx := a.sessionFor(ci.Fingerprint)
+	canConnect := ci.Online && ci.Request == nil && ci.InSessionWith == "" && tabIdx < 0 && a.waiting[ci.Fingerprint] == nil
+	bg := ui.ColPanel
 	editing := a.rename.fp == ci.Fingerprint
 	selected := tabIdx >= 0 && tabIdx == a.active
 	hover, clicked := c.Row(id, r, bg, selected)
-	if open {
-		rl.DrawRectangleRec(rl.NewRectangle(r.X, r.Y, 4, r.Height), ui.ColRequestBar)
-	}
 	rl.DrawLineV(rl.NewVector2(r.X+16, r.Y+r.Height), rl.NewVector2(r.X+r.Width, r.Y+r.Height), ui.ColHover)
 
 	x := r.X + 16
@@ -227,12 +202,16 @@ func (a *App) drawClientRow(ci control.ClientInfo, r rl.Rectangle) {
 	case editing:
 	case confirming:
 		actionW = 150
-	case open:
-		actionW = 118
-	case hover && tabIdx < 0:
-		actionW = 140
 	case hover:
 		actionW = 70
+		if tabIdx < 0 {
+			actionW += 70
+		}
+		if canConnect {
+			actionW += 92
+		}
+	case canConnect:
+		actionW = 92
 	}
 	if editing {
 		a.drawRenameField(ci, rl.NewRectangle(x, r.Y+5, r.X+r.Width-x-12, 28))
@@ -240,9 +219,6 @@ func (a *App) drawClientRow(ci control.ClientInfo, r rl.Rectangle) {
 	}
 	nameW := r.Width - (x - r.X) - actionW - 12
 	font := ui.Regular
-	if open {
-		font = ui.Bold
-	}
 	c.Text(font, ui.SizeBody, c.Ellipsize(font, ui.SizeBody, ci.Name, nameW), x, r.Y+8, nameCol)
 
 	sub, subCol := a.rowSubline(ci, tabIdx)
@@ -273,24 +249,32 @@ func (a *App) drawClientRow(ci control.ClientInfo, r rl.Rectangle) {
 			a.confirmRemove = ""
 			actionClicked = true
 		}
-	case open:
-		busy := a.opening[ci.Fingerprint]
-		label := "Open session"
-		if busy {
-			label = "Opening…"
+	case hover || canConnect:
+		bx := ax
+		if hover {
+			if c.Button(id+"/rename", rl.NewRectangle(bx, ay, 66, 30), "Rename", ui.Flat, !canRename) {
+				a.startRename(ci)
+				actionClicked = true
+			}
+			bx += 70
+			if tabIdx < 0 {
+				if c.Button(id+"/remove", rl.NewRectangle(bx, ay, 66, 30), "Remove", ui.Flat, !a.online()) {
+					a.confirmRemove = ci.Fingerprint
+					actionClicked = true
+				}
+				bx += 70
+			}
 		}
-		if c.Button(id+"/open", rl.NewRectangle(ax, ay, 112, 30), label, ui.Primary, busy || !a.online()) {
-			a.openRequest(ci)
-			actionClicked = true
-		}
-	case hover:
-		if c.Button(id+"/rename", rl.NewRectangle(ax, ay, 66, 30), "Rename", ui.Flat, !canRename) {
-			a.startRename(ci)
-			actionClicked = true
-		}
-		if tabIdx < 0 && c.Button(id+"/remove", rl.NewRectangle(ax+70, ay, 66, 30), "Remove", ui.Flat, !a.online()) {
-			a.confirmRemove = ci.Fingerprint
-			actionClicked = true
+		if canConnect {
+			busy := a.opening[ci.Fingerprint]
+			label := "Connect"
+			if busy {
+				label = "Asking…"
+			}
+			if c.Button(id+"/connect", rl.NewRectangle(bx, ay, 86, 30), label, ui.Primary, busy || !a.online()) {
+				a.connectClient(ci)
+				actionClicked = true
+			}
 		}
 	}
 	if hover && !actionClicked {
@@ -431,10 +415,12 @@ func (a *App) rowSubline(ci control.ClientInfo, tabIdx int) (string, rl.Color) {
 	switch {
 	case tabIdx >= 0:
 		return "In session", ui.ColAccent
-	case ci.Online && ci.Request != nil && ci.Request.State == control.RequestOpen:
-		return "Asked for help at " + ci.Request.Created.Local().Format("15:04"), ui.ColWarn
+	case a.waiting[ci.Fingerprint] != nil:
+		return "Waiting for the user to allow the session…", ui.ColWarn
 	case ci.InSessionWith != "" && ci.InSessionWith != a.me:
 		return "In session with " + ci.InSessionWith, ui.ColMuted
+	case ci.Online && ci.Request != nil && ci.Request.TakenBy != a.me:
+		return ci.Request.TakenBy + " is connecting", ui.ColMuted
 	case ci.Online:
 		if ci.UserMachine != "" && !strings.EqualFold(ci.UserMachine, ci.Name) {
 			return ci.UserMachine, ui.ColMuted
@@ -460,19 +446,24 @@ func lastSeen(t, now time.Time) string {
 	return t.Format("2 Jan 2006")
 }
 
-// openRequest takes a client's open help request.
-func (a *App) openRequest(ci control.ClientInfo) {
-	if a.backend == nil || ci.Request == nil {
+// connectClient asks a client's user to allow a session with this helper.
+func (a *App) connectClient(ci control.ClientInfo) {
+	if a.backend == nil {
 		return
 	}
-	reqID, fp := ci.Request.ID, ci.Fingerprint
+	reqID, fp := control.NewRequestID(), ci.Fingerprint
 	a.opened[reqID] = time.Now()
 	a.opening[fp] = true
-	a.run(a.backend.OpenRequest(reqID), func(err error) {
+	delete(a.notes, fp)
+	a.run(a.backend.Connect(fp, reqID), func(err error) {
 		delete(a.opening, fp)
 		if err != nil {
 			delete(a.opened, reqID)
-			a.notes[fp] = note{text: "Could not open: " + err.Error(), until: time.Now().Add(6 * time.Second)}
+			a.notes[fp] = note{text: "Could not connect: " + err.Error(), until: time.Now().Add(6 * time.Second)}
+			return
+		}
+		if _, ok := a.opened[reqID]; ok {
+			a.waiting[fp] = &waitInfo{id: reqID}
 		}
 	})
 }

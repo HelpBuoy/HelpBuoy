@@ -43,8 +43,9 @@ const (
 	listToggleW = 30 // the show/hide client list button at the left of the tab strip
 	idleFPS     = 10
 	activeHold  = 1500 * time.Millisecond // stay fast this long after input
-	// openTimeout is how long a taken request waits for its session channel.
-	openTimeout = 20 * time.Second
+	// openTimeout is how long a Connect waits for the user to allow it and
+	// the session channel to arrive. The relay gives up after 1 minute.
+	openTimeout = 75 * time.Second
 )
 
 // backend is what the views need from the relay connection; the demo mode
@@ -53,7 +54,7 @@ type backend interface {
 	RegisterClient(line, name string) <-chan error
 	RenameClient(fingerprint, name string) <-chan error
 	UnregisterClient(fingerprint string) <-chan error
-	OpenRequest(requestID string) <-chan error
+	Connect(fingerprint, requestID string) <-chan error
 }
 
 type tabKind int
@@ -106,10 +107,10 @@ type App struct {
 	localAdded int
 
 	cmds          []pending
-	opened        map[string]time.Time // request ids this helper sent OpenRequest for, and when
-	opening       map[string]bool      // client fingerprints with an OpenRequest in flight
+	opened        map[string]time.Time // request ids this helper sent Connect for, and when
+	opening       map[string]bool      // client fingerprints with a Connect in flight
+	waiting       map[string]*waitInfo // by client fingerprint: accepted Connects, until the session starts
 	notes         map[string]note      // by client fingerprint
-	seenRequests  map[string]bool
 	confirmRemove string
 	offlineOpen   bool
 	rename        renameState
@@ -142,15 +143,15 @@ type windowGeom struct {
 // New creates the app. Call it after rl.InitWindow.
 func New(opts Options) *App {
 	a := &App{
-		opts:         opts,
-		ui:           ui.New(),
-		active:       -1,
-		opened:       map[string]time.Time{},
-		opening:      map[string]bool{},
-		notes:        map[string]note{},
-		seenRequests: map[string]bool{},
-		pageHeight:   map[tabKind]float32{},
-		cfg:          &config.Config{},
+		opts:       opts,
+		ui:         ui.New(),
+		active:     -1,
+		opened:     map[string]time.Time{},
+		opening:    map[string]bool{},
+		waiting:    map[string]*waitInfo{},
+		notes:      map[string]note{},
+		pageHeight: map[tabKind]float32{},
+		cfg:        &config.Config{},
 	}
 	a.reg.init()
 	a.set.init()
@@ -168,7 +169,7 @@ func New(opts Options) *App {
 		a.openPage(tabSettings)
 	case "session":
 		if a.demo != nil {
-			a.demo.openFirstRequest()
+			a.demo.connectFirst()
 		}
 	}
 	return a
@@ -369,6 +370,11 @@ func (a *App) drain() {
 			delete(a.opened, id) // no session channel came; a late one is refused
 		}
 	}
+	for fp, w := range a.waiting {
+		if _, ok := a.opened[w.id]; !ok {
+			delete(a.waiting, fp)
+		}
+	}
 	for fp, n := range a.notes {
 		if a.ui.Now.After(n.until) {
 			delete(a.notes, fp)
@@ -388,6 +394,7 @@ func (a *App) handleEvent(ev relayconn.Event) {
 		}
 		if ev.Status != relayconn.StatusOnline {
 			a.opening = map[string]bool{}
+			a.waiting = map[string]*waitInfo{}
 		}
 	case relayconn.HostKeyPinned:
 		a.hostKey = ev.Key
@@ -401,24 +408,29 @@ func (a *App) handleEvent(ev relayconn.Event) {
 	}
 }
 
-// setPresence stores a snapshot and notifies about new open requests while
-// the window is not focused.
+// waitInfo is a Connect the relay accepted, waiting for the user's answer.
+type waitInfo struct {
+	id   string
+	seen bool // the request showed up in Presence
+}
+
+// setPresence stores a snapshot. A Connect whose request went away before
+// its session started was refused by the user, or not answered in time.
 func (a *App) setPresence(p *control.Presence) {
 	a.presence = p
 	for _, c := range p.Clients {
-		r := c.Request
-		if r != nil && !a.opened[r.ID].IsZero() {
-			switch r.State {
-			case control.RequestCancelled, control.RequestExpired, control.RequestEnded:
-				delete(a.opened, r.ID) // the user cancelled before the session started
-			}
-		}
-		if r == nil || r.State != control.RequestOpen || a.seenRequests[r.ID] {
+		w := a.waiting[c.Fingerprint]
+		if w == nil {
 			continue
 		}
-		a.seenRequests[r.ID] = true
-		if !rl.IsWindowFocused() {
-			notify(c.Name)
+		if c.Request != nil && c.Request.ID == w.id {
+			w.seen = true
+			continue
+		}
+		if w.seen {
+			delete(a.waiting, c.Fingerprint)
+			delete(a.opened, w.id)
+			a.notes[c.Fingerprint] = note{text: "Not allowed: the user refused or did not answer", until: time.Now().Add(10 * time.Second)}
 		}
 	}
 }
@@ -435,6 +447,11 @@ func (a *App) incomingSession(d control.HelperSessionData, ch ssh.Channel) {
 		return
 	}
 	delete(a.opened, d.RequestID)
+	for fp, w := range a.waiting {
+		if w.id == d.RequestID {
+			delete(a.waiting, fp)
+		}
+	}
 	a.addSession(session.Dial(ch, a.key.Signer, info))
 }
 

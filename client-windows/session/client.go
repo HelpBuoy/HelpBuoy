@@ -32,14 +32,13 @@ const (
 	PhaseStopped    Phase = iota // not started, closed, or given up (see State.Err)
 	PhaseConnecting              // dialing, or waiting before the next attempt
 	PhasePending                 // connected, key not registered yet
-	PhaseReady                   // registered and connected, no request
-	PhaseRequested               // help requested, nobody opened it yet
-	PhaseTaken                   // a helper opened the request; session starting
+	PhaseReady                   // registered and connected, waiting for a helper
+	PhaseAsking                  // a helper wants to connect; the user is asked, then the session starts
 	PhaseInSession               // the session runs
 )
 
 func (p Phase) String() string {
-	return [...]string{"stopped", "connecting", "pending", "ready", "requested", "taken", "in-session"}[p]
+	return [...]string{"stopped", "connecting", "pending", "ready", "asking", "in-session"}[p]
 }
 
 // Helper describes the helper of the current or last session.
@@ -60,7 +59,7 @@ type State struct {
 	RelayFingerprint string
 	// Name is the registered user@machine, empty while pending.
 	Name string
-	// RequestID of the open or taken request.
+	// RequestID of the helper's connect being asked about or running.
 	RequestID string
 	// Helper of the running session, or of the last one.
 	Helper Helper
@@ -68,7 +67,7 @@ type State struct {
 
 // Handler receives events from the client. Its methods are called from the
 // client's goroutines; StateChanged, Registered and HelperPinned must return
-// quickly. ConfirmHelperKeyChange may block while the user decides.
+// quickly. ConfirmHelper may block while the user decides.
 type Handler interface {
 	// StateChanged reports a new snapshot. Snapshots arrive in order.
 	StateChanged(State)
@@ -77,9 +76,13 @@ type Handler interface {
 	Registered(name, relayHostKey string)
 	// HelperPinned reports a helper key to remember for name.
 	HelperPinned(name, keyLine string)
-	// ConfirmHelperKeyChange asks the user whether to continue although the
-	// helper called name shows a different key than last time.
-	ConfirmHelperKeyChange(name, oldFingerprint, newFingerprint string) bool
+	// ConfirmHelper asks the user whether helper h may take control. It is
+	// called for every session, before the session channel is opened.
+	// oldFingerprint is set when the helper called h.Name showed a different
+	// key last time ("unreadable" if the pinned key can't be parsed). ctx
+	// ends when the question is moot (the relay ended the request, or the
+	// connection was lost); the implementation should then stop asking.
+	ConfirmHelper(ctx context.Context, h Helper, oldFingerprint string) bool
 }
 
 // Runner runs one session on the client's sv-session channel: the inner SSH
@@ -123,15 +126,6 @@ type Options struct {
 	Logger      *slog.Logger
 }
 
-type reqState int
-
-const (
-	reqNone  reqState = iota
-	reqSent           // RequestHelp sent, no id yet
-	reqOpen           // relay confirmed it as open
-	reqTaken          // a helper took it
-)
-
 // Client is one relay connection with automatic reconnects.
 type Client struct {
 	opts   Options
@@ -142,22 +136,21 @@ type Client struct {
 
 	notifyMu sync.Mutex // serializes Handler.StateChanged calls
 
-	mu            sync.Mutex
-	started       bool
-	stopped       bool
-	err           error
-	hostKey       ssh.PublicKey
-	helpers       map[string]string
-	conn          *relayConn // nil while disconnected
-	pending       bool
-	name          string
-	req           reqState
-	reqID         string
-	cancelPending bool
-	sessionBusy   bool // SessionReady accepted, until the session ended
-	inSession     bool
-	helper        Helper
-	endSession    context.CancelFunc
+	mu          sync.Mutex
+	started     bool
+	stopped     bool
+	err         error
+	hostKey     ssh.PublicKey
+	helpers     map[string]string
+	conn        *relayConn // nil while disconnected
+	pending     bool
+	name        string
+	reqID       string             // request of the SessionReady being handled, "" once it ended
+	reqEnded    context.CancelFunc // cancels the ConfirmHelper context
+	sessionBusy bool               // SessionReady accepted, until the session ended
+	inSession   bool
+	helper      Helper
+	endSession  context.CancelFunc
 }
 
 // relayConn is one established relay connection.
@@ -283,10 +276,8 @@ func (c *Client) stateLocked() State {
 		s.Phase = PhaseConnecting
 	case c.pending:
 		s.Phase = PhasePending
-	case c.req == reqTaken || c.sessionBusy:
-		s.Phase = PhaseTaken
-	case c.req == reqSent || c.req == reqOpen:
-		s.Phase = PhaseRequested
+	case c.sessionBusy:
+		s.Phase = PhaseAsking
 	default:
 		s.Phase = PhaseReady
 	}
@@ -298,45 +289,6 @@ func (c *Client) notify() {
 	c.notifyMu.Lock()
 	defer c.notifyMu.Unlock()
 	c.opts.Handler.StateChanged(c.State())
-}
-
-// RequestHelp files a help request. It reports false if the client is not in
-// a state where it can do that (not connected, pending, a request or session
-// already running).
-func (c *Client) RequestHelp() bool {
-	c.mu.Lock()
-	ok := c.conn != nil && !c.pending && c.req == reqNone && !c.sessionBusy && !c.inSession
-	if ok {
-		c.req = reqSent
-		c.conn.send(control.RequestHelp{})
-	}
-	c.mu.Unlock()
-	if ok {
-		c.notify()
-	}
-	return ok
-}
-
-// CancelRequest cancels the open request, if a helper has not taken it yet.
-func (c *Client) CancelRequest() {
-	c.mu.Lock()
-	changed := true
-	switch c.req {
-	case reqSent:
-		c.cancelPending = true // sent once the relay names the request
-		c.req = reqNone
-	case reqOpen:
-		if c.conn != nil {
-			c.conn.send(control.CancelRequest{RequestID: c.reqID})
-		}
-		c.req, c.reqID = reqNone, ""
-	default:
-		changed = false
-	}
-	c.mu.Unlock()
-	if changed {
-		c.notify()
-	}
 }
 
 // EndSession ends the running session, if any.
@@ -406,8 +358,13 @@ func (c *Client) hostKeyCallback(_ string, _ net.Addr, key ssh.PublicKey) error 
 		return nil
 	}
 	if !sameKey(c.hostKey, key) {
-		c.log.Error("relay host key changed", "pinned", ssh.FingerprintSHA256(c.hostKey), "got", ssh.FingerprintSHA256(key))
-		return ErrHostKeyChanged
+		e := &HostKeyChangedError{
+			OldFingerprint: ssh.FingerprintSHA256(c.hostKey),
+			NewFingerprint: ssh.FingerprintSHA256(key),
+			NewKeyLine:     identity.KeyLine(key, ""),
+		}
+		c.log.Error("relay host key changed", "pinned", e.OldFingerprint, "got", e.NewFingerprint)
+		return e
 	}
 	return nil
 }
@@ -600,7 +557,6 @@ func (c *Client) connected(rc *relayConn, h *control.Hello) error {
 	}
 	c.conn = rc
 	c.err = nil
-	c.req, c.reqID, c.cancelPending = reqNone, "", false
 	hostKey := identity.KeyLine(c.hostKey, "")
 	name := c.name
 	c.mu.Unlock()
@@ -614,7 +570,7 @@ func (c *Client) connected(rc *relayConn, h *control.Hello) error {
 func (c *Client) disconnected() {
 	c.mu.Lock()
 	c.conn = nil
-	c.req, c.reqID, c.cancelPending = reqNone, "", false
+	c.endRequestLocked()
 	end := c.endSession
 	c.mu.Unlock()
 	if end != nil {
@@ -636,36 +592,27 @@ func (c *Client) dispatch(rc *relayConn, m any) {
 
 	case *control.RequestStateMsg:
 		c.mu.Lock()
-		switch m.State {
-		case control.RequestOpen:
-			if c.cancelPending {
-				c.cancelPending = false
-				rc.send(control.CancelRequest{RequestID: m.RequestID})
-			} else if c.req == reqSent || c.req == reqNone {
-				c.req, c.reqID = reqOpen, m.RequestID
-			}
-		case control.RequestTaken:
-			c.req, c.reqID = reqTaken, m.RequestID
-		case control.RequestCancelled, control.RequestExpired, control.RequestEnded:
-			if c.reqID == "" || c.reqID == m.RequestID {
-				c.req, c.reqID = reqNone, ""
-			}
+		if m.RequestID != "" && m.RequestID == c.reqID {
+			c.log.Info("request ended by the relay", "request", m.RequestID, "state", m.State)
+			c.endRequestLocked()
 		}
 		c.mu.Unlock()
 
 	case *control.SessionReady:
 		c.mu.Lock()
 		busy := c.sessionBusy
+		var ask context.Context
 		if !busy {
 			c.sessionBusy = true
-			c.req, c.reqID = reqTaken, m.RequestID
+			c.reqID = m.RequestID
+			ask, c.reqEnded = context.WithCancel(rc.ctx)
 		}
 		c.mu.Unlock()
 		if busy {
 			c.log.Warn("SessionReady while a session runs; ignored", "request", m.RequestID)
 			return
 		}
-		go c.runSession(rc, *m)
+		go c.runSession(rc, *m, ask)
 
 	case *control.Error:
 		c.log.Warn("relay error", "message", m.Message)
@@ -681,15 +628,25 @@ func (c *Client) dispatch(rc *relayConn, m any) {
 	c.notify()
 }
 
-// runSession checks the helper key and runs the session for one SessionReady.
-func (c *Client) runSession(rc *relayConn, sr control.SessionReady) {
+// endRequestLocked forgets the current request and stops asking about it.
+func (c *Client) endRequestLocked() {
+	c.reqID = ""
+	if c.reqEnded != nil {
+		c.reqEnded()
+		c.reqEnded = nil
+	}
+}
+
+// runSession asks the user about the helper and runs the session for one
+// SessionReady. ask ends when the request ends.
+func (c *Client) runSession(rc *relayConn, sr control.SessionReady, ask context.Context) {
 	log := c.log.With("request", sr.RequestID, "helper", sr.HelperName)
 	abort := func(why string, err error) {
 		log.Warn("session not started: "+why, "err", err)
 		rc.send(control.CancelRequest{RequestID: sr.RequestID})
 		c.mu.Lock()
 		c.sessionBusy = false
-		c.req, c.reqID = reqNone, ""
+		c.endRequestLocked()
 		c.mu.Unlock()
 		c.notify()
 	}
@@ -709,20 +666,26 @@ func (c *Client) runSession(rc *relayConn, sr control.SessionReady) {
 	old := c.helpers[sr.HelperName]
 	c.mu.Unlock()
 	pin := old == ""
+	oldFP := ""
 	if old != "" {
 		oldKey, _, _, _, perr := ssh.ParseAuthorizedKey([]byte(old))
 		if perr != nil || !sameKey(oldKey, key) {
-			oldFP := "unreadable"
+			oldFP = "unreadable"
 			if perr == nil {
 				oldFP = ssh.FingerprintSHA256(oldKey)
 			}
 			log.Warn("helper key changed", "old", oldFP, "new", fp)
-			if !c.opts.Handler.ConfirmHelperKeyChange(sr.HelperName, oldFP, fp) {
-				abort("user refused the changed helper key", nil)
-				return
-			}
 			pin = true
 		}
+	}
+	helper := Helper{Name: sr.HelperName, DisplayName: sr.HelperDisplayName, Fingerprint: fp}
+	if !c.opts.Handler.ConfirmHelper(ask, helper, oldFP) {
+		abort("user refused the helper", nil)
+		return
+	}
+	if ask.Err() != nil {
+		abort("the request ended while the user was asked", nil)
+		return
 	}
 	if pin {
 		c.mu.Lock()
@@ -741,7 +704,6 @@ func (c *Client) runSession(rc *relayConn, sr control.SessionReady) {
 	}
 	go ssh.DiscardRequests(reqs)
 
-	helper := Helper{Name: sr.HelperName, DisplayName: sr.HelperDisplayName, Fingerprint: fp}
 	c.mu.Lock()
 	c.inSession = true
 	c.helper = helper
@@ -766,7 +728,7 @@ func (c *Client) runSession(rc *relayConn, sr control.SessionReady) {
 	c.inSession = false
 	c.sessionBusy = false
 	c.endSession = nil
-	c.req, c.reqID = reqNone, ""
+	c.endRequestLocked()
 	c.mu.Unlock()
 	c.notify()
 }

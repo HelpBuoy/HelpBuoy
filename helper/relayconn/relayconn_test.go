@@ -31,7 +31,7 @@ func newSigner(t *testing.T) ssh.Signer {
 }
 
 // fakeRelay is a minimal hmw-relay: it knows one helper key, sends Hello and
-// Presence, answers commands, and opens a session channel after OpenRequest.
+// Presence, answers commands, and opens a session channel after Connect.
 type fakeRelay struct {
 	t        *testing.T
 	ln       net.Listener
@@ -56,7 +56,6 @@ func newFakeRelay(t *testing.T, helper ssh.PublicKey) *fakeRelay {
 		payload: []byte("inner ssh bytes"),
 		presence: control.Presence{Clients: []control.ClientInfo{{
 			Fingerprint: "SHA256:abc", Name: "anna@ANNA-PC", Online: true,
-			Request: &control.RequestInfo{ID: "r1", Created: time.Now(), State: control.RequestOpen},
 		}}},
 	}
 	t.Cleanup(func() { ln.Close(); r.dropAll() })
@@ -159,9 +158,9 @@ func (r *fakeRelay) control(sc *ssh.ServerConn, ch ssh.Channel, role control.Rol
 				continue
 			}
 			cc.Send(&control.Reply{Seq: m.Seq})
-		case *control.OpenRequest:
-			if m.RequestID != "r1" {
-				cc.Send(&control.Reply{Seq: m.Seq, Error: "request is not open"})
+		case *control.Connect:
+			if m.Fingerprint != "SHA256:a" {
+				cc.Send(&control.Reply{Seq: m.Seq, Error: "client is not online"})
 				continue
 			}
 			cc.Send(&control.Reply{Seq: m.Seq})
@@ -240,7 +239,7 @@ func TestOnlinePresenceCommandsAndSession(t *testing.T) {
 		t.Fatalf("hello = %+v", st.Hello)
 	}
 	p := waitFor(t, c, func(PresenceEvent) bool { return true })
-	if len(p.Presence.Clients) != 1 || p.Presence.Clients[0].Request.State != control.RequestOpen {
+	if len(p.Presence.Clients) != 1 || !p.Presence.Clients[0].Online {
 		t.Fatalf("presence = %+v", p.Presence)
 	}
 
@@ -253,11 +252,11 @@ func TestOnlinePresenceCommandsAndSession(t *testing.T) {
 	if err := waitResult(t, c.RenameClient("SHA256:a", "Anna laptop")); err != nil {
 		t.Errorf("rename: %v", err)
 	}
-	if err := waitResult(t, c.OpenRequest("nope")); err == nil {
-		t.Error("open of a closed request succeeded")
+	if err := waitResult(t, c.Connect("SHA256:nope", "r0")); err == nil {
+		t.Error("connect to an offline client succeeded")
 	}
-	if err := waitResult(t, c.OpenRequest("r1")); err != nil {
-		t.Fatalf("open: %v", err)
+	if err := waitResult(t, c.Connect("SHA256:a", "r1")); err != nil {
+		t.Fatalf("connect: %v", err)
 	}
 	sess := waitFor(t, c, func(SessionEvent) bool { return true })
 	defer sess.Channel.Close()
@@ -283,7 +282,7 @@ func TestOnlinePresenceCommandsAndSession(t *testing.T) {
 			s = m.Seq
 		case *control.RenameClient:
 			s = m.Seq
-		case *control.OpenRequest:
+		case *control.Connect:
 			s = m.Seq
 		}
 		if seqs[s] {
@@ -327,7 +326,7 @@ func TestNotHelper(t *testing.T) {
 	if !errors.Is(st.Err, ErrNotHelper) {
 		t.Errorf("err = %v", st.Err)
 	}
-	if err := waitResult(t, c.OpenRequest("r1")); !errors.Is(err, ErrNotConnected) {
+	if err := waitResult(t, c.Connect("SHA256:a", "r1")); !errors.Is(err, ErrNotConnected) {
 		t.Errorf("command while offline: %v", err)
 	}
 }

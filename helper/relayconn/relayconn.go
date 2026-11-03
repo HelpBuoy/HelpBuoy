@@ -206,10 +206,12 @@ func (c *Conn) UnregisterClient(fingerprint string) <-chan error {
 	})
 }
 
-// OpenRequest takes an open help request.
-func (c *Conn) OpenRequest(requestID string) <-chan error {
+// Connect asks the client with the given fingerprint to allow a session.
+// requestID comes from control.NewRequestID; the session channel that
+// follows when the user allows it carries the same id.
+func (c *Conn) Connect(fingerprint, requestID string) <-chan error {
 	return c.command(func(seq uint32) any {
-		return &control.OpenRequest{Seq: seq, RequestID: requestID}
+		return &control.Connect{Seq: seq, Fingerprint: fingerprint, RequestID: requestID}
 	})
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"errors"
 	"io"
 	"net"
 	"sync"
@@ -24,8 +25,15 @@ type testHandler struct {
 	mu         sync.Mutex
 	registered []string // name|hostkey
 	pinned     map[string]string
-	confirm    bool
-	asked      int
+	refuse     bool
+	hold       bool // ConfirmHelper waits until its context ends
+	asked      []asked
+}
+
+// asked is one ConfirmHelper call.
+type asked struct {
+	helper Helper
+	oldFP  string
 }
 
 func newHandler() *testHandler {
@@ -43,11 +51,16 @@ func (h *testHandler) HelperPinned(name, line string) {
 	h.pinned[name] = line
 	h.mu.Unlock()
 }
-func (h *testHandler) ConfirmHelperKeyChange(name, oldFP, newFP string) bool {
+func (h *testHandler) ConfirmHelper(ctx context.Context, helper Helper, oldFP string) bool {
 	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.asked++
-	return h.confirm
+	h.asked = append(h.asked, asked{helper, oldFP})
+	hold, refuse := h.hold, h.refuse
+	h.mu.Unlock()
+	if hold {
+		<-ctx.Done()
+		return true // answered too late
+	}
+	return !refuse
 }
 
 // waitPhase waits for a snapshot with phase p.
@@ -190,10 +203,6 @@ func TestFirstRunRegistration(t *testing.T) {
 	if s.RelayFingerprint != wantFP || s.Name != "" {
 		t.Fatalf("pending state %+v", s)
 	}
-	if f.client.RequestHelp() {
-		t.Fatal("pending client could request help")
-	}
-
 	f.relay.Register(f.fp, "anna@PC")
 	s = f.h.waitPhase(t, PhaseReady)
 	if s.Name != "anna@PC" {
@@ -232,6 +241,11 @@ func TestHostKeyChanged(t *testing.T) {
 	}
 	if s.RelayFingerprint != ssh.FingerprintSHA256(other.PublicKey()) {
 		t.Fatal("state shows the new key as the relay key")
+	}
+	var hk *HostKeyChangedError
+	if !errors.As(s.Err, &hk) || hk.OldFingerprint != ssh.FingerprintSHA256(other.PublicKey()) ||
+		hk.NewFingerprint != ssh.FingerprintSHA256(f.relay.HostKey()) || hk.NewKeyLine != identity.KeyLine(f.relay.HostKey(), "") {
+		t.Fatalf("change %+v", hk)
 	}
 }
 
@@ -326,59 +340,12 @@ func TestRefusedKey(t *testing.T) {
 	}
 }
 
-func TestRequestAndCancel(t *testing.T) {
-	f := setup(t, nil)
-	f.relay.Register(f.fp, "anna@PC")
-	f.client.Start()
-	f.h.waitPhase(t, PhaseReady)
-
-	if !f.client.RequestHelp() {
-		t.Fatal("RequestHelp refused")
-	}
-	recv[*control.RequestHelp](t, f.relay)
-	if f.client.RequestHelp() {
-		t.Fatal("second RequestHelp accepted")
-	}
-	// Wait until the relay's "open" arrived and the id is known.
-	var s State
-	for s.RequestID == "" {
-		s = f.h.waitPhase(t, PhaseRequested)
-	}
-	f.client.CancelRequest()
-	c := recv[*control.CancelRequest](t, f.relay)
-	if c.RequestID != s.RequestID {
-		t.Fatalf("cancelled %q, want %q", c.RequestID, s.RequestID)
-	}
-	f.h.waitPhase(t, PhaseReady)
-}
-
-func TestCancelBeforeOpen(t *testing.T) {
-	f := setup(t, nil)
-	f.relay.Register(f.fp, "anna@PC")
-	f.client.Start()
-	f.h.waitPhase(t, PhaseReady)
-	f.client.RequestHelp()
-	f.client.CancelRequest() // before the relay's "open" can have arrived
-	c := recv[*control.CancelRequest](t, f.relay)
-	if c.RequestID == "" {
-		t.Fatal("empty request id")
-	}
-	if st := f.client.State(); st.Phase != PhaseReady {
-		t.Fatalf("phase %v", st.Phase)
-	}
-}
-
 func startSession(t *testing.T, f *fixture, helperLine string) fakerelay.Session {
 	t.Helper()
 	f.relay.Register(f.fp, "anna@PC")
 	f.client.Start()
 	f.h.waitPhase(t, PhaseReady)
-	f.client.RequestHelp()
-	recv[*control.RequestHelp](t, f.relay)
-	for f.client.State().RequestID == "" {
-		f.h.waitPhase(t, PhaseRequested)
-	}
-	if err := f.relay.Take(f.fp, "alice", helperLine); err != nil {
+	if _, err := f.relay.Connect(f.fp, "alice", helperLine); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -411,8 +378,12 @@ func TestSessionAndEsc(t *testing.T) {
 	if pinned != identity.KeyLine(helper.PublicKey(), "") {
 		t.Fatalf("pinned %q", pinned)
 	}
-	if f.client.RequestHelp() {
-		t.Fatal("RequestHelp during a session")
+	// Another connect while the session runs is ignored.
+	f.relay.Connect(f.fp, "bob", helperLine)
+	select {
+	case <-f.relay.Sessions():
+		t.Fatal("second session during a session")
+	case <-time.After(100 * time.Millisecond):
 	}
 
 	// Local Esc ends the session and removes the hook.
@@ -427,13 +398,8 @@ func TestSessionAndEsc(t *testing.T) {
 		t.Fatal("last helper forgotten")
 	}
 
-	// A new request gives a new session.
-	f.client.RequestHelp()
-	recv[*control.RequestHelp](t, f.relay)
-	for f.client.State().RequestID == "" {
-		f.h.waitPhase(t, PhaseRequested)
-	}
-	f.relay.Take(f.fp, "alice", helperLine)
+	// The helper can connect again.
+	f.relay.Connect(f.fp, "alice", helperLine)
 	sess = <-f.relay.Sessions()
 	<-f.runner.started
 	f.h.waitPhase(t, PhaseInSession)
@@ -443,10 +409,69 @@ func TestSessionAndEsc(t *testing.T) {
 	<-f.escStop
 	f.h.waitPhase(t, PhaseReady)
 	f.h.mu.Lock()
-	asked := f.h.asked
-	f.h.mu.Unlock()
-	if asked != 0 {
-		t.Fatal("asked about an unchanged helper key")
+	defer f.h.mu.Unlock()
+	if len(f.h.asked) != 2 {
+		t.Fatalf("asked %d times for 2 sessions", len(f.h.asked))
+	}
+	fp := ssh.FingerprintSHA256(helper.PublicKey())
+	for _, a := range f.h.asked {
+		if a.helper.Name != "alice" || a.helper.DisplayName != "Helper alice" || a.helper.Fingerprint != fp {
+			t.Fatalf("asked about %+v", a.helper)
+		}
+		if a.oldFP != "" {
+			t.Fatalf("warned about an unchanged helper key: %q", a.oldFP)
+		}
+	}
+}
+
+func TestHelperRefused(t *testing.T) {
+	f := setup(t, nil)
+	f.h.refuse = true
+	_, helperLine := newKey(t, "alice")
+	f.relay.Register(f.fp, "anna@PC")
+	f.client.Start()
+	f.h.waitPhase(t, PhaseReady)
+	id, _ := f.relay.Connect(f.fp, "alice", helperLine)
+	if c := recv[*control.CancelRequest](t, f.relay); c.RequestID != id {
+		t.Fatalf("cancelled %q, want %q", c.RequestID, id)
+	}
+	select {
+	case <-f.relay.Sessions():
+		t.Fatal("session opened despite refusal")
+	case <-f.runner.started:
+		t.Fatal("runner started despite refusal")
+	case <-time.After(100 * time.Millisecond):
+	}
+	f.h.waitPhase(t, PhaseReady)
+	f.h.mu.Lock()
+	defer f.h.mu.Unlock()
+	if len(f.h.asked) != 1 || f.h.asked[0].oldFP != "" || f.h.pinned["alice"] != "" {
+		t.Fatalf("asked %+v, pinned %q", f.h.asked, f.h.pinned["alice"])
+	}
+}
+
+// TestRequestEndsWhileAsking: the relay ends the request (the user did not
+// answer in time); the question is withdrawn and no session is opened.
+func TestRequestEndsWhileAsking(t *testing.T) {
+	f := setup(t, nil)
+	f.h.hold = true
+	_, helperLine := newKey(t, "alice")
+	f.relay.Register(f.fp, "anna@PC")
+	f.client.Start()
+	f.h.waitPhase(t, PhaseReady)
+	id, _ := f.relay.Connect(f.fp, "alice", helperLine)
+	s := f.h.waitPhase(t, PhaseAsking)
+	if s.RequestID != id {
+		t.Fatalf("asking about %q, want %q", s.RequestID, id)
+	}
+	f.relay.Send(f.fp, control.RequestStateMsg{RequestID: id, State: control.RequestEnded})
+	f.h.waitPhase(t, PhaseReady)
+	select {
+	case <-f.relay.Sessions():
+		t.Fatal("session opened after the request ended")
+	case <-f.runner.started:
+		t.Fatal("runner started after the request ended")
+	case <-time.After(100 * time.Millisecond):
 	}
 }
 
@@ -465,16 +490,12 @@ func TestConnectionLossEndsSession(t *testing.T) {
 func TestHelperKeyChangeRefused(t *testing.T) {
 	_, oldLine := newKey(t, "alice")
 	f := setup(t, func(o *Options) { o.KnownHelpers = map[string]string{"alice": oldLine} })
+	f.h.refuse = true
 	_, newLine := newKey(t, "alice")
 	f.relay.Register(f.fp, "anna@PC")
 	f.client.Start()
 	f.h.waitPhase(t, PhaseReady)
-	f.client.RequestHelp()
-	recv[*control.RequestHelp](t, f.relay)
-	for f.client.State().RequestID == "" {
-		f.h.waitPhase(t, PhaseRequested)
-	}
-	f.relay.Take(f.fp, "alice", newLine)
+	f.relay.Connect(f.fp, "alice", newLine)
 	recv[*control.CancelRequest](t, f.relay)
 	select {
 	case <-f.relay.Sessions():
@@ -485,23 +506,32 @@ func TestHelperKeyChangeRefused(t *testing.T) {
 	}
 	f.h.mu.Lock()
 	defer f.h.mu.Unlock()
-	if f.h.asked != 1 || f.h.pinned["alice"] != "" {
-		t.Fatalf("asked %d, pinned %q", f.h.asked, f.h.pinned["alice"])
+	if len(f.h.asked) != 1 || f.h.asked[0].oldFP == "" || f.h.pinned["alice"] != "" {
+		t.Fatalf("asked %+v, pinned %q", f.h.asked, f.h.pinned["alice"])
 	}
 }
 
 func TestHelperKeyChangeAccepted(t *testing.T) {
 	_, oldLine := newKey(t, "alice")
 	f := setup(t, func(o *Options) { o.KnownHelpers = map[string]string{"alice": oldLine} })
-	f.h.confirm = true
 	helper, newLine := newKey(t, "alice")
 	startSession(t, f, newLine)
 	<-f.runner.started
 	f.h.mu.Lock()
 	defer f.h.mu.Unlock()
-	if f.h.asked != 1 || f.h.pinned["alice"] != identity.KeyLine(helper.PublicKey(), "") {
-		t.Fatalf("asked %d, pinned %q", f.h.asked, f.h.pinned["alice"])
+	want := ssh.FingerprintSHA256(oldKey(t, oldLine))
+	if len(f.h.asked) != 1 || f.h.asked[0].oldFP != want || f.h.pinned["alice"] != identity.KeyLine(helper.PublicKey(), "") {
+		t.Fatalf("asked %+v, pinned %q", f.h.asked, f.h.pinned["alice"])
 	}
+}
+
+func oldKey(t *testing.T, line string) ssh.PublicKey {
+	t.Helper()
+	k, _, _, _, err := ssh.ParseAuthorizedKey([]byte(line))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return k
 }
 
 func TestReconnect(t *testing.T) {

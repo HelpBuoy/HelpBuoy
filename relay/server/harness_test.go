@@ -185,6 +185,7 @@ func (e *env) client(name string) (*fake.Conn, ssh.Signer) {
 	e.t.Helper()
 	k := e.addClient(name)
 	c, _ := e.connect(k, control.RoleClient)
+	clientFPs.Store(c, fp(k))
 	return c, k
 }
 

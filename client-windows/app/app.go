@@ -29,22 +29,13 @@ type Screen int
 const (
 	ScreenAddress  Screen = iota // first run, step 1: relay address
 	ScreenKey                    // first run, step 2: send this key to your helper
-	ScreenMain                   // name and the Request help button
+	ScreenMain                   // name, waiting for a helper to connect
 	ScreenKeyError               // the app key exists but can't be used
 )
 
 func (s Screen) String() string {
 	return [...]string{"address", "key", "main", "key-error"}[s]
 }
-
-// Button is the label of the main button.
-type Button int
-
-// Main button labels.
-const (
-	ButtonRequest Button = iota // "Request help"
-	ButtonCancel                // "Cancel request"
-)
 
 // View is everything the window shows.
 type View struct {
@@ -68,10 +59,13 @@ type View struct {
 	Notice string
 
 	// ScreenMain
-	Name          string
-	Button        Button
-	ButtonEnabled bool
-	InSession     bool // the window is minimized while true
+	Name      string
+	Ready     bool // connected and registered: helpers can connect
+	InSession bool // the window is minimized while true
+	// RelayKeyChange is set when the relay showed another key than the
+	// pinned one; the client stopped connecting. The window warns, and
+	// TrustRelayKey pins the new key if the user accepts it.
+	RelayKeyChange *session.HostKeyChangedError
 
 	// ScreenKeyError
 	KeyDir string
@@ -80,7 +74,7 @@ type View struct {
 	Relay RelayChange
 
 	// Update is a newer release to offer. It is only set while the client
-	// is idle (no request, no session, not changing the relay), so the
+	// is idle (no helper connecting, no session, not changing the relay), so the
 	// offer never interrupts the user.
 	Update *update.Release
 }
@@ -88,7 +82,7 @@ type View struct {
 // RelayChange is the state of "Change relay address" in the settings.
 type RelayChange struct {
 	// Blocked says why the relay address can't be changed now (a request is
-	// open, a session runs, the first window is still open). Empty if it
+	// helper is connecting, a session runs, the first window is still open). Empty if it
 	// can.
 	Blocked string
 	// Connecting is true while the new address is being tried.
@@ -117,9 +111,10 @@ type UI interface {
 	// Render shows v. It is called from any goroutine, one call at a time,
 	// and must not wait for the controller.
 	Render(v View)
-	// ConfirmHelperKeyChange asks whether to continue although the helper
-	// shows a different key than last time. It may block.
-	ConfirmHelperKeyChange(name, oldFingerprint, newFingerprint string) bool
+	// ConfirmHelper asks whether helper h may take control. oldFingerprint
+	// is set when that helper showed a different key last time. It may
+	// block; when ctx ends the question is moot and it should return false.
+	ConfirmHelper(ctx context.Context, h session.Helper, oldFingerprint string) bool
 }
 
 // Deps are the controller's collaborators.
@@ -243,14 +238,13 @@ func (c *Controller) viewLocked() View {
 	switch {
 	case c.firstRun:
 		v.Relay.Blocked = "Type the relay address in the first window."
-	case c.st.Phase == session.PhaseRequested || c.st.Phase == session.PhaseTaken:
-		v.Relay.Blocked = "Cancel your request for help first."
+	case c.st.Phase == session.PhaseAsking:
+		v.Relay.Blocked = "A helper is connecting."
 	case c.st.Phase == session.PhaseInSession:
 		v.Relay.Blocked = "Not possible during a session."
 	}
 	idle := c.probe == nil && (v.Screen == ScreenAddress && !v.Connecting ||
-		v.Screen == ScreenMain && !v.InSession && v.Button == ButtonRequest &&
-			c.st.Phase != session.PhaseTaken)
+		v.Screen == ScreenMain && v.Ready)
 	if idle {
 		v.Update = c.newRelease
 	}
@@ -308,19 +302,20 @@ func (c *Controller) screenLocked() View {
 	v.Name = c.cfg.Name
 	switch c.st.Phase {
 	case session.PhaseReady:
-		v.Button, v.ButtonEnabled = ButtonRequest, true
-	case session.PhaseRequested:
-		v.Button, v.ButtonEnabled = ButtonCancel, true
-	case session.PhaseTaken:
-		v.Button = ButtonCancel
+		v.Ready = true
+	case session.PhaseAsking:
+		v.Notice = "A helper wants to connect."
 	case session.PhaseInSession:
-		v.Button = ButtonRequest
 		v.InSession = true
 	case session.PhaseConnecting:
 		v.Notice = "Connecting to the relay..."
 	case session.PhaseStopped:
 		if c.st.Err != nil {
 			v.Error = session.Describe(c.st.Err)
+			var hk *session.HostKeyChangedError
+			if errors.As(c.st.Err, &hk) {
+				v.RelayKeyChange = hk
+			}
 		}
 	}
 	return v
@@ -562,27 +557,21 @@ func (c *Controller) probeEventLocked(s session.State, name string) (old *sessio
 	return old, true
 }
 
-// RequestHelp is the Request help button.
-func (c *Controller) RequestHelp() {
+// TrustRelayKey pins the relay's new host key after the user accepted the
+// change warning for newFingerprint, and connects again.
+func (c *Controller) TrustRelayKey(newFingerprint string) {
 	c.mu.Lock()
-	cl := c.client
-	if c.probe != nil {
-		cl = nil // the relay is being changed
+	var hk *session.HostKeyChangedError
+	if c.firstRun || c.st.Phase != session.PhaseStopped || !errors.As(c.st.Err, &hk) || hk.NewFingerprint != newFingerprint {
+		c.mu.Unlock()
+		return
 	}
+	c.log.Warn("relay host key change accepted by the user", "old", hk.OldFingerprint, "new", hk.NewFingerprint)
+	c.cfg.RelayHostKey = hk.NewKeyLine
+	c.startClientLocked(c.cfg.RelayAddress, hk.NewKeyLine, true)
 	c.mu.Unlock()
-	if cl != nil {
-		cl.RequestHelp()
-	}
-}
-
-// CancelRequest is the Cancel request button.
-func (c *Controller) CancelRequest() {
-	c.mu.Lock()
-	cl := c.client
-	c.mu.Unlock()
-	if cl != nil {
-		cl.CancelRequest()
-	}
+	c.save()
+	c.update()
 }
 
 // Reset forgets the configuration (not the key) and starts the first-run
@@ -788,8 +777,8 @@ func (h handler) HelperPinned(name, line string) {
 	c.save()
 }
 
-func (h handler) ConfirmHelperKeyChange(name, oldFP, newFP string) bool {
-	return h.c.d.UI.ConfirmHelperKeyChange(name, oldFP, newFP)
+func (h handler) ConfirmHelper(ctx context.Context, helper session.Helper, oldFP string) bool {
+	return h.c.d.UI.ConfirmHelper(ctx, helper, oldFP)
 }
 
 // save writes the current configuration. Saves are serialized and each

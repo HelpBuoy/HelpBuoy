@@ -59,7 +59,7 @@ func TestKeyRate(t *testing.T) {
 	if role, _ := dialFrom(t, e, "127.0.0.1", hk); role != "" {
 		t.Fatal("second attempt within a second accepted")
 	}
-	h.Send(&control.OpenRequest{Seq: 9, RequestID: "none"})
+	h.Send(&control.Connect{Seq: 9, Fingerprint: "SHA256:none", RequestID: "none"})
 	if rep := mustWait[control.Reply](t, h, nil); rep.Seq != 9 {
 		t.Fatalf("first connection broken: %+v", rep)
 	}

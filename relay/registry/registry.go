@@ -10,8 +10,6 @@ package registry
 
 import (
 	"cmp"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,7 +39,6 @@ type Peer interface {
 // Config configures a Registry. Zero durations and counts take the defaults.
 type Config struct {
 	Now                  func() time.Time
-	RequestExpiry        time.Duration // unopened requests expire after this (1 h)
 	SessionStartTimeout  time.Duration // a taken request must get its session channel within this (1 min)
 	PendingIdle          time.Duration // pending connections are closed after this (24 h)
 	MaxSessionsPerHelper int           // 20
@@ -119,9 +116,6 @@ type Registry struct {
 func New(cfg Config, idx *store.Index) *Registry {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
-	}
-	if cfg.RequestExpiry == 0 {
-		cfg.RequestExpiry = time.Hour
 	}
 	if cfg.SessionStartTimeout == 0 {
 		cfg.SessionStartTimeout = time.Minute
@@ -241,10 +235,9 @@ func (r *Registry) OpenControl(c *Conn) error {
 	}
 	c.control = true
 	h := &control.Hello{
-		Role:          c.role,
-		RelayVersion:  r.cfg.Version,
-		ServerTime:    r.cfg.Now().UTC(),
-		RequestExpiry: control.Duration(r.cfg.RequestExpiry),
+		Role:         c.role,
+		RelayVersion: r.cfg.Version,
+		ServerTime:   r.cfg.Now().UTC(),
 	}
 	if c.role != control.RolePending {
 		h.Name = c.name
@@ -387,12 +380,10 @@ func (r *Registry) Handle(c *Conn, m any) error {
 	switch m := m.(type) {
 	case *control.ClientHello:
 		return r.clientHello(c, m)
-	case *control.RequestHelp:
-		return r.requestHelp(c)
 	case *control.CancelRequest:
 		return r.cancelRequest(c, m)
-	case *control.OpenRequest:
-		return r.openRequest(c, m)
+	case *control.Connect:
+		return r.connect(c, m)
 	case *control.RegisterClient:
 		return r.registerClient(c, m)
 	case *control.UnregisterClient:
@@ -419,43 +410,13 @@ func (r *Registry) clientHello(c *Conn, m *control.ClientHello) error {
 	return nil
 }
 
-func newID() string {
-	b := make([]byte, 16)
-	rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
-func (r *Registry) requestHelp(c *Conn) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if c.role != control.RoleClient {
-		return fmt.Errorf("%w: RequestHelp from %s", ErrNotAllowed, c.role)
-	}
-	if c.detached {
-		return nil
-	}
-	if c.req != nil {
-		// One request (or session) at a time.
-		send(c, &control.RequestStateMsg{State: control.RequestRejected})
-		return nil
-	}
-	q := &request{id: newID(), client: c, created: r.cfg.Now(), state: control.RequestOpen}
-	r.requests[q.id] = q
-	c.req = q
-	send(c, &control.RequestStateMsg{RequestID: q.id, State: control.RequestOpen})
-	r.log.Info("request", "event", "open", "id", q.id, "client", c.fp, "name", c.name)
-	r.changedLocked()
-	return nil
-}
-
 func (r *Registry) cancelRequest(c *Conn, m *control.CancelRequest) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if c.role != control.RoleClient {
 		return fmt.Errorf("%w: CancelRequest from %s", ErrNotAllowed, c.role)
 	}
-	// Open and taken requests can be cancelled. For a taken request this
-	// also closes the session channels if they are being opened or open.
+	// This also closes the session channels if they are being opened or open.
 	if q := c.req; q != nil && q.id == m.RequestID {
 		r.endRequestLocked(q, control.RequestCancelled, true)
 	}
@@ -500,33 +461,42 @@ func (r *Registry) helperSessionsLocked(h *Conn) int {
 	return n
 }
 
-func (r *Registry) openRequest(c *Conn, m *control.OpenRequest) error {
+// connect starts a session from helper c: a request, taken by c, that waits
+// for the client's user to allow it.
+func (r *Registry) connect(c *Conn, m *control.Connect) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if c.role != control.RoleHelper {
-		return fmt.Errorf("%w: OpenRequest from %s", ErrNotAllowed, c.role)
+		return fmt.Errorf("%w: Connect from %s", ErrNotAllowed, c.role)
 	}
-	q := r.requests[m.RequestID]
-	if q == nil || q.state != control.RequestOpen || q.client.detached {
-		send(c, &control.Reply{Seq: m.Seq, Error: "request is not open"})
+	fail := func(msg string) error {
+		send(c, &control.Reply{Seq: m.Seq, Error: msg})
 		return nil
 	}
-	if r.helperSessionsLocked(c) >= r.cfg.MaxSessionsPerHelper {
-		send(c, &control.Reply{Seq: m.Seq, Error: fmt.Sprintf("too many sessions (max %d)", r.cfg.MaxSessionsPerHelper)})
-		return nil
+	if !control.ValidRequestID(m.RequestID) || r.requests[m.RequestID] != nil {
+		return fail("bad request id")
 	}
-	q.state = control.RequestTaken
-	q.helper = c
-	q.takenAt = r.cfg.Now()
+	cl := r.conns[m.Fingerprint]
+	switch {
+	case cl == nil || cl.role != control.RoleClient || cl.detached:
+		return fail("client is not online")
+	case cl.req != nil:
+		return fail("client is busy")
+	case r.helperSessionsLocked(c) >= r.cfg.MaxSessionsPerHelper:
+		return fail(fmt.Sprintf("too many sessions (max %d)", r.cfg.MaxSessionsPerHelper))
+	}
+	now := r.cfg.Now()
+	q := &request{id: m.RequestID, client: cl, created: now, state: control.RequestTaken, helper: c, takenAt: now}
+	r.requests[q.id] = q
+	cl.req = q
 	send(c, &control.Reply{Seq: m.Seq})
-	send(q.client, &control.RequestStateMsg{RequestID: q.id, State: control.RequestTaken})
-	send(q.client, &control.SessionReady{
+	send(cl, &control.SessionReady{
 		RequestID:         q.id,
 		HelperName:        c.name,
 		HelperDisplayName: c.displayName,
 		HelperKey:         c.keyLine,
 	})
-	r.log.Info("request", "event", "taken", "id", q.id, "client", q.client.fp, "helper", c.name)
+	r.log.Info("request", "event", "connect", "id", q.id, "client", cl.fp, "helper", c.name)
 	r.changedLocked()
 	return nil
 }
@@ -681,7 +651,7 @@ func (s *Session) End(res splice.Result) {
 	r.endRequestLocked(s.req, control.RequestEnded, true)
 }
 
-// Sweep expires open requests, drops taken requests whose session never
+// Sweep drops requests whose session never
 // started, and closes pending connections past their idle timeout.
 func (r *Registry) Sweep() {
 	r.mu.Lock()
@@ -689,8 +659,6 @@ func (r *Registry) Sweep() {
 	now := r.cfg.Now()
 	for _, q := range r.requests {
 		switch {
-		case q.state == control.RequestOpen && now.Sub(q.created) >= r.cfg.RequestExpiry:
-			r.endRequestLocked(q, control.RequestExpired, true)
 		case q.state == control.RequestTaken && q.sess == nil && now.Sub(q.takenAt) >= r.cfg.SessionStartTimeout:
 			r.endRequestLocked(q, control.RequestEnded, true)
 		}
