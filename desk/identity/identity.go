@@ -1,5 +1,5 @@
 // Package identity loads the desk app's own application-specific key
-// (PLAN.md 7.1) through proto/appkey, in the data directory "helpbuoy".
+// (PLAN.md 7.1) through proto/appkey, in the data directory "helpbuoy-desk".
 package identity
 
 import (
@@ -12,8 +12,9 @@ import (
 	"github.com/mevdschee/helpbuoy/proto/identity"
 )
 
-// AppName is the data directory name shared with the client app's layout.
-const AppName = "helpbuoy"
+// AppName is the data directory name. It is not the client's "helpbuoy",
+// so the two apps never share a key on one machine.
+const AppName = "helpbuoy-desk"
 
 // Dir returns the techie's data directory. It does not create it.
 func Dir() (string, error) { return datadir.Dir(AppName) }

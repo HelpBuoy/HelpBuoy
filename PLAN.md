@@ -643,9 +643,9 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
 
 ### 7.1 Identity and server connection
 - Same key handling as the computer (6.1, `proto/appkey`): its own unencrypted Ed25519 key in
-  the app's data directory (`%LOCALAPPDATA%\helpbuoy` on Windows,
-  `~/.local/share/helpbuoy` on Linux, `~/Library/Application Support/helpbuoy` on
-  macOS), generated once on first start, never regenerated automatically. Like the computer,
+  the app's data directory (`%LOCALAPPDATA%\helpbuoy-desk` on Windows,
+  `~/.local/share/helpbuoy-desk` on Linux, `~/Library/Application Support/helpbuoy-desk` on
+  macOS; not the computer's `helpbuoy`, so the two apps never share a key), generated once on first start, never regenerated automatically. Like the computer,
   **Remove key** is only offered on the damaged key screen (a centered box with the error and
   the key folder). The public key, with **Copy public key**, shows on the connect flow when a
   server does not know this techie yet. No certificates.
