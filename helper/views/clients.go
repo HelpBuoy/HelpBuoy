@@ -16,62 +16,15 @@ import (
 	"github.com/mevdschee/help-me-win/proto/control"
 )
 
-// drawClientsPage draws the Clients tab: a heading with the relay status
-// as a badge (so it does not read as a list entry), then the clients,
-// online first, offline collapsed.
+// drawClientsPage draws the Clients tab: the clients, online first,
+// offline collapsed. The relay status is on the Relay tab.
 func (a *App) drawClientsPage(r rl.Rectangle) {
 	c := a.ui
 	rl.DrawRectangleRec(r, ui.ColPanel)
 	c.Text(ui.Bold, ui.SizeHeading, "Clients", r.X+16, r.Y+14, ui.ColText)
-	right := r.X + r.Width - 16
-	if a.demo == nil {
-		// Disconnect goes back to the connect screen; not while helping.
-		bx := right - 120
-		busy := a.sessionCount() > 0
-		if c.Button("clients/disconnect", rl.NewRectangle(bx, r.Y+14, 120, 30), "Disconnect", ui.Normal, busy) {
-			a.disconnect()
-		}
-		if busy && c.Hover(rl.NewRectangle(bx, r.Y+14, 120, 30)) {
-			c.Tooltip("End the open sessions first")
-		}
-		right = bx - 12
-	}
-	y := a.drawRelayBadge(r.X+140, r.Y+14, right)
-	list := rl.NewRectangle(r.X, y+12, r.Width, r.Y+r.Height-(y+12))
+	list := rl.NewRectangle(r.X, r.Y+56, r.Width, r.Height-56)
 	rl.DrawLineV(rl.NewVector2(r.X, list.Y), rl.NewVector2(r.X+r.Width, list.Y), ui.ColBorder)
 	a.drawClientList(list)
-}
-
-// drawRelayBadge draws "Relay: <status>" as a rounded badge between x and
-// right, with the detail (address or error) inside it when online and on
-// the line below otherwise. It returns the y below what it drew.
-func (a *App) drawRelayBadge(x, y, right float32) float32 {
-	c := a.ui
-	text, detail, col := a.statusText()
-	label := "Relay: " + text
-	if a.status.Status == relayconn.StatusOnline && detail != "" {
-		label += " · " + detail
-		detail = ""
-	}
-	maxW := right - x
-	textW := min(c.Measure(ui.Regular, ui.SizeSmall, label).X, maxW-36)
-	badge := rl.NewRectangle(x, y+2, textW+36, 26)
-	rl.DrawRectangleRounded(badge, 0.5, 8, ui.ColBackground)
-	rl.DrawRectangleRoundedLinesEx(badge, 0.5, 8, 1, ui.ColBorder)
-	rl.DrawCircleV(rl.NewVector2(badge.X+14, badge.Y+badge.Height/2), 4.5, col)
-	c.TextIn(ui.Regular, ui.SizeSmall, c.Ellipsize(ui.Regular, ui.SizeSmall, label, textW),
-		rl.NewRectangle(badge.X+26, badge.Y, textW, badge.Height), ui.ColText)
-	y = badge.Y + badge.Height + 6
-	if detail != "" {
-		for i, l := range c.Wrap(ui.Regular, ui.SizeSmall, detail, maxW) {
-			if i == 2 {
-				break
-			}
-			c.Text(ui.Regular, ui.SizeSmall, l, x, y, ui.ColMuted)
-			y += 18
-		}
-	}
-	return y
 }
 
 // statusText describes the relay connection for the UI.

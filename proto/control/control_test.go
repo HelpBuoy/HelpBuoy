@@ -19,6 +19,7 @@ func TestRoundTripAll(t *testing.T) {
 			Helpers: []HelperInfo{{Name: "alice", Online: true}}},
 		&RegisterClient{Seq: 1, PublicKey: "ssh-ed25519 AAAA anna@pc1"},
 		&UnregisterClient{Seq: 2, Fingerprint: "SHA256:x"},
+		&RegisterHelper{Seq: 5, PublicKey: "ssh-ed25519 AAAA bob@pc2", Name: "bob"},
 		&RenameClient{Seq: 4, Fingerprint: "SHA256:x", Name: "Anna laptop"},
 		&Connect{Seq: 4, Fingerprint: "SHA256:x", RequestID: "r2"},
 		&Reply{Seq: 3, Error: "request is not open"},

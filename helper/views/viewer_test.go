@@ -5,7 +5,9 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
+	"github.com/mevdschee/help-me-win/proto/control"
 	"github.com/mevdschee/help-me-win/proto/input"
+	"github.com/mevdschee/help-me-win/proto/relayaddr"
 	"github.com/mevdschee/help-me-win/proto/screen"
 )
 
@@ -52,6 +54,46 @@ func TestDemoShapes(t *testing.T) {
 		}
 		if _, err := screen.DecodeCursorShape(screen.EncodeCursorShape(c)); err != nil {
 			t.Errorf("shape %d: %v", c.ID, err)
+		}
+	}
+}
+
+func TestSortedHelpersAndHelping(t *testing.T) {
+	p := &control.Presence{
+		Helpers: []control.HelperInfo{{Name: "zoe", Online: true}, {Name: "bob"}, {Name: "Alice", Online: true}},
+		Clients: []control.ClientInfo{{Name: "jan@PC", InSessionWith: "zoe"}, {Name: "anna@PC", InSessionWith: "zoe"}, {Name: "piet@PC"}},
+	}
+	hs := sortedHelpers(p)
+	if len(hs) != 3 || hs[0].Name != "Alice" || hs[1].Name != "zoe" || hs[2].Name != "bob" {
+		t.Fatalf("order %+v", hs)
+	}
+	if got := helping(p, "zoe"); len(got) != 2 || got[0] != "anna@PC" || got[1] != "jan@PC" {
+		t.Fatalf("helping %q", got)
+	}
+	if got := helping(p, "bob"); len(got) != 0 {
+		t.Fatalf("bob helping %q", got)
+	}
+}
+
+func TestHelperNames(t *testing.T) {
+	for comment, want := range map[string]string{"bob@PC": "bob", "Bob Smith@pc": "", "": "", "alice": "alice"} {
+		if got := helperNameFrom(comment); got != want {
+			t.Errorf("helperNameFrom(%q) = %q, want %q", comment, got, want)
+		}
+	}
+	if validHelperName("with space") || !validHelperName("bob") || validHelperName("") {
+		t.Error("validHelperName")
+	}
+}
+
+func TestFieldText(t *testing.T) {
+	for in, want := range map[string]string{"localhost": "", "localhost:2300": "localhost:2300", "helpme.example.com": "helpme.example.com:5938"} {
+		ad, err := relayaddr.Parse(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := fieldText(ad); got != want {
+			t.Errorf("fieldText(%s) = %q, want %q", in, got, want)
 		}
 	}
 }

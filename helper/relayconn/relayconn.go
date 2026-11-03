@@ -184,6 +184,13 @@ func (c *Conn) Close() {
 	<-c.done
 }
 
+// RegisterHelper adds another helper key under name.
+func (c *Conn) RegisterHelper(line, name string) <-chan error {
+	return c.command(func(seq uint32) any {
+		return &control.RegisterHelper{Seq: seq, PublicKey: line, Name: name}
+	})
+}
+
 // RegisterClient registers a client key line; name overrides the comment.
 func (c *Conn) RegisterClient(line, name string) <-chan error {
 	return c.command(func(seq uint32) any {

@@ -116,8 +116,9 @@ func (c *Context) Checkbox(id string, r rl.Rectangle, label string, v *bool) boo
 	return false
 }
 
-// Tab draws one tab of a tab bar and reports a click on it.
-func (c *Context) Tab(id string, r rl.Rectangle, title string, active bool) bool {
+// Tab draws one tab of a tab bar and reports a click on it. With icon set
+// the app icon (a lifebuoy) stands before the title, for session tabs.
+func (c *Context) Tab(id string, r rl.Rectangle, title string, active, icon bool) bool {
 	hover := c.Hover(r)
 	bg := ColBackground
 	if active {
@@ -130,13 +131,18 @@ func (c *Context) Tab(id string, r rl.Rectangle, title string, active bool) bool
 		rl.DrawRectangleRec(rl.NewRectangle(r.X, r.Y+r.Height-3, r.Width, 3), ColAccent)
 	}
 	rl.DrawLineV(rl.NewVector2(r.X+r.Width, r.Y+6), rl.NewVector2(r.X+r.Width, r.Y+r.Height-6), ColBorder)
-	textW := r.Width - 24
+	textX := r.X + 12
+	if icon {
+		c.DrawIcon(rl.NewVector2(r.X+21, r.Y+r.Height/2), 18)
+		textX += 22
+	}
+	textW := r.X + r.Width - 12 - textX
 	font := Regular
 	col := ColMuted
 	if active {
 		font, col = Bold, ColText
 	}
-	c.TextIn(font, SizeBody, c.Ellipsize(font, SizeBody, title, textW), rl.NewRectangle(r.X+12, r.Y, textW, r.Height), col)
+	c.TextIn(font, SizeBody, c.Ellipsize(font, SizeBody, title, textW), rl.NewRectangle(textX, r.Y, textW, r.Height), col)
 	if hover {
 		c.SetCursor(rl.MouseCursorPointingHand)
 	}

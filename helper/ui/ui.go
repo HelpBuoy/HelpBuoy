@@ -64,6 +64,9 @@ type Context struct {
 	scale float32
 	fonts map[fontKey]rl.Font
 
+	iconPNG []byte       // the app icon, set by SetIcon
+	icon    rl.Texture2D // loaded on first use, with mipmaps
+
 	// Input snapshot of this frame.
 	Mouse         rl.Vector2
 	MousePressed  bool // left button went down this frame
@@ -134,12 +137,42 @@ func (c *Context) font(kind FontKind, size float32) rl.Font {
 	return f
 }
 
-// Unload frees all fonts.
+// Unload frees all fonts and the icon texture.
 func (c *Context) Unload() {
 	for k, f := range c.fonts {
 		rl.UnloadFont(f)
 		delete(c.fonts, k)
 	}
+	if c.icon.ID != 0 {
+		rl.UnloadTexture(c.icon)
+		c.icon = rl.Texture2D{}
+	}
+}
+
+// SetIcon sets the app icon (PNG) that DrawIcon draws.
+func (c *Context) SetIcon(png []byte) { c.iconPNG = png }
+
+// DrawIcon draws the app icon size logical pixels square, centered on
+// center. The texture has mipmaps and trilinear filtering, so it stays
+// smooth when drawn much smaller than the PNG.
+func (c *Context) DrawIcon(center rl.Vector2, size float32) {
+	if c.icon.ID == 0 {
+		if len(c.iconPNG) == 0 {
+			return
+		}
+		img := rl.LoadImageFromMemory(".png", c.iconPNG, int32(len(c.iconPNG)))
+		if img == nil || img.Width == 0 {
+			c.iconPNG = nil
+			return
+		}
+		c.icon = rl.LoadTextureFromImage(img)
+		rl.UnloadImage(img)
+		rl.GenTextureMipmaps(&c.icon)
+		rl.SetTextureFilter(c.icon, rl.FilterTrilinear)
+	}
+	src := rl.NewRectangle(0, 0, float32(c.icon.Width), float32(c.icon.Height))
+	dst := rl.NewRectangle(center.X-size/2, center.Y-size/2, size, size)
+	rl.DrawTexturePro(c.icon, src, dst, rl.NewVector2(0, 0), 0, rl.White)
 }
 
 func dpiScale() float32 {

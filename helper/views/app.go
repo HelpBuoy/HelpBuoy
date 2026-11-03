@@ -1,5 +1,5 @@
 // Package views holds the helper app's screens: a tab bar that is always
-// there, with the fixed Clients, Register client and Settings tabs followed by
+// there, with the fixed Clients, Helpers, Register client, Register helper and Relay tabs followed by
 // one tab per open session (PLAN.md section 7).
 //
 // App owns all UI state and runs on the main OS thread. Network goroutines
@@ -33,7 +33,8 @@ type Options struct {
 	DataDir string // "" means the per-user data directory
 	Version string
 	Demo    bool   // fake relay data, no network, nothing written to disk
-	Page    string // start page: "register", "settings" or "session" (demo)
+	Page    string // start page: "register", "relay" or "session" (demo)
+	Icon    []byte // the app icon (PNG), shown on session tabs
 }
 
 // Layout sizes in logical pixels.
@@ -51,6 +52,7 @@ const (
 // has its own.
 type backend interface {
 	RegisterClient(line, name string) <-chan error
+	RegisterHelper(line, name string) <-chan error
 	RenameClient(fingerprint, name string) <-chan error
 	UnregisterClient(fingerprint string) <-chan error
 	Connect(fingerprint, requestID string) <-chan error
@@ -62,12 +64,14 @@ type tabKind int
 // follow them.
 const (
 	tabClients tabKind = iota
+	tabHelpers
 	tabRegister
-	tabSettings
+	tabRegisterHelper
+	tabRelay
 	tabSession
 )
 
-const fixedTabs = 3
+const fixedTabs = 5
 
 type tab struct {
 	kind tabKind
@@ -126,9 +130,10 @@ type App struct {
 	rename        renameState
 
 	tabs       []*tab
-	active     int // index into tabs
-	reg        registerPage
-	set        settingsPage
+	active     int          // index into tabs
+	reg        registerPage // Register client
+	regHelper  registerPage // Register helper
+	confirmKey bool         // the Remove key confirmation on the damaged key screen
 	pageHeight map[tabKind]float32
 
 	lastInput  time.Time
@@ -155,7 +160,7 @@ func New(opts Options) *App {
 	a := &App{
 		opts:       opts,
 		ui:         ui.New(),
-		tabs:       []*tab{{kind: tabClients}, {kind: tabRegister}, {kind: tabSettings}},
+		tabs:       []*tab{{kind: tabClients}, {kind: tabHelpers}, {kind: tabRegister}, {kind: tabRegisterHelper}, {kind: tabRelay}},
 		opened:     map[string]time.Time{},
 		opening:    map[string]bool{},
 		waiting:    map[string]*waitInfo{},
@@ -163,19 +168,23 @@ func New(opts Options) *App {
 		pageHeight: map[tabKind]float32{},
 		cfg:        &config.Config{},
 	}
-	a.reg.init()
+	a.ui.SetIcon(opts.Icon)
+	a.reg.init(false)
+	a.regHelper.init(true)
 	a.cs.init()
 	if opts.Demo {
 		a.demo = newDemo(a)
 	} else {
 		a.load()
 	}
-	a.cs.addr.Edit.SetText(a.cfg.RelayAddr)
+	if ad, err := relayaddr.Parse(a.cfg.RelayAddr); err == nil {
+		a.cs.addr.Edit.SetText(fieldText(ad))
+	}
 	switch opts.Page {
 	case "register":
 		a.openPage(tabRegister)
-	case "settings":
-		a.openPage(tabSettings)
+	case "relay":
+		a.openPage(tabRelay)
 	case "session":
 		if a.demo != nil {
 			a.demo.connectFirst()
@@ -556,8 +565,8 @@ func (a *App) leaveTab(i int) {
 		a.confirmRemove = ""
 	case tabRegister:
 		a.reg.reset()
-	case tabSettings:
-		a.set.reset()
+	case tabRegisterHelper:
+		a.regHelper.reset()
 	}
 }
 
@@ -642,7 +651,7 @@ func (a *App) drawWorkArea() {
 	}
 	for i, t := range a.tabs {
 		r := rl.NewRectangle(float32(i)*tabW, 0, tabW, tabBarH)
-		if a.ui.Tab(fmt.Sprintf("tab/%p", t), r, a.tabTitle(t), i == a.active) {
+		if a.ui.Tab(fmt.Sprintf("tab/%p", t), r, a.tabTitle(t), i == a.active, t.kind == tabSession) {
 			a.activate(i)
 		}
 	}
@@ -652,10 +661,14 @@ func (a *App) drawWorkArea() {
 		a.drawSession(t.sess, content)
 	case tabClients:
 		a.drawClientsPage(content)
+	case tabHelpers:
+		a.drawHelpersPage(content)
 	case tabRegister:
-		a.page(tabRegister, content, a.drawRegister)
-	case tabSettings:
-		a.page(tabSettings, content, a.drawSettings)
+		a.page(tabRegister, content, a.registerPageFor(&a.reg))
+	case tabRegisterHelper:
+		a.page(tabRegisterHelper, content, a.registerPageFor(&a.regHelper))
+	case tabRelay:
+		a.page(tabRelay, content, a.drawRelay)
 	}
 }
 
@@ -663,10 +676,14 @@ func (a *App) tabTitle(t *tab) string {
 	switch t.kind {
 	case tabClients:
 		return "Clients"
+	case tabHelpers:
+		return "Helpers"
 	case tabRegister:
 		return "Register client"
-	case tabSettings:
-		return "Settings"
+	case tabRegisterHelper:
+		return "Register helper"
+	case tabRelay:
+		return "Relay"
 	}
 	return a.sessionName(t.sess)
 }
@@ -684,38 +701,49 @@ func (a *App) page(k tabKind, r rl.Rectangle, draw func(x, y, w float32) float32
 	a.pageHeight[k] = bottom - top + 2*pad
 }
 
-// drawKeyProblem replaces the whole window when the key can't be used.
+// drawKeyProblem replaces the whole window when the key can't be used: a
+// centered box with the problem, the key folder and Remove key, like the
+// client's damaged key screen.
 func (a *App) drawKeyProblem() {
 	c := a.ui
 	w, h := ui.WindowSize()
-	x, y := float32(48), h/2-120
-	width := min(w-96, 640)
+	bw := min(w-48, 600)
+	bh := max(a.cs.boxH, 200)
+	box := rl.NewRectangle((w-bw)/2, max((h-bh)/2, 24), bw, bh)
+	rl.DrawRectangleRounded(box, 0.04, 8, ui.ColPanel)
+	rl.DrawRectangleRoundedLinesEx(box, 0.04, 8, 1, ui.ColBorder)
+	const pad = 32
+	x, y, width := box.X+pad, box.Y+pad, box.Width-2*pad
 	if a.keyRemoved {
 		c.Text(ui.Bold, ui.SizeHeading, "The key was removed", x, y, ui.ColText)
 		y += 36
-		y += c.Paragraph(ui.Regular, ui.SizeBody, "Start the app again to create a new key, then send the new public key to the relay admin.", x, y, width, ui.ColMuted)
+		y += c.Paragraph(ui.Regular, ui.SizeBody, "Start the app again to create a new key. The relay admin, or another helper on the Register helper tab, then adds the new key.", x, y, width, ui.ColMuted)
 	} else {
 		c.Text(ui.Bold, ui.SizeHeading, "The helper key can't be used", x, y, ui.ColText)
 		y += 36
 		y += c.Paragraph(ui.Regular, ui.SizeBody, a.keyErr.Error(), x, y, width, ui.ColError)
+		if a.dir != "" {
+			y += 10
+			y += c.Paragraph(ui.Regular, ui.SizeSmall, "Folder: "+a.dir, x, y, width, ui.ColMuted)
+		}
 		if errors.Is(a.keyErr, appkey.ErrDamaged) && a.dir != "" {
 			y += 12
-			y += c.Paragraph(ui.Regular, ui.SizeBody, "The key is never replaced automatically. Remove it to create a new one on the next start; the relay admin must then add the new key.", x, y, width, ui.ColMuted)
+			y += c.Paragraph(ui.Regular, ui.SizeBody, "The key is never replaced on its own. Remove key deletes it and makes a new one on the next start; the relay admin or another helper must then add the new key.", x, y, width, ui.ColMuted)
 			y += 16
-			if a.set.confirmKey {
+			if a.confirmKey {
 				if c.Button("keyproblem/confirm", rl.NewRectangle(x, y, 160, 36), "Remove key", ui.Danger, false) {
 					if err := identity.Remove(a.dir); err != nil {
 						a.keyErr = err
 					} else {
 						a.keyErr, a.keyRemoved = nil, true
 					}
-					a.set.confirmKey = false
+					a.confirmKey = false
 				}
 				if c.Button("keyproblem/cancel", rl.NewRectangle(x+172, y, 100, 36), "Cancel", ui.Normal, false) {
-					a.set.confirmKey = false
+					a.confirmKey = false
 				}
-			} else if c.Button("keyproblem/remove", rl.NewRectangle(x, y, 160, 36), "Remove key...", ui.Normal, false) {
-				a.set.confirmKey = true
+			} else if c.Button("keyproblem/remove", rl.NewRectangle(x, y, 160, 36), "Remove key…", ui.Normal, false) {
+				a.confirmKey = true
 			}
 			y += 36
 		}
@@ -724,4 +752,6 @@ func (a *App) drawKeyProblem() {
 	if c.Button("keyproblem/quit", rl.NewRectangle(x, y, 100, 36), "Quit", ui.Primary, false) {
 		a.quit = true
 	}
+	y += 36
+	a.cs.boxH = y - box.Y + pad
 }

@@ -102,8 +102,9 @@ const (
 	// relay -> any: fatal error before the relay closes the connection
 	MsgError MsgType = 13
 	// helper -> relay
-	MsgRenameClient MsgType = 14
-	MsgConnect      MsgType = 15
+	MsgRenameClient   MsgType = 14
+	MsgConnect        MsgType = 15
+	MsgRegisterHelper MsgType = 16
 )
 
 // Hello is the relay's first message on every control channel.
@@ -173,6 +174,14 @@ type RegisterClient struct {
 	Seq       uint32 `json:"seq"`
 	PublicKey string `json:"public_key"`
 	Name      string `json:"name,omitempty"`
+}
+
+// RegisterHelper adds another helper key, like hmw-relay helper add. Name
+// is required (1 to 64 characters, no spaces).
+type RegisterHelper struct {
+	Seq       uint32 `json:"seq"`
+	PublicKey string `json:"public_key"`
+	Name      string `json:"name"`
 }
 
 // RenameClient changes the name helpers see for a registered client (and the
@@ -310,6 +319,8 @@ func typeOf(m any) (MsgType, error) {
 		return MsgUnregisterClient, nil
 	case *RenameClient, RenameClient:
 		return MsgRenameClient, nil
+	case *RegisterHelper, RegisterHelper:
+		return MsgRegisterHelper, nil
 	case *Connect, Connect:
 		return MsgConnect, nil
 	case *Reply, Reply:
@@ -343,6 +354,8 @@ func newOf(t MsgType) (any, error) {
 		return &UnregisterClient{}, nil
 	case MsgRenameClient:
 		return &RenameClient{}, nil
+	case MsgRegisterHelper:
+		return &RegisterHelper{}, nil
 	case MsgConnect:
 		return &Connect{}, nil
 	case MsgReply:

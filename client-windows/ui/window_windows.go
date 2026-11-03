@@ -315,7 +315,7 @@ func (w *Window) events() {
 	w.btnCopy.On().BnClicked(func() { w.copyText(w.view.KeyLine, w.btnCopy) })
 	w.btnRemoveKey.On().BnClicked(w.confirmRemoveKey)
 	w.lnkChange.On().NmClick(func(_ *win.NMLINK) { w.ctrl.Disconnect() })
-	w.btnDisconnect.On().BnClicked(w.ctrl.Disconnect)
+	w.btnDisconnect.On().BnClicked(func() { w.ctrl.Disconnect() })
 }
 
 func (w *Window) connect() {

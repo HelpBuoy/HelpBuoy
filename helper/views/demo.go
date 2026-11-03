@@ -106,6 +106,26 @@ func (d *demo) RegisterClient(line, name string) <-chan error {
 	return done(nil)
 }
 
+// RegisterHelper adds a demo helper locally.
+func (d *demo) RegisterHelper(line, name string) <-chan error {
+	key, _, err := identity.ParseLine(line)
+	if err != nil {
+		return done(err)
+	}
+	p := d.a.presence
+	fp := ssh.FingerprintSHA256(key)
+	for _, h := range p.Helpers {
+		if h.Name == name {
+			return done(fmt.Errorf("helper %q already exists", name))
+		}
+		if h.Fingerprint == fp {
+			return done(fmt.Errorf("key %s is already the key of helper %q", fp, h.Name))
+		}
+	}
+	p.Helpers = append(p.Helpers, control.HelperInfo{Name: name, Fingerprint: fp})
+	return done(nil)
+}
+
 // RenameClient renames a demo client locally, with the relay's rules.
 func (d *demo) RenameClient(fp, name string) <-chan error {
 	name = strings.TrimSpace(name)

@@ -2,6 +2,7 @@ package views
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -26,27 +27,32 @@ type connectScreen struct {
 }
 
 func (s *connectScreen) init() {
-	s.addr.Placeholder = "helpme.example.com"
+	s.addr.Placeholder = "Local relay on this computer"
 	s.addr.Edit.Max = 260
 }
 
 // connecting reports whether a Connect is in progress or done.
 func (a *App) connecting() bool { return a.conn != nil || a.localWait }
 
-// startConnect is the Connect button. localhost starts the relay inside
-// this app, with this helper's key added, and connects to it.
+// startConnect is the Connect button. An empty address (or localhost)
+// starts the relay inside this app, with this helper's key added, and
+// connects to it.
 func (a *App) startConnect() {
 	s := &a.cs
 	if a.connecting() || a.key == nil {
 		return
 	}
-	ad, err := relayaddr.Parse(s.addr.Edit.String())
+	text := strings.TrimSpace(s.addr.Edit.String())
+	if text == "" {
+		text = "localhost"
+	}
+	ad, err := relayaddr.Parse(text)
 	if err != nil {
 		s.err = capitalize(err.Error()) + "."
 		return
 	}
 	s.err, s.changedKey, s.confirmTrust = "", false, false
-	s.addr.Edit.SetText(ad.String())
+	s.addr.Edit.SetText(fieldText(ad))
 	if a.cfg.SetRelayAddr(ad) {
 		a.saveConfig()
 	}
@@ -177,7 +183,7 @@ func (a *App) drawConnect(x, y, w float32) float32 {
 		a.startConnect()
 	}
 	y += 44
-	y += c.Paragraph(ui.Regular, ui.SizeSmall, "Type localhost to run the relay on this computer, with you as its helper.", x, y, w, ui.ColMuted)
+	y += c.Paragraph(ui.Regular, ui.SizeSmall, "Leave empty to run a local relay on this computer, with you as its helper.", x, y, w, ui.ColMuted)
 	if s.err != "" {
 		y += 10
 		y += c.Paragraph(ui.Regular, ui.SizeSmall, s.err, x, y, w, ui.ColError)
@@ -209,9 +215,9 @@ func (a *App) drawConnect(x, y, w float32) float32 {
 func (a *App) drawNotHelper(x, y, w float32) float32 {
 	c := a.ui
 	s := &a.cs
-	c.Text(ui.Bold, ui.SizeHeading, "Send your key to the relay admin", x, y, ui.ColText)
+	c.Text(ui.Bold, ui.SizeHeading, "Send your key to get added", x, y, ui.ColText)
 	y += 36
-	y += c.Paragraph(ui.Regular, ui.SizeBody, "The relay at "+a.addr.String()+" does not know this helper yet. Send this public key to its admin, who adds it with hmw-relay helper add.", x, y, w, ui.ColMuted)
+	y += c.Paragraph(ui.Regular, ui.SizeBody, "The relay at "+a.addr.String()+" does not know this helper yet. Send this public key to a helper on it (Register helper tab) or to its admin (hmw-relay helper add).", x, y, w, ui.ColMuted)
 	y += 12
 	for _, l := range c.Wrap(ui.Mono, ui.SizeSmall, a.key.Line, w) {
 		c.Text(ui.Mono, ui.SizeSmall, l, x, y, ui.ColText)
@@ -234,6 +240,15 @@ func (a *App) drawNotHelper(x, y, w float32) float32 {
 		a.disconnect()
 	}
 	return y + 34
+}
+
+// fieldText is how an address shows in the field: empty for the local
+// relay on the default port.
+func fieldText(ad relayaddr.Addr) string {
+	if config.IsLocal(ad) && ad.Port == relayaddr.DefaultPort {
+		return ""
+	}
+	return ad.String()
 }
 
 // capitalize upper-cases the first letter of an error message.

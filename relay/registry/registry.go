@@ -384,6 +384,8 @@ func (r *Registry) Handle(c *Conn, m any) error {
 		return r.registerClient(c, m)
 	case *control.UnregisterClient:
 		return r.unregisterClient(c, m)
+	case *control.RegisterHelper:
+		return r.registerHelper(c, m)
 	case *control.RenameClient:
 		return r.renameClient(c, m)
 	}
@@ -521,6 +523,20 @@ func (r *Registry) mutate(fn func(*store.State) error) error {
 		return errors.New("state is read-only")
 	}
 	return r.cfg.Mutate(fn)
+}
+
+// registerHelper adds a helper key on behalf of helper c.
+func (r *Registry) registerHelper(c *Conn, m *control.RegisterHelper) error {
+	by, err := r.helperName(c, "RegisterHelper")
+	if err != nil {
+		return err
+	}
+	err = r.mutate(func(st *store.State) error { return st.AddHelper(m.Name, m.PublicKey) })
+	if err == nil {
+		r.log.Info("helper added", "name", strings.TrimSpace(m.Name), "by", by)
+	}
+	r.reply(c, m.Seq, err)
+	return nil
 }
 
 func (r *Registry) registerClient(c *Conn, m *control.RegisterClient) error {

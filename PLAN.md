@@ -272,6 +272,7 @@ Helper commands carry a sequence number and the relay answers each with a `Reply
 | `ClientHello` | client → relay | app version, current `user@machine` (the registered name comes from the key comment) |
 | `Presence` | relay → helpers | full snapshot after every change: registered clients (`user@machine`, fingerprint, online, open or taken request with id and time, in session with whom) and helpers |
 | `RegisterClient` / `UnregisterClient` | helper → relay | public key line or fingerprint (name taken from the key comment, or given when the comment is empty) |
+| `RegisterHelper` | helper → relay | public key line and name: adds another helper, like `hmw-relay helper add` |
 | `Reply` | relay → helper | answer to a helper command: sequence number and error text if it failed |
 | `Registered` | relay → client | the key is now registered (no name: that is only for helpers) |
 | `RequestHelp` | client → relay | (no content) |
@@ -606,8 +607,8 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   `%LOCALAPPDATA%` and `~/Library/Caches` elsewhere) and loaded from there. Linux needs the
   usual desktop OpenGL and X11/Wayland libraries at run time, which every desktop has.
 - **One window.** raylib has a single window per process, so the helper app is one window
-  with a tab bar that is always visible: the fixed tabs **Clients**, **Register client** and
-  **Settings**, then one tab per session. Tabs have no close buttons. A session tab shows
+  with a tab bar that is always visible: the fixed tabs **Clients**, **Helpers**, **Register client**,
+  **Register helper** and **Relay**, then one tab per session, marked with a lifebuoy icon. Tabs have no close buttons. A session tab shows
   only the session, without the client list. Fullscreen applies to the active session.
 - **No raygui** (it needs cgo). `helper/ui` is a small immediate-mode widget set written for
   this app: label, button, list row, single-line text field with paste and selection, tabs,
@@ -625,36 +626,37 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
 - Same key handling as the client (6.1, `proto/appkey`): its own unencrypted Ed25519 key in
   the app's data directory (`%LOCALAPPDATA%\help-me-win` on Windows,
   `~/.local/share/help-me-win` on Linux, `~/Library/Application Support/help-me-win` on
-  macOS), generated once on first start, never regenerated automatically, removable from the app's
-  settings (**Remove key**) like the client. **Copy public key** in settings, to send to the relay admin
-  for `hmw-relay helper add`. No certificates.
+  macOS), generated once on first start, never regenerated automatically. Like the client,
+  **Remove key** is only offered on the damaged key screen (a centered box with the error and
+  the key folder). The public key, with **Copy public key**, shows on the connect flow when a
+  relay does not know this helper yet. No certificates.
 - **Connect screen**, like the client's: every start shows a centered box on the grey window
   with "Connect to your client", "Type the relay address you told the client to use, for
   example helpme.example.com.", the address field (prefilled with the last address) and
-  **Connect**, with the hint "Type localhost to run the relay on this computer, with you as
+  **Connect**, with the hint "Leave empty to run a local relay on this computer, with you as
   its helper." Errors show in the box. The relay host key is pinned on the first
   connection per address, like the client; a changed key brings the user back here with a
   warning and an explicit "Trust the new key". If the relay does not know this key as a
-  helper, the box shows the public key with **Copy public key** to send to the relay admin
-  and keeps retrying, so it moves on by itself once the key is added.
-- Once online the tabs appear. **Disconnect** on the Clients tab (not while sessions are
-  open) goes back to the connect screen and stops the local relay. The Settings tab shows
-  the relay status and fingerprint to read out to users, this helper's key, and the local
-  relay's log while it runs.
+  helper, the box shows the public key with **Copy public key** to send to a helper on it
+  (Register helper tab) or its admin (`hmw-relay helper add`) and keeps retrying, so it moves on by itself once the key is added.
+- Once online the tabs appear. The **Relay** tab shows the connection status, the address,
+  the relay fingerprint to read out to users, **Disconnect** (not while sessions are open;
+  back to the connect screen, stopping the local relay). There is no settings tab: nothing
+  else is configurable.
 - One relay connection with the control channel, keepalive, reconnect with backoff. All of
   this helper's sessions run as channels over that one connection.
 - **Local relay**: the relay is compiled into the helper app (`relay/server`, the same code
-  as `hmw-relay`). Connecting to `localhost` (or `localhost:<port>`) serves the relay
-  in-process on that port until Disconnect or exit (unless something already listens on the
-  port), with its status and log tail in Settings. There is no separate executable
+  as `hmw-relay`). Connecting with an empty address (or `localhost`, or `localhost:<port>`)
+  serves the relay in-process on that port until Disconnect or exit (unless something already listens on the
+  port). There is no separate executable
   to find, so `go run .` works too. It uses the same state directory as `hmw-relay serve`, so
   the standalone relay and its admin commands share the helpers, clients and host key. The
   app connects to `localhost:<port>` itself, while clients and other helpers use the
   machine's public `hostname:port`.
 - **This helper on the local relay**: if this helper's key is not a helper there yet, the app
   adds it to the relay state directly (with a number after the name if that name is taken),
-  so nobody has to copy keys around. Other helpers are added with `hmw-relay helper add` by
-  whoever runs the relay.
+  so nobody has to copy keys around. Other helpers are added on the Register helper tab
+  or with `hmw-relay helper add` by whoever runs the relay.
 - **Distribution**: one archive per OS containing the helper app and `hmw-relay` side by side
   (`hmw-helper` + `hmw-relay`, or `.exe` on Windows, or inside the macOS `.app`
   bundle's `Contents/MacOS`). All built on Linux with `CGO_ENABLED=0`; the macOS `.app` is
@@ -662,9 +664,11 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   no Docker image.
 
 ### 7.2 Client list and connecting
-- The **Clients** tab shows the relay status and one row per online client
+- The **Clients** tab shows one row per online client
   (`user@machine`). Registered clients that are offline are in a collapsed "Offline" section
   below.
+- The **Helpers** tab lists every helper on the relay, online first, with an online dot,
+  "(you)" for this helper, and whom they are helping (otherwise the key fingerprint).
 - **Connect**: every online client that nobody is helping has a **Connect** button. It
   sends `Connect` with a fresh request id; the row then says "Waiting for the user to allow
   the session…" until the session channel arrives (a tab opens) or the request goes away,
@@ -679,6 +683,10 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   the client should be showing. The name field is
   prefilled with the key's comment (`user@machine`) and always editable ("Anna laptop");
   it is required when the comment is empty. Registrations are permanent until removed.
+- **Register helper** (a tab) works like Register client for another helper's key line (their
+  app shows it when they connect to this relay before being added): the name is one word, prefilled from the user part of the key comment,
+  and the fingerprint is shown large for the phone. Any helper on a relay can add helpers;
+  removing one is still `hmw-relay helper remove`.
 - **Forms reset** when their tab is left: the Register client form and its result are
   cleared, the Settings fields go back to the saved values, and open renames, errors and
   confirmations are dropped.

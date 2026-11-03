@@ -7,7 +7,7 @@
 // Flags for trying the UI without a relay:
 //
 //	--demo           fake clients and requests, no network, nothing stored
-//	--page NAME      start on "register", "settings" or "session" (demo only)
+//	--page NAME      start on "register", "relay" or "session" (demo only)
 //	--datadir DIR    use DIR instead of the per-user data directory
 package main
 
@@ -36,7 +36,7 @@ func init() {
 
 func main() {
 	demo := flag.Bool("demo", os.Getenv("SV_HELPER_DEMO") != "", "show fake clients; no network, nothing stored")
-	page := flag.String("page", os.Getenv("SV_HELPER_PAGE"), `start page: "register", "settings" or "session" (demo)`)
+	page := flag.String("page", os.Getenv("SV_HELPER_PAGE"), `start page: "register", "relay" or "session" (demo)`)
 	dataDir := flag.String("datadir", "", "data directory (default: per-user data directory)")
 	// --upload-bench is a hidden developer check (helper/perf): it measures
 	// texture uploads in a window, prints a table and exits.
@@ -61,7 +61,7 @@ func main() {
 		return
 	}
 
-	app := views.New(views.Options{DataDir: *dataDir, Version: version, Demo: *demo, Page: *page})
+	app := views.New(views.Options{DataDir: *dataDir, Version: version, Demo: *demo, Page: *page, Icon: iconPNG})
 	defer app.Shutdown()
 	for !rl.WindowShouldClose() && !app.Quit() {
 		app.Frame()

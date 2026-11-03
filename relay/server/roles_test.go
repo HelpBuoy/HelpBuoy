@@ -139,6 +139,7 @@ func TestMessagesPerRole(t *testing.T) {
 		{"RegisterClient", &control.RegisterClient{Seq: 1, PublicKey: "bad"}, map[control.Role]bool{control.RoleHelper: true}},
 		{"UnregisterClient", &control.UnregisterClient{Seq: 1, Fingerprint: "SHA256:x"}, map[control.Role]bool{control.RoleHelper: true}},
 		{"RenameClient", &control.RenameClient{Seq: 1, Fingerprint: "SHA256:x", Name: "x"}, map[control.Role]bool{control.RoleHelper: true}},
+		{"RegisterHelper", &control.RegisterHelper{Seq: 1, PublicKey: "bad", Name: "x"}, map[control.Role]bool{control.RoleHelper: true}},
 		// Relay->app messages are never accepted from apps.
 		{"Hello", &control.Hello{Role: control.RoleHelper}, nil},
 		{"Presence", &control.Presence{}, nil},
@@ -511,6 +512,37 @@ func TestRenameClient(t *testing.T) {
 		h.Send(m)
 		if rep := mustWait[control.Reply](t, h, nil); rep.Seq != m.Seq || rep.Error == "" {
 			t.Errorf("case %d: reply %+v, want an error", i, rep)
+		}
+	}
+}
+
+// TestRegisterHelper: a helper adds another helper, who can then log in as
+// one; duplicates, bad names and client keys are refused.
+func TestRegisterHelper(t *testing.T) {
+	e := newEnv(t, nil)
+	h := e.helper("alice")
+	bk := fake.NewKey()
+	h.Send(&control.RegisterHelper{Seq: 1, PublicKey: keyLine(bk, "bob@pc"), Name: "bob"})
+	if rep := mustWait[control.Reply](t, h, func(r *control.Reply) bool { return r.Seq == 1 }); rep.Error != "" {
+		t.Fatalf("register: %s", rep.Error)
+	}
+	p := presenceWhere(t, h, func(p *control.Presence) bool { return len(p.Helpers) == 2 })
+	if p.Helpers[1].Name != "bob" || p.Helpers[1].Fingerprint != fp(bk) {
+		t.Errorf("helpers %+v", p.Helpers)
+	}
+	if _, hello := e.connect(bk, control.RoleHelper); hello.Name != "bob" {
+		t.Errorf("hello %+v", hello)
+	}
+	ck := e.addClient("anna@PC")
+	for i, m := range []*control.RegisterHelper{
+		{Seq: 2, PublicKey: keyLine(bk, ""), Name: "bob2"},           // key already a helper
+		{Seq: 3, PublicKey: keyLine(fake.NewKey(), ""), Name: "bob"}, // name taken
+		{Seq: 4, PublicKey: keyLine(fake.NewKey(), ""), Name: "with space"},
+		{Seq: 5, PublicKey: keyLine(ck, ""), Name: "anna"}, // a client key
+	} {
+		h.Send(m)
+		if rep := mustWait[control.Reply](t, h, func(r *control.Reply) bool { return r.Seq == m.Seq }); rep.Error == "" {
+			t.Errorf("case %d accepted", i)
 		}
 	}
 }
