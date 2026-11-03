@@ -14,9 +14,9 @@
 # goes up on every release as well. The desk app's winres.json gets the same
 # version.
 #
-# The script builds everything with "make msi deb" (the desk app archives,
-# the client MSI, the Linux client archive and the helpbuoy-server Debian
-# package in dist/), commits the
+# The script builds the release packages with "make dist" (MSIs of the
+# client and desk app, Debian packages of the client, desk app and
+# helpbuoy-server, all in dist/), commits the
 # version bump, tags and pushes it and creates the GitHub release v<version>
 # with all files in dist/.
 set -e
@@ -62,7 +62,7 @@ echo "Releasing helpbuoy $version (revision $revision)"
 
 # Build, test and package. VERSION goes into main.version of every binary and
 # into the file names in dist/.
-make vet test msi deb VERSION="v$version"
+make vet test dist VERSION="v$version"
 
 # Commit, tag, push and publish.
 git commit -q -m "Release v$version" $client $desk

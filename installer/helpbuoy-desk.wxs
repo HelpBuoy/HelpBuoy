@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MSI for the Windows desk app, built with wixl (msitools) by "make msi":
+  wixl -a x64 -D Version=x.y.z -D FileVersion=x.y.z.b -D ExePath=... -D IconPath=... -o out.msi helpbuoy-desk.wxs
+  It installs per user, without admin rights, into %LOCALAPPDATA%\Programs\helpbuoy-desk.
+  The state stays in %LOCALAPPDATA%\helpbuoy-desk.
+  The UpgradeCode must never change, so new versions replace old ones.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="HelpBuoy Desk" Language="1033" Version="$(var.Version)"
+           Manufacturer="Maurits van der Schee" UpgradeCode="6FAFF791-8160-4BEE-A691-43BFA1D40C20">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser"
+             Description="HelpBuoy Desk $(var.Version)" Comments="Remote support desk for Windows"/>
+    <Media Id="1" Cabinet="helpbuoy.cab" EmbedCab="yes"/>
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of HelpBuoy Desk is already installed."/>
+
+    <Icon Id="helpbuoy.ico" SourceFile="$(var.IconPath)"/>
+    <Property Id="ARPPRODUCTICON" Value="helpbuoy.ico"/>
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/mevdschee/helpbuoy"/>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="ProgramsFolder" Name="Programs">
+          <Directory Id="INSTALLDIR" Name="helpbuoy-desk">
+            <!-- Per-user components need a registry key path, not the file. -->
+            <Component Id="MainExecutable" Guid="*" Win64="yes">
+              <!-- The version must be set: an unversioned file never replaces
+                   the versioned exe of the old install during an upgrade, and
+                   removing the old version then deletes it. -->
+              <File Id="helpbuoy_desk.exe" Name="helpbuoy-desk.exe" Source="$(var.ExePath)"
+                    DefaultVersion="$(var.FileVersion)"/>
+              <RemoveFolder Id="RemoveInstallDir" On="uninstall"/>
+              <RegistryValue Root="HKCU" Key="Software\helpbuoy-desk" Name="exe"
+                             Type="integer" Value="1" KeyPath="yes"/>
+            </Component>
+          </Directory>
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Component Id="StartMenuShortcut" Guid="*">
+          <Shortcut Id="helpBuoyDeskShortcut" Name="HelpBuoy Desk" Description="Remote support desk"
+                    Target="[INSTALLDIR]helpbuoy-desk.exe" WorkingDirectory="INSTALLDIR"/>
+          <RegistryValue Root="HKCU" Key="Software\helpbuoy-desk" Name="shortcut"
+                         Type="integer" Value="1" KeyPath="yes"/>
+        </Component>
+      </Directory>
+    </Directory>
+
+    <Feature Id="Main" Level="1">
+      <ComponentRef Id="MainExecutable"/>
+      <ComponentRef Id="StartMenuShortcut"/>
+    </Feature>
+  </Product>
+</Wix>

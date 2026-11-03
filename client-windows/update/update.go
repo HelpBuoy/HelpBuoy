@@ -35,7 +35,11 @@ type Release struct {
 	MsiSize int64
 }
 
-// ParseRelease reads a GitHub "latest release" response and finds the first
+// msiPrefix starts the client MSI's name (helpbuoy_v1.2.3_windows-amd64.msi),
+// which sets it apart from the desk app's MSI in the same release.
+const msiPrefix = "helpbuoy_"
+
+// ParseRelease reads a GitHub "latest release" response and finds the client
 // MSI served over https. Drafts and prereleases are ignored.
 func ParseRelease(data []byte) (Release, bool) {
 	var r struct {
@@ -52,7 +56,8 @@ func ParseRelease(data []byte) (Release, bool) {
 		return Release{}, false
 	}
 	for _, a := range r.Assets {
-		if strings.HasSuffix(strings.ToLower(a.Name), ".msi") && strings.HasPrefix(a.URL, "https://") {
+		name := strings.ToLower(a.Name)
+		if strings.HasPrefix(name, msiPrefix) && strings.HasSuffix(name, ".msi") && strings.HasPrefix(a.URL, "https://") {
 			return Release{
 				Version: strings.TrimPrefix(r.TagName, "v"),
 				MsiURL:  a.URL, MsiName: a.Name, MsiSize: a.Size,

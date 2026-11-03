@@ -28,11 +28,13 @@ WINRES_ARCH := $(subst $(space),$(comma),$(ARCHES))
 DESK_SYSO := $(foreach a,$(ARCHES),desk/rsrc_windows_$(a).syso)
 CLIENT_SYSO := $(foreach a,$(ARCHES),client-windows/rsrc_windows_$(a).syso)
 CLIENT_ICONS := $(addprefix client-windows/resources/,icon.png icon48.png icon32.png icon16.png)
-# Four part version of the client exe, which the MSI needs for the upgrade.
+# Four part versions of the Windows exes, which the MSIs need for the upgrade.
 FILE_VERSION = $(shell jq -r '.RT_VERSION[]["0000"].fixed.file_version' client-windows/resources/winres.json)
+DESK_FILE_VERSION = $(shell jq -r '.RT_VERSION[]["0000"].fixed.file_version' desk/resources/winres.json)
 MSI := $(DIST)/helpbuoy_$(VERSION)_windows-amd64.msi
+DESK_MSI := $(DIST)/helpbuoy-desk_$(VERSION)_windows-amd64.msi
 
-.PHONY: help all test vet fuzz server client client-linux desk dist msi deb icon clean
+.PHONY: help all test vet fuzz server client client-linux desk dist msi deb deb-client deb-desk icon clean
 
 help:
 	@echo "make test     run proto and server tests"
@@ -42,9 +44,11 @@ help:
 	@echo "make client   build the Windows client ($(ARCHES)) into $(BIN)/"
 	@echo "make client-linux  build the static X11 Linux client ($(ARCHES)) into $(BIN)/"
 	@echo "make desk     build the desk app ($(TARGETS)) into $(BIN)/"
-	@echo "make dist     desk app and Linux client archives in $(DIST)/ (the Windows client ships as the MSI)"
-	@echo "make msi      dist plus the client installer (needs wixl and msitools)"
+	@echo "make dist     all release packages in $(DIST)/: msi, deb, deb-client and deb-desk"
+	@echo "make msi      per-user installers of the Windows client and desk app (needs wixl and msitools)"
 	@echo "make deb      Debian 13 package of helpbuoy-server with a systemd service (needs dpkg-deb)"
+	@echo "make deb-client  Debian package of the Linux client with a menu entry and icons (needs dpkg-deb)"
+	@echo "make deb-desk Debian package of the desk app with a menu entry and icons (needs dpkg-deb)"
 	@echo "make icon     regenerate the lifebuoy app icon (client, copied to the desk app)"
 
 all: vet test server client client-linux desk
@@ -98,22 +102,13 @@ client-linux:
 			-o $(BIN)/linux-$$arch/helpbuoy ./client-linux || exit 1; \
 	done
 
-# Release archives: the desk app per OS/arch (it runs the server built in, so
-# helpbuoy-server is not packaged with it; the server ships as the Debian
-# package, make deb). macOS gets a zipped .app. The Windows client exe is
-# built into bin/ for the MSI (make msi) and not released on its own; the
-# Linux client is released as a tarball with the single static binary.
-dist: desk client client-linux
+# Release packages, all in $(DIST)/: an installer per app and platform, no
+# bare binaries. Windows gets per-user MSIs for the client and the desk app,
+# Debian gets .debs for the client, the desk app and helpbuoy-server, and
+# macOS (when darwin is in OSES) a zipped desk .app.
+dist:
 	@rm -rf $(DIST) && mkdir -p $(DIST)
-	@for t in $(subst /,-,$(filter linux/%,$(TARGETS))); do \
-		tar -czf $(DIST)/helpbuoy-desk_$(VERSION)_$$t.tar.gz -C $(BIN)/$$t helpbuoy-desk; \
-	done
-	@for arch in $(ARCHES); do \
-		tar -czf $(DIST)/helpbuoy_$(VERSION)_linux-$$arch.tar.gz -C $(BIN)/linux-$$arch helpbuoy; \
-	done
-	@for t in $(subst /,-,$(filter windows/%,$(TARGETS))); do \
-		(cd $(BIN)/$$t && zip -q ../../$(DIST)/helpbuoy-desk_$(VERSION)_$$t.zip helpbuoy-desk.exe) || exit 1; \
-	done
+	@$(MAKE) --no-print-directory msi deb deb-client deb-desk
 	@for t in $(subst /,-,$(filter darwin/%,$(TARGETS))); do \
 		GOWORK=off GO111MODULE=off go run tools/macapp/main.go -app helpbuoy-desk -id helpbuoy.desk \
 			-version $(APP_VERSION) -exe $(BIN)/$$t/helpbuoy-desk \
@@ -122,24 +117,28 @@ dist: desk client client-linux
 	@cd $(DIST) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS
 	@ls -l $(DIST)
 
-# Client installer, per user and without admin rights (installer/helpbuoy.wxs).
-# wixl removes the old version right after InstallValidate, outside the
-# installation transaction: if the new install then fails, nothing is left.
-# RemoveExistingProducts moves after InstallInitialize, so a failed upgrade
-# rolls back to the old version (WiX: Schedule="afterInstallInitialize").
-msi: dist
-	GOWORK=off GO111MODULE=off go run tools/mkico/main.go $(BIN)/helpbuoy.ico $(CLIENT_ICONS)
-	wixl -a x64 -D Version="$(APP_VERSION)" -D FileVersion="$(FILE_VERSION)" \
-		-D ExePath=$(BIN)/windows-amd64/helpbuoy.exe -D IconPath=$(BIN)/helpbuoy.ico \
-		-o $(MSI) installer/helpbuoy.wxs
-	msiinfo export $(MSI) InstallExecuteSequence > $(BIN)/seq.idt
+# build-msi WXS EXE FILE_VERSION OUT: a per-user MSI, without admin rights
+# (installer/*.wxs). wixl removes the old version right after
+# InstallValidate, outside the installation transaction: if the new install
+# then fails, nothing is left. RemoveExistingProducts moves after
+# InstallInitialize, so a failed upgrade rolls back to the old version
+# (WiX: Schedule="afterInstallInitialize").
+define build-msi
+	wixl -a x64 -D Version="$(APP_VERSION)" -D FileVersion="$(3)" \
+		-D ExePath=$(2) -D IconPath=$(BIN)/helpbuoy.ico -o $(4) $(1)
+	msiinfo export $(4) InstallExecuteSequence > $(BIN)/seq.idt
 	sed -i 's/^RemoveExistingProducts\t\t1401\r\?$$/RemoveExistingProducts\t\t1501\r/' $(BIN)/seq.idt
 	grep -q $$'^RemoveExistingProducts\t\t1501\r$$' $(BIN)/seq.idt
-	msibuild $(MSI) -i $(BIN)/seq.idt
+	msibuild $(4) -i $(BIN)/seq.idt
 	@# The exe must be versioned in the File table, see installer/helpbuoy.wxs.
-	msiinfo export $(MSI) File | grep -q $$'\t'"$(FILE_VERSION)"$$'\t'
-	@cd $(DIST) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS
-	@ls -l $(DIST)
+	msiinfo export $(4) File | grep -q $$'\t'"$(3)"$$'\t'
+endef
+
+msi: client desk
+	@mkdir -p $(DIST)
+	GOWORK=off GO111MODULE=off go run tools/mkico/main.go $(BIN)/helpbuoy.ico $(CLIENT_ICONS)
+	$(call build-msi,installer/helpbuoy.wxs,$(BIN)/windows-amd64/helpbuoy.exe,$(FILE_VERSION),$(MSI))
+	$(call build-msi,installer/helpbuoy-desk.wxs,$(BIN)/windows-amd64/helpbuoy-desk.exe,$(DESK_FILE_VERSION),$(DESK_MSI))
 
 # Debian 13 package of helpbuoy-server (packaging/debian): the binary, a hardened
 # systemd service running as the helpbuoy-server system user with its state in
@@ -173,8 +172,42 @@ deb: server
 		(cd $$root && find usr -type f -exec md5sum {} + | sort -k2) > $$root/DEBIAN/md5sums; \
 		dpkg-deb --root-owner-group -Zxz --build $$root $(DIST)/helpbuoy-server_$(APP_VERSION)_$$arch.deb || exit 1; \
 	done
-	@cd $(DIST) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS
-	@ls -l $(DIST)
+
+# deb-app NAME DESC: a Debian package of a desktop app: $(BIN)/linux-ARCH/NAME,
+# its menu entry packaging/debian/NAME.desktop, the icon in the hicolor theme
+# and packaging/debian/NAME.control.in. The hicolor-icon-theme and
+# desktop-file-utils triggers refresh the caches, so it needs no maintainer
+# scripts. One per Linux arch.
+APP_DEB_ICONS := 16 32 48 256
+define deb-app
+	@mkdir -p $(DIST)
+	@for arch in $(DEB_ARCHES); do \
+		root=$(BIN)/deb-$(1)-$$arch; rm -rf $$root; \
+		install -D -m 0755 $(BIN)/linux-$$arch/$(1) $$root/usr/bin/$(1); \
+		install -D -m 0644 packaging/debian/$(1).desktop $$root/usr/share/applications/$(1).desktop; \
+		for n in $(APP_DEB_ICONS); do \
+			src=client-linux/resources/icon$$n.png; [ $$n = 256 ] && src=client-linux/resources/icon.png; \
+			install -D -m 0644 $$src $$root/usr/share/icons/hicolor/$${n}x$$n/apps/$(1).png || exit 1; \
+		done; \
+		install -D -m 0644 packaging/debian/copyright $$root/usr/share/doc/$(1)/copyright; \
+		printf '$(1) (%s) unstable; urgency=medium\n\n  * Release %s.\n\n -- Maurits van der Schee <maurits@vdschee.nl>  %s\n' \
+			"$(APP_VERSION)" "$(VERSION)" "$(DEB_DATE)" | gzip -9n > $$root/usr/share/doc/$(1)/changelog.gz; \
+		chmod 0644 $$root/usr/share/doc/$(1)/changelog.gz; \
+		install -d $$root/DEBIAN; \
+		size=$$(du -sk --exclude=DEBIAN $$root | cut -f1); \
+		sed "s/@VERSION@/$(APP_VERSION)/; s/@ARCH@/$$arch/; s/@SIZE@/$$size/" packaging/debian/$(1).control.in > $$root/DEBIAN/control; \
+		(cd $$root && find usr -type f -exec md5sum {} + | sort -k2) > $$root/DEBIAN/md5sums; \
+		dpkg-deb --root-owner-group -Zxz --build $$root $(DIST)/$(1)_$(APP_VERSION)_$$arch.deb || exit 1; \
+	done
+endef
+
+# The Linux client: static, so it runs on any Debian release and derivative.
+deb-client: client-linux
+	$(call deb-app,helpbuoy)
+
+# The desk app: the embedded raylib needs glibc 2.38 (Debian 13, Ubuntu 24.04).
+deb-desk: desk
+	$(call deb-app,helpbuoy-desk)
 
 icon:
 	GOWORK=off GO111MODULE=off go run tools/genicon/main.go client-windows/resources/icon.png
@@ -182,6 +215,7 @@ icon:
 		GOWORK=off GO111MODULE=off go run tools/genicon/main.go client-windows/resources/icon$$n.png $$n || exit 1; \
 	done
 	cp client-windows/resources/icon.png desk/resources/icon.png
+	cp client-windows/resources/icon*.png client-linux/resources/
 
 clean:
 	rm -rf $(BIN) $(DIST) desk/rsrc_windows_*.syso client-windows/rsrc_windows_*.syso

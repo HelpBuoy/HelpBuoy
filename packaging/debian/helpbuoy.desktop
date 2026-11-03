@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=HelpBuoy
+GenericName=Remote Support
+Comment=Let a support techie see and control your screen
+Exec=helpbuoy
+Icon=helpbuoy
+Terminal=false
+Categories=Network;RemoteAccess;
+Keywords=remote;support;help;screen;
+StartupWMClass=HelpBuoy
