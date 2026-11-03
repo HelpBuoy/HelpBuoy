@@ -37,9 +37,8 @@ const (
 
 // Helper is a helper key added by the relay admin.
 type Helper struct {
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name"`
-	PublicKey   string `json:"public_key"` // authorized_keys line
+	Name      string `json:"name"`
+	PublicKey string `json:"public_key"` // authorized_keys line
 }
 
 // Client is a registered client key.
@@ -59,10 +58,9 @@ type State struct {
 
 // Identity is what a fingerprint maps to.
 type Identity struct {
-	Role        control.Role
-	Name        string // helper name or client user@machine; empty for pending
-	DisplayName string // helpers only
-	KeyLine     string // authorized_keys line; empty for pending
+	Role    control.Role
+	Name    string // helper name or client name; empty for pending
+	KeyLine string // authorized_keys line; empty for pending
 }
 
 // Index is a read-only lookup view of a State by key fingerprint. It is
@@ -120,7 +118,7 @@ func NewIndex(st *State) (*Index, error) {
 func (x *Index) Lookup(fp string) Identity {
 	if i, ok := x.helpers[fp]; ok {
 		h := x.State.Helpers[i]
-		return Identity{Role: control.RoleHelper, Name: h.Name, DisplayName: h.DisplayName, KeyLine: h.PublicKey}
+		return Identity{Role: control.RoleHelper, Name: h.Name, KeyLine: h.PublicKey}
 	}
 	if i, ok := x.clients[fp]; ok {
 		c := x.State.Clients[i]
@@ -306,20 +304,14 @@ func writeAtomic(path string, b []byte) error {
 	return nil
 }
 
-// AddHelper adds a helper. The key line is normalized; displayName defaults to name.
-func (st *State) AddHelper(name, displayName, keyLine string) error {
+// AddHelper adds a helper. The key line is normalized.
+func (st *State) AddHelper(name, keyLine string) error {
 	name, err := auth.CleanName(name, MaxHelperName)
 	if err != nil {
 		return err
 	}
 	if strings.ContainsAny(name, " \t") {
 		return errors.New("helper name must not contain spaces")
-	}
-	if displayName == "" {
-		displayName = name
-	}
-	if displayName, err = auth.CleanName(displayName, MaxClientName); err != nil {
-		return fmt.Errorf("display name: %w", err)
 	}
 	k, comment, err := auth.ParseKey(keyLine)
 	if err != nil {
@@ -339,7 +331,7 @@ func (st *State) AddHelper(name, displayName, keyLine string) error {
 			return fmt.Errorf("key %s is registered as client %q; a key can't be both", fp, c.Name)
 		}
 	}
-	st.Helpers = append(st.Helpers, Helper{Name: name, DisplayName: displayName, PublicKey: auth.KeyLine(k, comment)})
+	st.Helpers = append(st.Helpers, Helper{Name: name, PublicKey: auth.KeyLine(k, comment)})
 	return nil
 }
 

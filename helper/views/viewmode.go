@@ -199,7 +199,7 @@ type resizeTarget struct {
 
 // resizeToClient computes the window size that shows a remote screen of
 // rw x rh pixels at 1:1. chromeW and chromeH are the logical sizes around the
-// view (client list, tab strip, toolbar); dpi converts remote pixels to
+// view (tab strip, toolbar); dpi converts remote pixels to
 // logical pixels and units converts logical pixels to window units (they
 // differ on platforms where the window size is in physical pixels). The
 // result is clamped to the monitor (in window units) minus room for the

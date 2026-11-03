@@ -352,8 +352,6 @@ func (a *App) runHostAction(st *sessionTab, act hostAction) {
 		st.toggleMode()
 	case actResize:
 		a.resizeToClient(st)
-	case actToggleList:
-		a.toggleClientList()
 	}
 }
 

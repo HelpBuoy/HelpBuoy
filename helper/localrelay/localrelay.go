@@ -65,9 +65,8 @@ type Options struct {
 	Version  string // reported to apps in Hello
 
 	// The helper's own key, added when the relay has no helpers yet.
-	HelperName    string
-	HelperDisplay string
-	KeyLine       string // authorized_keys line; "" skips the step
+	HelperName string
+	KeyLine    string // authorized_keys line; "" skips the step
 }
 
 // Status is a snapshot for the settings page.
@@ -228,10 +227,6 @@ func (r *Relay) ensureHelper(dir string) {
 	if name == "" {
 		name = "helper"
 	}
-	display := r.opts.HelperDisplay
-	if display == "" {
-		display = name
-	}
 	st, err := store.Open(dir)
 	if err != nil {
 		r.logLine("relay state: " + err.Error())
@@ -242,7 +237,7 @@ func (r *Relay) ensureHelper(dir string) {
 		if len(s.Helpers) > 0 {
 			return errHasHelpers
 		}
-		return s.AddHelper(name, display, r.opts.KeyLine)
+		return s.AddHelper(name, r.opts.KeyLine)
 	})
 	switch {
 	case errors.Is(err, errHasHelpers):

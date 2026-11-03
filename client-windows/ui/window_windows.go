@@ -22,6 +22,14 @@ import (
 // Title is the window title.
 const Title = "help-me-win"
 
+// copyKeyText is the label of the Copy key button.
+const copyKeyText = "C&opy key"
+
+// dialogWidth is the width of the task dialogs in dialog units, wide
+// enough for a SHA256 fingerprint on one line (task dialogs do not break
+// long words, they cut them off).
+const dialogWidth = 320
+
 // Client area size in 96-DPI units.
 const clientW, clientH = 460, 330
 
@@ -63,11 +71,10 @@ type Window struct {
 	lblKeyNotice *ui.Static
 	lnkChange    *ui.SysLink
 	// ScreenMain
-	lblName       *ui.Static
 	lblWaiting    *ui.Static
 	lblStatus     *ui.Static
 	btnDisconnect *ui.Button
-	lnkViewKey    *ui.SysLink
+	lblComment    *ui.Static
 	// ScreenKeyError
 	lblKeyErr    *ui.Static
 	btnRemoveKey *ui.Button
@@ -107,13 +114,13 @@ func New(iconID uint16) *Window {
 		return ui.NewSysLink(p, ui.OptsSysLink().Text(text).Size(1, 1).CtrlStyle(0))
 	}
 
-	w.lblHeading = static("Connect to your helper", co.SS_LEFT)
-	w.lblAddrHint = static("Type the relay address your helper gave you, for example relay.example.com.", co.SS_LEFT)
+	w.lblHeading = static("Connect to a helper", co.SS_LEFT)
+	w.lblAddrHint = static("Type the relay address a helper gave you, for example relay.example.com.", co.SS_LEFT)
 	w.edtAddr = ui.NewEdit(p, ui.OptsEdit())
 	w.btnConnect = button("&Connect", co.BS_DEFPUSHBUTTON)
 	w.lblAddrError = static("", co.SS_LEFT)
 
-	w.lblKeyIntro = static("Paste this key into a chat with your helper (for example WhatsApp).", co.SS_LEFT)
+	w.lblKeyIntro = static("Paste this key into a chat with a helper (for example WhatsApp).", co.SS_LEFT)
 	w.edtKey = ui.NewEdit(p, ui.OptsEdit().CtrlStyle(co.ES_MULTILINE|co.ES_READONLY|co.ES_AUTOVSCROLL))
 	w.btnCopy = button(copyKeyText, co.BS_PUSHBUTTON)
 	w.lblKeyFp = static("", co.SS_LEFT)
@@ -121,11 +128,10 @@ func New(iconID uint16) *Window {
 	w.lblKeyNotice = static("", co.SS_LEFT)
 	w.lnkChange = link(`<a>Use a different relay address</a>`)
 
-	w.lblName = static("", co.SS_CENTER)
 	w.lblWaiting = static("", co.SS_CENTER)
 	w.lblStatus = static("", co.SS_CENTER)
 	w.btnDisconnect = button("&Disconnect", co.BS_PUSHBUTTON)
-	w.lnkViewKey = link(`<a>View key</a>`)
+	w.lblComment = static("", co.SS_CENTER)
 
 	w.lblKeyErr = static("", co.SS_LEFT)
 	w.btnRemoveKey = button("Remove &key...", co.BS_PUSHBUTTON)
@@ -145,11 +151,10 @@ func New(iconID uint16) *Window {
 		{w.lblKeyNotice, 24, 234, 412, 40, fontNormal},
 		{w.lnkChange, 24, 298, 260, 20, fontNormal},
 
-		{w.lblName, 24, 44, 412, 34, fontHeading},
-		{w.lblWaiting, 24, 112, 412, 34, fontBig},
-		{w.lblStatus, 24, 164, 412, 80, fontNormal},
+		{w.lblComment, 24, 44, 412, 34, fontHeading},
+		{w.lblWaiting, 24, 104, 412, 40, fontBig},
+		{w.lblStatus, 24, 160, 412, 80, fontNormal},
 		{w.btnDisconnect, 150, 258, 160, 32, fontNormal},
-		{w.lnkViewKey, 366, 298, 70, 20, fontNormal},
 
 		{w.lblKeyErr, 24, 24, 412, 190, fontNormal},
 		{w.btnRemoveKey, 24, 226, 160, 32, fontNormal},
@@ -181,22 +186,17 @@ func (w *Window) ConfirmHelper(ctx context.Context, h session.Helper, oldFP stri
 	if w.wnd.Hwnd() == 0 {
 		return false
 	}
-	who := h.DisplayName
-	if who == "" {
-		who = h.Name
-	}
-	helper := "Helper: " + who
-	if h.DisplayName != "" && h.DisplayName != h.Name {
-		helper += " (" + h.Name + ")"
-	}
+	who := h.Name
 	cfg := win.TASKDIALOGCONFIG{
 		WindowTitle: Title,
 		Flags:       co.TDF_ALLOW_DIALOG_CANCELLATION | co.TDF_POSITION_RELATIVE_TO_WINDOW,
+		Width:       dialogWidth,
 	}
+	quoted := `"` + who + `"`
 	if oldFP == "" {
 		cfg.HMainIcon = win.TdcIconTdi(co.TDICON_WARNING)
-		cfg.MainInstruction = "Allow " + who + " to take control of this computer?"
-		cfg.Content = helper + "\nKey fingerprint: " + h.Fingerprint + "\n\n" +
+		cfg.MainInstruction = "Allow " + quoted + " to take control of this computer?"
+		cfg.Content = "Key fingerprint:\n" + h.Fingerprint + "\n\n" +
 			"Only allow this if you asked this person for help. You can take back " +
 			"control at any time by pressing Esc."
 		cfg.Buttons = []win.TASKDIALOG_BUTTON{
@@ -206,12 +206,11 @@ func (w *Window) ConfirmHelper(ctx context.Context, h session.Helper, oldFP stri
 		cfg.DefaultButtonId = uint16(co.ID_OK)
 	} else {
 		cfg.HMainIcon = win.TdcIconTdi(co.TDICON_ERROR)
-		cfg.MainInstruction = "Warning: the key of " + who + " has changed"
-		cfg.Content = helper + "\n" +
-			"Key last time: " + oldFP + "\n" +
-			"Key now: " + h.Fingerprint + "\n\n" +
-			"This may be someone pretending to be your helper. Do not continue " +
-			"unless your helper confirmed by phone that they have a new key."
+		cfg.MainInstruction = "Warning: the key of " + quoted + " has changed"
+		cfg.Content = "Key last time:\n" + oldFP + "\n\n" +
+			"Key now:\n" + h.Fingerprint + "\n\n" +
+			"This may be someone pretending to be a helper. Do not continue " +
+			"unless the helper confirmed by phone that they have a new key."
 		cfg.Buttons = []win.TASKDIALOG_BUTTON{
 			{Id: co.ID_CANCEL, Text: "&Cancel"},
 			{Id: co.ID_OK, Text: "Allow &anyway"},
@@ -317,7 +316,6 @@ func (w *Window) events() {
 	w.btnRemoveKey.On().BnClicked(w.confirmRemoveKey)
 	w.lnkChange.On().NmClick(func(_ *win.NMLINK) { w.ctrl.Disconnect() })
 	w.btnDisconnect.On().BnClicked(w.ctrl.Disconnect)
-	w.lnkViewKey.On().NmClick(func(_ *win.NMLINK) { w.showKey(w.wnd) })
 }
 
 func (w *Window) connect() {
@@ -433,7 +431,7 @@ func (w *Window) apply(v app.View) {
 		setText(w.lblRelayFp, "Relay fingerprint: "+v.RelayFingerprint)
 		notice := v.Notice
 		if notice == "" {
-			notice = "Waiting for your helper to add this key. This window changes by itself when that is done."
+			notice = "Waiting for a helper to add this key. This window changes by itself when that is done."
 		}
 		setText(w.lblKeyNotice, notice)
 		if entered {
@@ -442,16 +440,15 @@ func (w *Window) apply(v app.View) {
 	}
 
 	main := v.Screen == app.ScreenMain
-	show(w.lblName, main)
 	show(w.lblWaiting, main)
 	show(w.lblStatus, main)
 	show(w.btnDisconnect, main)
-	show(w.lnkViewKey, main)
+	show(w.lblComment, main)
 	if main {
-		setText(w.lblName, v.Name)
+		setText(w.lblComment, v.KeyComment)
 		waiting := ""
 		if v.Ready {
-			waiting = "Waiting for your helper"
+			waiting = "Waiting for a helper"
 		}
 		setText(w.lblWaiting, waiting)
 		status := v.Error
@@ -459,7 +456,7 @@ func (w *Window) apply(v app.View) {
 			status = v.Notice
 		}
 		if status == "" && v.Ready {
-			status = "Your helper can now ask to connect. You will be asked first, " +
+			status = "A helper can now ask to connect. You will be asked first, " +
 				"and pressing Esc always takes back control."
 		}
 		if w.updating != "" {
@@ -475,7 +472,7 @@ func (w *Window) apply(v app.View) {
 	if keyErr {
 		setText(w.lblKeyErr, v.Error+"\n\nFolder: "+v.KeyDir+
 			"\n\nThe key is never replaced on its own. Remove key deletes it and makes a new one; "+
-			"your helper will have to register this PC again.")
+			"a helper will have to register this PC again.")
 	}
 
 	// During a session the window gets out of the way; afterwards it comes
@@ -517,12 +514,13 @@ func (w *Window) warnRelayKey(hk session.HostKeyChangedError) {
 		HwndParent:      w.wnd.Hwnd(),
 		WindowTitle:     Title,
 		Flags:           co.TDF_ALLOW_DIALOG_CANCELLATION | co.TDF_POSITION_RELATIVE_TO_WINDOW,
+		Width:           dialogWidth,
 		HMainIcon:       win.TdcIconTdi(co.TDICON_ERROR),
 		MainInstruction: "Warning: the identity of the relay has changed",
-		Content: "Key last time: " + hk.OldFingerprint + "\n" +
-			"Key now: " + hk.NewFingerprint + "\n\n" +
+		Content: "Key last time:\n" + hk.OldFingerprint + "\n\n" +
+			"Key now:\n" + hk.NewFingerprint + "\n\n" +
 			"This may be someone pretending to be your relay. help-me-win stopped connecting. " +
-			"Only continue if your helper confirmed by phone that the relay has a new key " +
+			"Only continue if a helper confirmed by phone that the relay has a new key " +
 			"and the new fingerprint above matches what they read to you.",
 		Buttons: []win.TASKDIALOG_BUTTON{
 			{Id: co.ID_CANCEL, Text: "&Cancel"},

@@ -61,7 +61,6 @@ type Conn struct {
 	ip          string
 	role        control.Role
 	name        string
-	displayName string
 	keyLine     string
 	userMachine string
 	connectedAt time.Time
@@ -156,7 +155,7 @@ func (r *Registry) Attach(p Peer, fp, ip string, admit func() (func(), error)) (
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	id := r.idx.Lookup(fp)
-	c := &Conn{peer: p, fp: fp, ip: ip, role: id.Role, name: id.Name, displayName: id.DisplayName,
+	c := &Conn{peer: p, fp: fp, ip: ip, role: id.Role, name: id.Name,
 		keyLine: id.KeyLine, connectedAt: r.cfg.Now()}
 	if id.Role == control.RolePending {
 		rel, err := admit()
@@ -239,11 +238,8 @@ func (r *Registry) OpenControl(c *Conn) error {
 		RelayVersion: r.cfg.Version,
 		ServerTime:   r.cfg.Now().UTC(),
 	}
-	if c.role != control.RolePending {
-		h.Name = c.name
-	}
 	if c.role == control.RoleHelper {
-		h.DisplayName = c.displayName
+		h.Name = c.name // clients are not told the name helpers gave them
 	}
 	c.peer.Send(h)
 	if c.role == control.RoleHelper {
@@ -328,7 +324,7 @@ func (r *Registry) presenceLocked() control.Presence {
 		fp := r.idx.HelperFingerprint(i)
 		c := r.conns[fp]
 		p.Helpers = append(p.Helpers, control.HelperInfo{
-			Name: h.Name, DisplayName: h.DisplayName, Fingerprint: fp,
+			Name: h.Name, Fingerprint: fp,
 			Online: c != nil && c.role == control.RoleHelper,
 		})
 	}
@@ -350,7 +346,7 @@ func (r *Registry) SetIndex(idx *store.Index) {
 		id := idx.Lookup(fp)
 		switch {
 		case id.Role == c.role:
-			c.name, c.displayName, c.keyLine = id.Name, id.DisplayName, id.KeyLine
+			c.name, c.keyLine = id.Name, id.KeyLine
 		case c.role == control.RolePending && id.Role == control.RoleClient:
 			c.role = control.RoleClient
 			c.name, c.keyLine = id.Name, id.KeyLine
@@ -359,7 +355,7 @@ func (r *Registry) SetIndex(idx *store.Index) {
 				c.release = nil
 			}
 			r.lastSeen[fp] = r.cfg.Now()
-			send(c, &control.Registered{Name: id.Name})
+			send(c, &control.Registered{})
 			r.log.Info("pending promoted", "fp", fp, "name", id.Name, "ip", c.ip)
 		default:
 			reason := "key removed from the relay"
@@ -491,10 +487,9 @@ func (r *Registry) connect(c *Conn, m *control.Connect) error {
 	cl.req = q
 	send(c, &control.Reply{Seq: m.Seq})
 	send(cl, &control.SessionReady{
-		RequestID:         q.id,
-		HelperName:        c.name,
-		HelperDisplayName: c.displayName,
-		HelperKey:         c.keyLine,
+		RequestID:  q.id,
+		HelperName: c.name,
+		HelperKey:  c.keyLine,
 	})
 	r.log.Info("request", "event", "connect", "id", q.id, "client", cl.fp, "helper", c.name)
 	r.changedLocked()

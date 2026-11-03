@@ -31,7 +31,7 @@ func TestFakeClientEndToEnd(t *testing.T) {
 	dir := t.TempDir()
 	hk := fake.NewKey()
 	st, _ := store.Open(dir)
-	st.Update(func(s *store.State) error { return s.AddHelper("alice", "Alice", fake.KeyLine(hk.PublicKey(), "")) })
+	st.Update(func(s *store.State) error { return s.AddHelper("alice", fake.KeyLine(hk.PublicKey(), "")) })
 	srv, err := server.New(server.Config{StateDir: dir})
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +98,7 @@ func TestFakeClientEndToEnd(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("fakeclient did not finish")
 	}
-	for _, want := range []string{"key: ssh-ed25519 ", "hello: role=pending", "registered: anna@PC", "session-ready: ", "recv: ping", "session: closed"} {
+	for _, want := range []string{"key: ssh-ed25519 ", "hello: role=pending", "registered", "session-ready: ", "recv: ping", "session: closed"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
 		}

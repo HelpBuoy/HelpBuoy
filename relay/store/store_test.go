@@ -37,7 +37,7 @@ func TestRoundTrip(t *testing.T) {
 	hk, ck := newKey(t), newKey(t)
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	_, _, err = s.Update(func(st *State) error {
-		if err := st.AddHelper("alice", "Alice", auth.KeyLine(hk, "laptop")); err != nil {
+		if err := st.AddHelper("alice", auth.KeyLine(hk, "laptop")); err != nil {
 			return err
 		}
 		_, _, err := st.AddClient(auth.KeyLine(ck, "anna@PC"), "", "alice", now)
@@ -50,7 +50,7 @@ func TestRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if id := idx.Lookup(auth.Fingerprint(hk)); id.Role != control.RoleHelper || id.Name != "alice" || id.DisplayName != "Alice" {
+	if id := idx.Lookup(auth.Fingerprint(hk)); id.Role != control.RoleHelper || id.Name != "alice" {
 		t.Errorf("helper %+v", id)
 	}
 	if id := idx.Lookup(auth.Fingerprint(ck)); id.Role != control.RoleClient || id.Name != "anna@PC" {
@@ -80,19 +80,16 @@ func TestRules(t *testing.T) {
 	st := &State{}
 	hk, ck := newKey(t), newKey(t)
 	at := time.Now()
-	if err := st.AddHelper("alice", "", auth.KeyLine(hk, "")); err != nil {
+	if err := st.AddHelper("alice", auth.KeyLine(hk, "")); err != nil {
 		t.Fatal(err)
 	}
-	if st.Helpers[0].DisplayName != "alice" {
-		t.Error("display name default")
-	}
-	if err := st.AddHelper("alice", "", auth.KeyLine(newKey(t), "")); err == nil {
+	if err := st.AddHelper("alice", auth.KeyLine(newKey(t), "")); err == nil {
 		t.Error("duplicate helper name")
 	}
-	if err := st.AddHelper("bob", "", auth.KeyLine(hk, "")); err == nil {
+	if err := st.AddHelper("bob", auth.KeyLine(hk, "")); err == nil {
 		t.Error("duplicate helper key")
 	}
-	if err := st.AddHelper("with space", "", auth.KeyLine(newKey(t), "")); err == nil {
+	if err := st.AddHelper("with space", auth.KeyLine(newKey(t), "")); err == nil {
 		t.Error("helper name with space")
 	}
 	if _, _, err := st.AddClient(auth.KeyLine(hk, "x@y"), "", "alice", at); err == nil {
@@ -107,7 +104,7 @@ func TestRules(t *testing.T) {
 	if _, _, err := st.AddClient(auth.KeyLine(ck, "again@PC"), "", "alice", at); err == nil {
 		t.Error("duplicate client")
 	}
-	if err := st.AddHelper("carol", "", auth.KeyLine(ck, "")); err == nil {
+	if err := st.AddHelper("carol", auth.KeyLine(ck, "")); err == nil {
 		t.Error("client key added as helper")
 	}
 	if _, err := st.RemoveClient("SHA256:nope"); err == nil {
@@ -129,7 +126,8 @@ func TestParseRejectsBadState(t *testing.T) {
 	line := auth.KeyLine(hk, "")
 	for _, s := range []string{
 		`{`,
-		`{"helpers":[{"name":"a","display_name":"A","public_key":"garbage"}]}`,
+		`{"helpers":[{"name":"a","public_key":"garbage"}]}`,
+		`{"helpers":[{"name":"a","display_name":"A","public_key":"` + line + `"}]}`,
 		`{"helpers":[{"name":"a","public_key":"` + line + `"},{"name":"b","public_key":"` + line + `"}]}`,
 		`{"helpers":[{"name":"a","public_key":"` + line + `"}],"clients":[{"name":"x","public_key":"` + line + `"}]}`,
 		`{"unknown":1}`,

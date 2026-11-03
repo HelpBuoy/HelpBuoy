@@ -36,6 +36,18 @@ func (p *registerPage) init() {
 	p.name.Edit.Max = maxClientName
 }
 
+// reset empties the form, unless a registration is still running.
+func (p *registerPage) reset() {
+	if p.busy {
+		return
+	}
+	p.key.Edit.SetText("")
+	p.name.Edit.SetText("")
+	p.parsedFor, p.nameFor = "", ""
+	p.pubKey, p.comment, p.line, p.parseErr = nil, "", "", nil
+	p.result, p.failed = "", false
+}
+
 // parse re-parses the pasted text when it changed. A newly found key fills
 // the name field with its comment (user@machine), which stays editable.
 func (p *registerPage) parse() {

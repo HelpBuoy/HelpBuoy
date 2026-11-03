@@ -288,7 +288,7 @@ func TestManyHelpersAndClients(t *testing.T) {
 	if _, _, err := e.st.Update(func(st *store.State) error {
 		for i := range hkeys {
 			hkeys[i] = fake.NewKey()
-			if err := st.AddHelper(uniq("h"), "", keyLine(hkeys[i], "")); err != nil {
+			if err := st.AddHelper(uniq("h"), keyLine(hkeys[i], "")); err != nil {
 				return err
 			}
 		}

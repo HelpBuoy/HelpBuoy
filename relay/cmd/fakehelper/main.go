@@ -150,7 +150,7 @@ func formatPresence(p *control.Presence) string {
 		if h.Online {
 			state = "online"
 		}
-		fmt.Fprintf(&b, "  helper %s (%s) %s %s\n", h.Name, h.DisplayName, h.Fingerprint, state)
+		fmt.Fprintf(&b, "  helper %s %s %s\n", h.Name, h.Fingerprint, state)
 	}
 	return b.String()
 }

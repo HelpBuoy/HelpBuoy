@@ -34,7 +34,6 @@ import (
 func main() {
 	listen := flag.String("listen", "127.0.0.1:5938", "address to listen on")
 	register := flag.Duration("register", 0, "register pending keys after this delay (0 = never)")
-	name := flag.String("name", "anna@ANNA-LAPTOP", "name for registered keys")
 	connect := flag.Duration("connect", 0, "connect a helper this long after a registered client comes online (0 = never)")
 	var o helperOpts
 	flag.DurationVar(&o.length, "session", 10*time.Second, "end sessions after this long")
@@ -51,7 +50,6 @@ func main() {
 	}
 	r, err := fakerelay.Start(*listen, fakerelay.Options{
 		AutoRegister: *register,
-		AutoName:     *name,
 		AutoConnect:  *connect,
 		HelperName:   "alice",
 		HelperKey:    helper.Line,

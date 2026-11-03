@@ -15,31 +15,49 @@ import (
 	"github.com/mevdschee/help-me-win/proto/control"
 )
 
-// drawSidebar draws the left column: relay status, the clients (online
-// first, offline collapsed) and the buttons for the Register and Settings
-// pages.
-func (a *App) drawSidebar() {
+// drawClientsPage draws the Clients tab: a heading with the relay status
+// as a badge (so it does not read as a list entry), then the clients,
+// online first, offline collapsed.
+func (a *App) drawClientsPage(r rl.Rectangle) {
 	c := a.ui
-	_, h := ui.WindowSize()
-	rl.DrawRectangleRec(rl.NewRectangle(0, 0, sidebarW, h), ui.ColPanel)
-	defer rl.DrawRectangleRec(rl.NewRectangle(sidebarW, 0, 1, h), ui.ColBorder)
-
-	c.Text(ui.Bold, ui.SizeHeading, "Clients", 16, 14, ui.ColText)
-	y := a.drawStatus(16, 44, sidebarW-32)
-
-	list := rl.NewRectangle(0, y+8, sidebarW, h-(y+8)-64)
-	rl.DrawLineV(rl.NewVector2(0, list.Y), rl.NewVector2(sidebarW, list.Y), ui.ColBorder)
+	rl.DrawRectangleRec(r, ui.ColPanel)
+	c.Text(ui.Bold, ui.SizeHeading, "Clients", r.X+16, r.Y+14, ui.ColText)
+	y := a.drawRelayBadge(r.X+140, r.Y+14, r.X+r.Width-16)
+	list := rl.NewRectangle(r.X, y+12, r.Width, r.Y+r.Height-(y+12))
+	rl.DrawLineV(rl.NewVector2(r.X, list.Y), rl.NewVector2(r.X+r.Width, list.Y), ui.ColBorder)
 	a.drawClientList(list)
+}
 
-	by := h - 52
-	rl.DrawLineV(rl.NewVector2(0, by-12), rl.NewVector2(sidebarW, by-12), ui.ColBorder)
-	bw := float32(sidebarW-32-8) / 2
-	if c.Button("side/register", rl.NewRectangle(16, by, bw, 36), "Register client", ui.Normal, false) {
-		a.openPage(tabRegister)
+// drawRelayBadge draws "Relay: <status>" as a rounded badge between x and
+// right, with the detail (address or error) inside it when online and on
+// the line below otherwise. It returns the y below what it drew.
+func (a *App) drawRelayBadge(x, y, right float32) float32 {
+	c := a.ui
+	text, detail, col := a.statusText()
+	label := "Relay: " + text
+	if a.status.Status == relayconn.StatusOnline && detail != "" {
+		label += " · " + detail
+		detail = ""
 	}
-	if c.Button("side/settings", rl.NewRectangle(16+bw+8, by, bw, 36), "Settings", ui.Normal, false) {
-		a.openPage(tabSettings)
+	maxW := right - x
+	textW := min(c.Measure(ui.Regular, ui.SizeSmall, label).X, maxW-36)
+	badge := rl.NewRectangle(x, y+2, textW+36, 26)
+	rl.DrawRectangleRounded(badge, 0.5, 8, ui.ColBackground)
+	rl.DrawRectangleRoundedLinesEx(badge, 0.5, 8, 1, ui.ColBorder)
+	rl.DrawCircleV(rl.NewVector2(badge.X+14, badge.Y+badge.Height/2), 4.5, col)
+	c.TextIn(ui.Regular, ui.SizeSmall, c.Ellipsize(ui.Regular, ui.SizeSmall, label, textW),
+		rl.NewRectangle(badge.X+26, badge.Y, textW, badge.Height), ui.ColText)
+	y = badge.Y + badge.Height + 6
+	if detail != "" {
+		for i, l := range c.Wrap(ui.Regular, ui.SizeSmall, detail, maxW) {
+			if i == 2 {
+				break
+			}
+			c.Text(ui.Regular, ui.SizeSmall, l, x, y, ui.ColMuted)
+			y += 18
+		}
 	}
+	return y
 }
 
 // statusText describes the relay connection for the UI.
@@ -77,25 +95,6 @@ func (a *App) statusText() (text, detail string, col rl.Color) {
 	return "Connecting to " + addr, "", ui.ColWarn
 }
 
-// drawStatus draws the status line and returns the y below it.
-func (a *App) drawStatus(x, y, w float32) float32 {
-	c := a.ui
-	text, detail, col := a.statusText()
-	rl.DrawCircleV(rl.NewVector2(x+5, y+9), 4.5, col)
-	c.Text(ui.Regular, ui.SizeSmall, c.Ellipsize(ui.Regular, ui.SizeSmall, text, w-16), x+16, y, ui.ColText)
-	y += 20
-	if detail != "" {
-		for i, l := range c.Wrap(ui.Regular, ui.SizeSmall, detail, w-16) {
-			if i == 2 {
-				break
-			}
-			c.Text(ui.Regular, ui.SizeSmall, l, x+16, y, ui.ColMuted)
-			y += 18
-		}
-	}
-	return y
-}
-
 // sortedClients splits the presence into online and offline clients, each
 // sorted by name.
 func sortedClients(p *control.Presence) (online, offline []control.ClientInfo) {
@@ -124,7 +123,7 @@ func (a *App) drawClientList(r rl.Rectangle) {
 	c := a.ui
 	online, offline := sortedClients(a.presence)
 	if a.presence != nil && len(online)+len(offline) == 0 {
-		c.Paragraph(ui.Regular, ui.SizeSmall, "No registered clients yet. Use Register client below to add one.", 16, r.Y+16, r.Width-32, ui.ColMuted)
+		c.Paragraph(ui.Regular, ui.SizeSmall, "No registered clients yet. Use the Register client tab to add one.", 16, r.Y+16, r.Width-32, ui.ColMuted)
 		return
 	}
 	if a.presence == nil {

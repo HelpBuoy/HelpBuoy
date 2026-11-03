@@ -91,11 +91,11 @@ func runFail(t *testing.T, args ...string) string {
 func TestAdmin(t *testing.T) {
 	dir := t.TempDir()
 	hl, hfp := keyLine(t, "alice-laptop")
-	runOK(t, "helper", "add", "alice", "--display", "Alice A", hl, "--state", dir)
+	runOK(t, "helper", "add", "alice", hl, "--state", dir)
 	runFail(t, "helper", "add", "alice", hl, "--state", dir)
 	runFail(t, "helper", "add", "bob", "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQC7", "--state", dir)
 	out := runOK(t, "helper", "list", "--state", dir)
-	if !strings.Contains(out, "alice") || !strings.Contains(out, "Alice A") || !strings.Contains(out, hfp) {
+	if !strings.Contains(out, "alice") || !strings.Contains(out, hfp) {
 		t.Errorf("helper list:\n%s", out)
 	}
 

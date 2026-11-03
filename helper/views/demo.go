@@ -65,7 +65,7 @@ func newDemo(a *App) *demo {
 			RegisteredBy: "helper", RegisteredAt: now.Add(-30 * 24 * time.Hour), LastSeen: now.Add(-26 * time.Hour),
 		}
 	}
-	p := &control.Presence{Helpers: []control.HelperInfo{{Name: "helper", DisplayName: "Helper", Online: true}, {Name: "bob", DisplayName: "Bob", Online: true}}}
+	p := &control.Presence{Helpers: []control.HelperInfo{{Name: "helper", Online: true}, {Name: "bob", Online: true}}}
 	anna := client("anna@ANNA-LAPTOP", true)
 	jan := client("jan@KANTOOR-PC", true)
 	oma := client("oma@WOONKAMER", true)

@@ -116,9 +116,8 @@ func (c *Context) Checkbox(id string, r rl.Rectangle, label string, v *bool) boo
 	return false
 }
 
-// Tab draws one tab of a tab bar. It reports a click on the tab and a click
-// on its close button (closable tabs only).
-func (c *Context) Tab(id string, r rl.Rectangle, title string, active, closable bool) (clicked, closed bool) {
+// Tab draws one tab of a tab bar and reports a click on it.
+func (c *Context) Tab(id string, r rl.Rectangle, title string, active bool) bool {
 	hover := c.Hover(r)
 	bg := ColBackground
 	if active {
@@ -132,41 +131,16 @@ func (c *Context) Tab(id string, r rl.Rectangle, title string, active, closable 
 	}
 	rl.DrawLineV(rl.NewVector2(r.X+r.Width, r.Y+6), rl.NewVector2(r.X+r.Width, r.Y+r.Height-6), ColBorder)
 	textW := r.Width - 24
-	var closeR rl.Rectangle
-	if closable {
-		textW -= 22
-		closeR = rl.NewRectangle(r.X+r.Width-30, r.Y+(r.Height-22)/2, 22, 22)
-	}
 	font := Regular
 	col := ColMuted
 	if active {
 		font, col = Bold, ColText
 	}
 	c.TextIn(font, SizeBody, c.Ellipsize(font, SizeBody, title, textW), rl.NewRectangle(r.X+12, r.Y, textW, r.Height), col)
-	if closable {
-		ch := c.Hover(closeR)
-		if ch {
-			rl.DrawRectangleRounded(closeR, 0.3, 4, ColPressed)
-			c.SetCursor(rl.MouseCursorPointingHand)
-		}
-		drawCross(closeR, ColMuted)
-		if c.Clicked(id+"/close", closeR) {
-			return false, true
-		}
-		if ch {
-			return false, false
-		}
-	}
 	if hover {
 		c.SetCursor(rl.MouseCursorPointingHand)
 	}
-	return c.Clicked(id, r), false
-}
-
-func drawCross(r rl.Rectangle, col rl.Color) {
-	cx, cy, d := r.X+r.Width/2, r.Y+r.Height/2, float32(4.5)
-	rl.DrawLineEx(rl.NewVector2(cx-d, cy-d), rl.NewVector2(cx+d, cy+d), 1.5, col)
-	rl.DrawLineEx(rl.NewVector2(cx-d, cy+d), rl.NewVector2(cx+d, cy-d), 1.5, col)
+	return c.Clicked(id, r)
 }
 
 // BeginScroll starts a vertical scroll area at r for content of the given

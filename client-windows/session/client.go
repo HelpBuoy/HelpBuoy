@@ -44,7 +44,6 @@ func (p Phase) String() string {
 // Helper describes the helper of the current or last session.
 type Helper struct {
 	Name        string
-	DisplayName string
 	Fingerprint string
 }
 
@@ -57,8 +56,6 @@ type State struct {
 	// first connection), RelayFingerprint its fingerprint.
 	RelayHostKey     string
 	RelayFingerprint string
-	// Name is the registered user@machine, empty while pending.
-	Name string
 	// RequestID of the helper's connect being asked about or running.
 	RequestID string
 	// Helper of the running session, or of the last one.
@@ -71,9 +68,9 @@ type State struct {
 type Handler interface {
 	// StateChanged reports a new snapshot. Snapshots arrive in order.
 	StateChanged(State)
-	// Registered reports that the relay knows this key as a client with
-	// name, and the relay host key line to pin from now on.
-	Registered(name, relayHostKey string)
+	// Registered reports that the relay knows this key as a client, and
+	// the relay host key line to pin from now on.
+	Registered(relayHostKey string)
 	// HelperPinned reports a helper key to remember for name.
 	HelperPinned(name, keyLine string)
 	// ConfirmHelper asks the user whether helper h may take control. It is
@@ -144,7 +141,6 @@ type Client struct {
 	helpers     map[string]string
 	conn        *relayConn // nil while disconnected
 	pending     bool
-	name        string
 	reqID       string             // request of the SessionReady being handled, "" once it ended
 	reqEnded    context.CancelFunc // cancels the ConfirmHelper context
 	sessionBusy bool               // SessionReady accepted, until the session ended
@@ -259,7 +255,6 @@ func (c *Client) State() State {
 func (c *Client) stateLocked() State {
 	s := State{
 		Err:       c.err,
-		Name:      c.name,
 		RequestID: c.reqID,
 		Helper:    c.helper,
 	}
@@ -447,7 +442,7 @@ func (c *Client) connectOnce() (reached bool, err error) {
 		return false, fmt.Errorf("%w: first message is %T", ErrNotRelay, m)
 	}
 	tcp.SetDeadline(time.Time{})
-	c.log.Info("connected to relay", "role", hello.Role, "name", hello.Name, "relay_version", hello.RelayVersion)
+	c.log.Info("connected to relay", "role", hello.Role, "relay_version", hello.RelayVersion)
 
 	cctx, ccancel := context.WithCancel(c.ctx)
 	defer ccancel()
@@ -546,10 +541,8 @@ func (c *Client) connected(rc *relayConn, h *control.Hello) error {
 		return ErrHelperKey
 	case control.RolePending:
 		c.pending = true
-		c.name = ""
 	case control.RoleClient:
 		c.pending = false
-		c.name = h.Name
 		registered = true
 	default:
 		c.mu.Unlock()
@@ -558,10 +551,9 @@ func (c *Client) connected(rc *relayConn, h *control.Hello) error {
 	c.conn = rc
 	c.err = nil
 	hostKey := identity.KeyLine(c.hostKey, "")
-	name := c.name
 	c.mu.Unlock()
 	if registered {
-		c.opts.Handler.Registered(name, hostKey)
+		c.opts.Handler.Registered(hostKey)
 	}
 	c.notify()
 	return nil
@@ -584,11 +576,10 @@ func (c *Client) dispatch(rc *relayConn, m any) {
 	case *control.Registered:
 		c.mu.Lock()
 		c.pending = false
-		c.name = m.Name
 		hostKey := identity.KeyLine(c.hostKey, "")
 		c.mu.Unlock()
-		c.log.Info("registered", "name", m.Name)
-		c.opts.Handler.Registered(m.Name, hostKey)
+		c.log.Info("registered")
+		c.opts.Handler.Registered(hostKey)
 
 	case *control.RequestStateMsg:
 		c.mu.Lock()
@@ -678,7 +669,7 @@ func (c *Client) runSession(rc *relayConn, sr control.SessionReady, ask context.
 			pin = true
 		}
 	}
-	helper := Helper{Name: sr.HelperName, DisplayName: sr.HelperDisplayName, Fingerprint: fp}
+	helper := Helper{Name: sr.HelperName, Fingerprint: fp}
 	if !c.opts.Handler.ConfirmHelper(ask, helper, oldFP) {
 		abort("user refused the helper", nil)
 		return

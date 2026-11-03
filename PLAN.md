@@ -22,7 +22,7 @@ other, and splices their channels together.
   the address is stored and prefilled; every start shows the address with **Connect**, and the
   waiting screen has a **Disconnect** button that goes back to it. Once a helper has registered that key, the client shows up as online for all
   helpers. Helpers ask to help: a helper presses **Connect** on an online client, and the
-  client asks its user whether that helper (display name and key fingerprint) may take
+  client asks its user whether that helper (name and key fingerprint) may take
   control. Nothing happens without that approval. Talking about the problem happens over
   WhatsApp or the phone, not in the apps.
   A client is helped by **one helper at a time**; a helper can help many clients at once.
@@ -142,7 +142,7 @@ or ending.
    sends the client `SessionReady`. Other helpers see the client as busy; if two helpers
    connect at the same moment, the first one wins.
 3. **The client asks the user** whether that helper may take control, showing the helper's
-   display name, name and key fingerprint, with a separate warning if the key changed (3.5).
+   name and key fingerprint, with a separate warning if the key changed (3.5).
    If the user refuses, the client cancels the request and the helper sees "Not allowed".
    The relay ends a request whose session hasn't started within 1 minute, so the user has
    that long to answer; the client then closes the question by itself.
@@ -242,14 +242,14 @@ A key can't be both helper and client.
 State directory in the user's data directory, next to the helper app's own data:
 `~/.local/share/hmw-relay` on Linux, `~/Library/Application Support/hmw-relay` on macOS,
 `%LOCALAPPDATA%\hmw-relay` on Windows (override with `--state`). It holds `hostkey_ed25519` (0600) and `state.json` with helpers
-(name, display name, public key) and registered clients (key, `user@machine` name,
+(name, public key) and registered clients (key, `user@machine` name,
 registered by, registered at, last seen). Client registrations never expire; they are removed
 only by `UnregisterClient` or `hmw-relay client remove`. Writes are temp file + `fsync` + `rename`.
 
 | Command | What it does |
 |---|---|
 | `hmw-relay serve [--listen :5938]` | run the relay on its single port |
-| `hmw-relay helper add alice --display "Alice" 'ssh-ed25519 ...'` | add a helper with the public key copied from their helper app |
+| `hmw-relay helper add alice 'ssh-ed25519 ...'` | add a helper with the public key copied from their helper app |
 | `hmw-relay helper remove alice` | remove a helper; takes effect immediately, open sessions are closed |
 | `hmw-relay helper list` / `client list` / `client remove SHA256:...` | inspect and revoke |
 | `hmw-relay hostkey` | print the host key fingerprint, for helpers to compare with what clients show |
@@ -273,12 +273,12 @@ Helper commands carry a sequence number and the relay answers each with a `Reply
 | `Presence` | relay → helpers | full snapshot after every change: registered clients (`user@machine`, fingerprint, online, open or taken request with id and time, in session with whom) and helpers |
 | `RegisterClient` / `UnregisterClient` | helper → relay | public key line or fingerprint (name taken from the key comment, or given when the comment is empty) |
 | `Reply` | relay → helper | answer to a helper command: sequence number and error text if it failed |
-| `Registered` | relay → client | registered `user@machine` |
+| `Registered` | relay → client | the key is now registered (no name: that is only for helpers) |
 | `RequestHelp` | client → relay | (no content) |
 | `CancelRequest` | client → relay | request id |
 | `RequestStateMsg` | relay → client | request id and state (open / taken / cancelled / expired / ended) |
 | `OpenRequest` | helper → relay | request id; the relay lets only the first helper win |
-| `SessionReady` | relay → client | request id, helper name, display name and public key: open the `sv-session` now |
+| `SessionReady` | relay → client | request id, helper name and public key: a helper wants to connect |
 | `Error` | relay → any | reason, sent just before the relay closes a connection on purpose |
 
 Session channels carry small SSH-encoded extra data: the client's open names the request id;
@@ -329,7 +329,7 @@ Role caps and timeouts:
   independent way to know the helpers, so it accepts the helper key the (pinned) relay
   announces in `SessionReady`. On top of that, each helper's key is pinned per helper name
   the first time (TOFU again). Before every session the client asks the user whether the
-  helper may take control, showing its display name and key fingerprint; if `alice` later
+  helper may take control, showing its name and key fingerprint; if `alice` later
   shows up with a different key, that question also carries a warning.
 - **Client** is trusted because a helper registered its key after receiving it (or its
   fingerprint) over a trusted channel. The helper app pins registered client keys in the inner
@@ -525,16 +525,18 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   help-me-win relay. A changed relay key brings the user back here with the warning (3.5).
 - If the relay doesn't know this PC's key yet: relay fingerprint, the public key line in a
   read-only box, the key fingerprint, a big **Copy key** button, and "Paste this key into a
-  chat with your helper (for example WhatsApp)." A link goes back to the address field.
+  chat with a helper (for example WhatsApp)." A link goes back to the address field.
 - Waits for `Registered`, then saves the configuration and moves to the waiting screen.
 
 ### 6.3 Waiting screen
-- The client's name (`anna@ANNA-LAPTOP`) and "Waiting for your helper", with one line
+- The comment of this PC's own key (`anna@ANNA-LAPTOP`) and "Waiting for a helper", with one line
   saying the user will be asked first and that Esc takes back control. The helper connects,
   and the client asks the question from section 1 (Session, step 3) in a modal dialog.
 - **Disconnect** leaves the relay and goes back to the address screen (not while a helper is
-  connecting or a session runs). A small **View key** link shows the public key line,
-  fingerprint and **Copy key**, for sending the key to a helper again.
+  connecting or a session runs).
+- The client never shows the name helpers registered or renamed it under: the relay does
+  not send it to the client (neither `Hello` nor `Registered` carry it). That name is only
+  for helpers.
 - There is no settings window. Preferences such as turning off the update check are set by
   hand in `config.json`.
 - **During a session** the window is minimized (`SW_MINIMIZE`), nothing else is shown.
@@ -603,9 +605,10 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   (`~/.cache/github.com/gen2brain/raylib-go/6.0/` on Linux, the equivalent under
   `%LOCALAPPDATA%` and `~/Library/Caches` elsewhere) and loaded from there. Linux needs the
   usual desktop OpenGL and X11/Wayland libraries at run time, which every desktop has.
-- **One window.** raylib has a single window per process, so the helper app is one window: a
-  client list on the left and the work area on the right (session tabs, Register client,
-  Settings). Fullscreen applies to the active session.
+- **One window.** raylib has a single window per process, so the helper app is one window
+  with a tab bar that is always visible: the fixed tabs **Clients**, **Register client** and
+  **Settings**, then one tab per session. Tabs have no close buttons. A session tab shows
+  only the session, without the client list. Fullscreen applies to the active session.
 - **No raygui** (it needs cgo). `helper/ui` is a small immediate-mode widget set written for
   this app: label, button, list row, single-line text field with paste and selection, tabs,
   scroll area, tooltip. That is all the app needs.
@@ -647,7 +650,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   no Docker image.
 
 ### 7.2 Client list and connecting
-- **Connected clients** is the left column of the window: one row per online client
+- The **Clients** tab shows the relay status and one row per online client
   (`user@machine`). Registered clients that are offline are in a collapsed "Offline" section
   below.
 - **Connect**: every online client that nobody is helping has a **Connect** button. It
@@ -655,7 +658,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   the session…" until the session channel arrives (a tab opens) or the request goes away,
   which shows "Not allowed: the user refused or did not answer". Rows of clients another
   helper is connecting to or helping show that instead of the button.
-- **Register client** (a page in the work area): a text field for the key line the user sent in the chat. It tolerates
+- **Register client** (a tab): a text field for the key line the user sent in the chat. It tolerates
   what chat apps do to pasted text: line breaks, leading/trailing spaces, quotes, non-breaking
   spaces, and a preceding message ("here is my key: ssh-ed25519 ..."). Accepts only
   `ssh-ed25519`; an RSA or ECDSA key gets a clear "this is not a help-me-win key, ask the
@@ -664,13 +667,17 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   the client should be showing. The name field is
   prefilled with the key's comment (`user@machine`) and always editable ("Anna laptop");
   it is required when the comment is empty. Registrations are permanent until removed.
+- **Forms reset** when their tab is left: the Register client form and its result are
+  cleared, the Settings fields go back to the saved values, and open renames, errors and
+  confirmations are dropped.
 - **Rename**: hovering a client row shows Rename and Remove; Rename (or a double-click) turns
   the name into an inline field (Enter saves, Esc cancels) and sends `RenameClient`. The
   relay stores the name for everyone, so every helper's list shows it. When the
   `user@machine` the client reports differs from the name, it shows as a muted second line.
 - **Remove** a client (unregister) from the list.
-- Each opened session becomes a tab in the work area; any number at once. Closing the
-  window ends all open sessions.
+- Each opened session becomes a tab after the fixed ones; any number at once. When a
+  session ends its tab goes away and the Clients tab is shown. Closing the window ends all
+  open sessions.
 
 ### 7.3 Viewer
 View options follow Remmina's connection window.
@@ -682,12 +689,10 @@ View options follow Remmina's connection window.
   16 px of an edge. The mouse wheel always goes to the remote side.
 - **Resize** sizes the window so the view shows the remote screen at 1:1 exactly, clamped to
   the current monitor (then 1:1 with scrolling).
-- **Hide client list**: a chevron at the left of the tab strip collapses the client list so
-  the session gets the full width; the choice is remembered.
 - **Fullscreen** shows only the session; a floating toolbar slides in when the pointer
   touches the top edge and hides a second after it leaves. Leaving fullscreen restores the
-  window and the client list.
-- **Host key**: Right Ctrl + F (fullscreen), S (Fit/1:1), R (resize), H (client list). These
+  window.
+- **Host key**: Right Ctrl + F (fullscreen), S (Fit/1:1), R (resize). These
   combinations are never sent to the client; Right Ctrl with any other key, or with a mouse
   button, acts as a normal Ctrl on the remote side, and tapped alone it is sent as a press
   and release.
@@ -701,8 +706,8 @@ View options follow Remmina's connection window.
   `input.Codes`), and characters without a physical key as `Text`.
 - **Toolbar**: End session, Win, Alt+Tab, monitor selector, quality (Auto / Sharp / Fast),
   Fit / 1:1, Resize, Fullscreen, and an fps, RTT and Mbit/s readout.
-- **Ending**: **End session** in the toolbar, or closing the session's tab. Either closes the
-  inner SSH connection; no confirmation dialog. When the user ends the session (Esc or
+- **Ending**: **End session** in the toolbar closes the inner SSH connection; no
+  confirmation dialog. When the user ends the session (Esc or
   exiting the client application), the tab just closes. Esc pressed in the viewer is sent to
   the client as a normal key.
 

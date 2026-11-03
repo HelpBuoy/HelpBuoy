@@ -35,7 +35,7 @@ func init() {
 }
 
 func main() {
-	demo := flag.Bool("demo", os.Getenv("SV_HELPER_DEMO") != "", "show fake clients and requests; no network, nothing stored")
+	demo := flag.Bool("demo", os.Getenv("SV_HELPER_DEMO") != "", "show fake clients; no network, nothing stored")
 	page := flag.String("page", os.Getenv("SV_HELPER_PAGE"), `start page: "register", "settings" or "session" (demo)`)
 	dataDir := flag.String("datadir", "", "data directory (default: per-user data directory)")
 	// --upload-bench is a hidden developer check (helper/perf): it measures

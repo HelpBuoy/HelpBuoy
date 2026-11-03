@@ -125,7 +125,7 @@ func TestSessionSplice(t *testing.T) {
 	c, ck := e.client("anna@PC")
 	s := startSession(t, h, c, 1)
 
-	if s.ready.RequestID != s.id || s.ready.HelperName != "alice" || s.ready.HelperDisplayName != "Display alice" ||
+	if s.ready.RequestID != s.id || s.ready.HelperName != "alice" ||
 		s.ready.HelperKey != keyLine(hk, "") {
 		t.Errorf("session ready %+v", s.ready)
 	}

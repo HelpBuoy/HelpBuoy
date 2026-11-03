@@ -133,7 +133,7 @@ func (e *env) addHelper(name string) ssh.Signer {
 	e.t.Helper()
 	k := fake.NewKey()
 	e.update(func(st *store.State) error {
-		return st.AddHelper(name, "Display "+name, fake.KeyLine(k.PublicKey(), ""))
+		return st.AddHelper(name, fake.KeyLine(k.PublicKey(), ""))
 	})
 	return k
 }

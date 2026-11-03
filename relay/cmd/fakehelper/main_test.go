@@ -33,7 +33,7 @@ func TestFakeHelperEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	st, _ := store.Open(dir)
-	st.Update(func(s *store.State) error { return s.AddHelper("alice", "Alice", fake.KeyLine(hk.PublicKey(), "")) })
+	st.Update(func(s *store.State) error { return s.AddHelper("alice", fake.KeyLine(hk.PublicKey(), "")) })
 	srv, err := server.New(server.Config{StateDir: dir})
 	if err != nil {
 		t.Fatal(err)

@@ -111,8 +111,9 @@ type Hello struct {
 	Role         Role      `json:"role"`
 	RelayVersion string    `json:"relay_version"`
 	ServerTime   time.Time `json:"server_time"`
-	Name         string    `json:"name,omitempty"`         // helper name or registered client user@machine
-	DisplayName  string    `json:"display_name,omitempty"` // helpers only
+	// Name is the helper's name, helpers only. Clients are not told the name
+	// helpers gave them; that name is only for helpers.
+	Name string `json:"name,omitempty"`
 }
 
 // ClientHello is sent by clients and pending connections right after opening
@@ -161,7 +162,6 @@ type RequestInfo struct {
 // HelperInfo describes one helper.
 type HelperInfo struct {
 	Name        string `json:"name"`
-	DisplayName string `json:"display_name"`
 	Fingerprint string `json:"fingerprint"`
 	Online      bool   `json:"online"`
 }
@@ -227,9 +227,9 @@ type Reply struct {
 }
 
 // Registered tells a pending connection that it is now a registered client.
-type Registered struct {
-	Name string `json:"name"` // registered user@machine
-}
+// It carries no name: the name a client is registered under is only for
+// helpers.
+type Registered struct{}
 
 // CancelRequest refuses a helper's Connect (or ends it before the session
 // channel is opened).
@@ -249,10 +249,9 @@ type RequestStateMsg struct {
 // key in the inner SSH handshake (and warns if a known helper name shows a
 // different key).
 type SessionReady struct {
-	RequestID         string `json:"request_id"`
-	HelperName        string `json:"helper_name"`
-	HelperDisplayName string `json:"helper_display_name"`
-	HelperKey         string `json:"helper_key"`
+	RequestID  string `json:"request_id"`
+	HelperName string `json:"helper_name"`
+	HelperKey  string `json:"helper_key"`
 }
 
 // Error is sent before the relay closes a connection on purpose.

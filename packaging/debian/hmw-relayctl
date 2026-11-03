@@ -3,7 +3,7 @@
 # relay (/var/lib/hmw-relay), as the hmw-relay user, so files it writes stay
 # readable by the service. Examples:
 #
-#   sudo hmw-relayctl helper add alice --display "Alice" 'ssh-ed25519 AAAA...'
+#   sudo hmw-relayctl helper add alice 'ssh-ed25519 AAAA...'
 #   sudo hmw-relayctl helper list
 #   sudo hmw-relayctl client list
 #   sudo hmw-relayctl hostkey

@@ -1,6 +1,6 @@
 // Package config stores what the client learns about its relay in
 // config.json in the app's data directory (PLAN.md section 0): the relay
-// address, the pinned relay host key, the registered name, the pinned key
+// address, the pinned relay host key, the pinned key
 // of every helper met on that relay, and a few preferences. The app key lives next to it but is managed by
 // proto/appkey; Reset never touches it.
 package config
@@ -25,8 +25,6 @@ type Config struct {
 	RelayAddress string `json:"relay_address,omitempty"`
 	// RelayHostKey is the pinned relay host key as an authorized_keys line.
 	RelayHostKey string `json:"relay_host_key,omitempty"`
-	// Name is the registered user@machine as the relay reported it.
-	Name string `json:"name,omitempty"`
 	// KnownHelpers maps a helper name to its pinned authorized_keys line.
 	// The pins belong to RelayAddress: helpers are vouched for by the relay
 	// and names are only unique within one relay, so changing the relay
@@ -56,7 +54,7 @@ func (c *Config) Preferences() *Config {
 
 // Registered reports whether the first-run flow has been completed.
 func (c *Config) Registered() bool {
-	return c != nil && c.RelayAddress != "" && c.RelayHostKey != "" && c.Name != ""
+	return c != nil && c.RelayAddress != "" && c.RelayHostKey != ""
 }
 
 // Clone returns a deep copy.

@@ -36,7 +36,7 @@ const usage = `usage: hmw-relay <command> [flags]
 
 commands:
   serve [--listen :5938] [--state DIR]                   run the relay
-  helper add NAME [--display "Name"] 'ssh-ed25519 ...'   add a helper key
+  helper add NAME 'ssh-ed25519 ...'   add a helper key
   helper remove NAME                                     remove a helper
   helper list                                            list helpers
   client list                                            list registered clients
@@ -200,10 +200,6 @@ func helperCmd(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("helper "+args[0], flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	state := fs.String("state", "", "state directory")
-	var display *string
-	if args[0] == "add" {
-		display = fs.String("display", "", "display name shown to clients (default: NAME)")
-	}
 	pos, err := parse(fs, args[1:])
 	if err != nil {
 		return err
@@ -215,9 +211,9 @@ func helperCmd(args []string, stdout, stderr io.Writer) error {
 	switch args[0] {
 	case "add":
 		if len(pos) != 2 {
-			return fmt.Errorf("%w: helper add NAME [--display \"Name\"] 'ssh-ed25519 ...'", errUsage)
+			return fmt.Errorf("%w: helper add NAME 'ssh-ed25519 ...'", errUsage)
 		}
-		_, _, err := st.Update(func(s *store.State) error { return s.AddHelper(pos[0], *display, pos[1]) })
+		_, _, err := st.Update(func(s *store.State) error { return s.AddHelper(pos[0], pos[1]) })
 		if err != nil {
 			return err
 		}
@@ -240,9 +236,9 @@ func helperCmd(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 		tw := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(tw, "NAME\tDISPLAY NAME\tFINGERPRINT")
+		fmt.Fprintln(tw, "NAME\tFINGERPRINT")
 		for i, h := range idx.State.Helpers {
-			fmt.Fprintf(tw, "%s\t%s\t%s\n", h.Name, h.DisplayName, idx.HelperFingerprint(i))
+			fmt.Fprintf(tw, "%s\t%s\n", h.Name, idx.HelperFingerprint(i))
 		}
 		tw.Flush()
 	default:

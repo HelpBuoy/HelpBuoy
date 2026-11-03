@@ -109,7 +109,7 @@ func Describe(err error) string {
 	case KindRefusedKey:
 		return "The relay refused this PC for now. Try again later."
 	case KindHostKeyChanged:
-		return "The relay's identity changed, so help-me-win stopped connecting. Ask your helper before you continue. " +
+		return "The relay's identity changed, so help-me-win stopped connecting. Ask a helper before you continue. " +
 			"Restart help-me-win to answer the warning again, or use Reset in the settings."
 	case KindHelperKey:
 		return "This key belongs to a helper on this relay and can't be used here."

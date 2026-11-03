@@ -56,7 +56,7 @@ func helpers(t *testing.T, dir string) []store.Helper {
 func TestRunsInProcess(t *testing.T) {
 	dir := t.TempDir()
 	port := freePort(t)
-	r := Start(Options{Port: port, StateDir: dir, Version: "test", HelperName: "alice", HelperDisplay: "Alice", KeyLine: keyLine})
+	r := Start(Options{Port: port, StateDir: dir, Version: "test", HelperName: "alice", KeyLine: keyLine})
 	st := waitState(t, r, StateRunning)
 	if st.HelperAdded != 1 || st.StateDir != dir {
 		t.Fatalf("status %+v", st)
@@ -75,7 +75,7 @@ func TestRunsInProcess(t *testing.T) {
 		t.Fatalf("banner %q", buf[:n])
 	}
 
-	if hs := helpers(t, dir); len(hs) != 1 || hs[0].Name != "alice" || hs[0].DisplayName != "Alice" {
+	if hs := helpers(t, dir); len(hs) != 1 || hs[0].Name != "alice" {
 		t.Fatalf("helpers %+v", hs)
 	}
 	r.Stop()

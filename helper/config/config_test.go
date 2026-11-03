@@ -46,7 +46,7 @@ func TestLoadMissingGivesDefaults(t *testing.T) {
 func TestSaveLoadRoundTrip(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "sub")
 	k := newKey(t)
-	c := &Config{RelayAddr: "relay.example.com:5938", LocalRelay: LocalRelay{Enabled: true, Port: 2300}, HideClientList: true}
+	c := &Config{RelayAddr: "relay.example.com:5938", LocalRelay: LocalRelay{Enabled: true, Port: 2300}}
 	if _, err := c.Pin(k); err != nil {
 		t.Fatal(err)
 	}

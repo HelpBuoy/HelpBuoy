@@ -31,13 +31,13 @@ func TestHello(t *testing.T) {
 	e := newEnv(t, nil)
 	hk := e.addHelper("alice")
 	_, h := e.connect(hk, control.RoleHelper)
-	if h.Name != "alice" || h.DisplayName != "Display alice" || h.RelayVersion != "test" ||
+	if h.Name != "alice" || h.RelayVersion != "test" ||
 		!h.ServerTime.Equal(e.clock.Now()) {
 		t.Errorf("helper hello %+v", h)
 	}
 	_, h = e.connect(e.addClient("anna@PC"), control.RoleClient)
-	if h.Name != "anna@PC" || h.DisplayName != "" {
-		t.Errorf("client hello %+v", h)
+	if h.Name != "" {
+		t.Errorf("client hello tells the client its name: %+v", h)
 	}
 	_, h = e.connect(fake.NewKey(), control.RolePending)
 	if h.Name != "" {
@@ -235,7 +235,7 @@ func TestPresenceContent(t *testing.T) {
 		return ci != nil && ci.UserMachine == "anna@PC-NOW"
 	})
 	if len(p.Helpers) != 2 || p.Helpers[0].Name != "alice" || !p.Helpers[0].Online ||
-		p.Helpers[1].Name != "bob" || p.Helpers[1].Online || p.Helpers[1].DisplayName != "Display bob" {
+		p.Helpers[1].Name != "bob" || p.Helpers[1].Online {
 		t.Errorf("helpers %+v", p.Helpers)
 	}
 	if len(p.Clients) != 2 || p.Clients[0].Name != "anna@PC" || p.Clients[1].Name != "zed@OFF" {
@@ -274,9 +274,7 @@ func TestPromotion(t *testing.T) {
 	if rep := mustWait[control.Reply](t, h, nil); rep.Seq != 1 || rep.Error != "" {
 		t.Fatalf("reply %+v", rep)
 	}
-	if reg := mustWait[control.Registered](t, pc, nil); reg.Name != "anna@PC" {
-		t.Errorf("registered %+v", reg)
-	}
+	mustWait[control.Registered](t, pc, nil)
 	p := presenceWhere(t, h, func(p *control.Presence) bool {
 		ci := clientInfo(p, fp(k))
 		return ci != nil && ci.Online
@@ -306,9 +304,11 @@ func TestPromotion(t *testing.T) {
 	if rep := mustWait[control.Reply](t, h, nil); rep.Error != "" {
 		t.Errorf("register with name: %+v", rep)
 	}
-	if _, hello := e.connect(k2, control.RoleClient); hello.Name != "carl@PC" {
-		t.Errorf("hello %+v", hello)
-	}
+	e.connect(k2, control.RoleClient)
+	presenceWhere(t, h, func(p *control.Presence) bool {
+		ci := clientInfo(p, fp(k2))
+		return ci != nil && ci.Name == "carl@PC" && ci.Online
+	})
 }
 
 func TestReconnectReplaces(t *testing.T) {
@@ -392,7 +392,7 @@ func TestStateReload(t *testing.T) {
 	pc, _ := e.connect(k, control.RolePending)
 	// CLI-style changes, picked up by the poll only.
 	hk := fake.NewKey()
-	if _, _, err := e.st.Update(func(st *store.State) error { return st.AddHelper("bob", "Bob", keyLine(hk, "")) }); err != nil {
+	if _, _, err := e.st.Update(func(st *store.State) error { return st.AddHelper("bob", keyLine(hk, "")) }); err != nil {
 		t.Fatal(err)
 	}
 	presenceWhere(t, h, func(p *control.Presence) bool { return len(p.Helpers) == 2 })
@@ -426,9 +426,7 @@ func TestRestartKeepsRegistrations(t *testing.T) {
 	c, _ := e.connect(k, control.RoleClient)
 	c.Close()
 	e.restart()
-	if _, hello := e.connect(k, control.RoleClient); hello.Name != "anna@PC" {
-		t.Errorf("hello after restart %+v", hello)
-	}
+	e.connect(k, control.RoleClient) // still registered after the restart
 	h, _ = e.connect(hk, control.RoleHelper)
 	p := mustWait[control.Presence](t, h, nil)
 	ci := clientInfo(p, fp(k))

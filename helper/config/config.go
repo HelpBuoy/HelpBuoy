@@ -39,9 +39,6 @@ type Config struct {
 	RelayHostKey string `json:"relay_host_key,omitempty"`
 	// LocalRelay controls running hmw-relay on this machine.
 	LocalRelay LocalRelay `json:"local_relay"`
-	// HideClientList collapses the client list while sessions are open, so
-	// the session view uses the whole window width.
-	HideClientList bool `json:"hide_client_list,omitempty"`
 }
 
 // LocalRelay holds the settings for running hmw-relay as a child process.

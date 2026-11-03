@@ -35,9 +35,6 @@ type Session struct {
 type Options struct {
 	// AutoRegister registers every pending key after this delay; 0 = never.
 	AutoRegister time.Duration
-	// AutoName is the name used by AutoRegister (default "demo@PC"); the
-	// real relay takes it from the comment of the pasted key line.
-	AutoName string
 	// AutoConnect connects helper HelperName (key HelperKey) this long
 	// after a registered client comes online; 0 = never.
 	AutoConnect time.Duration
@@ -57,8 +54,8 @@ type Relay struct {
 	sessions chan Session
 
 	mu         sync.Mutex
-	registered map[string]string // fingerprint -> name
-	conns      map[string]*conn  // online, by fingerprint
+	registered map[string]bool  // fingerprints of registered keys
+	conns      map[string]*conn // online, by fingerprint
 	refuseAll  bool
 }
 
@@ -97,7 +94,7 @@ func Start(addr string, opts Options) (*Relay, error) {
 		log:        log,
 		recv:       make(chan Received, 64),
 		sessions:   make(chan Session, 4),
-		registered: make(map[string]string),
+		registered: make(map[string]bool),
 		conns:      make(map[string]*conn),
 	}
 	go r.serve()
@@ -134,16 +131,16 @@ func (r *Relay) RefuseAll(v bool) {
 	r.mu.Unlock()
 }
 
-// Register registers the key with fingerprint fp under name and, if it is
-// online and pending, sends it Registered.
-func (r *Relay) Register(fp, name string) {
+// Register registers the key with fingerprint fp and, if it is online and
+// pending, sends it Registered.
+func (r *Relay) Register(fp string) {
 	r.mu.Lock()
-	_, was := r.registered[fp]
-	r.registered[fp] = name
+	was := r.registered[fp]
+	r.registered[fp] = true
 	c := r.conns[fp]
 	r.mu.Unlock()
 	if c != nil && !was {
-		c.ctl.Send(control.Registered{Name: name})
+		c.ctl.Send(control.Registered{})
 		r.autoConnect(fp)
 	}
 }
@@ -190,10 +187,9 @@ func (r *Relay) Connect(fp, helperName, helperKey string) (string, error) {
 		return "", errors.New("fakerelay: client not online")
 	}
 	return id, c.ctl.Send(control.SessionReady{
-		RequestID:         id,
-		HelperName:        helperName,
-		HelperDisplayName: "Helper " + helperName,
-		HelperKey:         helperKey,
+		RequestID:  id,
+		HelperName: helperName,
+		HelperKey:  helperKey,
 	})
 }
 
@@ -293,7 +289,7 @@ func (r *Relay) control(c *conn) {
 		old.ssh.Close() // a known key that reconnects replaces its connection
 	}
 	r.conns[c.fp] = c
-	name, registered := r.registered[c.fp]
+	registered := r.registered[c.fp]
 	r.mu.Unlock()
 	defer func() {
 		r.mu.Lock()
@@ -305,7 +301,7 @@ func (r *Relay) control(c *conn) {
 
 	hello := control.Hello{Role: control.RolePending, RelayVersion: "fake", ServerTime: time.Now()}
 	if registered {
-		hello.Role, hello.Name = control.RoleClient, name
+		hello.Role = control.RoleClient
 	}
 	if err := c.ctl.Send(hello); err != nil {
 		return
@@ -314,11 +310,7 @@ func (r *Relay) control(c *conn) {
 		r.autoConnect(c.fp)
 	} else if r.opts.AutoRegister > 0 {
 		time.AfterFunc(r.opts.AutoRegister, func() {
-			name := r.opts.AutoName
-			if name == "" {
-				name = "demo@PC"
-			}
-			r.Register(c.fp, name)
+			r.Register(c.fp)
 		})
 	}
 	for {

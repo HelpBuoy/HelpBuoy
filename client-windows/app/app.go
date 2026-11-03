@@ -28,7 +28,7 @@ type Screen int
 // Screens.
 const (
 	ScreenAddress  Screen = iota // relay address and Connect; always the first screen
-	ScreenKey                    // connected, key not registered: send this key to your helper
+	ScreenKey                    // connected, key not registered: send this key to a helper
 	ScreenMain                   // registered: waiting for a helper to connect, Disconnect
 	ScreenKeyError               // the app key exists but can't be used
 )
@@ -56,10 +56,10 @@ type View struct {
 	Notice string
 
 	// ScreenMain
-	Name      string
-	Ready     bool // connected and registered: helpers can connect
-	Asking    bool // a helper wants to connect; the user is being asked
-	InSession bool // the window is minimized while true
+	KeyComment string // comment of this PC's key, user@machine
+	Ready      bool   // connected and registered: helpers can connect
+	Asking     bool   // a helper wants to connect; the user is being asked
+	InSession  bool   // the window is minimized while true
 	// RelayKeyChange is set when the relay showed another key than the
 	// pinned one; the client stopped connecting (ScreenAddress). The window
 	// warns, and TrustRelayKey pins the new key if the user accepts it.
@@ -207,8 +207,8 @@ func (c *Controller) screenLocked() View {
 	}
 	v.KeyLine = c.key.Line
 	v.KeyFingerprint = c.key.Fingerprint
+	v.KeyComment = c.key.Comment
 	v.RelayFingerprint = c.st.RelayFingerprint
-	v.Name = c.cfg.Name
 
 	lost := "The connection to the relay was lost. Trying again..."
 	switch p := c.st.Phase; {
@@ -511,7 +511,7 @@ func (h handler) StateChanged(s session.State) {
 // Registered saves the relay this PC is registered on. A different relay
 // than the stored one replaces it, and the helper pins of the old relay are
 // forgotten: helper names are only unique within one relay.
-func (h handler) Registered(name, relayHostKey string) {
+func (h handler) Registered(relayHostKey string) {
 	c := h.c
 	c.mu.Lock()
 	if c.gen != h.gen || c.client == nil {
@@ -522,13 +522,12 @@ func (h handler) Registered(name, relayHostKey string) {
 	if c.cfg.RelayAddress != c.addr {
 		c.cfg.KnownHelpers = nil
 	}
-	changed := c.cfg.RelayAddress != c.addr || c.cfg.RelayHostKey != relayHostKey || c.cfg.Name != name
+	changed := c.cfg.RelayAddress != c.addr || c.cfg.RelayHostKey != relayHostKey
 	c.cfg.RelayAddress = c.addr
 	c.cfg.RelayHostKey = relayHostKey
-	c.cfg.Name = name
 	c.mu.Unlock()
 	if changed {
-		c.log.Info("registered on the relay", "relay", c.addr, "name", name)
+		c.log.Info("registered on the relay", "relay", c.addr)
 		c.save()
 	}
 	c.update()

@@ -14,7 +14,6 @@ const (
 	actFullscreen            // Right Ctrl+F
 	actToggleMode            // Right Ctrl+S: Fit or 1:1
 	actResize                // Right Ctrl+R: resize the window to the client
-	actToggleList            // Right Ctrl+H: hide or show the client list
 )
 
 // hostCombos maps the W3C code of the second key to its shortcut. Codes are
@@ -23,7 +22,6 @@ var hostCombos = map[string]hostAction{
 	"KeyF": actFullscreen,
 	"KeyS": actToggleMode,
 	"KeyR": actResize,
-	"KeyH": actToggleList,
 }
 
 // hostState is where the host key filter is between key events.

@@ -23,7 +23,7 @@ type testHandler struct {
 	states chan State
 
 	mu         sync.Mutex
-	registered []string // name|hostkey
+	registered []string // relay host keys
 	pinned     map[string]string
 	refuse     bool
 	hold       bool // ConfirmHelper waits until its context ends
@@ -41,9 +41,9 @@ func newHandler() *testHandler {
 }
 
 func (h *testHandler) StateChanged(s State) { h.states <- s }
-func (h *testHandler) Registered(name, hostKey string) {
+func (h *testHandler) Registered(hostKey string) {
 	h.mu.Lock()
-	h.registered = append(h.registered, name+"|"+hostKey)
+	h.registered = append(h.registered, hostKey)
 	h.mu.Unlock()
 }
 func (h *testHandler) HelperPinned(name, line string) {
@@ -200,18 +200,15 @@ func TestFirstRunRegistration(t *testing.T) {
 	f.client.Start()
 	s := f.h.waitPhase(t, PhasePending)
 	wantFP := ssh.FingerprintSHA256(f.relay.HostKey())
-	if s.RelayFingerprint != wantFP || s.Name != "" {
+	if s.RelayFingerprint != wantFP {
 		t.Fatalf("pending state %+v", s)
 	}
-	f.relay.Register(f.fp, "anna@PC")
-	s = f.h.waitPhase(t, PhaseReady)
-	if s.Name != "anna@PC" {
-		t.Fatalf("name %q", s.Name)
-	}
+	f.relay.Register(f.fp)
+	f.h.waitPhase(t, PhaseReady)
 	f.h.mu.Lock()
 	reg := f.h.registered
 	f.h.mu.Unlock()
-	want := "anna@PC|" + identity.KeyLine(f.relay.HostKey(), "")
+	want := identity.KeyLine(f.relay.HostKey(), "")
 	if len(reg) != 1 || reg[0] != want {
 		t.Fatalf("registered %q, want %q", reg, want)
 	}
@@ -219,11 +216,13 @@ func TestFirstRunRegistration(t *testing.T) {
 
 func TestAlreadyRegistered(t *testing.T) {
 	f := setup(t, nil)
-	f.relay.Register(f.fp, "anna@PC")
+	f.relay.Register(f.fp)
 	f.client.Start()
-	s := f.h.waitPhase(t, PhaseReady)
-	if s.Name != "anna@PC" {
-		t.Fatal(s)
+	f.h.waitPhase(t, PhaseReady)
+	f.h.mu.Lock()
+	defer f.h.mu.Unlock()
+	if len(f.h.registered) != 1 {
+		t.Fatalf("registered %q", f.h.registered)
 	}
 }
 
@@ -342,7 +341,7 @@ func TestRefusedKey(t *testing.T) {
 
 func startSession(t *testing.T, f *fixture, helperLine string) fakerelay.Session {
 	t.Helper()
-	f.relay.Register(f.fp, "anna@PC")
+	f.relay.Register(f.fp)
 	f.client.Start()
 	f.h.waitPhase(t, PhaseReady)
 	if _, err := f.relay.Connect(f.fp, "alice", helperLine); err != nil {
@@ -415,7 +414,7 @@ func TestSessionAndEsc(t *testing.T) {
 	}
 	fp := ssh.FingerprintSHA256(helper.PublicKey())
 	for _, a := range f.h.asked {
-		if a.helper.Name != "alice" || a.helper.DisplayName != "Helper alice" || a.helper.Fingerprint != fp {
+		if a.helper.Name != "alice" || a.helper.Fingerprint != fp {
 			t.Fatalf("asked about %+v", a.helper)
 		}
 		if a.oldFP != "" {
@@ -428,7 +427,7 @@ func TestHelperRefused(t *testing.T) {
 	f := setup(t, nil)
 	f.h.refuse = true
 	_, helperLine := newKey(t, "alice")
-	f.relay.Register(f.fp, "anna@PC")
+	f.relay.Register(f.fp)
 	f.client.Start()
 	f.h.waitPhase(t, PhaseReady)
 	id, _ := f.relay.Connect(f.fp, "alice", helperLine)
@@ -456,7 +455,7 @@ func TestRequestEndsWhileAsking(t *testing.T) {
 	f := setup(t, nil)
 	f.h.hold = true
 	_, helperLine := newKey(t, "alice")
-	f.relay.Register(f.fp, "anna@PC")
+	f.relay.Register(f.fp)
 	f.client.Start()
 	f.h.waitPhase(t, PhaseReady)
 	id, _ := f.relay.Connect(f.fp, "alice", helperLine)
@@ -492,7 +491,7 @@ func TestHelperKeyChangeRefused(t *testing.T) {
 	f := setup(t, func(o *Options) { o.KnownHelpers = map[string]string{"alice": oldLine} })
 	f.h.refuse = true
 	_, newLine := newKey(t, "alice")
-	f.relay.Register(f.fp, "anna@PC")
+	f.relay.Register(f.fp)
 	f.client.Start()
 	f.h.waitPhase(t, PhaseReady)
 	f.relay.Connect(f.fp, "alice", newLine)
@@ -536,7 +535,7 @@ func oldKey(t *testing.T, line string) ssh.PublicKey {
 
 func TestReconnect(t *testing.T) {
 	f := setup(t, func(o *Options) { o.Retry = true })
-	f.relay.Register(f.fp, "anna@PC")
+	f.relay.Register(f.fp)
 	f.client.Start()
 	f.h.waitPhase(t, PhaseReady)
 	f.relay.Kick(f.fp)

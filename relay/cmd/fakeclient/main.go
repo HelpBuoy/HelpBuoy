@@ -54,11 +54,11 @@ func run(w io.Writer, relay, keyDir, userMachine string, refuse bool, message st
 		case *control.Hello:
 			fmt.Fprintf(w, "hello: role=%s name=%q relay=%s\n", m.Role, m.Name, m.RelayVersion)
 		case *control.Registered:
-			fmt.Fprintf(w, "registered: %s\n", m.Name)
+			fmt.Fprintln(w, "registered")
 		case *control.RequestStateMsg:
 			fmt.Fprintf(w, "request: %s %s\n", m.RequestID, m.State)
 		case *control.SessionReady:
-			fmt.Fprintf(w, "session-ready: %s helper=%s (%s) key=%s\n", m.RequestID, m.HelperName, m.HelperDisplayName, m.HelperKey)
+			fmt.Fprintf(w, "session-ready: %s helper=%s key=%s\n", m.RequestID, m.HelperName, m.HelperKey)
 			if refuse {
 				fmt.Fprintln(w, "session: refused")
 				if err := c.Send(&control.CancelRequest{RequestID: m.RequestID}); err != nil {

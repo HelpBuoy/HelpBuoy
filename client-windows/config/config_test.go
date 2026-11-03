@@ -24,7 +24,6 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	in := &Config{
 		RelayAddress: "relay.example.com:5938",
 		RelayHostKey: "ssh-ed25519 AAAA",
-		Name:         "anna@ANNA-LAPTOP",
 		KnownHelpers: map[string]string{"alice": "ssh-ed25519 BBBB"},
 	}
 	if err := s.Save(in); err != nil {
@@ -41,7 +40,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 		t.Fatal("not registered")
 	}
 	// Overwrite works and leaves no temp files behind.
-	in.Name = "anna@OTHER"
+	in.RelayAddress = "other.example.com:5938"
 	if err := s.Save(in); err != nil {
 		t.Fatal(err)
 	}

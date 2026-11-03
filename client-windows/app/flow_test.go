@@ -80,7 +80,7 @@ func TestOtherRelay(t *testing.T) {
 		t.Fatalf("config changed before registration %+v", cfg)
 	}
 
-	relay2.Register(e.fp(), "anna@PC")
+	relay2.Register(e.fp())
 	ui.wait(t, "main", readyMain)
 	cfg := e.config()
 	if cfg.RelayAddress != relay2.Addr() || cfg.RelayHostKey != identity.KeyLine(relay2.HostKey(), "") ||

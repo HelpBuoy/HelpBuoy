@@ -7,6 +7,7 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
+	"github.com/mevdschee/help-me-win/helper/config"
 	"github.com/mevdschee/help-me-win/helper/identity"
 	"github.com/mevdschee/help-me-win/helper/localrelay"
 	"github.com/mevdschee/help-me-win/helper/relayconn"
@@ -23,6 +24,15 @@ type settingsPage struct {
 	copiedAt   time.Time
 	confirmKey bool
 	confirmPin bool
+}
+
+// reset puts the fields back to the stored settings and clears errors and
+// open confirmations.
+func (p *settingsPage) reset(cfg *config.Config) {
+	p.addr.Edit.SetText(cfg.RelayAddr)
+	p.port.Edit.SetText(strconv.Itoa(cfg.LocalRelay.ListenPort()))
+	p.addrErr, p.portErr = "", ""
+	p.confirmKey, p.confirmPin = false, false
 }
 
 func (p *settingsPage) init() {
@@ -248,8 +258,8 @@ func (a *App) removeKey() {
 		a.cfgErr = err
 		return
 	}
-	for len(a.tabs) > 0 {
-		a.closeTab(0)
+	for len(a.tabs) > fixedTabs {
+		a.closeTab(fixedTabs)
 	}
 	if a.conn != nil {
 		a.conn.Close()

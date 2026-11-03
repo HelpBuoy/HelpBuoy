@@ -172,9 +172,9 @@ func TestFirstRunToMain(t *testing.T) {
 		t.Fatalf("config while pending %+v", cfg)
 	}
 
-	e.relay.Register(e.fp(), "anna@PC")
+	e.relay.Register(e.fp())
 	v = ui.wait(t, "main screen", func(v View) bool { return v.Screen == ScreenMain && v.Ready })
-	if v.Name != "anna@PC" || v.Notice != "" || v.Error != "" {
+	if v.KeyComment != e.key.Comment || v.KeyComment == "" || v.Notice != "" || v.Error != "" {
 		t.Fatalf("main view %+v", v)
 	}
 	cfg := e.config()
@@ -200,11 +200,10 @@ func TestFirstRunToMain(t *testing.T) {
 
 func registered(t *testing.T, e *env) {
 	t.Helper()
-	e.relay.Register(e.fp(), "anna@PC")
+	e.relay.Register(e.fp())
 	config.Store{Dir: e.dir}.Save(&config.Config{
 		RelayAddress: e.relay.Addr(),
 		RelayHostKey: identity.KeyLine(e.relay.HostKey(), ""),
-		Name:         "anna@PC",
 	})
 }
 
@@ -341,12 +340,11 @@ func TestUnregisteredShowsKeyAgain(t *testing.T) {
 	config.Store{Dir: e.dir}.Save(&config.Config{
 		RelayAddress: relay2.Addr(),
 		RelayHostKey: identity.KeyLine(relay2.HostKey(), ""),
-		Name:         "anna@PC",
 	})
 	c, ui := e.controller()
 	startAndConnect(t, c, ui, relay2.Addr())
 	ui.wait(t, "key screen", screenIs(ScreenKey))
-	relay2.Register(e.fp(), "anna@PC")
+	relay2.Register(e.fp())
 	ui.wait(t, "main", func(v View) bool { return v.Screen == ScreenMain && v.Ready })
 }
 
@@ -358,12 +356,11 @@ func TestCapitalize(t *testing.T) {
 
 func TestRelayKeyChanged(t *testing.T) {
 	e := newEnv(t)
-	e.relay.Register(e.fp(), "anna@PC")
+	e.relay.Register(e.fp())
 	old, _ := identity.Ephemeral("old relay")
 	config.Store{Dir: e.dir}.Save(&config.Config{
 		RelayAddress: e.relay.Addr(),
 		RelayHostKey: old.Line,
-		Name:         "anna@PC",
 	})
 	c, ui := e.controller()
 	startAndConnect(t, c, ui, e.relay.Addr())

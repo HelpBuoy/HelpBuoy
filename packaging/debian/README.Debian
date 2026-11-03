@@ -15,7 +15,7 @@ Admin commands go through hmw-relayctl, which runs hmw-relay as the
 service user on the service's state:
 
   sudo hmw-relayctl hostkey              # fingerprint to give to helpers
-  sudo hmw-relayctl helper add alice --display "Alice" 'ssh-ed25519 AAAA...'
+  sudo hmw-relayctl helper add alice 'ssh-ed25519 AAAA...'
   sudo hmw-relayctl helper list
   sudo hmw-relayctl helper remove alice
   sudo hmw-relayctl client list
