@@ -394,10 +394,10 @@ func (c *Controller) Connect(text string) {
 
 // Disconnect is the Disconnect button (and the "use a different relay
 // address" link): it leaves the relay and goes back to the address screen.
-// It does nothing during a session; the user ends that with Esc.
+// A running session ends with it.
 func (c *Controller) Disconnect() {
 	c.mu.Lock()
-	if c.client == nil || c.st.Phase == session.PhaseInSession {
+	if c.client == nil {
 		c.mu.Unlock()
 		return
 	}
@@ -406,6 +406,17 @@ func (c *Controller) Disconnect() {
 	c.lastErr = nil
 	c.mu.Unlock()
 	c.update()
+}
+
+// EndSession is the End session button shown during a session: it ends
+// the session and the client keeps waiting for a helper.
+func (c *Controller) EndSession() {
+	c.mu.Lock()
+	cl := c.client
+	c.mu.Unlock()
+	if cl != nil {
+		cl.EndSession()
+	}
 }
 
 // TrustRelayKey pins the relay's new host key after the user accepted the

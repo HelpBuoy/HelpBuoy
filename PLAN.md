@@ -534,8 +534,9 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
 - The comment of this PC's own key (`anna@ANNA-LAPTOP`) and "Waiting for a helper", with one line
   saying the user will be asked first and that Esc takes back control. The helper connects,
   and the client asks the question from section 1 (Session, step 3) in a modal dialog.
-- **Disconnect** leaves the relay and goes back to the address screen (not while a helper is
-  connecting or a session runs).
+- **Disconnect** is always available while connected: it leaves the relay and goes back to
+  the address screen. During a session the same button reads **End session** and ends only
+  the session (like Esc); afterwards it is Disconnect again.
 - The client never shows the name helpers registered or renamed it under: the relay does
   not send it to the client (neither `Hello` nor `Registered` carry it). That name is only
   for helpers.

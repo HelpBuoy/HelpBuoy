@@ -315,7 +315,13 @@ func (w *Window) events() {
 	w.btnCopy.On().BnClicked(func() { w.copyText(w.view.KeyLine, w.btnCopy) })
 	w.btnRemoveKey.On().BnClicked(w.confirmRemoveKey)
 	w.lnkChange.On().NmClick(func(_ *win.NMLINK) { w.ctrl.Disconnect() })
-	w.btnDisconnect.On().BnClicked(func() { w.ctrl.Disconnect() })
+	w.btnDisconnect.On().BnClicked(func() {
+		if w.view.InSession {
+			w.ctrl.EndSession()
+		} else {
+			w.ctrl.Disconnect()
+		}
+	})
 }
 
 func (w *Window) connect() {
@@ -463,7 +469,14 @@ func (w *Window) apply(v app.View) {
 			status = w.updating
 		}
 		setText(w.lblStatus, status)
-		w.btnDisconnect.Hwnd().EnableWindow(!v.Asking && !v.InSession && w.updating == "")
+		// During a session (window minimized) the button ends just the
+		// session; afterwards it disconnects again.
+		if v.InSession {
+			setText(w.btnDisconnect, "&End session")
+		} else {
+			setText(w.btnDisconnect, "&Disconnect")
+		}
+		w.btnDisconnect.Hwnd().EnableWindow(w.updating == "")
 	}
 
 	keyErr := v.Screen == app.ScreenKeyError

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"io"
 	"testing"
 	"time"
 
@@ -105,20 +106,35 @@ func TestDisconnect(t *testing.T) {
 	startAndConnect(t, c, ui, e.relay.Addr())
 	ui.wait(t, "ready", readyMain)
 
-	// Not during a session.
+	// End session ends only the session; the client keeps waiting.
+	connectHelper(t, e.relay, e.fp())
+	first := <-e.relay.Sessions()
+	ui.wait(t, "in session", func(v View) bool { return v.InSession })
+	c.EndSession()
+	if _, err := io.ReadAll(first.Channel); err != nil {
+		t.Fatalf("session channel: %v", err)
+	}
+	ui.wait(t, "ready again", readyMain)
+	if !e.relay.Online(e.fp()) {
+		t.Fatal("End session disconnected")
+	}
+
+	// During a session Disconnect ends the session too.
 	connectHelper(t, e.relay, e.fp())
 	sess := <-e.relay.Sessions()
 	ui.wait(t, "in session", func(v View) bool { return v.InSession })
 	c.Disconnect()
-	time.Sleep(50 * time.Millisecond)
-	if v := c.View(); !v.InSession || !e.relay.Online(e.fp()) {
-		t.Fatalf("disconnected during a session: %+v", v)
-	}
-	sess.Channel.Close()
-	ui.wait(t, "ready", readyMain)
-
-	c.Disconnect()
 	v := ui.wait(t, "address screen", screenIs(ScreenAddress))
+	if _, err := io.ReadAll(sess.Channel); err != nil {
+		t.Fatalf("session channel: %v", err)
+	}
+	waitOffline(t, e.relay, e.fp())
+
+	// When ready, back to the address screen with the address kept.
+	c.Connect(e.relay.Addr())
+	ui.wait(t, "ready", readyMain)
+	c.Disconnect()
+	v = ui.wait(t, "address screen", screenIs(ScreenAddress))
 	if v.Address != e.relay.Addr() || v.Error != "" || v.Connecting {
 		t.Fatalf("%+v", v)
 	}
