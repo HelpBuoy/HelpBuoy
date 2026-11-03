@@ -47,6 +47,7 @@ func (a *App) drawAgentsPage(r rl.Rectangle) {
 	c := a.ui
 	rl.DrawRectangleRec(r, ui.ColPanel)
 	c.Text(ui.Bold, ui.SizeHeading, "Agents", r.X+16, r.Y+14, ui.ColText)
+	a.addButton("agents/add", "Add agent", tabRegisterAgent, r)
 	list := rl.NewRectangle(r.X, r.Y+56, r.Width, r.Height-56)
 	rl.DrawLineV(rl.NewVector2(r.X, list.Y), rl.NewVector2(r.X+r.Width, list.Y), ui.ColBorder)
 	if a.presence == nil {

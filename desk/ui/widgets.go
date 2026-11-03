@@ -117,9 +117,11 @@ func (c *Context) Checkbox(id string, r rl.Rectangle, label string, v *bool) boo
 }
 
 // Tab draws one tab of a tab bar. A session tab has the app icon (a
-// lifebuoy) before the title and a close button on the right. It reports a
-// click on the tab and a click on its close button.
-func (c *Context) Tab(id string, r rl.Rectangle, title string, active, session bool) (clicked, closed bool) {
+// lifebuoy) before the title. Session tabs and closable tabs have a close
+// button on the right. It reports a click on the tab and a click on its
+// close button.
+func (c *Context) Tab(id string, r rl.Rectangle, title string, active, session, closable bool) (clicked, closed bool) {
+	closable = closable || session
 	hover := c.Hover(r)
 	bg := ColBackground
 	if active {
@@ -137,6 +139,8 @@ func (c *Context) Tab(id string, r rl.Rectangle, title string, active, session b
 	if session {
 		c.DrawIcon(rl.NewVector2(r.X+21, r.Y+r.Height/2), 18)
 		textX += 28
+	}
+	if closable {
 		closeR = rl.NewRectangle(r.X+r.Width-32, r.Y+(r.Height-22)/2, 22, 22)
 		right = closeR.X - 6
 	}
@@ -147,12 +151,16 @@ func (c *Context) Tab(id string, r rl.Rectangle, title string, active, session b
 		font, col = Bold, ColText
 	}
 	c.TextIn(font, SizeBody, c.Ellipsize(font, SizeBody, title, textW), rl.NewRectangle(textX, r.Y, textW, r.Height), col)
-	if session {
+	if closable {
 		over := c.Hover(closeR)
 		if over {
 			rl.DrawRectangleRounded(closeR, 0.3, 4, ColPressed)
 			c.SetCursor(rl.MouseCursorPointingHand)
-			c.Tooltip("End session")
+			if session {
+				c.Tooltip("End session")
+			} else {
+				c.Tooltip("Close")
+			}
 		}
 		drawCross(closeR, ColMuted)
 		if c.Clicked(id+"/close", closeR) {

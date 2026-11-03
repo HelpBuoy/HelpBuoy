@@ -1,5 +1,5 @@
 // Package views holds the desk app's screens: a tab bar that is always
-// there, with the fixed Clients, Agents, Register client, Register agent and Relay tabs followed by
+// there, with the fixed Clients, Agents and Relay tabs (and an open Register client or Register agent tab before Relay) followed by
 // one tab per open session (PLAN.md section 7).
 //
 // App owns all UI state and runs on the main OS thread. Network goroutines
@@ -39,12 +39,13 @@ type Options struct {
 
 // Layout sizes in logical pixels.
 const (
-	tabBarH     = 40
-	fixedTabW   = 144 // Clients, Agents, Register client, Register agent, Relay
-	sessionTabW = 216
-	toolbarH    = 44
-	idleFPS     = 10
-	activeHold  = 1500 * time.Millisecond // stay fast this long after input
+	tabBarH      = 40
+	fixedTabW    = 144 // Clients, Agents, Relay
+	registerTabW = 180 // Register client or Register agent, with a close button
+	sessionTabW  = 216
+	toolbarH     = 44
+	idleFPS      = 10
+	activeHold   = 1500 * time.Millisecond // stay fast this long after input
 	// openTimeout is how long a Connect waits for the user to allow it and
 	// the session channel to arrive. The relay gives up after 1 minute.
 	openTimeout = 75 * time.Second
@@ -63,8 +64,9 @@ type backend interface {
 
 type tabKind int
 
-// The first fixedTabs tabs are always there, in this order; session tabs
-// follow them.
+// Clients, Agents and Relay are always there, in this order. At most one
+// Register client or Register agent tab sits at registerSlot, between Agents
+// and Relay, while it is open. Session tabs follow Relay.
 const (
 	tabClients tabKind = iota
 	tabAgents
@@ -74,7 +76,9 @@ const (
 	tabSession
 )
 
-const fixedTabs = 5
+// registerSlot is the tab bar position of the Register client or Register
+// agent tab.
+const registerSlot = 2
 
 type tab struct {
 	kind tabKind
@@ -165,7 +169,7 @@ func New(opts Options) *App {
 	a := &App{
 		opts:       opts,
 		ui:         ui.New(),
-		tabs:       []*tab{{kind: tabClients}, {kind: tabAgents}, {kind: tabRegister}, {kind: tabRegisterAgent}, {kind: tabRelay}},
+		tabs:       []*tab{{kind: tabClients}, {kind: tabAgents}, {kind: tabRelay}},
 		opened:     map[string]time.Time{},
 		opening:    map[string]bool{},
 		waiting:    map[string]*waitInfo{},
@@ -188,7 +192,7 @@ func New(opts Options) *App {
 	}
 	switch opts.Page {
 	case "register":
-		a.openPage(tabRegister)
+		a.openRegister(tabRegister)
 	case "relay":
 		a.openPage(tabRelay)
 	case "session":
@@ -571,10 +575,66 @@ func (a *App) leaveTab(i int) {
 			a.endRename()
 		}
 		a.confirmRemove = ""
-	case tabRegister:
-		a.reg.reset()
-	case tabRegisterAgent:
+	}
+}
+
+// resetRegister empties the form of Register tab k; it is only reset when
+// its tab closes or is replaced, not when another tab is shown.
+func (a *App) resetRegister(k tabKind) {
+	if k == tabRegisterAgent {
 		a.regAgent.reset()
+	} else {
+		a.reg.reset()
+	}
+}
+
+// isRegister reports whether k is the Register client or Register agent tab.
+func isRegister(k tabKind) bool { return k == tabRegister || k == tabRegisterAgent }
+
+// registerOpen reports whether the Register tab is there, and which one.
+func (a *App) registerOpen() (tabKind, bool) {
+	if len(a.tabs) > registerSlot && isRegister(a.tabs[registerSlot].kind) {
+		return a.tabs[registerSlot].kind, true
+	}
+	return 0, false
+}
+
+// openRegister shows the Register client or Register agent tab (k) at
+// registerSlot. If it is already open it just switches to it; an open
+// Register tab of the other kind is replaced.
+func (a *App) openRegister(k tabKind) {
+	if cur, ok := a.registerOpen(); ok {
+		if cur != k {
+			a.resetRegister(cur)
+			a.tabs[registerSlot] = &tab{kind: k}
+		}
+	} else {
+		a.tabs = append(a.tabs[:registerSlot], append([]*tab{{kind: k}}, a.tabs[registerSlot:]...)...)
+		if a.active >= registerSlot {
+			a.active++
+		}
+	}
+	a.activate(registerSlot)
+}
+
+// closeRegister closes the Register tab and resets its form. When it was
+// active, the list it was opened from is shown.
+func (a *App) closeRegister() {
+	k, ok := a.registerOpen()
+	if !ok {
+		return
+	}
+	a.resetRegister(k)
+	a.tabs = append(a.tabs[:registerSlot], a.tabs[registerSlot+1:]...)
+	switch {
+	case a.active == registerSlot:
+		a.active = 0
+		if k == tabRegisterAgent {
+			a.active = 1
+		}
+		a.ui.Focus = ""
+	case a.active > registerSlot:
+		a.active--
 	}
 }
 
@@ -591,7 +651,7 @@ func (a *App) openPage(k tabKind) {
 // closeTab closes a session tab and ends its session. When it was the
 // active tab, the client list is shown.
 func (a *App) closeTab(i int) {
-	if i < fixedTabs || i >= len(a.tabs) {
+	if i < 0 || i >= len(a.tabs) || a.tabs[i].kind != tabSession {
 		return
 	}
 	t := a.tabs[i]
@@ -656,8 +716,11 @@ func (a *App) drawWorkArea() {
 	// Fixed tabs are narrower than session tabs; all shrink together when
 	// they do not fit.
 	widthOf := func(t *tab) float32 {
-		if t.kind == tabSession {
+		switch {
+		case t.kind == tabSession:
 			return sessionTabW
+		case isRegister(t.kind):
+			return registerTabW
 		}
 		return fixedTabW
 	}
@@ -673,7 +736,7 @@ func (a *App) drawWorkArea() {
 	closeAt := -1
 	for i, t := range a.tabs {
 		tw := max(widthOf(t)*shrink, 72)
-		clicked, closed := a.ui.Tab(fmt.Sprintf("tab/%p", t), rl.NewRectangle(x, 0, tw, tabBarH), a.tabTitle(t), i == a.active, t.kind == tabSession)
+		clicked, closed := a.ui.Tab(fmt.Sprintf("tab/%p", t), rl.NewRectangle(x, 0, tw, tabBarH), a.tabTitle(t), i == a.active, t.kind == tabSession, isRegister(t.kind))
 		if clicked {
 			a.activate(i)
 		}
@@ -683,7 +746,11 @@ func (a *App) drawWorkArea() {
 		x += tw
 	}
 	if closeAt >= 0 {
-		a.closeTab(closeAt) // ends the session
+		if isRegister(a.tabs[closeAt].kind) {
+			a.closeRegister()
+		} else {
+			a.closeTab(closeAt) // ends the session
+		}
 	}
 	content := rl.NewRectangle(0, tabBarH+1, w, h-tabBarH-1)
 	switch t := a.tabs[a.active]; t.kind {
@@ -747,7 +814,7 @@ func (a *App) drawKeyProblem() {
 	if a.keyRemoved {
 		c.Text(ui.Bold, ui.SizeHeading, "The key was removed", x, y, ui.ColText)
 		y += 36
-		y += c.Paragraph(ui.Regular, ui.SizeBody, "Start the app again to create a new key. The relay admin, or another agent on the Register agent tab, then adds the new key.", x, y, width, ui.ColMuted)
+		y += c.Paragraph(ui.Regular, ui.SizeBody, "Start the app again to create a new key. The relay admin, or another agent (Add agent on the Agents tab), then adds the new key.", x, y, width, ui.ColMuted)
 	} else {
 		c.Text(ui.Bold, ui.SizeHeading, "The agent key can't be used", x, y, ui.ColText)
 		y += 36

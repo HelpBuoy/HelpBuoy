@@ -22,9 +22,19 @@ func (a *App) drawClientsPage(r rl.Rectangle) {
 	c := a.ui
 	rl.DrawRectangleRec(r, ui.ColPanel)
 	c.Text(ui.Bold, ui.SizeHeading, "Clients", r.X+16, r.Y+14, ui.ColText)
+	a.addButton("clients/add", "Add client", tabRegister, r)
 	list := rl.NewRectangle(r.X, r.Y+56, r.Width, r.Height-56)
 	rl.DrawLineV(rl.NewVector2(r.X, list.Y), rl.NewVector2(r.X+r.Width, list.Y), ui.ColBorder)
 	a.drawClientList(list)
+}
+
+// addButton draws the Add client or Add agent button at the top right of
+// page r; it opens the Register tab k.
+func (a *App) addButton(id, label string, k tabKind, r rl.Rectangle) {
+	bw := a.ui.ButtonWidth(label)
+	if a.ui.Button(id, rl.NewRectangle(r.X+r.Width-16-bw, r.Y+11, bw, 34), label, ui.Normal, a.backend == nil) {
+		a.openRegister(k)
+	}
 }
 
 // statusText describes the relay connection for the UI.
@@ -90,7 +100,7 @@ func (a *App) drawClientList(r rl.Rectangle) {
 	c := a.ui
 	online, offline := sortedClients(a.presence)
 	if a.presence != nil && len(online)+len(offline) == 0 {
-		c.Paragraph(ui.Regular, ui.SizeSmall, "No registered clients yet. Use the Register client tab to add one.", 16, r.Y+16, r.Width-32, ui.ColMuted)
+		c.Paragraph(ui.Regular, ui.SizeSmall, "No registered clients yet. Use Add client to add one.", 16, r.Y+16, r.Width-32, ui.ColMuted)
 		return
 	}
 	if a.presence == nil {

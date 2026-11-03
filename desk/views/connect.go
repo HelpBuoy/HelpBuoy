@@ -84,9 +84,10 @@ func (a *App) openConn(addr string) {
 // disconnect leaves the relay, stops the local relay and goes back to the
 // connect screen. Open sessions end.
 func (a *App) disconnect() {
-	for len(a.tabs) > fixedTabs {
-		a.closeTab(fixedTabs)
+	for i := len(a.tabs) - 1; i >= 0; i-- {
+		a.closeTab(i) // only session tabs close
 	}
+	a.closeRegister()
 	if a.conn != nil {
 		a.conn.Close()
 		a.conn, a.backend = nil, nil
@@ -219,7 +220,7 @@ func (a *App) drawNotAgent(x, y, w float32) float32 {
 	s := &a.cs
 	c.Text(ui.Bold, ui.SizeHeading, "Send your key to get added", x, y, ui.ColText)
 	y += 36
-	y += c.Paragraph(ui.Regular, ui.SizeBody, "The relay at "+a.addr.String()+" does not know this agent yet. Send this public key to an agent on it (Register agent tab) or to its admin (helpbuoy-relay agent add).", x, y, w, ui.ColMuted)
+	y += c.Paragraph(ui.Regular, ui.SizeBody, "The relay at "+a.addr.String()+" does not know this agent yet. Send this public key to an agent on it (Add agent on the Agents tab) or to its admin (helpbuoy-relay agent add).", x, y, w, ui.ColMuted)
 	y += 12
 	for _, l := range c.Wrap(ui.Mono, ui.SizeSmall, a.key.Line, w) {
 		c.Text(ui.Mono, ui.SizeSmall, l, x, y, ui.ColText)

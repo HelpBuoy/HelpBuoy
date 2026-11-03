@@ -614,8 +614,8 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   `%LOCALAPPDATA%` and `~/Library/Caches` elsewhere) and loaded from there. Linux needs the
   usual desktop OpenGL and X11/Wayland libraries at run time, which every desktop has.
 - **One window.** raylib has a single window per process, so the desk app is one window
-  with a tab bar that is always visible: the fixed tabs **Clients**, **Agents**, **Register client**,
-  **Register agent** and **Relay**, then one tab per session, marked with the lifebuoy app icon and a close button
+  with a tab bar that is always visible: the fixed tabs **Clients**, **Agents** and **Relay**,
+  then one tab per session, marked with the lifebuoy app icon and a close button
   that ends the session. Session tabs are wider than the fixed tabs. A session tab shows
   only the session, without the client list. Fullscreen applies to the active session.
 - **No raygui** (it needs cgo). `desk/ui` is a small immediate-mode widget set written for
@@ -646,7 +646,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   connection per address, like the client; a changed key brings the user back here with a
   warning and an explicit "Trust the new key". If the relay does not know this key as a
   agent, the box shows the public key with **Copy public key** to send to an agent on it
-  (Register agent tab) or its admin (`helpbuoy-relay agent add`) and keeps retrying, so it moves on by itself once the key is added.
+  (**Add agent** on the Agents tab) or its admin (`helpbuoy-relay agent add`) and keeps retrying, so it moves on by itself once the key is added.
 - Once online the tabs appear. The **Relay** tab shows the connection status, the address,
   the relay fingerprint to read out to users, the relay's **title** and **instruction line**
   with **Save** (any agent can change them; every client and agent gets the new values
@@ -664,7 +664,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   machine's public `hostname:port`.
 - **This agent on the local relay**: if this agent's key is not an agent there yet, the app
   adds it to the relay state directly (with a number after the name if that name is taken),
-  so nobody has to copy keys around. Other agents are added on the Register agent tab
+  so nobody has to copy keys around. Other agents are added with **Add agent** on the Agents tab
   or with `helpbuoy-relay agent add` by whoever runs the relay.
 - **Distribution**: one archive per OS containing the desk app and `helpbuoy-relay` side by side
   (`helpbuoy-desk` + `helpbuoy-relay`, or `.exe` on Windows, or inside the macOS `.app`
@@ -683,7 +683,12 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   the session…" until the session channel arrives (a tab opens) or the request goes away,
   which shows "Not allowed: the user refused or did not answer". Rows of clients another
   agent is connecting to or helping show that instead of the button.
-- **Register client** (a tab): a text field for the key line the user sent in the chat. It tolerates
+- **Register client** and **Register agent** are tabs that only show after a click on
+  **Add client** (top right of the Clients tab, next to the title) or **Add agent** (same
+  place on the Agents tab). At most one of them is open, always in the same place, between
+  Agents and Relay, with a close button. Add on an already open one just switches to it;
+  the other one replaces it.
+- **Register client**: a text field for the key line the user sent in the chat. It tolerates
   what chat apps do to pasted text: line breaks, leading/trailing spaces, quotes, non-breaking
   spaces, and a preceding message ("here is my key: ssh-ed25519 ..."). Accepts only
   `ssh-ed25519`; an RSA or ECDSA key gets a clear "this is not a helpbuoy key, ask the
@@ -692,13 +697,12 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   the client should be showing. The name field is
   prefilled with the key's comment (`user@machine`) and always editable ("Anna laptop");
   it is required when the comment is empty. Registrations are permanent until removed.
-- **Register agent** (a tab) works like Register client for another agent's key line (their
+- **Register agent** works like Register client for another agent's key line (their
   app shows it when they connect to this relay before being added): the name is one word, prefilled from the user part of the key comment,
   and the fingerprint is shown large for the phone. Any agent on a relay can add agents;
   removing one is still `helpbuoy-relay agent remove`.
-- **Forms reset** when their tab is left: the Register client form and its result are
-  cleared, the Settings fields go back to the saved values, and open renames, errors and
-  confirmations are dropped.
+- **Forms reset** when their tab is closed (or replaced): the Register form and its result
+  are cleared. Leaving the Clients tab drops open renames and confirmations.
 - **Rename**: hovering a client row shows Rename and Remove; Rename (or a double-click) turns
   the name into an inline field (Enter saves, Esc cancels) and sends `RenameClient`. The
   relay stores the name for everyone, so every agent's list shows it. When the
