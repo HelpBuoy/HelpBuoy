@@ -1,8 +1,8 @@
 // Package config stores what the client learns about its relay in
 // config.json in the app's data directory (PLAN.md section 0): the relay
 // address, the pinned relay host key, the pinned key
-// of every helper met on that relay, and a few preferences. The app key lives next to it but is managed by
-// proto/appkey; Reset never touches it.
+// of every helper met on that relay, and the hand-set performance mode. The app key lives next to it but is managed by
+// proto/appkey.
 package config
 
 import (
@@ -37,19 +37,6 @@ type Config struct {
 	// while a session runs (PLAN.md 5.2). Off by default; set it by hand in
 	// config.json.
 	PerformanceMode bool `json:"performance_mode,omitempty"`
-	// NoUpdateCheck turns off the check for a newer release on startup
-	// ("Check for updates on startup" in the settings). The check is on by
-	// default.
-	NoUpdateCheck bool `json:"no_update_check,omitempty"`
-}
-
-// Preferences returns a Config with only the user's preferences, without
-// anything learned from a relay. Reset keeps these.
-func (c *Config) Preferences() *Config {
-	if c == nil {
-		return &Config{}
-	}
-	return &Config{PerformanceMode: c.PerformanceMode, NoUpdateCheck: c.NoUpdateCheck}
 }
 
 // Registered reports whether the first-run flow has been completed.

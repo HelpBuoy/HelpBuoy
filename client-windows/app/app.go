@@ -100,7 +100,7 @@ type Deps struct {
 	AppVersion  string
 	UserMachine string
 	// CheckUpdate looks for a newer release; nil never checks. It is called
-	// once in the background by Start unless the user turned the check off.
+	// once in the background by Start.
 	// Errors (offline, the API refusing) are ignored: next start tries again.
 	CheckUpdate func(ctx context.Context) (*update.Release, error)
 	// Tune adjusts the session options, for tests.
@@ -281,7 +281,7 @@ func (c *Controller) storedAddrLocked() string {
 
 // startUpdateCheckLocked runs Deps.CheckUpdate once in the background.
 func (c *Controller) startUpdateCheckLocked() {
-	if c.d.CheckUpdate == nil || c.updateStarted || c.cfg.NoUpdateCheck {
+	if c.d.CheckUpdate == nil || c.updateStarted {
 		return
 	}
 	c.updateStarted = true

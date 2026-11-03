@@ -164,21 +164,3 @@ func TestUpdateOfferedWhenIdle(t *testing.T) {
 		t.Fatal("not checked once")
 	}
 }
-
-func TestUpdateCheckTurnedOff(t *testing.T) {
-	e := newEnv(t)
-	config.Store{Dir: e.dir}.Save(&config.Config{NoUpdateCheck: true})
-	c, ui := e.controller()
-	called := make(chan struct{}, 1)
-	c.d.CheckUpdate = func(context.Context) (*update.Release, error) {
-		called <- struct{}{}
-		return nil, nil
-	}
-	c.Start()
-	ui.wait(t, "address", screenIs(ScreenAddress))
-	select {
-	case <-called:
-		t.Fatal("checked although turned off")
-	case <-time.After(50 * time.Millisecond):
-	}
-}
