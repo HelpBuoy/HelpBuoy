@@ -19,6 +19,7 @@ import (
 	"github.com/mevdschee/helpbuoy/client-windows/session"
 	"github.com/mevdschee/helpbuoy/client-windows/update"
 	"github.com/mevdschee/helpbuoy/proto/appkey"
+	"github.com/mevdschee/helpbuoy/proto/control"
 	"github.com/mevdschee/helpbuoy/proto/relayaddr"
 )
 
@@ -69,8 +70,8 @@ type View struct {
 	KeyDir string
 
 	// Title and Instruction are the relay's title and instruction line
-	// (e.g. "Example Inc", "Call +1 234 567 890 for support"); empty if
-	// not set or not known.
+	// (e.g. "Example Inc", "Call +1 234 567 890 for support"), or the
+	// generic defaults when the relay has none or is not known.
 	Title       string
 	Instruction string
 
@@ -198,6 +199,12 @@ func (c *Controller) viewLocked() View {
 	v := c.screenLocked()
 	if v.Screen != ScreenKeyError {
 		v.Title, v.Instruction = c.relayInfoLocked()
+		if v.Title == "" {
+			v.Title = control.DefaultTitle
+		}
+		if v.Instruction == "" {
+			v.Instruction = control.DefaultInstruction
+		}
 	}
 	idle := v.Screen == ScreenAddress && !v.Connecting || v.Screen == ScreenMain && v.Ready
 	if idle {

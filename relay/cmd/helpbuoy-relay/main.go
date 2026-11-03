@@ -20,6 +20,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/mevdschee/helpbuoy/proto/control"
 	"github.com/mevdschee/helpbuoy/proto/datadir"
 	"github.com/mevdschee/helpbuoy/proto/relayaddr"
 	"github.com/mevdschee/helpbuoy/relay/auth"
@@ -42,8 +43,8 @@ commands:
   client list                                            list registered clients
   client rename SHA256:... NAME                          rename a registered client
   client remove SHA256:...                               remove a registered client
-  title [TEXT]                                           print or set the title the apps show ("" clears it)
-  instruction [TEXT]                                     print or set the instruction line the apps show ("" clears it)
+  title [TEXT]                                           print or set the title the apps show ("" for the default)
+  instruction [TEXT]                                     print or set the instruction line the apps show ("" for the default)
   hostkey                                                print the relay host key and fingerprint
   version                                                print the version
 
@@ -342,9 +343,12 @@ func infoCmd(what string, args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-		v := idx.State.Title
+		v, def := idx.State.Title, control.DefaultTitle
 		if what == "instruction" {
-			v = idx.State.Instruction
+			v, def = idx.State.Instruction, control.DefaultInstruction
+		}
+		if v == "" {
+			v = def + " (default)"
 		}
 		fmt.Fprintln(stdout, v)
 		return nil
@@ -363,7 +367,7 @@ func infoCmd(what string, args []string, stdout, stderr io.Writer) error {
 		v = idx.State.Instruction
 	}
 	if v == "" {
-		fmt.Fprintf(stdout, "cleared the %s\n", what)
+		fmt.Fprintf(stdout, "cleared the %s; the apps show the default\n", what)
 	} else {
 		fmt.Fprintf(stdout, "set the %s to %q\n", what, v)
 	}

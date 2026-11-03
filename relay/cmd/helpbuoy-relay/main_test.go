@@ -10,6 +10,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
+	"github.com/mevdschee/helpbuoy/proto/control"
 	"github.com/mevdschee/helpbuoy/relay/auth"
 	"github.com/mevdschee/helpbuoy/relay/store"
 )
@@ -146,7 +147,7 @@ func TestStateDirEnv(t *testing.T) {
 
 func TestTitleAndInstruction(t *testing.T) {
 	dir := t.TempDir()
-	if out := runOK(t, "title", "--state", dir); out != "\n" {
+	if out := runOK(t, "title", "--state", dir); out != control.DefaultTitle+" (default)\n" {
 		t.Fatalf("empty title: %q", out)
 	}
 	runOK(t, "title", "  Example Inc ", "--state", dir)
@@ -161,7 +162,7 @@ func TestTitleAndInstruction(t *testing.T) {
 	runFail(t, "instruction", "two\nlines", "--state", dir)
 	runFail(t, "title", "a", "b", "--state", dir)
 	runOK(t, "title", "", "--state", dir)
-	if out := runOK(t, "title", "--state", dir); out != "\n" {
+	if out := runOK(t, "title", "--state", dir); out != control.DefaultTitle+" (default)\n" {
 		t.Fatalf("cleared title: %q", out)
 	}
 	if out := runOK(t, "instruction", "--state", dir); out != "Call +1 234 567 890 for support\n" {
