@@ -13,9 +13,9 @@ const copyKeyText = "C&opy key"
 
 // showKey opens the View key window over parent: the public key line to
 // send to a helper, its fingerprint and a big Copy key button, as on the
-// first-run window.
+// key screen.
 func (w *Window) showKey(parent ui.Parent) {
-	in := w.ctrl.Info()
+	in := w.view
 	if in.KeyLine == "" {
 		return
 	}

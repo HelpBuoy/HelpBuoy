@@ -19,7 +19,8 @@ other, and splices their channels together.
   for the relay's `hostname:port` and shows its own application-specific SSH public key
   (generated once on first start, kept in AppData) with a **Copy** button, so the user can
   send it to the helper over a chat such as WhatsApp. After the first successful connection
-  the address is stored, and later starts go straight to the relay. Once a helper has registered that key, the client shows up as online for all
+  the address is stored and prefilled; every start shows the address with **Connect**, and the
+  waiting screen has a **Disconnect** button that goes back to it. Once a helper has registered that key, the client shows up as online for all
   helpers. Helpers ask to help: a helper presses **Connect** on an online client, and the
   client asks its user whether that helper (display name and key fingerprint) may take
   control. Nothing happens without that approval. Talking about the problem happens over
@@ -64,14 +65,16 @@ connection and stored in `%LOCALAPPDATA%\help-me-win\config.json`:
 
 | Field | Example | Learned |
 |---|---|---|
-| relay address | `relay.example.com` (port 5938 unless given) | typed by the user on first start |
+| relay address | `relay.example.com` (port 5938 unless given) | typed by the user; the relay this PC got registered on |
 | relay host key | `ssh-ed25519 AAAA...` (`SHA256:3q2+7w...`) | first successful connection, pinned from then on |
+| last address | `relay.example.com` | the last address that reached a relay, to prefill the field |
 | known helpers | `alice` → `ssh-ed25519 AAAA...` | each helper's key, pinned on the first session with that helper (3.5) |
 
 The key is stored next to it, as its own application-specific key pair (6.1). Adding or removing a helper never touches
-the client: it trusts the helpers the relay announces. "Reset" in the client's
-about box forgets this configuration and starts the first-run flow again; it never touches
-the key.
+the client: it trusts the helpers the relay announces. Connecting to another address pins
+that relay's key on first use; only once this PC is registered there does it replace the
+stored relay, and the helper pins of the old relay are forgotten (helper names are only
+unique within one relay).
 
 ---
 
@@ -122,8 +125,8 @@ the key.
    relay address and relay host key (the stored configuration above) and switches to its normal window.
 5. From now on this key **is** `anna@ANNA-LAPTOP` on this relay. It stays registered until a
    helper or admin removes it: no expiry, and restarts, reboots and network changes don't
-   matter. Later starts skip all of the above: the client reads its configuration, connects,
-   and is ready to file a request. The key is never regenerated automatically; it is
+   matter. Later starts show the address screen with the stored address prefilled; one
+   click on **Connect** and the client waits for a helper, using the pinned relay key. The key is never regenerated automatically; it is
    only removed when the user explicitly does so in the app (6.1).
 
 ### Session (every time)
@@ -327,8 +330,7 @@ Role caps and timeouts:
   announces in `SessionReady`. On top of that, each helper's key is pinned per helper name
   the first time (TOFU again). Before every session the client asks the user whether the
   helper may take control, showing its display name and key fingerprint; if `alice` later
-  shows up with a different key, that question also carries a warning. The client's settings show the last helper's name and key
-  fingerprint; the main window stays free of status text.
+  shows up with a different key, that question also carries a warning.
 - **Client** is trusted because a helper registered its key after receiving it (or its
   fingerprint) over a trusted channel. The helper app pins registered client keys in the inner
   handshake, independent of what the relay says.
@@ -507,40 +509,34 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   key, and the app never replaces it on its own. If the file exists but can't be read or is
   damaged, the client shows an error with the path and a **Remove key** button; it does not
   make a new key silently.
-- **Removed only from the app**: settings → **Remove key**, with a confirmation that says
-  helpers will have to register this PC again. It deletes `id_ed25519`, `id_ed25519.pub` and
-  `config.json`, and the next start begins the first-run flow with a new key. The old
+- **Removed only from the app**: **Remove key** on the error screen of a damaged key, with a
+  confirmation that says helpers will have to register this PC again. It deletes
+  `id_ed25519`, `id_ed25519.pub` and `config.json`, and the client continues with a new key. The old
   registration can be removed in the helper app. Deleting the folder by hand has the same
   effect.
 - The key is per Windows user, so two users on one PC are two separate registered clients
   (`anna@PC1`, `bob@PC1`).
 - The registered name is the key's comment, `user@machine`.
 
-### 6.2 First-run window
-- Step 1: "Relay address" field (`hostname:port`, port defaults to 5938 if left out),
-  **Connect**. Errors are shown inline: name not found, connection refused, timeout, not a
-  help-me-win relay.
-- Step 2, once connected: relay fingerprint, the public key line in a read-only box, the key
-  fingerprint, a big **Copy key**
-  button, and "Paste this key into a chat with your helper (for example WhatsApp)." 
-- Waits for `Registered`, then saves the configuration and moves to the main window. If the
-  app is closed before that, nothing but the key is kept and the next start begins at step 1
-  with the address prefilled.
+### 6.2 Address and key screens
+- Every start: "Relay address" field (`hostname:port`, port defaults to 5938 if left out),
+  prefilled with the last address, and **Connect**. Nothing connects before the user
+  presses it. Errors are shown inline: name not found, connection refused, timeout, not a
+  help-me-win relay. A changed relay key brings the user back here with the warning (3.5).
+- If the relay doesn't know this PC's key yet: relay fingerprint, the public key line in a
+  read-only box, the key fingerprint, a big **Copy key** button, and "Paste this key into a
+  chat with your helper (for example WhatsApp)." A link goes back to the address field.
+- Waits for `Registered`, then saves the configuration and moves to the waiting screen.
 
-### 6.3 Main window
+### 6.3 Waiting screen
 - The client's name (`anna@ANNA-LAPTOP`) and "Waiting for your helper", with one line
-  saying the user will be asked first and that Esc takes back control. There is nothing to
-  press: the helper connects, and the client asks the question from section 1 (Session,
-  step 3) in a modal dialog. Two small links: **View key** (the public key line, fingerprint and **Copy key**, for
-  sending the key to a helper again) and **Settings**.
-- **Settings** shows the relay address and fingerprints and offers **Change relay address**:
-  the new relay is tried with a second connection while the old one stays in use, its host
-  key is pinned on first use, and only when it answers does the client switch (to the main
-  window if the key is registered there, otherwise to the key screen). If it fails, nothing
-  changes. Known helper pins are cleared on a switch, since helper names are only unique
-  within one relay. Not possible while a helper is connecting or a session runs. Also: **Check for
-  updates on startup**, **Reset** (forget relay and registration, keep the key and
-  preferences) and **Remove key**.
+  saying the user will be asked first and that Esc takes back control. The helper connects,
+  and the client asks the question from section 1 (Session, step 3) in a modal dialog.
+- **Disconnect** leaves the relay and goes back to the address screen (not while a helper is
+  connecting or a session runs). A small **View key** link shows the public key line,
+  fingerprint and **Copy key**, for sending the key to a helper again.
+- There is no settings window. Preferences such as turning off the update check are set by
+  hand in `config.json`.
 - **During a session** the window is minimized (`SW_MINIMIZE`), nothing else is shown.
 - **When the session ends** (the helper ended it, or Esc), the window is restored and brought
   to the front, waiting for the next helper.
@@ -577,7 +573,8 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
 - **Updates**, like otp4win: a release build asks the GitHub API for the latest release at
   start-up, and if its MSI is newer, offers "Download and install it now?". Yes downloads
   the MSI to the temp folder, checks its size, starts `msiexec` and closes the app. No prompt
-  during a session or with an open request. The check can be turned off in settings;
+  while a helper connects or during a session. The check can be turned off with
+  `no_update_check` in `config.json`;
   development builds and offline starts skip it silently. It needs the GitHub repository to
   be public, since the release API doesn't show private releases to anonymous callers.
 - `release.sh [major|minor|build]` bumps the version in both `winres.json` files, runs

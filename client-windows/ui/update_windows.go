@@ -20,7 +20,7 @@ import (
 // client is idle (no request, no session).
 func (w *Window) maybeOfferUpdate() {
 	r := w.view.Update
-	if r == nil || w.updateAsked || w.settings != nil || w.dialogs > 0 || w.wnd.Hwnd() == 0 {
+	if r == nil || w.updateAsked || w.dialogs > 0 || w.wnd.Hwnd() == 0 {
 		return
 	}
 	w.updateAsked = true
@@ -38,7 +38,7 @@ func (w *Window) offerUpdate(r update.Release) {
 		return
 	}
 	w.ctrl.DismissUpdate()
-	version := w.ctrl.Info().Version
+	version := w.ctrl.Version()
 	msg := fmt.Sprintf("help-me-win %s is available (you have %s).\n\n"+
 		"Download and install it now? help-me-win closes during the installation.\n\n"+
 		"Update checks can be turned off in Settings.", r.Version, version)

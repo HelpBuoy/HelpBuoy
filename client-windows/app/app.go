@@ -1,7 +1,7 @@
 // Package app is the client's logic between the window and the relay
-// connection: which screen to show (first-run address entry, the key to send,
-// the main window), the stored configuration, changing the relay address,
-// Reset, Remove key and the update offer. It has
+// connection: which screen to show (the relay address with Connect, the key
+// to send, waiting for a helper with Disconnect), the stored configuration,
+// Remove key and the update offer. It has
 // no GUI dependencies; the window renders the View it is given and forwards
 // button presses.
 package app
@@ -27,9 +27,9 @@ type Screen int
 
 // Screens.
 const (
-	ScreenAddress  Screen = iota // first run, step 1: relay address
-	ScreenKey                    // first run, step 2: send this key to your helper
-	ScreenMain                   // name, waiting for a helper to connect
+	ScreenAddress  Screen = iota // relay address and Connect; always the first screen
+	ScreenKey                    // connected, key not registered: send this key to your helper
+	ScreenMain                   // registered: waiting for a helper to connect, Disconnect
 	ScreenKeyError               // the app key exists but can't be used
 )
 
@@ -44,66 +44,34 @@ type View struct {
 	// ScreenAddress
 	Address    string // prefilled or current address
 	Connecting bool   // a Connect attempt is running
-	// Error is an inline error (ScreenAddress, ScreenKeyError) or a problem
-	// that stops the main window from working (ScreenMain).
+	// Error is an inline error (ScreenAddress, ScreenKeyError).
 	Error string
 
 	// ScreenKey
 	RelayFingerprint string
 	KeyLine          string
 	KeyFingerprint   string
-	// CanChangeAddress shows the link back to the address field.
-	CanChangeAddress bool
 	// Notice is a short, calm line for a temporary condition, like a lost
-	// connection being retried. Empty most of the time.
+	// connection being retried (ScreenKey, ScreenMain). Empty most of the time.
 	Notice string
 
 	// ScreenMain
 	Name      string
 	Ready     bool // connected and registered: helpers can connect
+	Asking    bool // a helper wants to connect; the user is being asked
 	InSession bool // the window is minimized while true
 	// RelayKeyChange is set when the relay showed another key than the
-	// pinned one; the client stopped connecting. The window warns, and
-	// TrustRelayKey pins the new key if the user accepts it.
+	// pinned one; the client stopped connecting (ScreenAddress). The window
+	// warns, and TrustRelayKey pins the new key if the user accepts it.
 	RelayKeyChange *session.HostKeyChangedError
 
 	// ScreenKeyError
 	KeyDir string
 
-	// Change relay address, in the settings window.
-	Relay RelayChange
-
 	// Update is a newer release to offer. It is only set while the client
-	// is idle (no helper connecting, no session, not changing the relay), so the
-	// offer never interrupts the user.
+	// is idle (address screen, or waiting for a helper), so the offer never
+	// interrupts the user.
 	Update *update.Release
-}
-
-// RelayChange is the state of "Change relay address" in the settings.
-type RelayChange struct {
-	// Blocked says why the relay address can't be changed now (a request is
-	// helper is connecting, a session runs, the first window is still open). Empty if it
-	// can.
-	Blocked string
-	// Connecting is true while the new address is being tried.
-	Connecting bool
-	// Error is why the last attempt failed; the old relay is still used.
-	Error string
-	// Done describes the relay just switched to, with its fingerprint.
-	Done string
-}
-
-// Info is shown in the settings window.
-type Info struct {
-	Version          string
-	RelayAddress     string
-	RelayFingerprint string
-	Name             string
-	KeyFingerprint   string
-	KeyLine          string
-	KeyDir           string
-	LastHelper       string // "name (SHA256:...)" of the last session, if any
-	CheckUpdates     bool   // "Check for updates on startup"
 }
 
 // UI is the window, as the controller sees it.
@@ -151,26 +119,16 @@ type Controller struct {
 	cfg      *config.Config
 	key      *appkey.Key
 	keyErr   error
-	addr     string // address of the running client
+	addr     string // address of the running client, or the last one tried
 	client   *session.Client
 	gen      int // identifies the running client; events of older ones are dropped
-	lastGen  int // the last generation handed out, to the running client or a probe
 	st       session.State
-	sawPend  bool // the running first-run client reached the relay
-	firstRun bool
-	inputErr string // address parse error
+	reached  bool  // the running client got through to the relay at least once
+	known    bool  // the running client is registered on its relay
+	lastErr  error // why the last client stopped, shown on the address screen
+	inputErr string
 	closed   bool
 	closing  <-chan struct{}
-
-	// probe is the client trying a new relay address from the settings; the
-	// running client stays in use until probe reached the new relay.
-	probe     *session.Client
-	probeGen  int
-	probeAddr string
-	change    RelayChange
-	// switched is set once the relay was changed in this run, for the
-	// wording of the key screen.
-	switched bool
 
 	newRelease    *update.Release // newer release, until offered
 	updateStarted bool
@@ -231,27 +189,14 @@ func (c *Controller) View() View {
 
 func (c *Controller) viewLocked() View {
 	v := c.screenLocked()
-	if v.Screen == ScreenKeyError {
-		return v
-	}
-	v.Relay = c.change
-	switch {
-	case c.firstRun:
-		v.Relay.Blocked = "Type the relay address in the first window."
-	case c.st.Phase == session.PhaseAsking:
-		v.Relay.Blocked = "A helper is connecting."
-	case c.st.Phase == session.PhaseInSession:
-		v.Relay.Blocked = "Not possible during a session."
-	}
-	idle := c.probe == nil && (v.Screen == ScreenAddress && !v.Connecting ||
-		v.Screen == ScreenMain && v.Ready)
+	idle := v.Screen == ScreenAddress && !v.Connecting || v.Screen == ScreenMain && v.Ready
 	if idle {
 		v.Update = c.newRelease
 	}
 	return v
 }
 
-// screenLocked computes the View without the settings and update parts.
+// screenLocked computes the View without the update offer.
 func (c *Controller) screenLocked() View {
 	var v View
 	if c.keyErr != nil || c.key == nil {
@@ -263,60 +208,43 @@ func (c *Controller) screenLocked() View {
 	v.KeyLine = c.key.Line
 	v.KeyFingerprint = c.key.Fingerprint
 	v.RelayFingerprint = c.st.RelayFingerprint
-	running := c.client != nil && c.st.Phase != session.PhaseStopped
-
-	if c.firstRun {
-		switch {
-		case running && c.sawPend:
-			v.Screen = ScreenKey
-			v.CanChangeAddress = true
-			if c.st.Phase == session.PhaseConnecting {
-				v.Notice = "The connection to the relay was lost. Trying again..."
-			}
-		default:
-			v.Screen = ScreenAddress
-			v.Address = c.addr
-			if v.Address == "" {
-				v.Address = c.cfg.LastAddress
-			}
-			v.Connecting = running
-			if c.inputErr != "" {
-				v.Error = c.inputErr
-			} else if !running && c.st.Err != nil {
-				v.Error = session.Describe(c.st.Err)
-			}
-		}
-		return v
-	}
-
-	if c.st.Phase == session.PhasePending {
-		v.Screen = ScreenKey
-		if c.switched {
-			v.Notice = "This PC is not registered on this relay yet. Send this key to a helper who uses this relay."
-		} else {
-			v.Notice = "This PC is not registered on the relay (anymore). Send this key to your helper again."
-		}
-		return v
-	}
-	v.Screen = ScreenMain
 	v.Name = c.cfg.Name
-	switch c.st.Phase {
-	case session.PhaseReady:
-		v.Ready = true
-	case session.PhaseAsking:
-		v.Notice = "A helper wants to connect."
-	case session.PhaseInSession:
-		v.InSession = true
-	case session.PhaseConnecting:
-		v.Notice = "Connecting to the relay..."
-	case session.PhaseStopped:
-		if c.st.Err != nil {
-			v.Error = session.Describe(c.st.Err)
+
+	lost := "The connection to the relay was lost. Trying again..."
+	switch p := c.st.Phase; {
+	case c.client == nil:
+		v.Screen = ScreenAddress
+		v.Address = c.addr
+		if v.Address == "" {
+			v.Address = c.cfg.LastAddress
+		}
+		if v.Address == "" {
+			v.Address = c.cfg.RelayAddress
+		}
+		switch {
+		case c.inputErr != "":
+			v.Error = c.inputErr
+		case c.lastErr != nil:
+			v.Error = session.Describe(c.lastErr)
 			var hk *session.HostKeyChangedError
-			if errors.As(c.st.Err, &hk) {
+			if errors.As(c.lastErr, &hk) {
 				v.RelayKeyChange = hk
 			}
 		}
+	case p == session.PhasePending:
+		v.Screen = ScreenKey
+	case p == session.PhaseReady:
+		v.Screen, v.Ready = ScreenMain, true
+	case p == session.PhaseAsking:
+		v.Screen, v.Asking, v.Notice = ScreenMain, true, "A helper wants to connect."
+	case p == session.PhaseInSession:
+		v.Screen, v.InSession = ScreenMain, true
+	case !c.reached:
+		v.Screen, v.Address, v.Connecting = ScreenAddress, c.addr, true
+	case c.known:
+		v.Screen, v.Notice = ScreenMain, lost
+	default:
+		v.Screen, v.Notice = ScreenKey, lost
 	}
 	return v
 }
@@ -331,8 +259,7 @@ func describeKeyError(err error) string {
 	return "The key of this PC could not be loaded or created: " + err.Error()
 }
 
-// Start loads the key and the configuration and shows the first screen;
-// with a stored configuration it connects right away.
+// Start loads the key and the configuration and shows the address screen.
 func (c *Controller) Start() {
 	c.mu.Lock()
 	c.loadLocked()
@@ -381,26 +308,28 @@ func (c *Controller) loadLocked() {
 		cfg = &config.Config{}
 	}
 	c.cfg = cfg
-	c.firstRun = !cfg.Registered()
-	if c.keyErr == nil && !c.firstRun {
-		c.startClientLocked(cfg.RelayAddress, cfg.RelayHostKey, true)
-	}
 }
 
-// startClientLocked replaces the running client.
-func (c *Controller) startClientLocked(addr, hostKey string, retry bool) {
+// startClientLocked replaces the running client. The relay's host key and
+// the helper pins are the stored ones when addr is the stored relay;
+// otherwise the host key is pinned on first use.
+func (c *Controller) startClientLocked(addr string) {
 	c.stopClientLocked()
-	c.lastGen++
-	c.gen = c.lastGen
+	c.gen++
 	c.addr = addr
-	c.sawPend = false
+	c.reached, c.known, c.lastErr = false, false, nil
 	c.st = session.State{Phase: session.PhaseConnecting}
-	c.client = c.newClientLocked(addr, hostKey, c.cfg.Clone().KnownHelpers, retry, c.gen)
+	var hostKey string
+	var helpers map[string]string
+	if addr == c.cfg.RelayAddress {
+		hostKey, helpers = c.cfg.RelayHostKey, c.cfg.Clone().KnownHelpers
+	}
+	c.client = c.newClientLocked(addr, hostKey, helpers, c.gen)
 	c.client.Start()
 }
 
 // newClientLocked returns a relay client whose events carry gen.
-func (c *Controller) newClientLocked(addr, hostKey string, helpers map[string]string, retry bool, gen int) *session.Client {
+func (c *Controller) newClientLocked(addr, hostKey string, helpers map[string]string, gen int) *session.Client {
 	var runner session.Runner
 	if c.d.NewRunner != nil {
 		runner = c.d.NewRunner(c.key)
@@ -412,7 +341,6 @@ func (c *Controller) newClientLocked(addr, hostKey string, helpers map[string]st
 		UserMachine:  c.d.UserMachine,
 		RelayHostKey: hostKey,
 		KnownHelpers: helpers,
-		Retry:        retry,
 		Handler:      handler{c, gen},
 		Runner:       runner,
 		EscHook:      c.d.EscHook,
@@ -424,10 +352,8 @@ func (c *Controller) newClientLocked(addr, hostKey string, helpers map[string]st
 	return session.New(opts)
 }
 
-// stopClientLocked stops the running client and any relay change.
+// stopClientLocked stops the running client.
 func (c *Controller) stopClientLocked() {
-	c.stopProbeLocked()
-	c.change = RelayChange{}
 	if c.client != nil {
 		c.client.Close()
 		c.client = nil
@@ -435,126 +361,40 @@ func (c *Controller) stopClientLocked() {
 	c.st = session.State{}
 }
 
-func (c *Controller) stopProbeLocked() {
-	if c.probe != nil {
-		c.probe.Close()
-		c.probe = nil
-	}
-}
-
-// Connect is the first-run Connect button.
+// Connect is the Connect button on the address screen.
 func (c *Controller) Connect(text string) {
 	c.mu.Lock()
-	if c.closed || c.key == nil {
+	if c.closed || c.key == nil || c.client != nil {
 		c.mu.Unlock()
 		return
 	}
 	a, err := relayaddr.Parse(text)
 	if err != nil {
-		c.stopClientLocked()
 		c.addr = text
+		c.lastErr = nil
 		c.inputErr = capitalize(err.Error()) + "."
 	} else {
 		c.inputErr = ""
-		c.startClientLocked(a.String(), "", false)
+		c.startClientLocked(a.String())
 	}
 	c.mu.Unlock()
 	c.update()
 }
 
-// ChangeAddress goes back from the key screen to the address field.
-func (c *Controller) ChangeAddress() {
+// Disconnect is the Disconnect button (and the "use a different relay
+// address" link): it leaves the relay and goes back to the address screen.
+// It does nothing during a session; the user ends that with Esc.
+func (c *Controller) Disconnect() {
 	c.mu.Lock()
-	if c.firstRun {
-		addr := c.addr
-		c.stopClientLocked()
-		c.addr = addr
-		c.sawPend = false
-	}
-	c.mu.Unlock()
-	c.update()
-}
-
-// ChangeRelay is the Connect button of "Change relay address" in the
-// settings. It tries text as the new relay address while the current relay
-// stays in use. The new relay's host key is pinned on first use, as on the
-// first-run window. Once the new relay answered, the client switches to it
-// for good: the new address and host key replace the old ones, the key
-// stays the same, and the known helpers of the old relay are forgotten. If
-// the key is not registered there, the window shows the key to send to a
-// helper of that relay. If the new relay can't be reached, nothing changes
-// and View.Relay.Error says why.
-func (c *Controller) ChangeRelay(text string) {
-	c.mu.Lock()
-	v := c.viewLocked()
-	if c.closed || c.key == nil || v.Screen == ScreenKeyError || v.Relay.Blocked != "" {
+	if c.client == nil || c.st.Phase == session.PhaseInSession {
 		c.mu.Unlock()
 		return
 	}
-	c.stopProbeLocked()
-	c.change = RelayChange{}
-	a, err := relayaddr.Parse(text)
-	switch {
-	case err != nil:
-		c.change.Error = capitalize(err.Error()) + "."
-	case a.String() == c.cfg.RelayAddress:
-		c.change.Error = "This PC already uses this relay."
-	default:
-		c.lastGen++
-		c.probeGen = c.lastGen
-		c.probeAddr = a.String()
-		c.change.Connecting = true
-		c.probe = c.newClientLocked(c.probeAddr, "", nil, false, c.probeGen)
-		c.probe.Start()
-	}
+	c.log.Info("disconnected by the user", "relay", c.addr)
+	c.stopClientLocked()
+	c.lastErr = nil
 	c.mu.Unlock()
 	c.update()
-}
-
-// EndRelayChange stops a relay change that is still being tried and clears
-// its result; the settings window calls it when it closes.
-func (c *Controller) EndRelayChange() {
-	c.mu.Lock()
-	c.stopProbeLocked()
-	c.change = RelayChange{}
-	c.mu.Unlock()
-	c.update()
-}
-
-// probeEventLocked handles an event of the client trying a new relay. It
-// returns the client to close and whether the configuration must be saved.
-func (c *Controller) probeEventLocked(s session.State, name string) (old *session.Client, save bool) {
-	switch s.Phase {
-	case session.PhaseStopped:
-		c.probe = nil
-		c.change = RelayChange{Error: session.Describe(s.Err)}
-		if s.Err == nil {
-			c.change.Error = "The relay could not be reached."
-		}
-		return nil, false
-	case session.PhaseConnecting:
-		if name == "" {
-			return nil, false
-		}
-	}
-	// The new relay answered: switch to it.
-	old = c.client
-	c.client, c.probe = c.probe, nil
-	c.gen = c.probeGen
-	c.addr = c.probeAddr
-	c.st = s
-	c.sawPend = false
-	c.switched = true
-	c.cfg.RelayAddress = c.probeAddr
-	c.cfg.RelayHostKey = s.RelayHostKey
-	c.cfg.KnownHelpers = nil
-	c.cfg.LastAddress = ""
-	if name != "" {
-		c.cfg.Name = name
-	}
-	c.change = RelayChange{Done: "Connected to " + c.probeAddr + ".\nRelay fingerprint: " + s.RelayFingerprint}
-	c.log.Info("relay changed", "relay", c.probeAddr, "fingerprint", s.RelayFingerprint)
-	return old, true
 }
 
 // TrustRelayKey pins the relay's new host key after the user accepted the
@@ -562,45 +402,26 @@ func (c *Controller) probeEventLocked(s session.State, name string) (old *sessio
 func (c *Controller) TrustRelayKey(newFingerprint string) {
 	c.mu.Lock()
 	var hk *session.HostKeyChangedError
-	if c.firstRun || c.st.Phase != session.PhaseStopped || !errors.As(c.st.Err, &hk) || hk.NewFingerprint != newFingerprint {
+	if c.client != nil || !errors.As(c.lastErr, &hk) || hk.NewFingerprint != newFingerprint || c.addr != c.cfg.RelayAddress {
 		c.mu.Unlock()
 		return
 	}
 	c.log.Warn("relay host key change accepted by the user", "old", hk.OldFingerprint, "new", hk.NewFingerprint)
 	c.cfg.RelayHostKey = hk.NewKeyLine
-	c.startClientLocked(c.cfg.RelayAddress, hk.NewKeyLine, true)
+	c.startClientLocked(c.addr)
 	c.mu.Unlock()
 	c.save()
 	c.update()
 }
 
-// Reset forgets the configuration (not the key) and starts the first-run
-// flow again.
-func (c *Controller) Reset() error {
-	c.mu.Lock()
-	c.stopClientLocked()
-	err := c.d.Store.Reset()
-	prefs := c.cfg.Preferences()
-	if err == nil && (prefs.PerformanceMode || prefs.NoUpdateCheck) {
-		err = c.d.Store.Save(prefs)
-	}
-	c.cfg = prefs
-	c.switched = false
-	c.firstRun = true
-	c.addr, c.inputErr = "", ""
-	c.mu.Unlock()
-	c.update()
-	return err
-}
-
 // RemoveKey deletes the key and the configuration, then creates a new key
-// and starts the first-run flow. Call only after the user confirmed.
+// and goes back to the address screen. Call only after the user confirmed.
 func (c *Controller) RemoveKey() error {
 	c.mu.Lock()
 	c.stopClientLocked()
 	err := c.d.RemoveKey()
 	if err == nil {
-		c.addr, c.inputErr = "", ""
+		c.addr, c.inputErr, c.lastErr = "", "", nil
 		c.loadLocked()
 	}
 	c.mu.Unlock()
@@ -637,40 +458,8 @@ func (c *Controller) WaitClosed(d time.Duration) {
 	}
 }
 
-// Info returns what the settings window shows.
-func (c *Controller) Info() Info {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	in := Info{Version: c.d.AppVersion, KeyDir: c.d.Store.Dir}
-	if c.key != nil {
-		in.KeyFingerprint, in.KeyLine = c.key.Fingerprint, c.key.Line
-	}
-	if c.cfg != nil {
-		in.RelayAddress, in.Name = c.cfg.RelayAddress, c.cfg.Name
-	}
-	if in.RelayAddress == "" {
-		in.RelayAddress = c.addr
-	}
-	in.RelayFingerprint = c.st.RelayFingerprint
-	if h := c.st.Helper; h.Name != "" {
-		in.LastHelper = h.Name + " (" + h.Fingerprint + ")"
-	}
-	in.CheckUpdates = c.cfg == nil || !c.cfg.NoUpdateCheck
-	return in
-}
-
-// SetCheckUpdates is the "Check for updates on startup" checkbox. It takes
-// effect on the next start.
-func (c *Controller) SetCheckUpdates(on bool) {
-	c.mu.Lock()
-	if c.cfg == nil || c.cfg.NoUpdateCheck == !on {
-		c.mu.Unlock()
-		return
-	}
-	c.cfg.NoUpdateCheck = !on
-	c.mu.Unlock()
-	c.save()
-}
+// Version is the app version, for the update offer.
+func (c *Controller) Version() string { return c.d.AppVersion }
 
 // DismissUpdate is called once View.Update was offered, whatever the user
 // answered, so it is not offered again in this run.
@@ -690,29 +479,26 @@ type handler struct {
 func (h handler) StateChanged(s session.State) {
 	c := h.c
 	c.mu.Lock()
-	if c.probe != nil && h.gen == c.probeGen {
-		old, save := c.probeEventLocked(s, "")
-		c.mu.Unlock()
-		if old != nil {
-			old.Close()
-		}
-		if save {
-			c.save()
-		}
-		c.update()
-		return
-	}
 	if c.gen != h.gen || c.client == nil {
 		c.mu.Unlock()
 		return
 	}
 	c.st = s
 	var save bool
-	if s.Phase == session.PhasePending && c.firstRun && !c.sawPend {
-		c.sawPend = true
-		if c.cfg.LastAddress != c.addr {
-			c.cfg.LastAddress = c.addr
-			save = true
+	switch s.Phase {
+	case session.PhaseStopped:
+		// The client gave up (the relay could not be reached at first, or
+		// refused this PC): back to the address screen with the reason.
+		c.client = nil
+		c.lastErr = s.Err
+	case session.PhasePending, session.PhaseReady:
+		c.known = s.Phase == session.PhaseReady
+		if !c.reached {
+			c.reached = true
+			if c.cfg.LastAddress != c.addr {
+				c.cfg.LastAddress = c.addr
+				save = true
+			}
 		}
 	}
 	c.mu.Unlock()
@@ -722,41 +508,27 @@ func (h handler) StateChanged(s session.State) {
 	c.update()
 }
 
+// Registered saves the relay this PC is registered on. A different relay
+// than the stored one replaces it, and the helper pins of the old relay are
+// forgotten: helper names are only unique within one relay.
 func (h handler) Registered(name, relayHostKey string) {
 	c := h.c
 	c.mu.Lock()
-	if c.probe != nil && h.gen == c.probeGen {
-		// Registered comes before the first StateChanged of a connection.
-		old, save := c.probeEventLocked(session.State{
-			Phase:            session.PhaseReady,
-			RelayHostKey:     relayHostKey,
-			RelayFingerprint: fingerprint(relayHostKey),
-			Name:             name,
-		}, name)
-		c.mu.Unlock()
-		if old != nil {
-			old.Close()
-		}
-		if save {
-			c.save()
-		}
-		c.update()
-		return
-	}
 	if c.gen != h.gen || c.client == nil {
 		c.mu.Unlock()
 		return
 	}
-	changed := c.cfg.RelayAddress != c.addr || c.cfg.RelayHostKey != relayHostKey ||
-		c.cfg.Name != name || c.cfg.LastAddress != ""
+	c.known = true
+	if c.cfg.RelayAddress != c.addr {
+		c.cfg.KnownHelpers = nil
+	}
+	changed := c.cfg.RelayAddress != c.addr || c.cfg.RelayHostKey != relayHostKey || c.cfg.Name != name
 	c.cfg.RelayAddress = c.addr
 	c.cfg.RelayHostKey = relayHostKey
 	c.cfg.Name = name
-	c.cfg.LastAddress = ""
-	c.firstRun = false
 	c.mu.Unlock()
 	if changed {
-		c.log.Info("registered on the relay", "name", name)
+		c.log.Info("registered on the relay", "relay", c.addr, "name", name)
 		c.save()
 	}
 	c.update()

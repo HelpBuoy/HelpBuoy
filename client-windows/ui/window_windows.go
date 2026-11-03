@@ -63,21 +63,18 @@ type Window struct {
 	lblKeyNotice *ui.Static
 	lnkChange    *ui.SysLink
 	// ScreenMain
-	lblName    *ui.Static
-	lblWaiting *ui.Static
-	lblStatus  *ui.Static
-	lnkViewKey *ui.SysLink
+	lblName       *ui.Static
+	lblWaiting    *ui.Static
+	lblStatus     *ui.Static
+	btnDisconnect *ui.Button
+	lnkViewKey    *ui.SysLink
 	// ScreenKeyError
 	lblKeyErr    *ui.Static
 	btnRemoveKey *ui.Button
-	// all screens
-	lnkSettings *ui.SysLink
-
-	settings    *settingsDlg // the open settings window, if any
-	dialogs     int          // other modal windows open
-	updateAsked bool         // the update in the view was offered
-	relayAsked  string       // new relay fingerprint the user was warned about
-	updating    string       // status while an update is downloaded
+	dialogs      int    // modal windows open
+	updateAsked  bool   // the update in the view was offered
+	relayAsked   string // new relay fingerprint the user was warned about
+	updating     string // status while an update is downloaded
 
 	items []item
 	dpi   int
@@ -127,12 +124,11 @@ func New(iconID uint16) *Window {
 	w.lblName = static("", co.SS_CENTER)
 	w.lblWaiting = static("", co.SS_CENTER)
 	w.lblStatus = static("", co.SS_CENTER)
+	w.btnDisconnect = button("&Disconnect", co.BS_PUSHBUTTON)
 	w.lnkViewKey = link(`<a>View key</a>`)
 
 	w.lblKeyErr = static("", co.SS_LEFT)
 	w.btnRemoveKey = button("Remove &key...", co.BS_PUSHBUTTON)
-
-	w.lnkSettings = link(`<a>Settings</a>`)
 
 	w.items = []item{
 		{w.lblHeading, 24, 22, 412, 30, fontHeading},
@@ -152,12 +148,11 @@ func New(iconID uint16) *Window {
 		{w.lblName, 24, 44, 412, 34, fontHeading},
 		{w.lblWaiting, 24, 112, 412, 34, fontBig},
 		{w.lblStatus, 24, 164, 412, 80, fontNormal},
-		{w.lnkViewKey, 290, 298, 70, 20, fontNormal},
+		{w.btnDisconnect, 150, 258, 160, 32, fontNormal},
+		{w.lnkViewKey, 366, 298, 70, 20, fontNormal},
 
 		{w.lblKeyErr, 24, 24, 412, 190, fontNormal},
 		{w.btnRemoveKey, 24, 226, 160, 32, fontNormal},
-
-		{w.lnkSettings, 370, 298, 66, 20, fontNormal},
 	}
 	w.events()
 	return w
@@ -320,8 +315,8 @@ func (w *Window) events() {
 	w.btnConnect.On().BnClicked(w.connect)
 	w.btnCopy.On().BnClicked(func() { w.copyText(w.view.KeyLine, w.btnCopy) })
 	w.btnRemoveKey.On().BnClicked(w.confirmRemoveKey)
-	w.lnkChange.On().NmClick(func(_ *win.NMLINK) { w.ctrl.ChangeAddress() })
-	w.lnkSettings.On().NmClick(func(_ *win.NMLINK) { w.showSettings() })
+	w.lnkChange.On().NmClick(func(_ *win.NMLINK) { w.ctrl.Disconnect() })
+	w.btnDisconnect.On().BnClicked(w.ctrl.Disconnect)
 	w.lnkViewKey.On().NmClick(func(_ *win.NMLINK) { w.showKey(w.wnd) })
 }
 
@@ -431,7 +426,7 @@ func (w *Window) apply(v app.View) {
 	for _, c := range []ui.Window{w.lblKeyIntro, w.edtKey, w.btnCopy, w.lblKeyFp, w.lblRelayFp, w.lblKeyNotice} {
 		show(c, key)
 	}
-	show(w.lnkChange, key && v.CanChangeAddress)
+	show(w.lnkChange, key)
 	if key {
 		setText(w.edtKey, v.KeyLine)
 		setText(w.lblKeyFp, "Key fingerprint: "+v.KeyFingerprint)
@@ -450,6 +445,7 @@ func (w *Window) apply(v app.View) {
 	show(w.lblName, main)
 	show(w.lblWaiting, main)
 	show(w.lblStatus, main)
+	show(w.btnDisconnect, main)
 	show(w.lnkViewKey, main)
 	if main {
 		setText(w.lblName, v.Name)
@@ -470,6 +466,7 @@ func (w *Window) apply(v app.View) {
 			status = w.updating
 		}
 		setText(w.lblStatus, status)
+		w.btnDisconnect.Hwnd().EnableWindow(!v.Asking && !v.InSession && w.updating == "")
 	}
 
 	keyErr := v.Screen == app.ScreenKeyError
@@ -480,7 +477,6 @@ func (w *Window) apply(v app.View) {
 			"\n\nThe key is never replaced on its own. Remove key deletes it and makes a new one; "+
 			"your helper will have to register this PC again.")
 	}
-	show(w.lnkSettings, v.Screen >= app.ScreenAddress && v.Screen <= app.ScreenMain)
 
 	// During a session the window gets out of the way; afterwards it comes
 	// back.
@@ -494,9 +490,6 @@ func (w *Window) apply(v app.View) {
 		w.rendered = true
 	}
 	w.lblStatus.Hwnd().InvalidateRect(nil, true) // its color depends on w.view
-	if w.settings != nil && v.Screen >= 0 {
-		w.settings.apply(v)
-	}
 	w.maybeOfferUpdate()
 	w.maybeWarnRelayKey()
 }
@@ -504,7 +497,7 @@ func (w *Window) apply(v app.View) {
 // maybeWarnRelayKey shows the relay key change warning once per new key.
 func (w *Window) maybeWarnRelayKey() {
 	hk := w.view.RelayKeyChange
-	if hk == nil || w.relayAsked == hk.NewFingerprint || w.settings != nil || w.dialogs > 0 || w.wnd.Hwnd() == 0 {
+	if hk == nil || w.relayAsked == hk.NewFingerprint || w.dialogs > 0 || w.wnd.Hwnd() == 0 {
 		return
 	}
 	w.relayAsked = hk.NewFingerprint

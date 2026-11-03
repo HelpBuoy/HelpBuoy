@@ -32,8 +32,8 @@ type Config struct {
 	// and names are only unique within one relay, so changing the relay
 	// address clears them.
 	KnownHelpers map[string]string `json:"known_helpers,omitempty"`
-	// LastAddress is the address typed on the first-run window before the
-	// key was registered, only used to prefill that field next time.
+	// LastAddress is the last address that reached a relay, used to
+	// prefill the address field on the next start.
 	LastAddress string `json:"last_address,omitempty"`
 	// PerformanceMode turns on solid wallpaper and no window animations
 	// while a session runs (PLAN.md 5.2). Off by default; set it by hand in

@@ -1,0 +1,183 @@
+package app
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"golang.org/x/crypto/ssh"
+
+	"github.com/mevdschee/help-me-win/client-windows/config"
+	"github.com/mevdschee/help-me-win/client-windows/identity"
+	"github.com/mevdschee/help-me-win/client-windows/internal/fakerelay"
+	"github.com/mevdschee/help-me-win/client-windows/update"
+)
+
+func startRelay(t *testing.T) *fakerelay.Relay {
+	t.Helper()
+	r, err := fakerelay.Start("", fakerelay.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { r.Close() })
+	return r
+}
+
+// registeredWithHelper is registered, with a pinned helper "alice".
+func registeredWithHelper(t *testing.T, e *env) {
+	t.Helper()
+	registered(t, e)
+	cfg := e.config()
+	cfg.KnownHelpers = map[string]string{"alice": "ssh-ed25519 AAAA alice"}
+	config.Store{Dir: e.dir}.Save(cfg)
+}
+
+func readyMain(v View) bool {
+	return v.Screen == ScreenMain && v.Ready
+}
+
+func waitOffline(t *testing.T, r *fakerelay.Relay, fp string) {
+	t.Helper()
+	for i := 0; i < 200 && r.Online(fp); i++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if r.Online(fp) {
+		t.Fatal("still connected to the old relay")
+	}
+}
+
+// startAndConnect starts the controller, checks that it waits on the
+// address screen with the stored address, and presses Connect.
+func startAndConnect(t *testing.T, c *Controller, ui *fakeUI, want string) {
+	t.Helper()
+	c.Start()
+	v := ui.wait(t, "address screen", screenIs(ScreenAddress))
+	if v.Address != want || v.Connecting {
+		t.Fatalf("start view %+v, want address %q", v, want)
+	}
+	c.Connect(v.Address)
+}
+
+// TestOtherRelay: Disconnect, then Connect to another relay. Nothing about
+// the old relay is forgotten until this PC is registered on the new one.
+func TestOtherRelay(t *testing.T) {
+	e := newEnv(t)
+	registeredWithHelper(t, e)
+	relay2 := startRelay(t)
+	c, ui := e.controller()
+	startAndConnect(t, c, ui, e.relay.Addr())
+	ui.wait(t, "ready", readyMain)
+
+	c.Disconnect()
+	ui.wait(t, "address screen", screenIs(ScreenAddress))
+	waitOffline(t, e.relay, e.fp())
+	c.Connect(relay2.Addr())
+	v := ui.wait(t, "key screen", screenIs(ScreenKey))
+	if v.RelayFingerprint != ssh.FingerprintSHA256(relay2.HostKey()) || v.KeyLine != e.key.Line {
+		t.Fatalf("key view %+v", v)
+	}
+	if cfg := e.config(); cfg.RelayAddress != e.relay.Addr() || cfg.KnownHelpers["alice"] == "" || cfg.LastAddress != relay2.Addr() {
+		t.Fatalf("config changed before registration %+v", cfg)
+	}
+
+	relay2.Register(e.fp(), "anna@PC")
+	ui.wait(t, "main", readyMain)
+	cfg := e.config()
+	if cfg.RelayAddress != relay2.Addr() || cfg.RelayHostKey != identity.KeyLine(relay2.HostKey(), "") ||
+		len(cfg.KnownHelpers) != 0 {
+		t.Fatalf("config %+v", cfg)
+	}
+
+	// After a restart the new relay is prefilled and pinned.
+	c.Close()
+	c2, ui2 := e.controller()
+	startAndConnect(t, c2, ui2, relay2.Addr())
+	ui2.wait(t, "main after restart", readyMain)
+}
+
+func TestDisconnect(t *testing.T) {
+	e := newEnv(t)
+	registered(t, e)
+	c, ui := e.controller()
+	startAndConnect(t, c, ui, e.relay.Addr())
+	ui.wait(t, "ready", readyMain)
+
+	// Not during a session.
+	connectHelper(t, e.relay, e.fp())
+	sess := <-e.relay.Sessions()
+	ui.wait(t, "in session", func(v View) bool { return v.InSession })
+	c.Disconnect()
+	time.Sleep(50 * time.Millisecond)
+	if v := c.View(); !v.InSession || !e.relay.Online(e.fp()) {
+		t.Fatalf("disconnected during a session: %+v", v)
+	}
+	sess.Channel.Close()
+	ui.wait(t, "ready", readyMain)
+
+	c.Disconnect()
+	v := ui.wait(t, "address screen", screenIs(ScreenAddress))
+	if v.Address != e.relay.Addr() || v.Error != "" || v.Connecting {
+		t.Fatalf("%+v", v)
+	}
+	waitOffline(t, e.relay, e.fp())
+
+	// From the key screen as well.
+	relay2 := startRelay(t)
+	c.Connect(relay2.Addr())
+	ui.wait(t, "key screen", screenIs(ScreenKey))
+	c.Disconnect()
+	v = ui.wait(t, "address screen", screenIs(ScreenAddress))
+	if v.Address != relay2.Addr() {
+		t.Fatalf("%+v", v)
+	}
+	waitOffline(t, relay2, e.fp())
+}
+
+func TestUpdateOfferedWhenIdle(t *testing.T) {
+	e := newEnv(t)
+	registered(t, e)
+	release := &update.Release{Version: "9.9.9", MsiURL: "https://x/a.msi"}
+	checked := make(chan struct{}, 1)
+	c, ui := e.controller()
+	c.d.CheckUpdate = func(context.Context) (*update.Release, error) {
+		checked <- struct{}{}
+		return release, nil
+	}
+	c.Start()
+	ui.wait(t, "offer on the address screen", func(v View) bool { return v.Update == release && v.Screen == ScreenAddress })
+	c.Connect(e.relay.Addr())
+	ui.wait(t, "offer", func(v View) bool { return v.Update == release && readyMain(v) })
+
+	gate := make(chan struct{})
+	ui.answer(true, gate)
+	connectHelper(t, e.relay, e.fp())
+	v := ui.wait(t, "asking", func(v View) bool { return v.Asking })
+	if v.Update != nil {
+		t.Fatal("offered while a helper connects")
+	}
+	close(gate)
+	ui.wait(t, "offer again", func(v View) bool { return v.Update == release && readyMain(v) })
+	c.DismissUpdate()
+	ui.wait(t, "dismissed", func(v View) bool { return v.Update == nil })
+	if len(checked) != 1 {
+		t.Fatal("not checked once")
+	}
+}
+
+func TestUpdateCheckTurnedOff(t *testing.T) {
+	e := newEnv(t)
+	config.Store{Dir: e.dir}.Save(&config.Config{NoUpdateCheck: true})
+	c, ui := e.controller()
+	called := make(chan struct{}, 1)
+	c.d.CheckUpdate = func(context.Context) (*update.Release, error) {
+		called <- struct{}{}
+		return nil, nil
+	}
+	c.Start()
+	ui.wait(t, "address", screenIs(ScreenAddress))
+	select {
+	case <-called:
+		t.Fatal("checked although turned off")
+	case <-time.After(50 * time.Millisecond):
+	}
+}

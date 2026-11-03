@@ -178,13 +178,23 @@ func TestFirstRunToMain(t *testing.T) {
 		t.Fatalf("main view %+v", v)
 	}
 	cfg := e.config()
-	if !cfg.Registered() || cfg.RelayAddress != e.relay.Addr() || cfg.LastAddress != "" ||
+	if !cfg.Registered() || cfg.RelayAddress != e.relay.Addr() ||
 		cfg.RelayHostKey != identity.KeyLine(e.relay.HostKey(), "") {
 		t.Fatalf("config %+v", cfg)
 	}
-	in := c.Info()
-	if in.RelayAddress != e.relay.Addr() || in.Name != "anna@PC" || in.KeyFingerprint != e.fp() {
-		t.Fatalf("info %+v", in)
+
+	// The next start waits on the address screen, prefilled.
+	c.Close()
+	waitOffline(t, e.relay, e.fp())
+	c2, ui2 := e.controller()
+	c2.Start()
+	v = ui2.wait(t, "address screen", screenIs(ScreenAddress))
+	if v.Address != e.relay.Addr() || v.Connecting {
+		t.Fatalf("restart view %+v", v)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if e.relay.Online(e.fp()) {
+		t.Fatal("connected without Connect")
 	}
 }
 
@@ -212,7 +222,7 @@ func TestHelperConnects(t *testing.T) {
 	e := newEnv(t)
 	registered(t, e)
 	c, ui := e.controller()
-	c.Start()
+	startAndConnect(t, c, ui, e.relay.Addr())
 	ui.wait(t, "ready", readyMain)
 
 	// The user refuses: no session, still ready.
@@ -232,7 +242,7 @@ func TestHelperConnects(t *testing.T) {
 	gate := make(chan struct{})
 	ui.answer(false, gate)
 	helper := connectHelper(t, e.relay, e.fp())
-	ui.wait(t, "asking", func(v View) bool { return v.Screen == ScreenMain && !v.Ready && v.Notice != "" })
+	ui.wait(t, "asking", func(v View) bool { return v.Screen == ScreenMain && v.Asking && v.Notice != "" })
 	close(gate)
 	sess := <-e.relay.Sessions()
 	v := ui.wait(t, "in session", func(v View) bool { return v.InSession })
@@ -244,9 +254,6 @@ func TestHelperConnects(t *testing.T) {
 	}
 	sess.Channel.Close() // the helper ends the session
 	ui.wait(t, "back", func(v View) bool { return !v.InSession && readyMain(v) })
-	if in := c.Info(); !strings.HasPrefix(in.LastHelper, "alice (SHA256:") {
-		t.Fatalf("last helper %q", in.LastHelper)
-	}
 }
 
 func TestConnectError(t *testing.T) {
@@ -283,33 +290,12 @@ func TestPrefillAfterCloseBeforeRegistration(t *testing.T) {
 	}
 }
 
-func TestChangeAddress(t *testing.T) {
-	e := newEnv(t)
-	c, ui := e.controller()
-	c.Start()
-	c.Connect(e.relay.Addr())
-	ui.wait(t, "key screen", screenIs(ScreenKey))
-	c.ChangeAddress()
-	v := ui.wait(t, "address screen", screenIs(ScreenAddress))
-	if v.Address != e.relay.Addr() || v.Connecting {
-		t.Fatalf("%+v", v)
-	}
-}
-
-func TestResetAndRemoveKey(t *testing.T) {
+func TestRemoveKey(t *testing.T) {
 	e := newEnv(t)
 	registered(t, e)
 	c, ui := e.controller()
-	c.Start()
+	startAndConnect(t, c, ui, e.relay.Addr())
 	ui.wait(t, "main", screenIs(ScreenMain))
-	if err := c.Reset(); err != nil {
-		t.Fatal(err)
-	}
-	ui.wait(t, "address screen", screenIs(ScreenAddress))
-	if e.config().Registered() || e.loads != 1 {
-		t.Fatalf("config kept or key reloaded (%d loads)", e.loads)
-	}
-
 	old := e.key.Fingerprint
 	if err := c.RemoveKey(); err != nil {
 		t.Fatal(err)
@@ -317,6 +303,9 @@ func TestResetAndRemoveKey(t *testing.T) {
 	v := ui.wait(t, "address screen", screenIs(ScreenAddress))
 	if e.removed != 1 || v.KeyFingerprint == old || v.KeyFingerprint != e.key.Fingerprint {
 		t.Fatalf("removed %d, key %s (old %s)", e.removed, v.KeyFingerprint, old)
+	}
+	if e.config().Registered() {
+		t.Fatal("config kept")
 	}
 }
 
@@ -355,11 +344,8 @@ func TestUnregisteredShowsKeyAgain(t *testing.T) {
 		Name:         "anna@PC",
 	})
 	c, ui := e.controller()
-	c.Start()
-	v := ui.wait(t, "key screen", screenIs(ScreenKey))
-	if v.Notice == "" {
-		t.Fatal("no notice")
-	}
+	startAndConnect(t, c, ui, relay2.Addr())
+	ui.wait(t, "key screen", screenIs(ScreenKey))
 	relay2.Register(e.fp(), "anna@PC")
 	ui.wait(t, "main", func(v View) bool { return v.Screen == ScreenMain && v.Ready })
 }
@@ -380,8 +366,11 @@ func TestRelayKeyChanged(t *testing.T) {
 		Name:         "anna@PC",
 	})
 	c, ui := e.controller()
-	c.Start()
+	startAndConnect(t, c, ui, e.relay.Addr())
 	v := ui.wait(t, "warning", func(v View) bool { return v.RelayKeyChange != nil })
+	if v.Screen != ScreenAddress {
+		t.Fatalf("warning on %v", v.Screen)
+	}
 	newFP := ssh.FingerprintSHA256(e.relay.HostKey())
 	if v.RelayKeyChange.OldFingerprint != old.Fingerprint || v.RelayKeyChange.NewFingerprint != newFP || v.Error == "" {
 		t.Fatalf("view %+v", v)
