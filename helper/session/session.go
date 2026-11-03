@@ -21,11 +21,11 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/proto/control"
-	"github.com/mevdschee/help-me-win/proto/inner"
-	"github.com/mevdschee/help-me-win/proto/input"
-	"github.com/mevdschee/help-me-win/proto/screen"
-	"github.com/mevdschee/help-me-win/proto/wire"
+	"github.com/mevdschee/helpbuoy/proto/control"
+	"github.com/mevdschee/helpbuoy/proto/inner"
+	"github.com/mevdschee/helpbuoy/proto/input"
+	"github.com/mevdschee/helpbuoy/proto/screen"
+	"github.com/mevdschee/helpbuoy/proto/wire"
 )
 
 // MaxSide bounds the remote screen size accepted from a client.

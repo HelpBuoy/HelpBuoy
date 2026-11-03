@@ -4,7 +4,7 @@ import (
 	"image"
 	"unicode/utf16"
 
-	"github.com/mevdschee/help-me-win/proto/input"
+	"github.com/mevdschee/helpbuoy/proto/input"
 )
 
 // event is one platform-neutral SendInput event: a MOUSEINPUT when mouse is

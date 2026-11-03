@@ -8,8 +8,8 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/mevdschee/help-me-win/helper/session"
-	"github.com/mevdschee/help-me-win/proto/screen"
+	"github.com/mevdschee/helpbuoy/helper/session"
+	"github.com/mevdschee/helpbuoy/proto/screen"
 )
 
 // Screen is one remote screen texture.

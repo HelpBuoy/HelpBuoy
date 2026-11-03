@@ -12,7 +12,7 @@ import (
 	"github.com/rodrigocfd/windigo/co"
 	"github.com/rodrigocfd/windigo/ui"
 
-	"github.com/mevdschee/help-me-win/client-windows/update"
+	"github.com/mevdschee/helpbuoy/client-windows/update"
 )
 
 // maybeOfferUpdate offers the release in the current view, once, when no
@@ -39,15 +39,15 @@ func (w *Window) offerUpdate(r update.Release) {
 	}
 	w.ctrl.DismissUpdate()
 	version := w.ctrl.Version()
-	msg := fmt.Sprintf("Help-Me-Win %s is available (you have %s).\n\n"+
-		"Download and install it now? Help-Me-Win closes during the installation.", r.Version, version)
+	msg := fmt.Sprintf("HelpBuoy %s is available (you have %s).\n\n"+
+		"Download and install it now? HelpBuoy closes during the installation.", r.Version, version)
 	w.dialogs++
 	ret, _ := w.wnd.Hwnd().MessageBox(msg, "Update available", co.MB_YESNO|co.MB_ICONINFORMATION)
 	w.dialogs--
 	if ret != co.ID_YES {
 		return
 	}
-	w.updating = "Downloading Help-Me-Win " + r.Version + "..."
+	w.updating = "Downloading HelpBuoy " + r.Version + "..."
 	w.apply(w.view)
 	go func() {
 		path, err := update.Download(context.Background(), r, os.TempDir())
@@ -57,8 +57,8 @@ func (w *Window) offerUpdate(r update.Release) {
 		w.wnd.UiThread(func() {
 			if err == nil {
 				// msiexec shows the installer; the MSI replaces the running
-				// version, so the app closes to release help-me-win.exe.
-				log := filepath.Join(os.TempDir(), "help-me-win-update.log")
+				// version, so the app closes to release helpbuoy.exe.
+				log := filepath.Join(os.TempDir(), "helpbuoy-update.log")
 				err = exec.Command("msiexec", "/i", path, "/l*v", log).Start()
 			}
 			if err != nil {

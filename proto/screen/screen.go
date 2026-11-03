@@ -39,7 +39,7 @@ import (
 	"math"
 	"unicode/utf8"
 
-	"github.com/mevdschee/help-me-win/proto/wire"
+	"github.com/mevdschee/helpbuoy/proto/wire"
 )
 
 // Message type bytes.

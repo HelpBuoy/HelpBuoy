@@ -49,7 +49,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/mevdschee/help-me-win/proto/screen"
+	"github.com/mevdschee/helpbuoy/proto/screen"
 )
 
 // TileSize is the edge length of the tiles used for damage, cache and refine.

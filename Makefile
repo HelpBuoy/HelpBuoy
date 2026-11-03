@@ -1,4 +1,4 @@
-# help-me-win build. Run "make help" for the targets.
+# helpbuoy build. Run "make help" for the targets.
 #
 # Everything builds on Linux with only the Go toolchain and CGO_ENABLED=0:
 # hmw-relay, the Windows client, and the raylib helper app (raylib-go purego,
@@ -30,7 +30,7 @@ CLIENT_SYSO := $(foreach a,$(ARCHES),client-windows/rsrc_windows_$(a).syso)
 CLIENT_ICONS := $(addprefix client-windows/resources/,icon.png icon48.png icon32.png icon16.png)
 # Four part version of the client exe, which the MSI needs for the upgrade.
 FILE_VERSION = $(shell jq -r '.RT_VERSION[]["0000"].fixed.file_version' client-windows/resources/winres.json)
-MSI := $(DIST)/help-me-win_$(VERSION)_windows-amd64.msi
+MSI := $(DIST)/helpbuoy_$(VERSION)_windows-amd64.msi
 
 .PHONY: help all test vet fuzz relay client helper dist msi deb icon clean
 
@@ -83,9 +83,9 @@ $(CLIENT_SYSO): client-windows/resources/winres.json $(CLIENT_ICONS)
 
 client: $(CLIENT_SYSO)
 	@for arch in $(ARCHES); do \
-		echo "help-me-win.exe windows/$$arch"; \
+		echo "helpbuoy.exe windows/$$arch"; \
 		GOOS=windows GOARCH=$$arch go build $(GOFLAGS) -ldflags "$(LDFLAGS) -H=windowsgui" \
-			-o $(BIN)/windows-$$arch/help-me-win.exe ./client-windows || exit 1; \
+			-o $(BIN)/windows-$$arch/helpbuoy.exe ./client-windows || exit 1; \
 	done
 
 # Release archives: helper app and hmw-relay side by side per OS/arch. macOS
@@ -100,28 +100,28 @@ dist: relay helper client
 		(cd $(BIN)/$$t && zip -q ../../$(DIST)/hmw-helper_$(VERSION)_$$t.zip hmw-helper.exe hmw-relay.exe) || exit 1; \
 	done
 	@for t in $(subst /,-,$(filter darwin/%,$(TARGETS))); do \
-		GOWORK=off GO111MODULE=off go run tools/macapp/main.go -app hmw-helper -id help-me-win.helper \
+		GOWORK=off GO111MODULE=off go run tools/macapp/main.go -app hmw-helper -id helpbuoy.helper \
 			-version $(APP_VERSION) -exe $(BIN)/$$t/hmw-helper -relay $(BIN)/$$t/hmw-relay \
 			-icon helper/resources/icon.png -out $(DIST)/hmw-helper_$(VERSION)_$$t.zip || exit 1; \
 	done
 	@cd $(DIST) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS
 	@ls -l $(DIST)
 
-# Client installer, per user and without admin rights (installer/help-me-win.wxs).
+# Client installer, per user and without admin rights (installer/helpbuoy.wxs).
 # wixl removes the old version right after InstallValidate, outside the
 # installation transaction: if the new install then fails, nothing is left.
 # RemoveExistingProducts moves after InstallInitialize, so a failed upgrade
 # rolls back to the old version (WiX: Schedule="afterInstallInitialize").
 msi: dist
-	GOWORK=off GO111MODULE=off go run tools/mkico/main.go $(BIN)/help-me-win.ico $(CLIENT_ICONS)
+	GOWORK=off GO111MODULE=off go run tools/mkico/main.go $(BIN)/helpbuoy.ico $(CLIENT_ICONS)
 	wixl -a x64 -D Version="$(APP_VERSION)" -D FileVersion="$(FILE_VERSION)" \
-		-D ExePath=$(BIN)/windows-amd64/help-me-win.exe -D IconPath=$(BIN)/help-me-win.ico \
-		-o $(MSI) installer/help-me-win.wxs
+		-D ExePath=$(BIN)/windows-amd64/helpbuoy.exe -D IconPath=$(BIN)/helpbuoy.ico \
+		-o $(MSI) installer/helpbuoy.wxs
 	msiinfo export $(MSI) InstallExecuteSequence > $(BIN)/seq.idt
 	sed -i 's/^RemoveExistingProducts\t\t1401\r\?$$/RemoveExistingProducts\t\t1501\r/' $(BIN)/seq.idt
 	grep -q $$'^RemoveExistingProducts\t\t1501\r$$' $(BIN)/seq.idt
 	msibuild $(MSI) -i $(BIN)/seq.idt
-	@# The exe must be versioned in the File table, see installer/help-me-win.wxs.
+	@# The exe must be versioned in the File table, see installer/helpbuoy.wxs.
 	msiinfo export $(MSI) File | grep -q $$'\t'"$(FILE_VERSION)"$$'\t'
 	@cd $(DIST) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS
 	@ls -l $(DIST)

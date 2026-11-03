@@ -1,6 +1,6 @@
 [Unit]
-Description=help-me-win relay
-Documentation=https://github.com/mevdschee/help-me-win
+Description=helpbuoy relay
+Documentation=https://github.com/mevdschee/helpbuoy
 After=network-online.target
 Wants=network-online.target
 

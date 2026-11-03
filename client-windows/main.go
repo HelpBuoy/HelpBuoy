@@ -1,6 +1,6 @@
 //go:build windows
 
-// Command help-me-win is the Windows client: the person who needs help runs
+// Command helpbuoy is the Windows client: the person who needs help runs
 // it, and allows a helper to take control when the helper connects.
 //
 // Hidden flags for testing: --demo uses a key that only lives in memory and
@@ -23,16 +23,16 @@ import (
 	"github.com/rodrigocfd/windigo/co"
 	"github.com/rodrigocfd/windigo/win"
 
-	"github.com/mevdschee/help-me-win/client-windows/app"
-	"github.com/mevdschee/help-me-win/client-windows/config"
-	"github.com/mevdschee/help-me-win/client-windows/identity"
-	"github.com/mevdschee/help-me-win/client-windows/injector"
-	"github.com/mevdschee/help-me-win/client-windows/session"
-	"github.com/mevdschee/help-me-win/client-windows/ui"
-	"github.com/mevdschee/help-me-win/client-windows/update"
-	"github.com/mevdschee/help-me-win/proto/appkey"
-	pid "github.com/mevdschee/help-me-win/proto/identity"
-	"github.com/mevdschee/help-me-win/proto/screen"
+	"github.com/mevdschee/helpbuoy/client-windows/app"
+	"github.com/mevdschee/helpbuoy/client-windows/config"
+	"github.com/mevdschee/helpbuoy/client-windows/identity"
+	"github.com/mevdschee/helpbuoy/client-windows/injector"
+	"github.com/mevdschee/helpbuoy/client-windows/session"
+	"github.com/mevdschee/helpbuoy/client-windows/ui"
+	"github.com/mevdschee/helpbuoy/client-windows/update"
+	"github.com/mevdschee/helpbuoy/proto/appkey"
+	pid "github.com/mevdschee/helpbuoy/proto/identity"
+	"github.com/mevdschee/helpbuoy/proto/screen"
 )
 
 // version is set at build time with -ldflags "-X main.version=...". Release
@@ -77,7 +77,7 @@ func main() {
 		removeKey func() error
 	)
 	if *demo {
-		dir, err := os.MkdirTemp("", "help-me-win-demo-")
+		dir, err := os.MkdirTemp("", "helpbuoy-demo-")
 		if err == nil {
 			defer os.RemoveAll(dir)
 		}

@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mevdschee/help-me-win/proto/encode/internal/refdec"
-	"github.com/mevdschee/help-me-win/proto/encode/scenes"
-	"github.com/mevdschee/help-me-win/proto/screen"
+	"github.com/mevdschee/helpbuoy/proto/encode/internal/refdec"
+	"github.com/mevdschee/helpbuoy/proto/encode/scenes"
+	"github.com/mevdschee/helpbuoy/proto/screen"
 )
 
 var t0 = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)

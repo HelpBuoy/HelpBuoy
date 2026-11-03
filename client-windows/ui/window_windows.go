@@ -15,12 +15,12 @@ import (
 	"github.com/rodrigocfd/windigo/ui"
 	"github.com/rodrigocfd/windigo/win"
 
-	"github.com/mevdschee/help-me-win/client-windows/app"
-	"github.com/mevdschee/help-me-win/client-windows/session"
+	"github.com/mevdschee/helpbuoy/client-windows/app"
+	"github.com/mevdschee/helpbuoy/client-windows/session"
 )
 
 // Title is the window title.
-const Title = "Help-Me-Win"
+const Title = "HelpBuoy"
 
 // copyKeyText is the label of the Copy key button.
 const copyKeyText = "C&opy key"
@@ -532,7 +532,7 @@ func (w *Window) warnRelayKey(hk session.HostKeyChangedError) {
 		MainInstruction: "Warning: the identity of the relay has changed",
 		Content: "Key last time:\n" + hk.OldFingerprint + "\n\n" +
 			"Key now:\n" + hk.NewFingerprint + "\n\n" +
-			"This may be someone pretending to be your relay. Help-Me-Win stopped connecting. " +
+			"This may be someone pretending to be your relay. HelpBuoy stopped connecting. " +
 			"Only continue if a helper confirmed by phone that the relay has a new key " +
 			"and the new fingerprint above matches what they read to you.",
 		Buttons: []win.TASKDIALOG_BUTTON{

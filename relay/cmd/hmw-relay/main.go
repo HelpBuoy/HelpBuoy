@@ -1,4 +1,4 @@
-// Command hmw-relay is the help-me-win SSH relay. It runs as a normal user
+// Command hmw-relay is the helpbuoy SSH relay. It runs as a normal user
 // process next to the helper app and listens on a single port.
 //
 // Besides serve, its subcommands administer the state directory directly;
@@ -20,13 +20,13 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/mevdschee/help-me-win/proto/datadir"
-	"github.com/mevdschee/help-me-win/proto/relayaddr"
-	"github.com/mevdschee/help-me-win/relay/auth"
-	"github.com/mevdschee/help-me-win/relay/hostkey"
-	"github.com/mevdschee/help-me-win/relay/logfile"
-	"github.com/mevdschee/help-me-win/relay/server"
-	"github.com/mevdschee/help-me-win/relay/store"
+	"github.com/mevdschee/helpbuoy/proto/datadir"
+	"github.com/mevdschee/helpbuoy/proto/relayaddr"
+	"github.com/mevdschee/helpbuoy/relay/auth"
+	"github.com/mevdschee/helpbuoy/relay/hostkey"
+	"github.com/mevdschee/helpbuoy/relay/logfile"
+	"github.com/mevdschee/helpbuoy/relay/server"
+	"github.com/mevdschee/helpbuoy/relay/store"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".

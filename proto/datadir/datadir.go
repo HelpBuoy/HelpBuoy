@@ -1,4 +1,4 @@
-// Package datadir returns the per-user directory where help-me-win programs
+// Package datadir returns the per-user directory where helpbuoy programs
 // keep their keys and state:
 //
 //	Linux:   $XDG_DATA_HOME/<name>, default ~/.local/share/<name>
@@ -48,4 +48,33 @@ func dirFor(goos string, getenv func(string) string, home func() (string, error)
 		}
 		return filepath.Join(h, ".local", "share", name), nil
 	}
+}
+
+// Migrate returns the data directory for name like Dir, after moving the
+// directory of the program's former name (legacy) to it when only the old
+// one exists. If the move fails, it returns the old directory so existing
+// keys keep working.
+func Migrate(name, legacy string) (string, error) {
+	dir, err := Dir(name)
+	if err != nil {
+		return "", err
+	}
+	old, err := Dir(legacy)
+	if err != nil {
+		return dir, nil
+	}
+	return migrate(dir, old), nil
+}
+
+func migrate(dir, old string) string {
+	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
+		return dir
+	}
+	if fi, err := os.Stat(old); err != nil || !fi.IsDir() {
+		return dir
+	}
+	if err := os.Rename(old, dir); err != nil {
+		return old
+	}
+	return dir
 }

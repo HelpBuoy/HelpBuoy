@@ -15,11 +15,11 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/client-windows/config"
-	"github.com/mevdschee/help-me-win/client-windows/session"
-	"github.com/mevdschee/help-me-win/client-windows/update"
-	"github.com/mevdschee/help-me-win/proto/appkey"
-	"github.com/mevdschee/help-me-win/proto/relayaddr"
+	"github.com/mevdschee/helpbuoy/client-windows/config"
+	"github.com/mevdschee/helpbuoy/client-windows/session"
+	"github.com/mevdschee/helpbuoy/client-windows/update"
+	"github.com/mevdschee/helpbuoy/proto/appkey"
+	"github.com/mevdschee/helpbuoy/proto/relayaddr"
 )
 
 // Screen is one of the window's layouts.

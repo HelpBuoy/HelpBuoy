@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mevdschee/help-me-win/client-windows/identity"
-	"github.com/mevdschee/help-me-win/client-windows/injector"
-	"github.com/mevdschee/help-me-win/proto/inner"
-	"github.com/mevdschee/help-me-win/proto/input"
-	"github.com/mevdschee/help-me-win/proto/screen"
-	"github.com/mevdschee/help-me-win/proto/wire"
+	"github.com/mevdschee/helpbuoy/client-windows/identity"
+	"github.com/mevdschee/helpbuoy/client-windows/injector"
+	"github.com/mevdschee/helpbuoy/proto/inner"
+	"github.com/mevdschee/helpbuoy/proto/input"
+	"github.com/mevdschee/helpbuoy/proto/screen"
+	"github.com/mevdschee/helpbuoy/proto/wire"
 )
 
 // TestPatternRunnerRealInner runs the real inner SSH server and the real

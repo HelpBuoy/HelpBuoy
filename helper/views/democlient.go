@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mevdschee/help-me-win/proto/input"
-	"github.com/mevdschee/help-me-win/proto/screen"
-	"github.com/mevdschee/help-me-win/proto/wire"
+	"github.com/mevdschee/helpbuoy/proto/input"
+	"github.com/mevdschee/helpbuoy/proto/screen"
+	"github.com/mevdschee/helpbuoy/proto/wire"
 )
 
 // demoMonitors are the fake client's displays; they differ in size, so

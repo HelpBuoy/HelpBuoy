@@ -24,11 +24,11 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/client-windows/identity"
-	"github.com/mevdschee/help-me-win/client-windows/internal/fakerelay"
-	"github.com/mevdschee/help-me-win/proto/inner"
-	"github.com/mevdschee/help-me-win/proto/screen"
-	"github.com/mevdschee/help-me-win/proto/wire"
+	"github.com/mevdschee/helpbuoy/client-windows/identity"
+	"github.com/mevdschee/helpbuoy/client-windows/internal/fakerelay"
+	"github.com/mevdschee/helpbuoy/proto/inner"
+	"github.com/mevdschee/helpbuoy/proto/screen"
+	"github.com/mevdschee/helpbuoy/proto/wire"
 )
 
 func main() {

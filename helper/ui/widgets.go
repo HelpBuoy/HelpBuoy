@@ -5,7 +5,7 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/mevdschee/help-me-win/helper/ui/textedit"
+	"github.com/mevdschee/helpbuoy/helper/ui/textedit"
 )
 
 // ButtonKind selects a button's look.

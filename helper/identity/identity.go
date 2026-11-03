@@ -1,5 +1,5 @@
 // Package identity loads the helper app's own application-specific key
-// (PLAN.md 7.1) through proto/appkey, in the data directory "help-me-win".
+// (PLAN.md 7.1) through proto/appkey, in the data directory "helpbuoy".
 package identity
 
 import (
@@ -7,16 +7,20 @@ import (
 	"os/user"
 	"strings"
 
-	"github.com/mevdschee/help-me-win/proto/appkey"
-	"github.com/mevdschee/help-me-win/proto/datadir"
-	"github.com/mevdschee/help-me-win/proto/identity"
+	"github.com/mevdschee/helpbuoy/proto/appkey"
+	"github.com/mevdschee/helpbuoy/proto/datadir"
+	"github.com/mevdschee/helpbuoy/proto/identity"
 )
 
 // AppName is the data directory name shared with the client app's layout.
-const AppName = "help-me-win"
+const AppName = "helpbuoy"
+
+// LegacyAppName is the data directory name before the rename to HelpBuoy;
+// Dir moves it to AppName on first start.
+const LegacyAppName = "help-me-win"
 
 // Dir returns the helper's data directory. It does not create it.
-func Dir() (string, error) { return datadir.Dir(AppName) }
+func Dir() (string, error) { return datadir.Migrate(AppName, LegacyAppName) }
 
 // Load loads the app key from dir, creating it on the very first start with
 // the comment user@machine. created reports whether a new key was generated.

@@ -6,8 +6,8 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/mevdschee/help-me-win/helper/ui"
-	"github.com/mevdschee/help-me-win/proto/control"
+	"github.com/mevdschee/helpbuoy/helper/ui"
+	"github.com/mevdschee/helpbuoy/proto/control"
 )
 
 // sortedHelpers returns the helpers of the presence, online first, each

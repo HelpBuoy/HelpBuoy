@@ -20,8 +20,8 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/mevdschee/help-me-win/helper/perf"
-	"github.com/mevdschee/help-me-win/helper/views"
+	"github.com/mevdschee/helpbuoy/helper/perf"
+	"github.com/mevdschee/helpbuoy/helper/views"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -48,7 +48,7 @@ func main() {
 
 	rl.SetTraceLogLevel(rl.LogWarning)
 	rl.SetConfigFlags(rl.FlagWindowResizable | rl.FlagWindowHighdpi | rl.FlagMsaa4xHint)
-	rl.InitWindow(1100, 700, "Help-Me-Win helper")
+	rl.InitWindow(1100, 700, "HelpBuoy helper")
 	defer rl.CloseWindow()
 	rl.SetWindowMinSize(views.MinWidth, views.MinHeight)
 	rl.SetExitKey(rl.KeyNull) // Esc belongs to the remote session

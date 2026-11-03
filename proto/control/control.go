@@ -58,14 +58,14 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/proto/wire"
+	"github.com/mevdschee/helpbuoy/proto/wire"
 )
 
 // SSH names.
 const (
-	SSHUser        = "hmw"                     // user name sent by apps; the relay ignores it
-	ChannelControl = "hmw-control@help-me-win" // one per connection, opened by the app
-	ChannelSession = "hmw-session@help-me-win" // opened by the client, and by the relay towards the helper
+	SSHUser        = "hmw"                  // user name sent by apps; the relay ignores it
+	ChannelControl = "hmw-control@helpbuoy" // one per connection, opened by the app
+	ChannelSession = "hmw-session@helpbuoy" // opened by the client, and by the relay towards the helper
 )
 
 // Role of a connection, decided by the relay from the key alone.

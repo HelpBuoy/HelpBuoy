@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/mevdschee/help-me-win/proto/input"
+	"github.com/mevdschee/helpbuoy/proto/input"
 )
 
 // w3c lists every W3C code the helper must be able to send: the full

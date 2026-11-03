@@ -12,9 +12,9 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/proto/inner"
-	"github.com/mevdschee/help-me-win/proto/screen"
-	"github.com/mevdschee/help-me-win/proto/wire"
+	"github.com/mevdschee/helpbuoy/proto/inner"
+	"github.com/mevdschee/helpbuoy/proto/screen"
+	"github.com/mevdschee/helpbuoy/proto/wire"
 )
 
 // InnerSession is the client's side of an inner SSH connection, as returned

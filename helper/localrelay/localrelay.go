@@ -25,11 +25,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mevdschee/help-me-win/proto/datadir"
-	"github.com/mevdschee/help-me-win/relay/auth"
-	"github.com/mevdschee/help-me-win/relay/logfile"
-	"github.com/mevdschee/help-me-win/relay/server"
-	"github.com/mevdschee/help-me-win/relay/store"
+	"github.com/mevdschee/helpbuoy/proto/datadir"
+	"github.com/mevdschee/helpbuoy/relay/auth"
+	"github.com/mevdschee/helpbuoy/relay/logfile"
+	"github.com/mevdschee/helpbuoy/relay/server"
+	"github.com/mevdschee/helpbuoy/relay/store"
 )
 
 // State of the local relay.

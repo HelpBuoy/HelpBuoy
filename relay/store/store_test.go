@@ -12,8 +12,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/proto/control"
-	"github.com/mevdschee/help-me-win/relay/auth"
+	"github.com/mevdschee/helpbuoy/proto/control"
+	"github.com/mevdschee/helpbuoy/relay/auth"
 )
 
 func newKey(t *testing.T) ssh.PublicKey {

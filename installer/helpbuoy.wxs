@@ -1,37 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   MSI for the Windows client, built with wixl (msitools) by "make msi":
-  wixl -a x64 -D Version=x.y.z -D FileVersion=x.y.z.b -D ExePath=... -D IconPath=... -o out.msi help-me-win.wxs
-  It installs per user, without admin rights, into %LOCALAPPDATA%\Programs\help-me-win.
-  The state stays in %LOCALAPPDATA%\help-me-win, shared with the portable exe.
+  wixl -a x64 -D Version=x.y.z -D FileVersion=x.y.z.b -D ExePath=... -D IconPath=... -o out.msi helpbuoy.wxs
+  It installs per user, without admin rights, into %LOCALAPPDATA%\Programs\helpbuoy.
+  The state stays in %LOCALAPPDATA%\helpbuoy, shared with the portable exe.
   The UpgradeCode must never change, so new versions replace old ones.
 -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Product Id="*" Name="Help-Me-Win" Language="1033" Version="$(var.Version)"
+  <Product Id="*" Name="HelpBuoy" Language="1033" Version="$(var.Version)"
            Manufacturer="Maurits van der Schee" UpgradeCode="A3182225-098E-4C63-8855-57925CF25A30">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser"
-             Description="Help-Me-Win $(var.Version)" Comments="Remote support client for Windows"/>
-    <Media Id="1" Cabinet="helpmewin.cab" EmbedCab="yes"/>
+             Description="HelpBuoy $(var.Version)" Comments="Remote support client for Windows"/>
+    <Media Id="1" Cabinet="helpbuoy.cab" EmbedCab="yes"/>
     <MajorUpgrade AllowSameVersionUpgrades="yes"
-                  DowngradeErrorMessage="A newer version of Help-Me-Win is already installed."/>
+                  DowngradeErrorMessage="A newer version of HelpBuoy is already installed."/>
 
-    <Icon Id="help_me_win.ico" SourceFile="$(var.IconPath)"/>
-    <Property Id="ARPPRODUCTICON" Value="help_me_win.ico"/>
-    <Property Id="ARPURLINFOABOUT" Value="https://github.com/mevdschee/help-me-win"/>
+    <Icon Id="helpbuoy.ico" SourceFile="$(var.IconPath)"/>
+    <Property Id="ARPPRODUCTICON" Value="helpbuoy.ico"/>
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/mevdschee/helpbuoy"/>
 
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="LocalAppDataFolder">
         <Directory Id="ProgramsFolder" Name="Programs">
-          <Directory Id="INSTALLDIR" Name="help-me-win">
+          <Directory Id="INSTALLDIR" Name="helpbuoy">
             <!-- Per-user components need a registry key path, not the file. -->
             <Component Id="MainExecutable" Guid="*" Win64="yes">
               <!-- The version must be set: an unversioned file never replaces
                    the versioned exe of the old install during an upgrade, and
                    removing the old version then deletes it. -->
-              <File Id="help_me_win.exe" Name="help-me-win.exe" Source="$(var.ExePath)"
+              <File Id="helpbuoy.exe" Name="helpbuoy.exe" Source="$(var.ExePath)"
                     DefaultVersion="$(var.FileVersion)"/>
               <RemoveFolder Id="RemoveInstallDir" On="uninstall"/>
-              <RegistryValue Root="HKCU" Key="Software\help-me-win" Name="exe"
+              <RegistryValue Root="HKCU" Key="Software\helpbuoy" Name="exe"
                              Type="integer" Value="1" KeyPath="yes"/>
             </Component>
           </Directory>
@@ -39,9 +39,9 @@
       </Directory>
       <Directory Id="ProgramMenuFolder">
         <Component Id="StartMenuShortcut" Guid="*">
-          <Shortcut Id="helpMeWinShortcut" Name="Help-Me-Win" Description="Remote support client"
-                    Target="[INSTALLDIR]help-me-win.exe" WorkingDirectory="INSTALLDIR"/>
-          <RegistryValue Root="HKCU" Key="Software\help-me-win" Name="shortcut"
+          <Shortcut Id="helpBuoyShortcut" Name="HelpBuoy" Description="Remote support client"
+                    Target="[INSTALLDIR]helpbuoy.exe" WorkingDirectory="INSTALLDIR"/>
+          <RegistryValue Root="HKCU" Key="Software\helpbuoy" Name="shortcut"
                          Type="integer" Value="1" KeyPath="yes"/>
         </Component>
       </Directory>

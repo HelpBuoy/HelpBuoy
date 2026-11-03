@@ -11,11 +11,11 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/helper/relayconn"
-	"github.com/mevdschee/help-me-win/helper/session"
-	"github.com/mevdschee/help-me-win/proto/appkey"
-	"github.com/mevdschee/help-me-win/proto/control"
-	"github.com/mevdschee/help-me-win/proto/identity"
+	"github.com/mevdschee/helpbuoy/helper/relayconn"
+	"github.com/mevdschee/helpbuoy/helper/session"
+	"github.com/mevdschee/helpbuoy/proto/appkey"
+	"github.com/mevdschee/helpbuoy/proto/control"
+	"github.com/mevdschee/helpbuoy/proto/identity"
 )
 
 // demo fakes a relay with a few clients so the UI can be seen and tried

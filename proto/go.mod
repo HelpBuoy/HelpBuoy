@@ -1,4 +1,4 @@
-module github.com/mevdschee/help-me-win/proto
+module github.com/mevdschee/helpbuoy/proto
 
 go 1.26.0
 

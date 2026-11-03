@@ -1,6 +1,6 @@
 package encode
 
-import "github.com/mevdschee/help-me-win/proto/screen"
+import "github.com/mevdschee/helpbuoy/proto/screen"
 
 // Sizes of the version 2 frame wire format (proto/screen/ops.go).
 const (

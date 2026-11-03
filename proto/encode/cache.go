@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"hash/maphash"
 
-	"github.com/mevdschee/help-me-win/proto/screen"
+	"github.com/mevdschee/helpbuoy/proto/screen"
 )
 
 // lru is the encoder's view of the helper's tile cache: which content hash

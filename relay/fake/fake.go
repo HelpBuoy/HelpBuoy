@@ -18,7 +18,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/proto/control"
+	"github.com/mevdschee/helpbuoy/proto/control"
 )
 
 // KeyFile is the private key file name inside a key directory.

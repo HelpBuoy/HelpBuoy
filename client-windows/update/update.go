@@ -17,7 +17,7 @@ import (
 )
 
 // LatestReleaseURL is the GitHub API endpoint for the newest release.
-const LatestReleaseURL = "https://api.github.com/repos/mevdschee/help-me-win/releases/latest"
+const LatestReleaseURL = "https://api.github.com/repos/mevdschee/helpbuoy/releases/latest"
 
 // Limits for the release query and the MSI download.
 const (
@@ -124,7 +124,7 @@ func Check(ctx context.Context, url, version string) (*Release, error) {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "help-me-win/"+version)
+	req.Header.Set("User-Agent", "helpbuoy/"+version)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -163,7 +163,7 @@ func Download(ctx context.Context, r Release, dir string) (string, error) {
 	}
 	name := filepath.Base(r.MsiName)
 	if name == "." || name == string(filepath.Separator) || !strings.HasSuffix(strings.ToLower(name), ".msi") {
-		name = "help-me-win-update.msi"
+		name = "helpbuoy-update.msi"
 	}
 	path := filepath.Join(dir, name)
 	f, err := os.Create(path)

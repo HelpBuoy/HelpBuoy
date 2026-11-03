@@ -7,12 +7,12 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/mevdschee/help-me-win/helper/config"
-	"github.com/mevdschee/help-me-win/helper/identity"
-	"github.com/mevdschee/help-me-win/helper/localrelay"
-	"github.com/mevdschee/help-me-win/helper/relayconn"
-	"github.com/mevdschee/help-me-win/helper/ui"
-	"github.com/mevdschee/help-me-win/proto/relayaddr"
+	"github.com/mevdschee/helpbuoy/helper/config"
+	"github.com/mevdschee/helpbuoy/helper/identity"
+	"github.com/mevdschee/helpbuoy/helper/localrelay"
+	"github.com/mevdschee/helpbuoy/helper/relayconn"
+	"github.com/mevdschee/helpbuoy/helper/ui"
+	"github.com/mevdschee/helpbuoy/proto/relayaddr"
 )
 
 // connectScreen is the state of the first screen: the relay address and

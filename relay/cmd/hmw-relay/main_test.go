@@ -10,8 +10,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/relay/auth"
-	"github.com/mevdschee/help-me-win/relay/store"
+	"github.com/mevdschee/helpbuoy/relay/auth"
+	"github.com/mevdschee/helpbuoy/relay/store"
 )
 
 func TestRunExitCodes(t *testing.T) {

@@ -1,5 +1,5 @@
 // Package identity gives the client its application-specific Ed25519 key
-// (PLAN.md 6.1), kept in %LOCALAPPDATA%\help-me-win through proto/appkey.
+// (PLAN.md 6.1), kept in %LOCALAPPDATA%\helpbuoy through proto/appkey.
 package identity
 
 import (
@@ -9,16 +9,20 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/proto/appkey"
-	"github.com/mevdschee/help-me-win/proto/datadir"
-	pid "github.com/mevdschee/help-me-win/proto/identity"
+	"github.com/mevdschee/helpbuoy/proto/appkey"
+	"github.com/mevdschee/helpbuoy/proto/datadir"
+	pid "github.com/mevdschee/helpbuoy/proto/identity"
 )
 
 // AppName is the data directory name below %LOCALAPPDATA%.
-const AppName = "help-me-win"
+const AppName = "helpbuoy"
+
+// LegacyAppName is the data directory name before the rename to HelpBuoy;
+// Dir moves it to AppName on first start.
+const LegacyAppName = "help-me-win"
 
 // Dir returns the client's data directory. It does not create it.
-func Dir() (string, error) { return datadir.Dir(AppName) }
+func Dir() (string, error) { return datadir.Migrate(AppName, LegacyAppName) }
 
 // Comment returns the comment for a new key: the current user@machine.
 func Comment() string { return pid.UserMachine() }

@@ -13,7 +13,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/mevdschee/help-me-win/proto/appkey"
+	"github.com/mevdschee/helpbuoy/proto/appkey"
 )
 
 // FileName is the configuration file inside the data directory.

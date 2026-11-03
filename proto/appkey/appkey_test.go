@@ -16,7 +16,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/proto/identity"
+	"github.com/mevdschee/helpbuoy/proto/identity"
 )
 
 type fileState struct {
@@ -101,7 +101,7 @@ func checkKey(t *testing.T, k *Key, dir, comment string) {
 }
 
 func TestCreateOnceThenLoad(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "sub", "help-me-win")
+	dir := filepath.Join(t.TempDir(), "sub", "helpbuoy")
 	k, created, err := LoadOrCreate(dir, "anna@PC")
 	if err != nil || !created {
 		t.Fatalf("created=%v err=%v", created, err)

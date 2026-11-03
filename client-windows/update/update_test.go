@@ -44,14 +44,14 @@ func TestParseRelease(t *testing.T) {
 		"tag_name": "v0.3.0", "draft": false, "prerelease": false,
 		"assets": [
 			{"name": "notes.txt", "browser_download_url": "https://example.com/notes.txt", "size": 10},
-			{"name": "help-me-win-0.3.0-amd64.msi", "browser_download_url": "https://github.com/mevdschee/help-me-win/releases/download/v0.3.0/help-me-win-0.3.0-amd64.msi", "size": 3912192}
+			{"name": "helpbuoy-0.3.0-amd64.msi", "browser_download_url": "https://github.com/mevdschee/helpbuoy/releases/download/v0.3.0/helpbuoy-0.3.0-amd64.msi", "size": 3912192}
 		]}`)
 	r, ok := ParseRelease(data)
 	if !ok {
 		t.Fatal("no release found")
 	}
-	want := Release{Version: "0.3.0", MsiName: "help-me-win-0.3.0-amd64.msi", MsiSize: 3912192,
-		MsiURL: "https://github.com/mevdschee/help-me-win/releases/download/v0.3.0/help-me-win-0.3.0-amd64.msi"}
+	want := Release{Version: "0.3.0", MsiName: "helpbuoy-0.3.0-amd64.msi", MsiSize: 3912192,
+		MsiURL: "https://github.com/mevdschee/helpbuoy/releases/download/v0.3.0/helpbuoy-0.3.0-amd64.msi"}
 	if r != want {
 		t.Errorf("got %+v", r)
 	}
@@ -81,7 +81,7 @@ func TestCheck(t *testing.T) {
 	ctx := context.Background()
 
 	r, err := Check(ctx, srv.URL, "v0.2.0")
-	if err != nil || r == nil || r.Version != "0.3.0" || agent != "help-me-win/v0.2.0" {
+	if err != nil || r == nil || r.Version != "0.3.0" || agent != "helpbuoy/v0.2.0" {
 		t.Fatalf("got %+v, %v, agent %q", r, err, agent)
 	}
 	if r, err := Check(ctx, srv.URL, "v0.3.0"); r != nil || err != nil {

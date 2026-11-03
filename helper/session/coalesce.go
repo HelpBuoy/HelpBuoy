@@ -3,7 +3,7 @@ package session
 import (
 	"time"
 
-	"github.com/mevdschee/help-me-win/proto/input"
+	"github.com/mevdschee/helpbuoy/proto/input"
 )
 
 // Coalescer limits mouse moves to one per Interval while keeping every other

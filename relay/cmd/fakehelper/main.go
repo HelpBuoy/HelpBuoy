@@ -17,8 +17,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/proto/control"
-	"github.com/mevdschee/help-me-win/relay/fake"
+	"github.com/mevdschee/helpbuoy/proto/control"
+	"github.com/mevdschee/helpbuoy/relay/fake"
 )
 
 type options struct {

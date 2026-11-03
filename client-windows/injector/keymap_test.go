@@ -3,7 +3,7 @@ package injector
 import (
 	"testing"
 
-	"github.com/mevdschee/help-me-win/proto/input"
+	"github.com/mevdschee/helpbuoy/proto/input"
 )
 
 // TestTableCoversInputCodes checks that every key code the helper may send

@@ -1,4 +1,4 @@
-# help-me-win: self-hosted remote support over a custom Go SSH relay
+# helpbuoy: self-hosted remote support over a custom Go SSH relay
 
 A self-hosted alternative to TeamViewer QuickSupport. The relay is **a single Go binary
 (`hmw-relay`) that speaks SSH on a single port** (default 5938). Everybody, helpers and clients,
@@ -61,7 +61,7 @@ Performance target: **as fast as RDP** for normal desktop work (section 5).
 
 The client is one generic exe; nothing is embedded or preconfigured. The only thing the user
 types is the relay's `hostname:port`. Everything else is learned on the first successful
-connection and stored in `%LOCALAPPDATA%\help-me-win\config.json`:
+connection and stored in `%LOCALAPPDATA%\helpbuoy\config.json`:
 
 | Field | Example | Learned |
 |---|---|---|
@@ -107,7 +107,7 @@ unique within one relay).
    tells the user what to type, e.g. `helpme.example.com`, with `:port` only when the relay
    doesn't use the default 5938). On this first start
    it generates its own Ed25519 key pair in
-   `%LOCALAPPDATA%\help-me-win\` (section 6.1), with the comment `user@machine`, e.g.
+   `%LOCALAPPDATA%\helpbuoy\` (section 6.1), with the comment `user@machine`, e.g.
    `anna@ANNA-LAPTOP`, so the public key line reads `ssh-ed25519 AAAAC3Nz... anna@ANNA-LAPTOP`.
 2. The client connects to that address with the key. It shows the relay's host key
    fingerprint and pins it (trust on first use). The key is unknown to the relay, so the
@@ -146,7 +146,7 @@ or ending.
    If the user refuses, the client cancels the request and the helper sees "Not allowed".
    The relay ends a request whose session hasn't started within 1 minute, so the user has
    that long to answer; the client then closes the question by itself.
-4. Once the user allows it, the client opens a `hmw-session@help-me-win` channel for that
+4. Once the user allows it, the client opens a `hmw-session@helpbuoy` channel for that
    helper. The relay opens a matching channel to the helper's connection and splices the
    two (3.6).
 5. **Inner SSH** runs over the spliced channel (section 4). The client is the SSH server with
@@ -173,7 +173,7 @@ read or alter screen data or keystrokes.
 ## 2. Repository layout
 
 ```
-help-me-win/
+helpbuoy/
 ├── go.work                      # use ./proto ./relay ./helper ./client-windows
 ├── PLAN.md
 ├── proto/                       # shared, pure Go, no GUI deps
@@ -208,7 +208,7 @@ help-me-win/
 └── client-windows/              # windigo app, Windows 10 2004+ / Windows 11
     ├── go.mod
     ├── resources/               # manifest (PerMonitorV2 DPI, comctl6), icon, .syso
-    ├── identity/                # app key in %LOCALAPPDATA%\help-me-win (via proto/appkey)
+    ├── identity/                # app key in %LOCALAPPDATA%\helpbuoy (via proto/appkey)
     ├── config/                  # first-run address entry, stored config.json
     ├── capture/                 # GDI capture, damage detection, scroll detection
     ├── encode/                  # tile classification and encoding, per-viewer state
@@ -261,7 +261,7 @@ reloads it when the CLI changes it (no signals, so it works the same on Windows)
 
 ### 3.3 Control channel
 
-`hmw-control@help-me-win`, framed messages (`proto/control`): each is a `proto/wire` frame
+`hmw-control@helpbuoy`, framed messages (`proto/control`): each is a `proto/wire` frame
 whose type byte names the message and whose payload is JSON. Control traffic is small and
 rare, so JSON keeps it easy to debug; the screen and input streams use binary payloads.
 Helper commands carry a sequence number and the relay answers each with a `Reply`.
@@ -487,11 +487,11 @@ Linux with `GOOS=windows`. Missing calls go through `golang.org/x/sys/windows`.
 
 ### 6.1 Identity: an application-specific key
 
-The client has its own key, used for nothing but help-me-win. It is not the user's
+The client has its own key, used for nothing but helpbuoy. It is not the user's
 `~/.ssh` key: no agent, no passphrase, no discovery, and no risk that stealing it opens other
 SSH logins. Shared code in `proto/appkey`, also used by the helper app.
 
-- **Location**: `%LOCALAPPDATA%\help-me-win\id_ed25519` and `id_ed25519.pub`. Local, not
+- **Location**: `%LOCALAPPDATA%\helpbuoy\id_ed25519` and `id_ed25519.pub`. Local, not
   roaming, so the key never follows the user to another PC.
 - **Algorithm**: Ed25519 only (`ssh-ed25519`), the modern default of OpenSSH. It is fast,
   has small keys (the public line fits in one chat message) and has no parameter choices to
@@ -524,7 +524,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   **Connect**. With a stored address the client connects to it at start by itself, with
   the field locked while it does; the field can only be edited when that fails or after
   **Disconnect**. Errors are shown inline: name not found, connection refused, timeout, not a
-  help-me-win relay. A changed relay key brings the user back here with the warning (3.5).
+  helpbuoy relay. A changed relay key brings the user back here with the warning (3.5).
 - If the relay doesn't know this PC's key yet: relay fingerprint, the public key line in a
   read-only box, the key fingerprint, a big **Copy key** button, and "Paste this key into a
   chat with a helper (for example WhatsApp)." A link goes back to the address field.
@@ -571,8 +571,8 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
 
 ### 6.5 Distribution
 - One generic exe for everybody, nothing embedded, never needs admin. It ships only as a
-  per-user MSI (`installer/help-me-win.wxs`, no UAC prompt) that installs it into
-  `%LOCALAPPDATA%\Programs\help-me-win` with a Start menu shortcut. Because the exe is never
+  per-user MSI (`installer/helpbuoy.wxs`, no UAC prompt) that installs it into
+  `%LOCALAPPDATA%\Programs\helpbuoy` with a Start menu shortcut. Because the exe is never
   patched, it can be Authenticode-signed (`osslsigncode`) once per release.
 - **Updates**, like otp4win: a release build asks the GitHub API for the latest release at
   start-up, and if its MSI is newer, offers "Download and install it now?". Yes downloads
@@ -589,7 +589,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
   as a hardened systemd service under its own system user with its state in
   `/var/lib/hmw-relay`, settings in `/etc/default/hmw-relay`, and `hmw-relayctl` to run
   admin commands as the service user.
-- All state lives in `%LOCALAPPDATA%\help-me-win`, not next to the exe, so a newer exe
+- All state lives in `%LOCALAPPDATA%\helpbuoy`, not next to the exe, so a newer exe
   picks up the same key and registration.
 
 ---
@@ -625,8 +625,8 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
 
 ### 7.1 Identity and relay connection
 - Same key handling as the client (6.1, `proto/appkey`): its own unencrypted Ed25519 key in
-  the app's data directory (`%LOCALAPPDATA%\help-me-win` on Windows,
-  `~/.local/share/help-me-win` on Linux, `~/Library/Application Support/help-me-win` on
+  the app's data directory (`%LOCALAPPDATA%\helpbuoy` on Windows,
+  `~/.local/share/helpbuoy` on Linux, `~/Library/Application Support/helpbuoy` on
   macOS), generated once on first start, never regenerated automatically. Like the client,
   **Remove key** is only offered on the damaged key screen (a centered box with the error and
   the key folder). The public key, with **Copy public key**, shows on the connect flow when a
@@ -678,7 +678,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the helper app.
 - **Register client** (a tab): a text field for the key line the user sent in the chat. It tolerates
   what chat apps do to pasted text: line breaks, leading/trailing spaces, quotes, non-breaking
   spaces, and a preceding message ("here is my key: ssh-ed25519 ..."). Accepts only
-  `ssh-ed25519`; an RSA or ECDSA key gets a clear "this is not a help-me-win key, ask the
+  `ssh-ed25519`; an RSA or ECDSA key gets a clear "this is not a helpbuoy key, ask the
   user to copy the key shown in the app" message. The app
   shows the name and the fingerprint large for comparing on the phone, plus the relay fingerprint
   the client should be showing. The name field is
@@ -815,7 +815,7 @@ client can stay online in the background; `client-macos/` and `client-linux/` re
 ## 10. Open questions
 
 - Default port: 5938 (the port TeamViewer uses, so firewalls that let TeamViewer out
-  usually let help-me-win out too). Above 1024, so no privileges are needed; 443 would pass
+  usually let helpbuoy out too). Above 1024, so no privileges are needed; 443 would pass
   more corporate firewalls but needs privileges on Linux and may still meet TLS inspection.
 - Does a relay on the helper's own machine behind a home or office router need a dynamic DNS
   name in the docs, since clients store `hostname:port` once and never change it?

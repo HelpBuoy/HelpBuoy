@@ -1,4 +1,4 @@
-// Package wire is the length-prefixed framing used on every help-me-win
+// Package wire is the length-prefixed framing used on every helpbuoy
 // stream: the sv-control channel and the inner screen and input channels.
 //
 // A frame is: uint32 length (big-endian, counts type + payload) | uint8 type | payload.

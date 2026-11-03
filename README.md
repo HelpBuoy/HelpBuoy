@@ -1,4 +1,4 @@
-# Help-Me-Win
+# HelpBuoy
 
 Self-hosted remote support for Windows, a small alternative to TeamViewer QuickSupport.
 

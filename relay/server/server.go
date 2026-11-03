@@ -23,14 +23,14 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/proto/control"
-	"github.com/mevdschee/help-me-win/proto/wire"
-	"github.com/mevdschee/help-me-win/relay/auth"
-	"github.com/mevdschee/help-me-win/relay/hostkey"
-	"github.com/mevdschee/help-me-win/relay/limits"
-	"github.com/mevdschee/help-me-win/relay/registry"
-	"github.com/mevdschee/help-me-win/relay/splice"
-	"github.com/mevdschee/help-me-win/relay/store"
+	"github.com/mevdschee/helpbuoy/proto/control"
+	"github.com/mevdschee/helpbuoy/proto/wire"
+	"github.com/mevdschee/helpbuoy/relay/auth"
+	"github.com/mevdschee/helpbuoy/relay/hostkey"
+	"github.com/mevdschee/helpbuoy/relay/limits"
+	"github.com/mevdschee/helpbuoy/relay/registry"
+	"github.com/mevdschee/helpbuoy/relay/splice"
+	"github.com/mevdschee/helpbuoy/relay/store"
 )
 
 // KeepaliveRequest is the only global request the relay answers, and the one

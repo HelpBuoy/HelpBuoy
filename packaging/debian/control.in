@@ -6,10 +6,10 @@ Installed-Size: @SIZE@
 Depends: systemd | systemd-standalone-sysusers
 Section: net
 Priority: optional
-Homepage: https://github.com/mevdschee/help-me-win
-Description: relay for help-me-win self-hosted remote support
- hmw-relay is the SSH relay of help-me-win. Helpers (hmw-helper) and the
- people they help (help-me-win.exe on Windows) connect to it on one port;
+Homepage: https://github.com/mevdschee/helpbuoy
+Description: relay for helpbuoy self-hosted remote support
+ hmw-relay is the SSH relay of helpbuoy. Helpers (hmw-helper) and the
+ people they help (helpbuoy.exe on Windows) connect to it on one port;
  it authenticates their keys and splices their sessions. The screen and
  input run end to end over an inner SSH connection the relay can't read.
  .

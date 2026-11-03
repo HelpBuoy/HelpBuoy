@@ -10,10 +10,10 @@
     "#1": {
       "0409": {
         "identity": {
-          "name": "help-me-win.helper",
+          "name": "helpbuoy.helper",
           "version": "0.4.5.10"
         },
-        "description": "Help-Me-Win helper",
+        "description": "HelpBuoy helper",
         "minimum-os": "win10",
         "execution-level": "as invoker",
         "ui-access": false,
@@ -40,10 +40,10 @@
         },
         "info": {
           "0409": {
-            "FileDescription": "Help-Me-Win helper",
+            "FileDescription": "HelpBuoy helper",
             "InternalName": "hmw-helper",
             "OriginalFilename": "hmw-helper.exe",
-            "ProductName": "Help-Me-Win",
+            "ProductName": "HelpBuoy",
             "ProductVersion": "0.4.5",
             "FileVersion": "0.4.5"
           }

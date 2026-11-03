@@ -14,10 +14,10 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/client-windows/capture"
-	"github.com/mevdschee/help-me-win/proto/encode"
-	"github.com/mevdschee/help-me-win/proto/screen"
-	"github.com/mevdschee/help-me-win/proto/wire"
+	"github.com/mevdschee/helpbuoy/client-windows/capture"
+	"github.com/mevdschee/helpbuoy/proto/encode"
+	"github.com/mevdschee/helpbuoy/proto/screen"
+	"github.com/mevdschee/helpbuoy/proto/wire"
 )
 
 // fakeScreen is a capture.Screen whose content, layout and cursor the test

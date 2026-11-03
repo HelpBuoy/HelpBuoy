@@ -19,9 +19,9 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/client-windows/identity"
-	"github.com/mevdschee/help-me-win/proto/control"
-	pid "github.com/mevdschee/help-me-win/proto/identity"
+	"github.com/mevdschee/helpbuoy/client-windows/identity"
+	"github.com/mevdschee/helpbuoy/proto/control"
+	pid "github.com/mevdschee/helpbuoy/proto/identity"
 )
 
 // Phase is what the client is doing, as far as the window cares.
@@ -406,7 +406,7 @@ func (c *Client) connectOnce() (reached bool, err error) {
 		Auth:              []ssh.AuthMethod{ssh.PublicKeys(c.opts.Signer)},
 		HostKeyCallback:   c.hostKeyCallback,
 		HostKeyAlgorithms: algos,
-		ClientVersion:     "SSH-2.0-help-me-win-client",
+		ClientVersion:     "SSH-2.0-helpbuoy-client",
 		Timeout:           c.opts.DialTimeout,
 	}
 	sc, chans, reqs, err := ssh.NewClientConn(tcp, c.opts.Addr, cfg)

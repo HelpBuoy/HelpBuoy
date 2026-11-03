@@ -23,9 +23,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mevdschee/help-me-win/proto/encode"
-	"github.com/mevdschee/help-me-win/proto/encode/scenes"
-	"github.com/mevdschee/help-me-win/proto/screen"
+	"github.com/mevdschee/helpbuoy/proto/encode"
+	"github.com/mevdschee/helpbuoy/proto/encode/scenes"
+	"github.com/mevdschee/helpbuoy/proto/screen"
 )
 
 func main() {

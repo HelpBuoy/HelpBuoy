@@ -8,8 +8,8 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/helper/ui"
-	"github.com/mevdschee/help-me-win/proto/identity"
+	"github.com/mevdschee/helpbuoy/helper/ui"
+	"github.com/mevdschee/helpbuoy/proto/identity"
 )
 
 // registerPage is the state of the Register client or Register helper page.
@@ -121,9 +121,9 @@ func (p *registerPage) nameOK() bool {
 func parseMessage(err error) string {
 	switch {
 	case errors.Is(err, identity.ErrNotEd25519):
-		return "This is not a Help-Me-Win key. Ask the user to copy the key shown in the app."
+		return "This is not a HelpBuoy key. Ask the user to copy the key shown in the app."
 	case errors.Is(err, identity.ErrNoKey):
-		return "No Help-Me-Win key found in this text. Ask the user to copy the key shown in the app."
+		return "No HelpBuoy key found in this text. Ask the user to copy the key shown in the app."
 	}
 	return err.Error()
 }

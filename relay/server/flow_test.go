@@ -10,10 +10,10 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/proto/control"
-	"github.com/mevdschee/help-me-win/relay/fake"
-	"github.com/mevdschee/help-me-win/relay/server"
-	"github.com/mevdschee/help-me-win/relay/store"
+	"github.com/mevdschee/helpbuoy/proto/control"
+	"github.com/mevdschee/helpbuoy/relay/fake"
+	"github.com/mevdschee/helpbuoy/relay/server"
+	"github.com/mevdschee/helpbuoy/relay/store"
 )
 
 // clientFPs maps client connections made by env.client to their fingerprints.

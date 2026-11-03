@@ -1,7 +1,7 @@
 // Command macapp writes a zipped macOS .app bundle for the helper app, with
 // hmw-relay next to the main executable, on any OS (no Xcode tools needed).
 //
-//	go run tools/macapp/main.go -app hmw-helper -id help-me-win.helper \
+//	go run tools/macapp/main.go -app hmw-helper -id helpbuoy.helper \
 //	    -version 0.0.1 -exe bin/darwin-arm64/hmw-helper \
 //	    -relay bin/darwin-arm64/hmw-relay -icon helper/resources/icon.png -out out.zip
 package main
@@ -22,7 +22,7 @@ import (
 
 func main() {
 	app := flag.String("app", "hmw-helper", "bundle and executable name")
-	id := flag.String("id", "help-me-win.helper", "CFBundleIdentifier")
+	id := flag.String("id", "helpbuoy.helper", "CFBundleIdentifier")
 	version := flag.String("version", "0.0.1", "CFBundleShortVersionString (numeric, like 1.2.3)")
 	exe := flag.String("exe", "", "main executable")
 	relay := flag.String("relay", "", "hmw-relay executable to put next to it")

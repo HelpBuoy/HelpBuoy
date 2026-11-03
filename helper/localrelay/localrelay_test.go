@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/relay/store"
+	"github.com/mevdschee/helpbuoy/relay/store"
 )
 
 const keyLine = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJsaI2z9Ean/dC7UtgWXE4Sfld8k4km6FTbrTsI6K3RI alice@pc"

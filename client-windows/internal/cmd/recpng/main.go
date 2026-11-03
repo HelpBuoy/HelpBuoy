@@ -11,8 +11,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/mevdschee/help-me-win/client-windows/capture"
-	"github.com/mevdschee/help-me-win/proto/encode"
+	"github.com/mevdschee/helpbuoy/client-windows/capture"
+	"github.com/mevdschee/helpbuoy/proto/encode"
 )
 
 func main() {

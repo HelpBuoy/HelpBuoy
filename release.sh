@@ -2,7 +2,7 @@
 #
 # sudo apt install jq zip wixl msitools gh dpkg
 #
-# Releases a new version of help-me-win:
+# Releases a new version of helpbuoy:
 #
 #   ./release.sh          # 0.1.0 -> 0.1.1 (build, the default)
 #   ./release.sh minor    # 0.1.1 -> 0.2.0
@@ -57,7 +57,7 @@ for json in $client $helper; do
 	  .RT_MANIFEST["#1"]["0409"].identity.version = $fv
 	' $json >$json.tmp && mv $json.tmp $json
 done
-echo "Releasing help-me-win $version (revision $revision)"
+echo "Releasing helpbuoy $version (revision $revision)"
 
 # Build, test and package. VERSION goes into main.version of every binary and
 # into the file names in dist/.

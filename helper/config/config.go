@@ -18,7 +18,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/proto/relayaddr"
+	"github.com/mevdschee/helpbuoy/proto/relayaddr"
 )
 
 // FileName is the settings file inside the data directory. The client app

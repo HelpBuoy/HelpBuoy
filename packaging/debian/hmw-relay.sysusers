@@ -1,1 +1,1 @@
-u hmw-relay - "help-me-win relay" /var/lib/hmw-relay /usr/sbin/nologin
+u hmw-relay - "helpbuoy relay" /var/lib/hmw-relay /usr/sbin/nologin

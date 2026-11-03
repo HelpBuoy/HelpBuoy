@@ -14,7 +14,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/proto/control"
+	"github.com/mevdschee/helpbuoy/proto/control"
 )
 
 // Received is a control message from a client.

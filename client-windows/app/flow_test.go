@@ -8,10 +8,10 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/client-windows/config"
-	"github.com/mevdschee/help-me-win/client-windows/identity"
-	"github.com/mevdschee/help-me-win/client-windows/internal/fakerelay"
-	"github.com/mevdschee/help-me-win/client-windows/update"
+	"github.com/mevdschee/helpbuoy/client-windows/config"
+	"github.com/mevdschee/helpbuoy/client-windows/identity"
+	"github.com/mevdschee/helpbuoy/client-windows/internal/fakerelay"
+	"github.com/mevdschee/helpbuoy/client-windows/update"
 )
 
 func startRelay(t *testing.T) *fakerelay.Relay {

@@ -137,7 +137,7 @@ func Serve(rw io.ReadWriteCloser, hostKey ssh.Signer, helperKey ssh.PublicKey) (
 			}
 			return &ssh.Permissions{}, nil
 		},
-		ServerVersion: "SSH-2.0-help-me-win",
+		ServerVersion: "SSH-2.0-helpbuoy",
 	}
 	cfg.AddHostKey(hostKey)
 
@@ -265,7 +265,7 @@ func Dial(rw io.ReadWriteCloser, signer ssh.Signer, clientKey ssh.PublicKey) (*C
 			return nil
 		},
 		HostKeyAlgorithms: []string{ssh.KeyAlgoED25519},
-		ClientVersion:     "SSH-2.0-help-me-win",
+		ClientVersion:     "SSH-2.0-helpbuoy",
 	}
 
 	cl := &closer{rw: rw}

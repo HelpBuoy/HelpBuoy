@@ -19,8 +19,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/help-me-win/helper/config"
-	"github.com/mevdschee/help-me-win/proto/control"
+	"github.com/mevdschee/helpbuoy/helper/config"
+	"github.com/mevdschee/helpbuoy/proto/control"
 )
 
 // Status is the state of the relay connection as shown in the UI.
