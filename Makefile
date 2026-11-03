@@ -1,7 +1,7 @@
 # helpbuoy build. Run "make help" for the targets.
 #
 # Everything builds on Linux with only the Go toolchain and CGO_ENABLED=0:
-# helpbuoy-relay, the Windows client, and the raylib helper app (raylib-go purego,
+# helpbuoy-relay, the Windows client, and the raylib desk app (raylib-go purego,
 # which embeds the raylib shared library per OS/arch). No Docker, no C compiler.
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -25,14 +25,14 @@ comma   := ,
 space   := $(subst ,, )
 WINRES_ARCH := $(subst $(space),$(comma),$(ARCHES))
 
-HELPER_SYSO := $(foreach a,$(ARCHES),desk/rsrc_windows_$(a).syso)
+DESK_SYSO := $(foreach a,$(ARCHES),desk/rsrc_windows_$(a).syso)
 CLIENT_SYSO := $(foreach a,$(ARCHES),client-windows/rsrc_windows_$(a).syso)
 CLIENT_ICONS := $(addprefix client-windows/resources/,icon.png icon48.png icon32.png icon16.png)
 # Four part version of the client exe, which the MSI needs for the upgrade.
 FILE_VERSION = $(shell jq -r '.RT_VERSION[]["0000"].fixed.file_version' client-windows/resources/winres.json)
 MSI := $(DIST)/helpbuoy_$(VERSION)_windows-amd64.msi
 
-.PHONY: help all test vet fuzz relay client helper dist msi deb icon clean
+.PHONY: help all test vet fuzz relay client desk dist msi deb icon clean
 
 help:
 	@echo "make test     run proto and relay tests"
@@ -40,13 +40,13 @@ help:
 	@echo "make fuzz     short fuzz run of the fuzz targets"
 	@echo "make relay    build helpbuoy-relay ($(TARGETS)) into $(BIN)/"
 	@echo "make client   build the Windows client ($(ARCHES)) into $(BIN)/"
-	@echo "make helper   build the helper app ($(TARGETS)) into $(BIN)/"
+	@echo "make desk     build the desk app ($(TARGETS)) into $(BIN)/"
 	@echo "make dist     desk/relay archives in $(DIST)/ (the client ships only as the MSI)"
 	@echo "make msi      dist plus the client installer (needs wixl and msitools)"
 	@echo "make deb      Debian 13 package of helpbuoy-relay with a systemd service (needs dpkg-deb)"
-	@echo "make icon     regenerate the lifebuoy app icon (client, copied to the helper)"
+	@echo "make icon     regenerate the lifebuoy app icon (client, copied to the desk app)"
 
-all: vet test relay client helper
+all: vet test relay client desk
 
 test:
 	go test ./proto/... ./relay/...
@@ -72,11 +72,11 @@ endef
 relay:
 	$(call build-all,helpbuoy-relay,./relay/cmd/helpbuoy-relay,)
 
-helper: $(HELPER_SYSO)
+desk: $(DESK_SYSO)
 	$(call build-all,helpbuoy-desk,./desk,-H=windowsgui)
 
-$(HELPER_SYSO): desk/resources/winres.json desk/resources/icon.png
-	cd helper && $(WINRES) make --in resources/winres.json --arch $(WINRES_ARCH)
+$(DESK_SYSO): desk/resources/winres.json desk/resources/icon.png
+	cd desk && $(WINRES) make --in resources/winres.json --arch $(WINRES_ARCH)
 
 $(CLIENT_SYSO): client-windows/resources/winres.json $(CLIENT_ICONS)
 	cd client-windows && $(WINRES) make --in resources/winres.json --arch $(WINRES_ARCH)
@@ -88,10 +88,10 @@ client: $(CLIENT_SYSO)
 			-o $(BIN)/windows-$$arch/helpbuoy.exe ./client-windows || exit 1; \
 	done
 
-# Release archives: helper app and helpbuoy-relay side by side per OS/arch. macOS
+# Release archives: desk app and helpbuoy-relay side by side per OS/arch. macOS
 # gets a zipped .app with helpbuoy-relay in Contents/MacOS. The client exe is built
 # into bin/ for the MSI (make msi) and not released on its own.
-dist: relay helper client
+dist: relay desk client
 	@rm -rf $(DIST) && mkdir -p $(DIST)
 	@for t in $(subst /,-,$(filter linux/%,$(TARGETS))); do \
 		tar -czf $(DIST)/helpbuoy-desk_$(VERSION)_$$t.tar.gz -C $(BIN)/$$t helpbuoy-desk helpbuoy-relay; \
@@ -100,7 +100,7 @@ dist: relay helper client
 		(cd $(BIN)/$$t && zip -q ../../$(DIST)/helpbuoy-desk_$(VERSION)_$$t.zip helpbuoy-desk.exe helpbuoy-relay.exe) || exit 1; \
 	done
 	@for t in $(subst /,-,$(filter darwin/%,$(TARGETS))); do \
-		GOWORK=off GO111MODULE=off go run tools/macapp/main.go -app helpbuoy-desk -id helpbuoy.helper \
+		GOWORK=off GO111MODULE=off go run tools/macapp/main.go -app helpbuoy-desk -id helpbuoy.desk \
 			-version $(APP_VERSION) -exe $(BIN)/$$t/helpbuoy-desk -relay $(BIN)/$$t/helpbuoy-relay \
 			-icon desk/resources/icon.png -out $(DIST)/helpbuoy-desk_$(VERSION)_$$t.zip || exit 1; \
 	done

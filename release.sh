@@ -11,10 +11,10 @@
 # The version is file_version in client-windows/resources/winres.json, as
 # "major.minor.build.revision". Windows Installer only compares the first
 # three numbers, so every release raises at least the build. The revision
-# goes up on every release as well. The helper's winres.json gets the same
+# goes up on every release as well. The desk app's winres.json gets the same
 # version.
 #
-# The script builds everything with "make msi deb" (the helper and helpbuoy-relay
+# The script builds everything with "make msi deb" (the desk app and helpbuoy-relay
 # archives, the client MSI and the helpbuoy-relay Debian package in dist/), commits the
 # version bump, tags and pushes it and creates the GitHub release v<version>
 # with all files in dist/.
@@ -34,7 +34,7 @@ fi
 
 # Bump the version.
 client=client-windows/resources/winres.json
-helper=desk/resources/winres.json
+desk=desk/resources/winres.json
 ver=$(jq -r '.RT_VERSION["#1"]["0000"].fixed.file_version' $client)
 IFS=. read -r major minor build revision <<<"$ver"
 case $part in
@@ -48,7 +48,7 @@ if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
 	echo "tag v$version already exists" >&2
 	exit 1
 fi
-for json in $client $helper; do
+for json in $client $desk; do
 	jq --indent 2 --arg v "$version" --arg fv "$version.$revision" '
 	  .RT_VERSION["#1"]["0000"].fixed.file_version = $fv |
 	  .RT_VERSION["#1"]["0000"].fixed.product_version = $fv |
@@ -64,7 +64,7 @@ echo "Releasing helpbuoy $version (revision $revision)"
 make vet test msi deb VERSION="v$version"
 
 # Commit, tag, push and publish.
-git commit -q -m "Release v$version" $client $helper
+git commit -q -m "Release v$version" $client $desk
 git tag "v$version"
 git push
 git push origin "v$version"
