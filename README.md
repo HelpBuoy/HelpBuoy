@@ -41,7 +41,6 @@ Open source TeamViewer alternatives on GitHub, ranked by stars (November 2026). 
 | [RetGal/Dayon](https://github.com/RetGal/Dayon) | 175 | Dayon! - A cross-platform remote desktop assistance solution for your family and friends | GPL-3.0 |
 | [DeskX11/DeskX](https://github.com/DeskX11/DeskX) | 161 | Universal light and fast program for remote control of a computer. | Apache-2.0 |
 | [mmozeiko/ScreenBuddy](https://github.com/mmozeiko/ScreenBuddy) | 152 | Simple remote desktop sharing application for Windows | Unlicense |
-| [boonkerz/teamscreen](https://github.com/boonkerz/teamscreen) | 142 | It should be an Teamviewer/Vnc/Something replacement | GPL-3.0 |
 
 ---
 
