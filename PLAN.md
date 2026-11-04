@@ -859,3 +859,88 @@ computer can stay online in the background; `computer-macos/` and `computer-linu
   it the first time (right-click, Open). Is that acceptable for techies, or is a Developer ID
   signature and notarization (needs a Mac or a signing service) required?
 - Is JPEG enough for video-heavy work, or is the Media Foundation H.264 path needed in v1?
+- Translations (section 11): which languages ship after English and Dutch?
+
+## 11. Translations
+
+Both apps are English only today, with about 50 user-facing strings spread over `desk/views/`
+and `client-windows/ui/` (plus the Linux client, which reuses the Windows client's UI code).
+The person receiving help is the one who most needs their own language, so the Windows client
+comes first; the desk app follows; `helpbuoy-server` and its admin CLI stay English.
+
+### 11.1 What any option has to handle
+
+- **Lookup and formatting**: a key or English source string, `{{.Name}}`-style or printf
+  arguments (techie name, fingerprint, `hostname:port`), and plurals for the few counted
+  strings ("3 computers online"). Plural rules differ per language (Polish and Russian have
+  three or four forms), so hand-written `if n == 1` only works for English-like languages.
+- **Locale detection without cgo**: Windows via `GetUserDefaultUILanguage` /
+  `GetUserPreferredUILanguages` (`x/sys/windows`, already a dependency); Linux via
+  `LC_ALL`, `LC_MESSAGES`, `LANG`; macOS `.app` bundles usually start without `LANG`, so read
+  `defaults read -g AppleLanguages` or `CFPreferences` through purego. Fall back to English,
+  allow an override in the stored configuration.
+- **Shipping**: catalogs embedded with `go:embed`, so each app stays a single file. The
+  Windows client is downloaded by the person receiving help, so added size matters.
+- **Glyphs in the desk app**: `desk/ui/ui.go` rasterizes only ASCII, Latin-1, Latin
+  Extended-A and a few symbols from the Go fonts. Greek, Cyrillic and Vietnamese need more
+  ranges (Go fonts cover them); CJK, Arabic and Hebrew need another TTF (e.g. Noto, several
+  MB per script) and, for Arabic and Hebrew, right-to-left shaping that raylib does not do.
+  The codepoint set should be derived from the active catalog plus the existing ranges. The
+  Windows client uses native Win32 controls, so it gets Unicode and RTL from the OS.
+- **Translator workflow**: whether translations come from the maintainer only or from
+  contributors through Weblate, Crowdin or plain pull requests decides which file format pays
+  off.
+- **Missing translations**: fall back to English per string, and a test that fails when a
+  catalog has keys the code no longer uses or is missing placeholders the English string has.
+
+### 11.2 Options
+
+**A. Hand-rolled: a small `proto/i18n` package with embedded JSON or TOML per language.**
+A `map[string]string` per locale, `T(key, args...)`, locale detection as above, and plural
+rules for the handful of supported languages written by hand.
+Pros: no new dependency, smallest binaries, full control, trivial to read. Cons: no
+extraction tool, plural rules and fallback logic are ours to get right, and every new language
+with unusual plurals needs code. Fine for a few European languages, weak beyond that.
+
+**B. `github.com/nicksnyder/go-i18n/v2`** (the most used Go i18n library, MIT).
+Messages in TOML, JSON or YAML, `i18n.Localizer` with language matching through
+`golang.org/x/text/language`, CLDR plural rules for all languages, `text/template` arguments,
+and the `goi18n` CLI to extract messages from Go code (`i18n.Message{ID, Other, One}` literals)
+and merge new strings into each language file. Weblate and Crowdin read its JSON format.
+Pros: de facto standard, complete plural support, mature tooling, file format translators can
+handle. Cons: one dependency plus `x/text` (already indirect in `proto`), messages declared as
+struct literals are more verbose than `T("...")`, templates are checked only at run time.
+
+**C. `golang.org/x/text/message` with the `gotext` tool.**
+`p := message.NewPrinter(lang); p.Printf("%d computers online", n)`; `gotext` extracts the
+printf strings into `locales/*/out.gotext.json` and generates a `catalog.go`, with plural
+selection through `plural.Selectf`.
+Pros: Go team package, already in the module graph, the English text is the key so call sites
+stay readable, catalog compiled into the binary. Cons: `gotext` is marked experimental and has
+seen little work for years, extraction breaks on code it does not understand and needs
+`go generate` in each module, its JSON format is not supported by common translation
+platforms, and documentation is thin.
+
+**D. GNU gettext `.po` files through a pure-Go reader such as `github.com/leonelquinteros/gotext`** (MIT).
+English source strings as `msgid`, `.po` per language embedded and parsed at start, plural
+forms from the `.po` header; `xgotext` or `xgettext` with a Go keyword list to extract.
+Pros: the format every translator and tool knows (Poedit, Weblate, Crowdin, Transifex),
+readable call sites (`gotext.Get("Connect")`), context and translator comments built in.
+Cons: plural rules come from each `.po` header rather than CLDR, extraction for Go is less
+polished than for C or Python, and placeholders are printf verbs, so argument order changes
+need `%[2]s`.
+
+### 11.3 Decision
+
+**B (go-i18n v2)**, with a thin `proto/i18n` wrapper that owns locale detection, the
+fallback chain and the embedded files, so both apps call one `i18n.T(...)` and the library
+can be swapped later. It gets plurals right for any language without our own code, has the
+only actively maintained extract-and-merge tool of the four, and its JSON works with Weblate
+if contributors start sending translations. A was rejected because plural rules for anything
+beyond a few European languages would be ours to write, C because `gotext` is effectively
+unmaintained, and D because CLDR plurals and the merge tool outweigh `.po` familiarity.
+
+The work is: introduce `proto/i18n`, move all user-facing strings in
+`client-windows/ui/` and `desk/views/` behind it, add Dutch as the first second language to
+prove the path, derive the desk app's font codepoints from the loaded catalogs, and add the
+catalog consistency test to CI. Roughly 2-3 days, fitting in phase 5.
