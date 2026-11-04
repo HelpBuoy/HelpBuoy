@@ -19,15 +19,14 @@ A session only carries the screen (computer to techie) and mouse and keyboard in
 
 ## Alternatives
 
-Open source TeamViewer alternatives on GitHub, ranked by stars (November 2026). Descriptions are taken from GitHub.
+Open source TeamViewer alternatives on GitHub, ranked by stars (November 2026). Descriptions are taken from GitHub (translated to English where needed).
 
 | Project | Stars | Description | License |
 | --- | ---: | --- | --- |
 | [rustdesk/rustdesk](https://github.com/rustdesk/rustdesk) | 128,133 | An open-source remote desktop application designed for self-hosting, as an alternative to TeamViewer. | AGPL-3.0 |
-| [galaxy-s10/billd-desk](https://github.com/galaxy-s10/billd-desk) | 9,146 | 基于Vue3 + WebRTC + Nodejs + Flutter搭建的远程桌面控制、游戏串流 | MIT |
 | [Ylianst/MeshCentral](https://github.com/Ylianst/MeshCentral) | 7,614 | A complete web-based remote monitoring and management web site. Once setup you can install agents and perform remote desktop session to devices on the local network or over the Internet. | Apache-2.0 |
 | [immense/Remotely](https://github.com/immense/Remotely) | 5,093 | A remote control and remote scripting solution, built with .NET 8, Blazor, and SignalR. | GPL-3.0 |
-| [kunkundi/crossdesk](https://github.com/kunkundi/crossdesk) | 4,688 | A lightweight, cross-platform remote desktop software with support for Web Client access \| 一款支持 Web 客户端访问的轻量级跨平台远程桌面软件。 | GPL-3.0 |
+| [kunkundi/crossdesk](https://github.com/kunkundi/crossdesk) | 4,688 | A lightweight, cross-platform remote desktop software with support for Web Client access | GPL-3.0 |
 | [miroslavpejic85/p2p](https://github.com/miroslavpejic85/p2p) | 4,086 | 🖥️ P2P Remote Desktop - Portable peer-to-peer remote desktop with no installation required. | MIT |
 | [DarkCoderSc/PowerRemoteDesktop](https://github.com/DarkCoderSc/PowerRemoteDesktop) | 2,247 | Remote Desktop entirely coded in PowerShell. | Apache-2.0 |
 | [dchapyshev/aspia](https://github.com/dchapyshev/aspia) | 1,966 | Remote desktop and file transfer tool. | GPL-3.0 |
@@ -42,7 +41,7 @@ Open source TeamViewer alternatives on GitHub, ranked by stars (November 2026). 
 | [DeskX11/DeskX](https://github.com/DeskX11/DeskX) | 161 | Universal light and fast program for remote control of a computer. | Apache-2.0 |
 | [mmozeiko/ScreenBuddy](https://github.com/mmozeiko/ScreenBuddy) | 152 | Simple remote desktop sharing application for Windows | Unlicense |
 | [boonkerz/teamscreen](https://github.com/boonkerz/teamscreen) | 142 | It should be an Teamviewer/Vnc/Something replacement | GPL-3.0 |
-| [dyhwdnmd/RLink-RemoteCtrl](https://github.com/dyhwdnmd/RLink-RemoteCtrl) | 141 | RLink 是一款面向 Windows 的高性能开源远程桌面与多人协作工具，支持最高 4K、120 FPS 的低延迟桌面共享。用户可通过设备 ID 和一次性验证码快速发起远程协助，也可登录账户直接访问自己的在线设备，并支持多人音视频、屏幕共享、远程控制。 | GPL-3.0 |
+| [dyhwdnmd/RLink-RemoteCtrl](https://github.com/dyhwdnmd/RLink-RemoteCtrl) | 141 | RLink is a high-performance open source remote desktop and multi-user collaboration tool for Windows, supporting low-latency desktop sharing at up to 4K and 120 FPS. Users can quickly start remote assistance with a device ID and a one-time verification code, or sign in to an account to access their own online devices directly, with support for multi-user audio and video, screen sharing and remote control. | GPL-3.0 |
 
 ---
 
