@@ -865,10 +865,12 @@ computer can stay online in the background; `computer-macos/` and `computer-linu
 The Windows client and the desk app are translated; `helpbuoy-server` stays English. The
 approach is deliberately minimal, with no dependency:
 
-- **`proto/i18n`**: one function, `i18n.T(text string, args ...any) string`. The English text
-  is the key (`i18n.T("Connect")`, `i18n.T("Allow %s to help you?", name)`), so there is no
-  English catalog and call sites stay readable. The result goes through `fmt.Sprintf`;
-  translators can reorder arguments with `%[2]s`.
+- **`proto/i18n`**: one function, `i18n.Trans(text string, args ...any) string`. The English
+  text is the key (`i18n.Trans("Connect")`, `i18n.Trans("Allow {0} ({1}) to help you?", name,
+  fingerprint)`), so there is no English catalog and call sites stay readable. After lookup,
+  each `{0}`, `{1}`, ... is replaced with `fmt.Sprint` of the argument at that index, so
+  translators can reorder or repeat placeholders freely. No `fmt.Sprintf`, so a stray `%` in a
+  translation is harmless. A placeholder without a matching argument is left as is.
 - **Catalogs**: one flat JSON object per language mapping English to translated text,
   `proto/i18n/locales/nl.json` and so on, compiled into every binary with
   `//go:embed locales/*.json`. Nothing is read from disk at run time.
@@ -877,8 +879,8 @@ approach is deliberately minimal, with no dependency:
   catalog, shows English.
 - **No plurals**: counted strings are phrased so the number needs no agreement
   ("Computers online: 3").
-- **Test**: every key in every catalog must appear as an `i18n.T` string literal in the code,
-  and its translation must have the same `%` verbs.
+- **Test**: every key in every catalog must appear as an `i18n.Trans` string literal in the
+  code, and its translation must use the same set of `{n}` placeholders.
 - **Desk app fonts**: the codepoint set in `desk/ui/ui.go` adds the characters used by the
   embedded catalogs. Scripts the Go fonts lack (CJK, Arabic, Hebrew) are out of scope.
 
