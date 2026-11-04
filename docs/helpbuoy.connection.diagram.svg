@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1200" height="1228" viewBox="0 0 1200 1228" role="img" aria-label="How HelpBuoy connects a techie to a computer in three steps">
+<defs>
+<marker id="head-17324B" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#17324B"/></marker>
+<marker id="tail-17324B" viewBox="0 0 10 10" refX="2" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M10 0 L0 5 L10 10 Z" fill="#17324B"/></marker>
+<marker id="head-D11F2D" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#D11F2D"/></marker>
+<marker id="tail-D11F2D" viewBox="0 0 10 10" refX="2" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M10 0 L0 5 L10 10 Z" fill="#D11F2D"/></marker>
+<marker id="head-E3A83A" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#E3A83A"/></marker>
+<marker id="tail-E3A83A" viewBox="0 0 10 10" refX="2" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M10 0 L0 5 L10 10 Z" fill="#E3A83A"/></marker>
+<symbol id="user" overflow="visible"><circle cx="0" cy="0" r="34" fill="#FFFFFF" stroke="#D3DDE3" stroke-width="2"/><circle cx="0" cy="-9" r="11" fill="#17324B"/><path d="M-20 22 Q-20 3 0 3 Q20 3 20 22 Z" fill="#D11F2D"/></symbol>
+<symbol id="techie" overflow="visible"><circle cx="0" cy="0" r="34" fill="#FFFFFF" stroke="#D3DDE3" stroke-width="2"/><circle cx="0" cy="-9" r="11" fill="#17324B"/><path d="M-20 22 Q-20 3 0 3 Q20 3 20 22 Z" fill="#17324B"/><path d="M-14 -9 A14 14 0 0 1 14 -9" fill="none" stroke="#E3A83A" stroke-width="3.5"/><path d="M14 -9 L14 -2 Q14 4 6 5" fill="none" stroke="#E3A83A" stroke-width="2.5"/></symbol>
+<symbol id="pc" overflow="visible"><rect x="-34" y="-26" width="68" height="44" rx="6" fill="#FFFFFF" stroke="#17324B" stroke-width="3"/><rect x="-27" y="-19" width="54" height="30" rx="2" fill="#C9DEE4"/><path d="M-7 18 L7 18 L10 28 L-10 28 Z" fill="#17324B"/><rect x="-18" y="27" width="36" height="4" rx="2" fill="#17324B"/></symbol>
+<symbol id="laptop" overflow="visible"><rect x="-28" y="-24" width="56" height="38" rx="5" fill="#FFFFFF" stroke="#17324B" stroke-width="3"/><rect x="-21" y="-17" width="42" height="24" rx="2" fill="#C9DEE4"/><path d="M-40 16 L40 16 L36 24 L-36 24 Z" fill="#17324B"/></symbol>
+<symbol id="buoy" overflow="visible"><circle r="12" fill="none" stroke="#FFFFFF" stroke-width="8"/><circle r="12" fill="none" stroke="#D11F2D" stroke-width="8" stroke-dasharray="9.42 9.42" stroke-dashoffset="4.7"/><circle r="16" fill="none" stroke="#A8B6C3" stroke-width="1.2"/><circle r="8" fill="none" stroke="#A8B6C3" stroke-width="1.2"/></symbol>
+<symbol id="server" overflow="visible"><rect x="-36" y="-30" width="72" height="26" rx="5" fill="#FFFFFF" stroke="#17324B" stroke-width="3"/><rect x="-36" y="2" width="72" height="26" rx="5" fill="#FFFFFF" stroke="#17324B" stroke-width="3"/><circle cx="-24" cy="-17" r="3" fill="#E3A83A"/><circle cx="-24" cy="15" r="3" fill="#E3A83A"/><rect x="-14" y="-19" width="22" height="4" rx="2" fill="#A8B6C3"/><rect x="-14" y="13" width="22" height="4" rx="2" fill="#A8B6C3"/><use href="#buoy" xlink:href="#buoy" transform="translate(30 -26) scale(.9)"/></symbol>
+<symbol id="chat" overflow="visible"><path d="M-17 -13 Q-17 -17 -13 -17 L13 -17 Q17 -17 17 -13 L17 6 Q17 10 13 10 L-4 10 L-11 17 L-10 10 L-13 10 Q-17 10 -17 6 Z" fill="#F6E4BE" stroke="#E3A83A" stroke-width="2" stroke-linejoin="round"/><circle cx="-7" cy="-3.5" r="2" fill="#17324B"/><circle cx="0" cy="-3.5" r="2" fill="#17324B"/><circle cx="7" cy="-3.5" r="2" fill="#17324B"/></symbol>
+<symbol id="lock" overflow="visible"><circle r="15" fill="#FFFFFF" stroke="#D3DDE3" stroke-width="1.5"/><path d="M-5 -2 L-5 -6 A5 5 0 0 1 5 -6 L5 -2" fill="none" stroke="#17324B" stroke-width="2.4"/><rect x="-8" y="-2" width="16" height="12" rx="2.5" fill="#E3A83A"/><circle cy="3.5" r="1.8" fill="#17324B"/></symbol>
+</defs>
+<rect width="100%" height="100%" fill="#F6F9F9"/>
+<use href="#buoy" xlink:href="#buoy" transform="translate(66 64) scale(1.7)"/>
+<text x="104" y="76" font-family="Literata, Georgia, 'Times New Roman', serif" font-size="34" font-weight="600" fill="#17324B" text-anchor="start">How HelpBuoy connects</text>
+<text x="1152" y="60" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#4B6177" text-anchor="end">Everything runs over SSH on one port (5959).</text>
+<text x="1152" y="82" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#4B6177" text-anchor="end">Nothing happens without the user's approval.</text>
+<g transform="translate(0 150)">
+<rect x="32" y="0" width="1136" height="330" rx="22" fill="#FFFFFF" stroke="#D3DDE3" stroke-width="1.5"/>
+<circle cx="74" cy="44" r="18" fill="#D11F2D"/>
+<text x="74" y="51" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="19" font-weight="700" fill="#FFFFFF" text-anchor="middle">1</text>
+<text x="104" y="52" font-family="Literata, Georgia, 'Times New Roman', serif" font-size="22" font-weight="600" fill="#17324B" text-anchor="start">Register the computer</text>
+<rect x="1006.0" y="30" width="138.0" height="28" rx="14" fill="#F6E4BE"/>
+<text x="1075.0" y="49" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="700" fill="#17324B" text-anchor="middle">first time only</text>
+<use href="#user" xlink:href="#user" transform="translate(214 112) scale(1)"/>
+<use href="#techie" xlink:href="#techie" transform="translate(986 112) scale(1)"/>
+<text x="166" y="118" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="end">Computer user</text>
+<text x="1034" y="118" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="start">Techie</text>
+<text x="166" y="136" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="end">anna@laptop</text>
+<text x="1034" y="136" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="start">bob</text>
+<use href="#chat" xlink:href="#chat" transform="translate(278 112) scale(1)"/>
+<use href="#chat" xlink:href="#chat" transform="translate(922 112) scale(1)"/>
+<line x1="304" y1="112" x2="896" y2="112" stroke="#E3A83A" stroke-width="2.5" stroke-linecap="round" marker-end="url(#head-E3A83A)"/>
+<text x="600" y="100" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">sends anna@laptop public key (WhatsApp, mail, ...)</text>
+<use href="#pc" xlink:href="#pc" transform="translate(214 238) scale(1)"/>
+<text x="166" y="244" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="end">HelpBuoy</text>
+<text x="166" y="262" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="end">client</text>
+<use href="#laptop" xlink:href="#laptop" transform="translate(986 238) scale(1)"/>
+<text x="1034" y="244" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="start">HelpBuoy</text>
+<text x="1034" y="262" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="start">desk app</text>
+<use href="#server" xlink:href="#server" transform="translate(600 238) scale(1)"/>
+<text x="600" y="296" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="middle">helpbuoy-server</text>
+<line x1="986" y1="150" x2="986" y2="206" stroke="#17324B" stroke-width="2" stroke-linecap="round" marker-end="url(#head-17324B)"/>
+<text x="974" y="171.0" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#4B6177" text-anchor="end" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">pastes the key</text>
+<text x="974" y="190.0" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#4B6177" text-anchor="end" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">into the desk app</text>
+<line x1="650" y1="238" x2="938" y2="238" stroke="#17324B" stroke-width="2.5" stroke-linecap="round" marker-start="url(#tail-17324B)"/>
+<use href="#lock" xlink:href="#lock" transform="translate(789 238) scale(1)"/>
+<text x="789" y="268" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">registers public key for anna@laptop</text>
+<line x1="214" y1="150" x2="214" y2="206" stroke="#17324B" stroke-width="2" stroke-linecap="round" marker-end="url(#head-17324B)"/>
+<text x="226" y="171.0" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#4B6177" text-anchor="start" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">starts the client,</text>
+<text x="226" y="190.0" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#4B6177" text-anchor="start" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">types the server address</text>
+<line x1="262" y1="229" x2="550" y2="229" stroke="#17324B" stroke-width="2.5" stroke-linecap="round" marker-end="url(#head-17324B)"/>
+<line x1="550" y1="247" x2="262" y2="247" stroke="#17324B" stroke-width="2.5" stroke-linecap="round" marker-end="url(#head-17324B)"/>
+<use href="#lock" xlink:href="#lock" transform="translate(411 238) scale(1)"/>
+<text x="411" y="218" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">uses anna@laptop private key</text>
+<text x="411" y="277" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">stores server address and key</text>
+</g>
+<g transform="translate(0 508)">
+<rect x="32" y="0" width="1136" height="330" rx="22" fill="#FFFFFF" stroke="#D3DDE3" stroke-width="1.5"/>
+<circle cx="74" cy="44" r="18" fill="#D11F2D"/>
+<text x="74" y="51" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="19" font-weight="700" fill="#FFFFFF" text-anchor="middle">2</text>
+<text x="104" y="52" font-family="Literata, Georgia, 'Times New Roman', serif" font-size="22" font-weight="600" fill="#17324B" text-anchor="start">Ask for help</text>
+<rect x="1044.0" y="30" width="100.0" height="28" rx="14" fill="#E2EEF1"/>
+<text x="1094.0" y="49" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="700" fill="#17324B" text-anchor="middle">every time</text>
+<use href="#user" xlink:href="#user" transform="translate(214 112) scale(1)"/>
+<use href="#techie" xlink:href="#techie" transform="translate(986 112) scale(1)"/>
+<text x="166" y="118" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="end">Computer user</text>
+<text x="1034" y="118" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="start">Techie</text>
+<text x="166" y="136" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="end">anna@laptop</text>
+<text x="1034" y="136" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="start">bob</text>
+<use href="#chat" xlink:href="#chat" transform="translate(278 112) scale(1)"/>
+<use href="#chat" xlink:href="#chat" transform="translate(922 112) scale(1)"/>
+<line x1="304" y1="112" x2="896" y2="112" stroke="#E3A83A" stroke-width="2.5" stroke-linecap="round" marker-end="url(#head-E3A83A)"/>
+<text x="600" y="100" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">asks for help by phone or chat</text>
+<use href="#pc" xlink:href="#pc" transform="translate(214 238) scale(1)"/>
+<text x="166" y="244" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="end">HelpBuoy</text>
+<text x="166" y="262" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="end">client</text>
+<use href="#laptop" xlink:href="#laptop" transform="translate(986 238) scale(1)"/>
+<text x="1034" y="244" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="start">HelpBuoy</text>
+<text x="1034" y="262" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="start">desk app</text>
+<use href="#server" xlink:href="#server" transform="translate(600 238) scale(1)"/>
+<text x="600" y="296" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="middle">helpbuoy-server</text>
+<line x1="986" y1="150" x2="986" y2="206" stroke="#17324B" stroke-width="2" stroke-linecap="round" marker-end="url(#head-17324B)"/>
+<text x="974" y="171.0" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#4B6177" text-anchor="end" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">presses</text>
+<text x="974" y="190.0" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#4B6177" text-anchor="end" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">Connect</text>
+<line x1="214" y1="150" x2="214" y2="206" stroke="#17324B" stroke-width="2" stroke-linecap="round" marker-end="url(#head-17324B)"/>
+<text x="226" y="171.0" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#4B6177" text-anchor="start" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">starts client and</text>
+<text x="226" y="190.0" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#4B6177" text-anchor="start" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">approves request</text>
+<line x1="650" y1="238" x2="938" y2="238" stroke="#17324B" stroke-width="2.5" stroke-linecap="round" marker-start="url(#tail-17324B)"/>
+<use href="#lock" xlink:href="#lock" transform="translate(789 238) scale(1)"/>
+<text x="789" y="268" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">requests a session</text>
+<line x1="262" y1="229" x2="550" y2="229" stroke="#17324B" stroke-width="2.5" stroke-linecap="round" marker-end="url(#head-17324B)"/>
+<line x1="550" y1="247" x2="262" y2="247" stroke="#17324B" stroke-width="2.5" stroke-linecap="round" marker-end="url(#head-17324B)"/>
+<use href="#lock" xlink:href="#lock" transform="translate(411 238) scale(1)"/>
+<text x="411" y="218" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">connects to server</text>
+<text x="411" y="277" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">asks: may bob take control?</text>
+</g>
+<g transform="translate(0 866)">
+<rect x="32" y="0" width="1136" height="330" rx="22" fill="#FFFFFF" stroke="#D3DDE3" stroke-width="1.5"/>
+<circle cx="74" cy="44" r="18" fill="#D11F2D"/>
+<text x="74" y="51" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="19" font-weight="700" fill="#FFFFFF" text-anchor="middle">3</text>
+<text x="104" y="52" font-family="Literata, Georgia, 'Times New Roman', serif" font-size="22" font-weight="600" fill="#17324B" text-anchor="start">Get help</text>
+<rect x="1044.0" y="30" width="100.0" height="28" rx="14" fill="#E2EEF1"/>
+<text x="1094.0" y="49" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="700" fill="#17324B" text-anchor="middle">every time</text>
+<use href="#user" xlink:href="#user" transform="translate(214 112) scale(1)"/>
+<use href="#techie" xlink:href="#techie" transform="translate(986 112) scale(1)"/>
+<text x="166" y="118" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="end">Computer user</text>
+<text x="1034" y="118" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="start">Techie</text>
+<text x="166" y="136" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="end">anna@laptop</text>
+<text x="1034" y="136" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="start">bob</text>
+<use href="#chat" xlink:href="#chat" transform="translate(278 112) scale(1)"/>
+<use href="#chat" xlink:href="#chat" transform="translate(922 112) scale(1)"/>
+<line x1="304" y1="112" x2="896" y2="112" stroke="#E3A83A" stroke-width="2.5" stroke-linecap="round"/>
+<text x="600" y="100" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">talk it through while the techie works</text>
+<use href="#pc" xlink:href="#pc" transform="translate(214 238) scale(1)"/>
+<text x="166" y="244" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="end">HelpBuoy</text>
+<text x="166" y="262" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="end">client</text>
+<use href="#laptop" xlink:href="#laptop" transform="translate(986 238) scale(1)"/>
+<text x="1034" y="244" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="start">HelpBuoy</text>
+<text x="1034" y="262" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="start">desk app</text>
+<use href="#server" xlink:href="#server" transform="translate(600 238) scale(1)"/>
+<text x="600" y="296" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="middle">helpbuoy-server</text>
+<line x1="214" y1="150" x2="214" y2="206" stroke="#17324B" stroke-width="2" stroke-linecap="round" marker-end="url(#head-17324B)"/>
+<text x="226" y="171.0" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#4B6177" text-anchor="start" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">gets help</text>
+<line x1="986" y1="150" x2="986" y2="206" stroke="#17324B" stroke-width="2" stroke-linecap="round" marker-end="url(#head-17324B)"/>
+<text x="974" y="171.0" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#4B6177" text-anchor="end" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">helps</text>
+<line x1="262" y1="229" x2="550" y2="229" stroke="#D11F2D" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="650" y1="229" x2="938" y2="229" stroke="#D11F2D" stroke-width="2.5" stroke-linecap="round" marker-end="url(#head-D11F2D)"/>
+<line x1="938" y1="247" x2="650" y2="247" stroke="#17324B" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="550" y1="247" x2="262" y2="247" stroke="#17324B" stroke-width="2.5" stroke-linecap="round" marker-end="url(#head-17324B)"/>
+<text x="407" y="218" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="700" fill="#A51320" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">screen</text>
+<text x="793" y="218" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="700" fill="#A51320" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">screen</text>
+<text x="407" y="270" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="700" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">mouse and keyboard</text>
+<text x="793" y="270" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="700" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">mouse and keyboard</text>
+<use href="#lock" xlink:href="#lock" transform="translate(297 238) scale(1)"/>
+<use href="#lock" xlink:href="#lock" transform="translate(903 238) scale(1)"/>
+<text x="206" y="52" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#4B6177" text-anchor="start">end-to-end encrypted: the server only passes the stream on</text>
+</g>
+</svg>

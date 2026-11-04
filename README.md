@@ -11,6 +11,8 @@ A session only carries the screen (computer to techie) and mouse and keyboard in
 
 ![The desk app listing computers](screenshot.png)
 
+![How HelpBuoy connects: register the computer, ask for help, get help](docs/helpbuoy.connection.diagram.svg)
+
 ## Scripts
 
 - `./run.sh`: builds and starts a server, the desk app and the Windows client (in wine) on this machine for testing. All state lives in `.run/`; `./run.sh reset` clears it.
