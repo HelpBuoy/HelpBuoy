@@ -41,6 +41,9 @@
 //	computer asks its user whether this techie may take control. If not:
 //	computer -> server   CancelRequest{RequestID}
 //	server  -> computer  RequestStateMsg{RequestID, cancelled}; techies see it in Presence
+//	The techie may also give up waiting:
+//	techie -> server   CancelRequest{RequestID}
+//	server  -> computer  RequestStateMsg{RequestID, cancelled}
 //	If so:
 //	computer -> server   opens channel ChannelSession, extra data = SessionChannelData
 //	server  -> techie  opens channel ChannelSession, extra data = TechiesessionData
@@ -277,7 +280,8 @@ type Reply struct {
 type Registered struct{}
 
 // CancelRequest refuses a techie's Connect (or ends it before the session
-// channel is opened).
+// channel is opened). The techie who sent the Connect may send it too, to
+// stop waiting for the user.
 type CancelRequest struct {
 	RequestID string `json:"request_id"`
 }

@@ -153,7 +153,9 @@ func (a *App) drawComputerRow(ci control.ComputerInfo, r rl.Rectangle) {
 	c := a.ui
 	id := "computer/" + ci.Fingerprint
 	tabIdx := a.sessionFor(ci.Fingerprint)
-	canConnect := ci.Online && ci.Request == nil && ci.InSessionWith == "" && tabIdx < 0 && a.waiting[ci.Fingerprint] == nil
+	wait := a.waiting[ci.Fingerprint]
+	canConnect := ci.Online && ci.Request == nil && ci.InSessionWith == "" && tabIdx < 0 && wait == nil
+	canCancel := wait != nil && tabIdx < 0
 	bg := ui.ColPanel
 	editing := a.rename.fp == ci.Fingerprint
 	selected := tabIdx >= 0 && tabIdx == a.active
@@ -183,10 +185,10 @@ func (a *App) drawComputerRow(ci control.ComputerInfo, r rl.Rectangle) {
 		if tabIdx < 0 {
 			actionW += 70
 		}
-		if canConnect {
+		if canConnect || canCancel {
 			actionW += 92
 		}
-	case canConnect:
+	case canConnect || canCancel:
 		actionW = 92
 	}
 	if editing {
@@ -225,7 +227,7 @@ func (a *App) drawComputerRow(ci control.ComputerInfo, r rl.Rectangle) {
 			a.confirmRemove = ""
 			actionClicked = true
 		}
-	case hover || canConnect:
+	case hover || canConnect || canCancel:
 		bx := ax
 		if hover {
 			if c.Button(id+"/rename", rl.NewRectangle(bx, ay, 66, 30), "Rename", ui.Flat, !canRename) {
@@ -249,6 +251,12 @@ func (a *App) drawComputerRow(ci control.ComputerInfo, r rl.Rectangle) {
 			}
 			if c.Button(id+"/connect", rl.NewRectangle(bx, ay, 86, 30), label, ui.Primary, busy || !a.online()) {
 				a.connectComputer(ci)
+				actionClicked = true
+			}
+		}
+		if canCancel {
+			if c.Button(id+"/cancelconnect", rl.NewRectangle(bx, ay, 86, 30), "Cancel", ui.Normal, false) {
+				a.cancelConnect(ci.Fingerprint)
 				actionClicked = true
 			}
 		}
@@ -442,6 +450,21 @@ func (a *App) connectComputer(ci control.ComputerInfo) {
 			a.waiting[fp] = &waitInfo{id: reqID}
 		}
 	})
+}
+
+// cancelConnect stops waiting for the user to allow a Connect. The server
+// closes the question on the computer; a session channel that still comes
+// is refused because the request is no longer in a.opened.
+func (a *App) cancelConnect(fp string) {
+	w := a.waiting[fp]
+	if w == nil {
+		return
+	}
+	delete(a.waiting, fp)
+	delete(a.opened, w.id)
+	if a.backend != nil {
+		a.backend.CancelRequest(w.id)
+	}
 }
 
 // unregister removes a computer from the server.

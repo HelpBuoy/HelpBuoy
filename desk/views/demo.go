@@ -196,6 +196,9 @@ func (d *demo) Connect(fp, _ string) <-chan error {
 	return done(fmt.Errorf("computer is not online"))
 }
 
+// CancelRequest does nothing: demo Connects never wait.
+func (d *demo) CancelRequest(string) {}
+
 // connectFirst connects to the first online computer, for --page session.
 func (d *demo) connectFirst() {
 	online, _ := sortedComputers(d.a.presence)

@@ -134,7 +134,7 @@ func TestMessagesPerRole(t *testing.T) {
 		ok   map[control.Role]bool
 	}{
 		{"ComputerHello", &control.ComputerHello{UserMachine: "x@y"}, map[control.Role]bool{control.RoleComputer: true, control.RolePending: true, control.RoleTechie: true}},
-		{"CancelRequest", &control.CancelRequest{RequestID: "x"}, map[control.Role]bool{control.RoleComputer: true}},
+		{"CancelRequest", &control.CancelRequest{RequestID: "x"}, map[control.Role]bool{control.RoleComputer: true, control.RoleTechie: true}},
 		{"Connect", &control.Connect{Seq: 1, Fingerprint: "SHA256:x", RequestID: "x"}, map[control.Role]bool{control.RoleTechie: true}},
 		{"RegisterComputer", &control.RegisterComputer{Seq: 1, PublicKey: "bad"}, map[control.Role]bool{control.RoleTechie: true}},
 		{"UnregisterComputer", &control.UnregisterComputer{Seq: 1, Fingerprint: "SHA256:x"}, map[control.Role]bool{control.RoleTechie: true}},
@@ -161,8 +161,9 @@ func TestMessagesPerRole(t *testing.T) {
 					t.Fatal(err)
 				}
 				if mm.ok[rc.role] {
-					// Allowed: the connection stays and answers techie commands.
-					if rc.role == control.RoleTechie && mm.name != "ComputerHello" {
+					// Allowed: the connection stays and answers techie commands
+					// (ComputerHello and CancelRequest have no reply).
+					if rc.role == control.RoleTechie && mm.name != "ComputerHello" && mm.name != "CancelRequest" {
 						rep := mustWait[control.Reply](t, c, nil)
 						if rep.Seq != 1 || rep.Error == "" {
 							t.Errorf("%s: reply %+v, want an error for the bogus argument", mm.name, rep)
