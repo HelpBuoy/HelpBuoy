@@ -932,15 +932,35 @@ need `%[2]s`.
 
 ### 11.3 Decision
 
-**B (go-i18n v2)**, with a thin `proto/i18n` wrapper that owns locale detection, the
-fallback chain and the embedded files, so both apps call one `i18n.T(...)` and the library
-can be swapped later. It gets plurals right for any language without our own code, has the
-only actively maintained extract-and-merge tool of the four, and its JSON works with Weblate
-if contributors start sending translations. A was rejected because plural rules for anything
-beyond a few European languages would be ours to write, C because `gotext` is effectively
-unmaintained, and D because CLDR plurals and the merge tool outweigh `.po` familiarity.
+**A (hand-rolled)**, as `proto/i18n` with no new dependency. Fifty strings and a few
+languages do not justify a library, and the client the person receiving help downloads stays
+as small as it is. B was rejected for the dependency, C because `gotext` is effectively
+unmaintained, and D for the `.po` parser and extraction tooling it would bring.
+
+Design:
+
+- **Catalogs**: one flat JSON file per language in `proto/i18n/locales/` (`en.json`,
+  `nl.json`, ...), embedded with `go:embed`. Keys are stable dotted IDs
+  (`waiting.allow_techie`), not English text, so fixing English wording does not orphan the
+  translations. `en.json` is the source of truth.
+- **Lookup**: `i18n.T(key, args...)` with named placeholders (`{name}`, `{fingerprint}`)
+  filled from key/value pairs, so translators can reorder them freely. A missing key in the
+  active language falls back to English, and a key missing in English returns the key itself
+  so the gap is visible.
+- **Plurals**: `i18n.N(key, n, args...)` looks up `key.one`, `key.few`, `key.many` or
+  `key.other`, choosing the form with a small per-language function taken from the CLDR
+  rules. Only languages we ship need a function; English, Dutch, German, French and Spanish
+  share the one/other rule, and adding Polish or Russian means adding their rule (a few lines
+  each) together with the catalog.
+- **Locale detection**: as in 11.1, in `proto/i18n` behind build tags, with an override in
+  the stored configuration.
+- **Tests**: a Go test parses the apps' sources with `go/ast` for `i18n.T` and `i18n.N`
+  calls with constant keys and fails when a key is missing from `en.json`, when `en.json` has
+  keys no code uses, or when another catalog has unknown keys, missing plural forms or
+  placeholders that differ from English. This stands in for the extraction tool the libraries
+  provide.
 
 The work is: introduce `proto/i18n`, move all user-facing strings in
 `client-windows/ui/` and `desk/views/` behind it, add Dutch as the first second language to
 prove the path, derive the desk app's font codepoints from the loaded catalogs, and add the
-catalog consistency test to CI. Roughly 2-3 days, fitting in phase 5.
+catalog test to CI. Roughly 2-3 days, fitting in phase 5.
