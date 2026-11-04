@@ -940,9 +940,13 @@ unmaintained, and D for the `.po` parser and extraction tooling it would bring.
 Design:
 
 - **Catalogs**: one flat JSON file per language in `proto/i18n/locales/` (`en.json`,
-  `nl.json`, ...), embedded with `go:embed`. Keys are stable dotted IDs
-  (`waiting.allow_techie`), not English text, so fixing English wording does not orphan the
-  translations. `en.json` is the source of truth.
+  `nl.json`, ...). Every catalog is compiled into every binary with
+  `//go:embed locales/*.json` into an `embed.FS`; nothing is read from disk, downloaded or
+  overridden by files next to the exe, so the apps stay single files and a translation can
+  never go missing or be tampered with after install. The JSON is parsed once at start, and
+  a test that parses every embedded catalog keeps a malformed file from reaching a release.
+  Keys are stable dotted IDs (`waiting.allow_techie`), not English text, so fixing English
+  wording does not orphan the translations. `en.json` is the source of truth.
 - **Lookup**: `i18n.T(key, args...)` with named placeholders (`{name}`, `{fingerprint}`)
   filled from key/value pairs, so translators can reorder them freely. A missing key in the
   active language falls back to English, and a key missing in English returns the key itself
