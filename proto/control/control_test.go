@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/helpbuoy/helpbuoy/proto/wire"
 )
 
 type rw struct{ bytes.Buffer }
@@ -45,6 +47,38 @@ func TestRoundTripAll(t *testing.T) {
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("got %#v, want %#v", got, want)
 		}
+	}
+}
+
+func TestReceiveSkipsUnknown(t *testing.T) {
+	var buf rw
+	if err := wire.NewWriter(&buf).WriteFrame(250, []byte(`{"salt":"x"}`)); err != nil {
+		t.Fatal(err)
+	}
+	c := NewConn(&buf)
+	if err := c.Send(&Registered{}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := c.Receive()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got.(*Registered); !ok {
+		t.Fatalf("got %#v, want *Registered", got)
+	}
+}
+
+func TestReceiveIgnoresUnknownFields(t *testing.T) {
+	var buf rw
+	if err := wire.NewWriter(&buf).WriteFrame(uint8(MsgRegistered), []byte(`{"salt":"x"}`)); err != nil {
+		t.Fatal(err)
+	}
+	got, err := NewConn(&buf).Receive()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got.(*Registered); !ok {
+		t.Fatalf("got %#v, want *Registered", got)
 	}
 }
 

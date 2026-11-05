@@ -685,7 +685,7 @@ func readMessage(r io.Reader, max int) (any, error) {
 		}
 		return nil, err
 	}
-	return control.NewConn(bytes.NewBuffer(frame)).Receive()
+	return control.Decode(frame[4], frame[5:])
 }
 
 type openResult struct {

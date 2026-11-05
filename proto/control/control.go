@@ -460,14 +460,28 @@ func (c *Conn) Send(m any) error {
 }
 
 // Receive reads one message and returns a pointer to it, e.g. *Hello.
+// Messages of a type this version doesn't know are skipped, so a newer peer
+// can add message types without breaking older apps.
 func (c *Conn) Receive() (any, error) {
-	t, b, err := c.r.ReadFrame()
-	if err != nil {
-		return nil, err
+	for {
+		t, b, err := c.r.ReadFrame()
+		if err != nil {
+			return nil, err
+		}
+		if len(b) > MaxMessage {
+			return nil, fmt.Errorf("control: message of %d bytes too large", len(b))
+		}
+		if _, err := newOf(MsgType(t)); err != nil {
+			continue
+		}
+		return Decode(t, b)
 	}
-	if len(b) > MaxMessage {
-		return nil, fmt.Errorf("control: message of %d bytes too large", len(b))
-	}
+}
+
+// Decode turns one frame's type byte and payload into a pointer to its
+// message. Unlike Receive it fails on a type it doesn't know, for the server,
+// which accepts only the messages it knows.
+func Decode(t uint8, b []byte) (any, error) {
 	m, err := newOf(MsgType(t))
 	if err != nil {
 		return nil, err
