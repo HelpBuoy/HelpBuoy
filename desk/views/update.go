@@ -14,9 +14,10 @@ import (
 	"github.com/helpbuoy/helpbuoy/proto/update"
 )
 
-// updateWait is how long the start waits for the update check before it
-// connects anyway. A later result is offered on the Server tab.
-const updateWait = 5 * time.Second
+// updateDelay is how long after the start the update check runs, so it
+// never holds up starting the app. A release it finds is offered on the
+// Connect page and the Server tab.
+const updateDelay = 10 * time.Second
 
 type checkResult struct {
 	r   *update.Release
@@ -28,57 +29,47 @@ type downloadResult struct {
 	err  error
 }
 
-// updater is the update check at the start and the offer that follows. The
-// start connects to the stored server only once the check is done and any
-// offer was declined, like the Windows client.
+// updater is the update check, run once updateDelay after the start, and
+// the offer that follows.
 type updater struct {
-	checking    bool // the start waits for the check
-	deadline    time.Time
+	checkAt     time.Time // when to start the check; zero once started or never
 	res         <-chan checkResult
 	release     *update.Release // newer release to offer, until dismissed
 	download    <-chan downloadResult
 	downloading bool
 	err         string
-	autoConnect bool // connect to the stored server once the check allows it
 }
 
-// startUpdate runs Options.CheckUpdate in the background. Without it the
-// stored server is connected to right away.
-func (a *App) startUpdate() {
-	u := &a.upd
-	if a.opts.CheckUpdate == nil {
-		a.connectStored()
-		return
+// scheduleUpdate lets pollUpdate run Options.CheckUpdate updateDelay from
+// now. Without it there is no check.
+func (a *App) scheduleUpdate() {
+	if a.opts.CheckUpdate != nil {
+		a.upd.checkAt = time.Now().Add(updateDelay)
 	}
-	ch := make(chan checkResult, 1)
-	u.res, u.checking, u.deadline = ch, true, time.Now().Add(updateWait)
-	check := a.opts.CheckUpdate
-	go func() {
-		r, err := check(context.Background())
-		ch <- checkResult{r, err}
-	}()
 }
 
-// pollUpdate handles the check result, the wait running out and the
+// pollUpdate starts the check when it is due and handles its result and the
 // download, once per frame.
 func (a *App) pollUpdate() {
 	u := &a.upd
+	if !u.checkAt.IsZero() && time.Now().After(u.checkAt) {
+		u.checkAt = time.Time{}
+		ch := make(chan checkResult, 1)
+		u.res = ch
+		check := a.opts.CheckUpdate
+		go func() {
+			r, err := check(context.Background())
+			ch <- checkResult{r, err}
+		}()
+	}
 	if u.res != nil {
 		select {
 		case res := <-u.res:
 			u.res = nil
-			waited := u.checking
-			u.checking = false
 			if res.err == nil && res.r != nil {
-				u.release = res.r // the offer decides when to connect
-			} else if waited {
-				a.connectStored()
+				u.release = res.r
 			}
 		default:
-			if u.checking && time.Now().After(u.deadline) {
-				u.checking = false
-				a.connectStored()
-			}
 		}
 	}
 	if u.download != nil {
@@ -103,23 +94,9 @@ func (a *App) pollUpdate() {
 	}
 }
 
-// connectStored connects to the stored server, once, if the app was ever
-// connected to it (its host key is pinned) and nothing else happened since.
-func (a *App) connectStored() {
-	u := &a.upd
-	if !u.autoConnect {
-		return
-	}
-	u.autoConnect = false
-	if !a.connecting() && !a.reached && a.key != nil {
-		a.startConnect()
-	}
-}
-
-// dismissUpdate drops the offer; the start then connects.
+// dismissUpdate drops the offer.
 func (a *App) dismissUpdate() {
 	a.upd.release = nil
-	a.connectStored()
 }
 
 // installUpdate downloads the offered MSI; pollUpdate starts it.

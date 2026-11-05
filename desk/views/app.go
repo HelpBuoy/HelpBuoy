@@ -42,9 +42,8 @@ type Options struct {
 	// Screenshot, if set, saves a frame as PNG to this path once the window
 	// has settled, then quits (screenshot.sh, for the README).
 	Screenshot string
-	// CheckUpdate looks for a newer release at the start; nil never checks.
-	// The stored server is connected to once it is done, or after
-	// updateWait. Errors (offline, the API refusing) are ignored.
+	// CheckUpdate looks for a newer release, updateDelay after the start;
+	// nil never checks. Errors (offline, the API refusing) are ignored.
 	CheckUpdate func(ctx context.Context) (*update.Release, error)
 }
 
@@ -207,10 +206,12 @@ func New(opts Options) *App {
 		a.cs.addr.Edit.SetText(fieldText(ad))
 	}
 	if a.demo == nil && opts.Screenshot == "" {
-		// Like the client: connect to the server used last time, once the
-		// update check is done. A pinned host key means it was reached.
-		a.upd.autoConnect = a.cfg.ServerAddr != "" && a.cfg.ServerHostKey != "" && a.key != nil && a.keyErr == nil
-		a.startUpdate()
+		// Like the client: connect to the server used last time right away.
+		// A pinned host key means it was reached.
+		if a.cfg.ServerAddr != "" && a.cfg.ServerHostKey != "" && a.key != nil && a.keyErr == nil {
+			a.startConnect()
+		}
+		a.scheduleUpdate()
 	}
 	switch opts.Page {
 	case "register":

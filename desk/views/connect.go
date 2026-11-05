@@ -43,7 +43,6 @@ func (a *App) startConnect() {
 	if a.connecting() || a.key == nil {
 		return
 	}
-	a.upd.autoConnect = false
 	text := strings.TrimSpace(s.addr.Edit.String())
 	if text == "" {
 		text = "localhost"
@@ -170,7 +169,7 @@ func (a *App) drawStart() {
 func (a *App) drawConnect(x, y, w float32) float32 {
 	c := a.ui
 	s := &a.cs
-	busy := a.connecting() || a.upd.checking || a.upd.downloading
+	busy := a.connecting() || a.upd.downloading
 	if !a.connecting() && (a.upd.release != nil || a.upd.err != "") {
 		y = a.drawUpdateOffer(x, y, w, "")
 		rl.DrawLineV(rl.NewVector2(x, y), rl.NewVector2(x+w, y), ui.ColBorder)
@@ -195,10 +194,6 @@ func (a *App) drawConnect(x, y, w float32) float32 {
 		a.startConnect()
 	}
 	y += 44
-	if a.upd.checking {
-		y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Checking for updates…"), x, y, w, ui.ColMuted)
-		return y
-	}
 	y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Leave empty to run a local server on this computer, with you as its techie."), x, y, w, ui.ColMuted)
 	if s.err != "" {
 		y += 10

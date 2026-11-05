@@ -298,7 +298,7 @@ func (w *Window) events() {
 		hdc.SetBkMode(co.BKMODE_TRANSPARENT)
 		errColor := win.RGB(170, 20, 20)
 		switch h := p.HwndControl(); {
-		case h == w.lblAddrError.Hwnd() && (w.view.CheckingUpdate || w.updating != ""):
+		case h == w.lblAddrError.Hwnd() && w.updating != "":
 			hdc.SetTextColor(win.GetSysColor(co.COLOR_GRAYTEXT))
 		case h == w.lblAddrError.Hwnd(), h == w.lblKeyErr.Hwnd():
 			hdc.SetTextColor(errColor)
@@ -522,11 +522,7 @@ func (w *Window) apply(v app.View) {
 			setText(w.lblAddrError, w.updating)
 		} else if v.Connecting {
 			setText(w.btnConnect, i18n.Trans("Connecting..."))
-			if v.CheckingUpdate {
-				setText(w.lblAddrError, i18n.Trans("Checking for updates..."))
-			} else {
-				setText(w.lblAddrError, "")
-			}
+			setText(w.lblAddrError, "")
 		} else {
 			setText(w.btnConnect, i18n.Trans("&Connect"))
 			setText(w.lblAddrError, v.Error)

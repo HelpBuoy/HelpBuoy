@@ -17,8 +17,7 @@ import (
 
 // maybeOfferUpdate offers the release in the current view, once, when no
 // dialog is open. The controller only puts a release in the view while the
-// computer is idle (no request, no session). At the start it holds back
-// connecting until the offer is declined.
+// computer is idle (no request, no session).
 func (w *Window) maybeOfferUpdate() {
 	r := w.view.Update
 	if r == nil || w.updateAsked || w.dialogs > 0 || w.wnd.Hwnd() == 0 {
@@ -33,7 +32,7 @@ func (w *Window) maybeOfferUpdate() {
 
 // offerUpdate asks whether to install r, then downloads it, starts msiexec
 // and closes the app, which ends any session and disconnects. Declining, or
-// a failed installation, dismisses the offer, which lets the start connect.
+// a failed installation, dismisses the offer for this run.
 func (w *Window) offerUpdate(r update.Release) {
 	if w.view.Update == nil {
 		w.updateAsked = false // no longer idle; offer it when it is again

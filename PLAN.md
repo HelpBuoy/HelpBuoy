@@ -592,12 +592,12 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   per-user MSI (`installer/helpbuoy.wxs`, no UAC prompt) that installs it into
   `%LOCALAPPDATA%\Programs\helpbuoy` with a Start menu shortcut. Because the exe is never
   patched, it can be Authenticode-signed (`osslsigncode`) once per release.
-- **Updates**, like otp4win: a release build asks the GitHub API for the latest release at
-  start-up, before it connects to the stored server, and if its MSI is newer, offers
-  "Download and install it now?". Yes downloads the MSI to the temp folder, checks its size,
-  starts `msiexec` and closes the app; No connects. A check that takes over 5 seconds does
-  not hold up connecting; its offer then waits until the computer is idle. No prompt while
-  a techie connects or during a session. The check can't be turned off;
+- **Updates**, like otp4win: a release build asks the GitHub API for the latest release
+  10 seconds after start-up, so the check never holds up starting or connecting, and if its
+  MSI is newer, offers "Download and install it now?". Yes downloads the MSI to the temp
+  folder, checks its size, starts `msiexec` and closes the app; No dismisses the offer until
+  the next start. The offer waits until the computer is idle: no prompt while a techie
+  connects or during a session. The check can't be turned off;
   development builds and offline starts skip it silently. It needs the GitHub repository to
   be public, since the release API doesn't show private releases to anonymous callers.
 - `release.sh [major|minor|build]` bumps the version in both `winres.json` files, runs
@@ -605,8 +605,8 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   with everything in `dist/`: only installers, never a bare binary. That is the client and desk
   app MSIs and the Debian packages of the Linux client, the desk app and `helpbuoy-server`.
   The updaters pick their MSI by name prefix: `helpbuoy_` for the client, `helpbuoy-desk_`
-  for the desk app on Windows, which checks the same way before it connects to its last
-  server (on the connect screen, or on the Server tab once connected). For now only Linux and
+  for the desk app on Windows, which checks the same way, 10 seconds after start-up, and offers
+  the update on the connect screen, or on the Server tab once connected. For now only Linux and
   Windows on amd64 are built (`OSES` and `ARCHES` in the Makefile).
 - The server also ships as a Debian 13 package (`make deb`, `packaging/debian/`): `helpbuoy-server`
   as a hardened systemd service under its own system user with its state in
@@ -659,7 +659,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   example helpme.example.com.", the address field (prefilled with the last address) and
   **Connect**, with the hint "Leave empty to run a local server on this computer, with you as
   its techie." Like the computer, it connects by itself to the last address once that server
-  was reached (its host key is pinned), after the update check (6.5). Errors show in the box. The server host key is pinned on the first
+  was reached (its host key is pinned), right at the start. Errors show in the box. The server host key is pinned on the first
   connection per address, like the computer; a changed key brings the user back here with a
   warning and an explicit "Trust the new key". If the server does not know this key as a
   techie, the box shows the public key with **Copy public key** to send to a techie on it
