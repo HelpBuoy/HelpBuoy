@@ -884,5 +884,5 @@ approach is deliberately minimal, with no dependency:
 - **Desk app fonts**: the codepoint set in `desk/ui/ui.go` adds the characters used by the
   embedded catalogs. Scripts the Go fonts lack (CJK, Arabic, Hebrew) are out of scope.
 
-Dutch is the first translation (done: about 210 strings across the three apps). Rejected:
+Dutch, German, French, Spanish and Italian are done (about 210 strings each). Rejected:
 go-i18n, `x/text` with `gotext`, and gettext `.po`, all more machinery than this needs.
