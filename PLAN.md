@@ -350,8 +350,8 @@ Role caps and timeouts:
   session locally, even if the server misbehaves.
 - **Pending keys** are never shown to anyone.
 - **Unknown servers**: anyone can run a server and give it any title. The clients will check
-  each techie that asks to connect with helpbuoy.com, without a public list, and show which
-  company that techie works for if HelpBuoy checked it (12).
+  with helpbuoy.com, without a public list, whether the server a techie asks to connect
+  through belongs to a company HelpBuoy checked, and show which company if so (12).
 - **Server compromise**: sees metadata (who, when, how much) and can deny service. Because the
   server vouches for techies, a compromised server *could* present a techie key of its own to a
   computer that files a request. It can't do so silently for a techie the computer has already
@@ -920,8 +920,9 @@ address and ask them to click Allow.
    or files copied from a verified company.
 4. Checked on every connection request, without a cache in the client or on the way, so a
    removal works at once.
-5. The check uses only static files on helpbuoy.com over HTTPS, at URLs that can't be
-   guessed. HelpBuoy runs no service for it.
+5. The check during a connection request uses only static files on helpbuoy.com over
+   HTTPS, at URLs that can't be guessed. The portal where companies ask for verification
+   (12.7) is never contacted by the apps.
 6. No signed statements, and nothing for server admins to manage: the server makes its
    own salt and keeps it.
 7. Unverified servers keep working: families, IT shops and the local server of the desk
@@ -988,11 +989,18 @@ id = hex(SHA-256("helpbuoy verified server v1\n" + host key in wire format + sal
 - **The files live in `static/verified/` of the site repository**, which must stay
   private (it is now). If the site repository is ever made public, the files move to a
   separate private repository that is copied in when the site is built. The site keeps
-  directory listing off for `/verified/`, and no page or sitemap links to the files.
-- **Trust:** the files are trusted because they come from helpbuoy.com over HTTPS, with
-  Go's normal certificate checks; there is no signature. So a file is as safe as
-  whatever can change what helpbuoy.com serves: the domain, the TLS certificate, the web
-  host and push access to the site's production remote.
+  directory listing off for `/verified/`, and no page or sitemap links to the files. The
+  same goes for the built site: it must never be pushed to a public repository (such as
+  one serving GitHub Pages), where every file could be listed.
+- **Trust:** the files are trusted because they come from helpbuoy.com over HTTPS; there
+  is no signature. So a file is as safe as whatever can change what helpbuoy.com serves:
+  the domain, the TLS certificate, the web host and push access to the site's production
+  remote. Anyone who can intercept TLS can serve any file, with their own `hostkey` in
+  it: a TLS-inspecting company proxy, or a root certificate a victim was talked into
+  installing. So the clients don't use the operating system's root store for this
+  request, but a fixed set built into the app: the roots of the CA that issues
+  helpbuoy.com's certificate and of one backup CA, so changing CA never needs a client
+  release first. helpbuoy.com gets CAA records for those two CAs and DNSSEC (12.10).
 
 What this design gives up: there is no techie name in the file, only the company. Every
 techie the company adds to its server is vouched for by the company, and the badge can
@@ -1006,6 +1014,21 @@ company thinks a copy has leaked, it tells us and we delete the file (12.8). Get
 badge back takes a new host key, which every registered computer sees as a changed
 server identity (3.5), so the company has to tell its users to expect that warning.
 
+Risks we accept:
+
+- **A rogue techie on a verified server is vouched for**, and so is someone using a
+  hacked desk app of a techie there. Any techie can also add more techies with
+  `RegisterTechie`, without us or the company's contact person seeing it. Only the
+  company can stop this, by removing the key (12.8), and if it doesn't, the whole server
+  loses its badge.
+- **A leaked id or file reveals the host key**, and internet scanners such as Shodan
+  index SSH host keys, so the host key leads to the server's IP address. Someone with a
+  leaked file can find that company's server, but still learns nothing about any other
+  customer.
+- **The web host sees which IP addresses ask for which id**, and with access to the
+  files it can link computers to companies. We keep that to the web host we choose, and
+  the privacy text says so (12.10).
+
 ### 12.4 Protocol change
 
 One new control message (3.3):
@@ -1014,19 +1037,28 @@ One new control message (3.3):
 |---|---|---|
 | `Verification` | server → computer, techie | the salt; to registered computers right after `Hello` and right after `Registered`, to techies right after `Hello`, and again to everyone when it is rotated |
 
-A pending key never gets it. The salt is in `state.json` and is never printed by
-`helpbuoy-server` except through `helpbuoy-server verification` (12.7). Clients keep it
-only in memory for the connection.
+A pending key never gets it. The salt is exactly 32 bytes from `crypto/rand`. It is kept
+in `state.json` (0600, like the host key) and is never printed or logged:
+`helpbuoy-server verification` prints only the host key line and the id (12.7). Clients
+keep it only in memory for the connection, and treat a salt of any other length as no
+salt, so a broken server can never end up with an id a scanner could compute.
+
+During a rotation (12.7) `state.json` also holds the next salt. It is not sent to
+anyone until it becomes the current one.
 
 ### 12.5 When the client checks
 
 On every `SessionReady`, without a cache:
 
-- The client computes the id from the host key it pinned for this server and the salt
-  from `Verification`. Without a salt (an older server), the techie is "not verified".
+- The client computes the id from the host key the server presented in this
+  connection's handshake, which is the one it pinned: a connection with a host key that
+  is not pinned (3.5) never gets this far. Only Ed25519 host keys count. Without a valid
+  salt (an older server), the techie is "not verified", and there is no fallback to an id
+  without salt.
 - The check starts as soon as the request arrives. The approval dialog opens with the
   result, or after 3 seconds with "could not be checked yet" and updates when the answer
-  arrives.
+  arrives. Each check belongs to one request id, so a late answer is dropped once that
+  request is answered, cancelled or expired, and can never show up in a later dialog.
 - Only `https://helpbuoy.com/verified/<id>.json`: no redirects, no plain HTTP, no other
   host and no address from configuration. At most 4 KB and 10 seconds.
 - A 404 means not verified. A file whose `hostkey` is not the pinned host key, or whose
@@ -1060,8 +1092,10 @@ When a techie asks to connect:
   company's server gives.
 - **Not verified:** "This person is not verified by HelpBuoy. Only allow this if you know
   them personally. Banks, Microsoft and the police never ask for this."
-- **Could not be checked:** "HelpBuoy could not check who this person is." Never shown as
-  verified.
+- **Could not be checked:** "HelpBuoy could not check who this person is. Only allow this
+  if you know them personally. Banks, Microsoft and the police never ask for this." The
+  same warning as not verified, never a softer one, so "it says could not be checked,
+  that's normal" doesn't help a scammer.
 
 Before the first connection to a new server, the address screen shows a full warning:
 "Only continue if someone you know personally gave you this address. If someone called
@@ -1071,6 +1105,13 @@ who run their own server see it once per computer.
 
 Nothing is ever blocked: an unverified techie can still be allowed. Blocking unverified
 servers can come later as an option for managed installs.
+
+The server title, the instruction line and the techie name are text from the server, so
+they could try to imitate the badge. The client shows each on one line, removes control
+characters and bidi overrides (such as U+202E), and replaces a check mark (✓, ✔, ☑ and the
+like) or the word "verified", in any language the apps are translated to, with nothing.
+The badge has its own area of the dialog, with its own icon and color, where server text
+is never shown.
 
 ### 12.7 Getting verified
 
@@ -1100,12 +1141,24 @@ include it is still to decide. A company asks in our portal and we check it once
 7. We write the file under that id and release the site; publishing stays a manual step,
    so nothing writes to the site by itself.
 
-`helpbuoy-server verification --rotate` makes a new salt, sends it to everyone online
-(12.4) and prints the new id. The company enters it in our portal, we add the new file
-and delete the old one. The same goes for a new host key. A new or removed host name
+Rotating the salt takes two steps, so the badge never disappears in between.
+`helpbuoy-server verification --new` makes the next salt (12.4) and prints the next id,
+without changing anything for the clients. The company enters it in our portal and we add
+the new file next to the old one. Once the portal says the new file is live,
+`helpbuoy-server verification --activate` makes the next salt the current one and sends
+it to everyone online, and the company tells us in the portal so we delete the old file.
+A new host key goes the same way, as a new file next to the old one. A new or removed host name
 only changes the file, after we checked the new name as in step 6.
 
 We check the company again every year.
+
+The portal holds every verified company with its ids, host names and contact persons,
+so it is the most sensitive part: whoever gets into it can list our customers. It never
+tells anyone whether a host key, id or host name is already verified, also not as an
+error when one is entered twice. Contact persons sign in with a second factor. A
+removal or rotation asked for in the portal is confirmed by email to every contact
+person of that company before we act on it, so one taken-over account can't quietly
+change the company's verification.
 
 ### 12.8 Removing a server
 
@@ -1149,6 +1202,8 @@ These keep HelpBuoy a poor tool for scammers, verified or not:
 - The web host and any CDN must serve `/verified/`, 404s included, with
   `Cache-Control: no-store`, so a deleted file is gone at once. A release purges any
   cache for `/verified/`, and after removing a server we check that its URL answers 404.
+- CAA records for helpbuoy.com that allow only the two CAs whose roots the clients carry
+  (12.3), and DNSSEC for the domain.
 - The same text must say what we keep about a verified company: the company name, country
   and date in its file, and the contact person in our own records, until the
   verification is removed.
