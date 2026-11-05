@@ -259,6 +259,7 @@ only by `UnregisterComputer` or `helpbuoy-server computer remove`. They are adde
 | `helpbuoy-server computer remove SHA256:...` | remove a registered computer; an online computer is disconnected |
 | `helpbuoy-server title ['Example Inc']` / `instruction ['Call +1 234 567 890 for support']` | print or set the title and instruction line the apps show (`''` clears); the same values techies edit on the desk app's Server tab |
 | `helpbuoy-server hostkey` | print the host key fingerprint, for techies to compare with what computers show |
+| `helpbuoy-server verification [--new \| --activate]` | planned (12.7): print the host key line and the id to enter in the HelpBuoy portal; `--new` prepares the next salt and prints its id, `--activate` makes it the current one |
 
 **Techies are plain keys**: there are no certificates. A new techie sends
 their public key line to the server admin, who adds it with `helpbuoy-server techie add`. Removing it
@@ -284,7 +285,7 @@ Techie commands carry a sequence number and the server answers each with a `Repl
 | `SetServerInfo` | techie → server | new title (up to 64 characters) and instruction line (up to 160), one line each, empty to clear; stored in `state.json` |
 | `Reply` | server → techie | answer to a techie command: sequence number and error text if it failed |
 | `Registered` | server → computer | the key is now registered (no name: that is only for techies) |
-| `Verification` | server → computer, techie | planned (12.4): the server's salt for the verified server check; to registered computers right after `Hello` and `Registered`, to techies right after `Hello`, and again when it is rotated; never to pending keys |
+| `Verification` | server → computer, techie | planned (12.4): the server's salt for the verified server check; to registered computers right after `Hello` and `Registered`, to techies right after `Hello`, and again when a new salt is activated (12.7); never to pending keys |
 | `RequestHelp` | computer → server | (no content) |
 | `CancelRequest` | computer → server | request id |
 | `RequestStateMsg` | server → computer | request id and state (open / taken / cancelled / expired / ended) |
@@ -963,9 +964,8 @@ id = hex(SHA-256("helpbuoy verified server v1\n" + host key in wire format + sal
   registering a computer there, for example) can make their own server send that salt,
   so the client finds the file. But the client only shows the badge if the file's
   `hostkey` is the host key it pinned for the server it is connected to, and presenting
-  that host key in the SSH handshake takes the server's private key. Unlike a badge per
-  techie, this is checked before the dialog says anything, not by a session that fails
-  afterwards.
+  that host key in the SSH handshake takes the server's private key. All of this is
+  checked before the dialog says anything.
 - **Why the file holds the host key:** the id already depends on the host key, so a
   scammer's own key never finds the file. But we can't check the id a company gives us
   without its salt (12.7). A dishonest company could show us its real server at its
@@ -1035,7 +1035,7 @@ One new control message (3.3):
 
 | Message | Direction | Content |
 |---|---|---|
-| `Verification` | server → computer, techie | the salt; to registered computers right after `Hello` and right after `Registered`, to techies right after `Hello`, and again to everyone when it is rotated |
+| `Verification` | server → computer, techie | the salt; to registered computers right after `Hello` and right after `Registered`, to techies right after `Hello`, and again to everyone when a new salt is activated (12.7) |
 
 A pending key never gets it. The salt is exactly 32 bytes from `crypto/rand`. It is kept
 in `state.json` (0600, like the host key) and is never printed or logged:
@@ -1053,7 +1053,7 @@ On every `SessionReady`, without a cache:
 - The client computes the id from the host key the server presented in this
   connection's handshake, which is the one it pinned: a connection with a host key that
   is not pinned (3.5) never gets this far. Only Ed25519 host keys count. Without a valid
-  salt (an older server), the techie is "not verified", and there is no fallback to an id
+  salt (an older server), the server is "not verified", and there is no fallback to an id
   without salt.
 - The check starts as soon as the request arrives. The approval dialog opens with the
   result, or after 3 seconds with "could not be checked yet" and updates when the answer
@@ -1077,8 +1077,8 @@ the same general warning (12.6). That is fine: the scam needs the Allow click, a
 is where the check happens.
 
 The desk app makes the same check for its own server on the Server tab ("Verified:
-Example Inc" or "Not verified"), so the company can see its file works. Its user is the
-techie, so it never checks techies.
+Example Inc" or "Not verified"), so the company can see its file works. It shows no
+approval dialog: its user is the techie.
 
 ### 12.6 What the user sees
 
@@ -1090,10 +1090,12 @@ When a techie asks to connect:
   vouches for its support staff." The country comes from the file, the address is the
   one the client stored and matched (12.5), and the techie's name is the one the
   company's server gives.
-- **Not verified:** "This person is not verified by HelpBuoy. Only allow this if you know
-  them personally. Banks, Microsoft and the police never ask for this."
-- **Could not be checked:** "HelpBuoy could not check who this person is. Only allow this
-  if you know them personally. Banks, Microsoft and the police never ask for this." The
+- **Not verified:** "HelpBuoy has not verified who runs this server. Only allow this if
+  you know the person asking personally. Banks, Microsoft and the police never ask for
+  this."
+- **Could not be checked:** "HelpBuoy could not check who runs this server. Only allow this
+  if you know the person asking personally. Banks, Microsoft and the police never ask for
+  this." The
   same warning as not verified, never a softer one, so "it says could not be checked,
   that's normal" doesn't help a scammer.
 
@@ -1103,8 +1105,8 @@ you unexpectedly, hang up: banks, Microsoft and the police never ask you to inst
 this." Continue only works after 5 seconds. It is shown once per server key, so people
 who run their own server see it once per computer.
 
-Nothing is ever blocked: an unverified techie can still be allowed. Blocking unverified
-servers can come later as an option for managed installs.
+Nothing is ever blocked: a techie on an unverified server can still be allowed. Blocking
+unverified servers can come later as an option for managed installs.
 
 The server title, the instruction line and the techie name are text from the server, so
 they could try to imitate the badge. The client shows each on one line, removes control
