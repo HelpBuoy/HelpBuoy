@@ -60,7 +60,12 @@ func main() {
 
 	rl.SetTraceLogLevel(rl.LogWarning)
 	rl.SetConfigFlags(rl.FlagWindowResizable | rl.FlagWindowHighdpi | rl.FlagMsaa4xHint)
-	rl.InitWindow(w, h, "HelpBuoy Desk")
+	// Like most apps, the title shows the version: "HelpBuoy Desk v0.4.19".
+	title := "HelpBuoy Desk"
+	if update.IsRelease(version) {
+		title += " " + version
+	}
+	rl.InitWindow(w, h, title)
 	defer rl.CloseWindow()
 	if *screenshot == "" {
 		rl.SetWindowMinSize(views.MinWidth, views.MinHeight)

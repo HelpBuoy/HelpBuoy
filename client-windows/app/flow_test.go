@@ -154,7 +154,7 @@ func TestDisconnect(t *testing.T) {
 }
 
 // TestUpdateOnlyOnClick: the start never checks for updates; only
-// LatestRelease (clicking the version) does, and it returns what it finds.
+// LatestRelease (clicking update) does, and it returns what it finds.
 func TestUpdateOnlyOnClick(t *testing.T) {
 	e := newEnv(t)
 	registered(t, e)

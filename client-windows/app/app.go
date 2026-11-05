@@ -103,7 +103,7 @@ type Deps struct {
 	UserMachine string
 	// CheckUpdate looks for a newer release, or returns nil when there is
 	// none; nil never finds one. It only runs when the user clicks the
-	// version on the waiting screen (LatestRelease).
+	// update link on the waiting screen (LatestRelease).
 	CheckUpdate func(ctx context.Context) (*update.Release, error)
 	// Tune adjusts the session options, for tests.
 	Tune   func(*session.Options)
@@ -460,12 +460,12 @@ func (c *Controller) WaitClosed(d time.Duration) {
 	}
 }
 
-// Version is the app version, shown on the waiting screen.
+// Version is the app version, shown in the window title.
 func (c *Controller) Version() string { return c.d.AppVersion }
 
 // LatestRelease asks for a release newer than Version and returns nil when
 // there is none (or for a development build). It blocks, so the window
-// calls it outside the UI thread, when the user clicks the version.
+// calls it outside the UI thread, when the user clicks update.
 func (c *Controller) LatestRelease(ctx context.Context) (*update.Release, error) {
 	if c.d.CheckUpdate == nil {
 		return nil, nil

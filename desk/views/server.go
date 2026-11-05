@@ -185,13 +185,5 @@ func (a *App) drawServer(x, y, w float32) float32 {
 	}
 
 	y += 12
-	if a.upd.release != nil || a.upd.err != "" {
-		blocked := ""
-		if a.sessionCount() > 0 {
-			blocked = i18n.Trans("End the open sessions first.")
-		}
-		y = a.drawUpdateOffer(x, y, w, blocked)
-	}
-	c.Text(ui.Regular, ui.SizeSmall, "HelpBuoy Desk "+a.opts.Version, x, y, ui.ColMuted)
-	return y + 20
+	return y
 }

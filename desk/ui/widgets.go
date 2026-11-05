@@ -73,6 +73,26 @@ func (c *Context) Button(id string, r rl.Rectangle, label string, kind ButtonKin
 	return c.Clicked(id, r)
 }
 
+// Link draws label as a text link with its top-left at x, y: accent
+// colored, underlined while hovered. A disabled link is muted text and never
+// clicks.
+func (c *Context) Link(id string, x, y float32, label string, disabled bool) bool {
+	m := c.Measure(Regular, SizeSmall, label)
+	r := rl.NewRectangle(x, y, m.X, m.Y)
+	if disabled {
+		c.Text(Regular, SizeSmall, label, x, y, ColMuted)
+		return false
+	}
+	col := ColAccent
+	if c.Hover(r) {
+		col = ColAccentDark
+		rl.DrawLineV(rl.NewVector2(x, y+m.Y), rl.NewVector2(x+m.X, y+m.Y), col)
+		c.SetCursor(rl.MouseCursorPointingHand)
+	}
+	c.Text(Regular, SizeSmall, label, x, y, col)
+	return c.Clicked(id, r)
+}
+
 // ButtonWidth returns a comfortable width for a button with label.
 func (c *Context) ButtonWidth(label string) float32 {
 	return c.Measure(Regular, SizeBody, label).X + 28

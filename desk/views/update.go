@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
@@ -13,11 +12,6 @@ import (
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
 	"github.com/helpbuoy/helpbuoy/proto/update"
 )
-
-// updateDelay is how long after the start the update check runs, so it
-// never holds up starting the app. A release it finds is offered on the
-// Connect page and the Server tab.
-const updateDelay = 10 * time.Second
 
 type checkResult struct {
 	r   *update.Release
@@ -29,45 +23,97 @@ type downloadResult struct {
 	err  error
 }
 
-// updater is the update check, run once updateDelay after the start, and
-// the offer that follows.
+// updater is the update that starts when the user clicks update in the top
+// right corner: the check, the download and the dialog that tells how it
+// went.
 type updater struct {
-	checkAt     time.Time // when to start the check; zero once started or never
-	res         <-chan checkResult
-	release     *update.Release // newer release to offer, until dismissed
-	download    <-chan downloadResult
-	downloading bool
-	err         string
+	check    <-chan checkResult
+	download <-chan downloadResult
+	version  string  // the release being downloaded
+	dialog   *dialog // a message the user still has to close
 }
 
-// scheduleUpdate lets pollUpdate run Options.CheckUpdate updateDelay from
-// now. Without it there is no check.
-func (a *App) scheduleUpdate() {
-	if a.opts.CheckUpdate != nil {
-		a.upd.checkAt = time.Now().Add(updateDelay)
+// dialog is a modal message with an OK button.
+type dialog struct {
+	title, body string
+}
+
+// busy reports whether a check or download is running.
+func (u *updater) busy() bool { return u.check != nil || u.download != nil }
+
+// updateLinkW is the room the update link takes in the top right corner, 0
+// where the app does not update itself.
+func (a *App) updateLinkW() float32 {
+	if a.opts.CheckUpdate == nil {
+		return 0
+	}
+	label := i18n.Trans("update")
+	if a.upd.busy() {
+		label = a.updateStatus()
+	}
+	return a.ui.Measure(ui.Regular, ui.SizeSmall, label).X + 32
+}
+
+// updateStatus is shown instead of update while updating.
+func (a *App) updateStatus() string {
+	if a.upd.download != nil {
+		return i18n.Trans("Downloading HelpBuoy Desk {0}…", a.upd.version)
+	}
+	return i18n.Trans("Checking for updates…")
+}
+
+// drawUpdateLink draws "update" in the top right corner, in a bar of height
+// h, where the app updates itself (Options.CheckUpdate). Clicking it checks
+// for a newer release and installs it; meanwhile it shows the progress.
+func (a *App) drawUpdateLink(h float32) {
+	if a.opts.CheckUpdate == nil {
+		return
+	}
+	c := a.ui
+	w, _ := ui.WindowSize()
+	label := i18n.Trans("update")
+	if a.upd.busy() {
+		label = a.updateStatus()
+	}
+	m := c.Measure(ui.Regular, ui.SizeSmall, label)
+	x, y := w-16-m.X, (h-m.Y)/2
+	if c.Link("update", x, y, label, a.upd.busy()) {
+		a.checkForUpdate()
 	}
 }
 
-// pollUpdate starts the check when it is due and handles its result and the
-// download, once per frame.
+// checkForUpdate starts the check; pollUpdate handles the result.
+func (a *App) checkForUpdate() {
+	if a.upd.busy() || a.opts.CheckUpdate == nil {
+		return
+	}
+	ch := make(chan checkResult, 1)
+	a.upd.check = ch
+	check := a.opts.CheckUpdate
+	go func() {
+		r, err := check(context.Background())
+		ch <- checkResult{r, err}
+	}()
+}
+
+// pollUpdate handles the check and the download, once per frame.
 func (a *App) pollUpdate() {
 	u := &a.upd
-	if !u.checkAt.IsZero() && time.Now().After(u.checkAt) {
-		u.checkAt = time.Time{}
-		ch := make(chan checkResult, 1)
-		u.res = ch
-		check := a.opts.CheckUpdate
-		go func() {
-			r, err := check(context.Background())
-			ch <- checkResult{r, err}
-		}()
-	}
-	if u.res != nil {
+	if u.check != nil {
 		select {
-		case res := <-u.res:
-			u.res = nil
-			if res.err == nil && res.r != nil {
-				u.release = res.r
+		case res := <-u.check:
+			u.check = nil
+			switch {
+			case res.err != nil:
+				u.dialog = &dialog{i18n.Trans("Could not check for updates"), res.err.Error()}
+			case res.r == nil:
+				u.dialog = &dialog{i18n.Trans("HelpBuoy Desk is up to date"),
+					i18n.Trans("You have the latest version, {0}.", a.opts.Version)}
+			case a.sessionCount() > 0:
+				u.dialog = &dialog{i18n.Trans("HelpBuoy Desk {0} is available", res.r.Version),
+					i18n.Trans("End the open sessions first, then click update again.")}
+			default:
+				a.startDownload(*res.r)
 			}
 		default:
 		}
@@ -75,17 +121,17 @@ func (a *App) pollUpdate() {
 	if u.download != nil {
 		select {
 		case res := <-u.download:
-			u.download, u.downloading = nil, false
+			u.download = nil
 			err := res.err
 			if err == nil {
 				// msiexec shows the installer; the MSI replaces the running
 				// version, so the app quits to release helpbuoy-desk.exe.
+				// The MSI starts the new version when it is done.
 				log := filepath.Join(os.TempDir(), "helpbuoy-desk-update.log")
 				err = exec.Command("msiexec", "/i", res.path, "/l*v", log).Start()
 			}
 			if err != nil {
-				u.err = i18n.Trans("The update could not be installed: {0}", err)
-				a.dismissUpdate()
+				u.dialog = &dialog{i18n.Trans("The update could not be installed"), err.Error()}
 				return
 			}
 			a.quit = true
@@ -94,57 +140,47 @@ func (a *App) pollUpdate() {
 	}
 }
 
-// dismissUpdate drops the offer.
-func (a *App) dismissUpdate() {
-	a.upd.release = nil
-}
-
-// installUpdate downloads the offered MSI; pollUpdate starts it.
-func (a *App) installUpdate() {
-	u := &a.upd
-	if u.release == nil || u.downloading {
-		return
-	}
-	r := *u.release
+// startDownload downloads the MSI of r; pollUpdate starts it.
+func (a *App) startDownload(r update.Release) {
 	ch := make(chan downloadResult, 1)
-	u.download, u.downloading, u.err = ch, true, ""
+	a.upd.download, a.upd.version = ch, r.Version
 	go func() {
 		path, err := update.Download(context.Background(), r, os.TempDir())
 		ch <- downloadResult{path, err}
 	}()
 }
 
-// drawUpdateOffer draws the offer with Install now and Not now (or the
-// download in progress) and returns the bottom y. blocked disables Install
-// now with a reason.
-func (a *App) drawUpdateOffer(x, y, w float32, blocked string) float32 {
+// dialogShown reports whether the update dialog is drawn this frame. It
+// waits while a session is shown, so no input meant for the remote computer
+// goes to the dialog, or the other way around.
+func (a *App) dialogShown() bool {
+	return a.upd.dialog != nil && a.activeSession() == nil
+}
+
+// drawDialog draws the update dialog over everything, dimming the rest. OK,
+// Enter and Esc close it.
+func (a *App) drawDialog() {
+	d := a.upd.dialog
 	c := a.ui
-	u := &a.upd
-	if u.err != "" {
-		y += c.Paragraph(ui.Regular, ui.SizeSmall, u.err, x, y, w, ui.ColError)
-		y += 12
+	w, h := ui.WindowSize()
+	rl.DrawRectangleRec(rl.NewRectangle(0, 0, w, h), rl.Fade(ui.ColText, 0.35))
+	const pad = 24
+	bw := min(w-48, 440)
+	inner := bw - 2*pad
+	lines := len(c.Wrap(ui.Regular, ui.SizeBody, d.body, inner))
+	bh := pad + 30 + float32(lines)*ui.SizeBody*1.35 + 20 + 34 + pad
+	box := rl.NewRectangle((w-bw)/2, (h-bh)/2, bw, bh)
+	rl.DrawRectangleRounded(box, 0.04, 8, ui.ColPanel)
+	rl.DrawRectangleRoundedLinesEx(box, 0.04, 8, 1, ui.ColBorder)
+	x, y := box.X+pad, box.Y+pad
+	c.Text(ui.Bold, ui.SizeHeading, d.title, x, y, ui.ColText)
+	y += 30
+	y += c.Paragraph(ui.Regular, ui.SizeBody, d.body, x, y, inner, ui.ColMuted)
+	y += 20
+	okL := i18n.Trans("OK")
+	bw2 := a.btnW(okL, 90)
+	if c.Button("dialog/ok", rl.NewRectangle(box.X+box.Width-pad-bw2, y, bw2, 34), okL, ui.Primary, false) ||
+		rl.IsKeyPressed(rl.KeyEnter) || rl.IsKeyPressed(rl.KeyKpEnter) || rl.IsKeyPressed(rl.KeyEscape) {
+		a.upd.dialog = nil
 	}
-	if u.release == nil {
-		return y
-	}
-	c.Text(ui.Bold, ui.SizeBody, i18n.Trans("HelpBuoy Desk {0} is available", u.release.Version), x, y, ui.ColText)
-	y += 26
-	if u.downloading {
-		y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Downloading HelpBuoy Desk {0}…", u.release.Version), x, y, w, ui.ColMuted)
-		return y + 12
-	}
-	y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("You have {0}. HelpBuoy Desk closes during the installation.", a.opts.Version), x, y, w, ui.ColMuted)
-	y += 10
-	installL, laterL := i18n.Trans("Install now"), i18n.Trans("Not now")
-	wi, wl := a.btnW(installL, 140), a.btnW(laterL, 110)
-	if c.Button("update/install", rl.NewRectangle(x, y, wi, 34), installL, ui.Primary, blocked != "") {
-		a.installUpdate()
-	}
-	if c.Button("update/later", rl.NewRectangle(x+wi+10, y, wl, 34), laterL, ui.Normal, false) {
-		a.dismissUpdate()
-	}
-	if blocked != "" {
-		c.Text(ui.Regular, ui.SizeSmall, blocked, x+wi+10+wl+12, y+9, ui.ColMuted)
-	}
-	return y + 46
 }

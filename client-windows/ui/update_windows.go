@@ -15,15 +15,7 @@ import (
 	"github.com/helpbuoy/helpbuoy/proto/update"
 )
 
-// versionText is the text of the version link on the waiting screen.
-func versionText(version string) string {
-	if update.IsRelease(version) {
-		version = "v" + version
-	}
-	return "<a>" + version + "</a>"
-}
-
-// checkForUpdate is the version link on the waiting screen. It asks for the
+// checkForUpdate is the update link on the waiting screen. It asks for the
 // latest release and, when it is newer, installs it; otherwise it says this
 // version is the latest.
 func (w *Window) checkForUpdate() {

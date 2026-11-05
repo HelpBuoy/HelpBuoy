@@ -18,6 +18,7 @@ import (
 	"github.com/helpbuoy/helpbuoy/client-windows/app"
 	"github.com/helpbuoy/helpbuoy/client-windows/session"
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/proto/update"
 )
 
 // Title is the window title.
@@ -78,7 +79,7 @@ type Window struct {
 	lblInfoTitle  *ui.Static // the server's title, above the status line
 	btnDisconnect *ui.Button
 	lblComment    *ui.Static
-	lnkVersion    *ui.SysLink // bottom right; clicking it updates
+	lnkUpdate     *ui.SysLink // "update", bottom right
 	// ScreenKeyError
 	lblKeyErr    *ui.Static
 	btnRemoveKey *ui.Button
@@ -137,7 +138,7 @@ func New(iconID uint16) *Window {
 	w.lblInfoTitle = static("", co.SS_CENTER)
 	w.btnDisconnect = button(i18n.Trans("&Disconnect"), co.BS_PUSHBUTTON)
 	w.lblComment = static("", co.SS_CENTER)
-	w.lnkVersion = link("", co.LWS_RIGHT)
+	w.lnkUpdate = link("<a>"+i18n.Trans("update")+"</a>", co.LWS_RIGHT)
 
 	w.lblKeyErr = static("", co.SS_LEFT)
 	w.btnRemoveKey = button(i18n.Trans("Remove &key..."), co.BS_PUSHBUTTON)
@@ -164,7 +165,7 @@ func New(iconID uint16) *Window {
 		{w.lblInfoTitle, 24, 152, 412, 28, fontHeading},
 		{w.lblStatus, 24, statusY, 412, 64, fontNormal},
 		{w.btnDisconnect, 150, 258, 160, 32, fontNormal},
-		{w.lnkVersion, 336, 304, 112, 20, fontNormal},
+		{w.lnkUpdate, 236, 304, 212, 20, fontNormal},
 
 		{w.lblKeyErr, 24, 24, 412, 190, fontNormal},
 		{w.btnRemoveKey, 24, 226, 160, 32, fontNormal},
@@ -332,7 +333,7 @@ func (w *Window) events() {
 	w.btnCopy.On().BnClicked(func() { w.copyText(w.view.KeyLine, w.btnCopy) })
 	w.btnRemoveKey.On().BnClicked(w.confirmRemoveKey)
 	w.lnkChange.On().NmClick(func(_ *win.NMLINK) { w.ctrl.Disconnect() })
-	w.lnkVersion.On().NmClick(func(_ *win.NMLINK) { w.checkForUpdate() })
+	w.lnkUpdate.On().NmClick(func(_ *win.NMLINK) { w.checkForUpdate() })
 	w.btnDisconnect.On().BnClicked(func() {
 		if w.view.InSession {
 			w.ctrl.EndSession()
@@ -566,10 +567,9 @@ func (w *Window) apply(v app.View) {
 	w.moveStatus(title)
 	show(w.btnDisconnect, main)
 	show(w.lblComment, main)
-	show(w.lnkVersion, main)
+	show(w.lnkUpdate, main)
 	if main {
-		setText(w.lnkVersion, versionText(w.ctrl.Version()))
-		w.lnkVersion.Hwnd().EnableWindow(w.updating == "")
+		w.lnkUpdate.Hwnd().EnableWindow(w.updating == "")
 		setText(w.lblComment, v.KeyComment)
 		waiting := ""
 		if v.Ready {
@@ -610,9 +610,13 @@ func (w *Window) apply(v app.View) {
 				"a techie will have to register this PC again."))
 	}
 
+	// Like most apps, the title shows the version: "HelpBuoy v0.4.19".
 	caption := Title
+	if version := w.ctrl.Version(); update.IsRelease(version) {
+		caption += " " + version
+	}
 	if v.Title != "" {
-		caption = v.Title + " - " + Title
+		caption = v.Title + " - " + caption
 	}
 	setText(w.wnd, caption)
 

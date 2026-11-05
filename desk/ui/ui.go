@@ -97,6 +97,15 @@ type Context struct {
 	lastClick time.Time
 	tooltip   string
 	tipPos    rl.Vector2
+	muted     *mouseInput // the input Mute took away, until Unmute
+}
+
+// mouseInput is the part of the input snapshot Mute hides.
+type mouseInput struct {
+	mouse                   rl.Vector2
+	pressed, released, down bool
+	wheel                   rl.Vector2
+	chars                   []rune
 }
 
 // New returns a Context. Call Load after InitWindow.
@@ -261,6 +270,29 @@ func (c *Context) End() {
 	if !c.hidden && c.cursor != c.curCursor {
 		rl.SetMouseCursor(int32(c.cursor))
 		c.curCursor = c.cursor
+	}
+}
+
+// Mute hides the mouse and typed characters from the widgets drawn until
+// Unmute and drops the keyboard focus, so a modal dialog drawn over them
+// gets all input.
+func (c *Context) Mute() {
+	if c.muted != nil {
+		return
+	}
+	c.muted = &mouseInput{c.Mouse, c.MousePressed, c.MouseReleased, c.MouseDown, c.Wheel, c.Chars}
+	c.Mouse = rl.NewVector2(-1e6, -1e6)
+	c.MousePressed, c.MouseReleased, c.MouseDown = false, false, false
+	c.Wheel, c.Chars = rl.Vector2{}, nil
+	c.Focus = ""
+}
+
+// Unmute gives back the input Mute hid.
+func (c *Context) Unmute() {
+	if m := c.muted; m != nil {
+		c.Mouse, c.MousePressed, c.MouseReleased, c.MouseDown = m.mouse, m.pressed, m.released, m.down
+		c.Wheel, c.Chars = m.wheel, m.chars
+		c.muted = nil
 	}
 }
 

@@ -169,12 +169,7 @@ func (a *App) drawStart() {
 func (a *App) drawConnect(x, y, w float32) float32 {
 	c := a.ui
 	s := &a.cs
-	busy := a.connecting() || a.upd.downloading
-	if !a.connecting() && (a.upd.release != nil || a.upd.err != "") {
-		y = a.drawUpdateOffer(x, y, w, "")
-		rl.DrawLineV(rl.NewVector2(x, y), rl.NewVector2(x+w, y), ui.ColBorder)
-		y += 24
-	}
+	busy := a.connecting() || a.upd.download != nil
 	c.Text(ui.Bold, ui.SizeHeading, i18n.Trans("Connect to your computer"), x, y, ui.ColText)
 	y += 36
 	y += c.Paragraph(ui.Regular, ui.SizeBody, i18n.Trans("Type the server address you told the computer to use, for example helpme.example.com."), x, y, w, ui.ColMuted)

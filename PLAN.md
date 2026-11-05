@@ -592,12 +592,13 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   per-user MSI (`installer/helpbuoy.wxs`, no UAC prompt) that installs it into
   `%LOCALAPPDATA%\Programs\helpbuoy` with a Start menu shortcut. Because the exe is never
   patched, it can be Authenticode-signed (`osslsigncode`) once per release.
-- **Updates**, like otp4win, but only on request: the waiting screen shows the version as a
-  text link in the bottom right corner (for example "v0.4.18"). Clicking it asks the GitHub
-  API for the latest release; if its MSI is newer, the app downloads it to the temp folder,
-  checks its size, starts `msiexec` and closes. Otherwise a dialog says this is the latest
-  version, or that the check failed. The app never checks by itself. The MSI starts the app
-  when the installation is done. A development build always reports it is up to date. It
+- **Updates**, like otp4win, but only on request. Like most apps, the window title shows the
+  version ("HelpBuoy v0.4.19"), and the waiting screen has an "update" text link in the
+  bottom right corner. Clicking it asks the GitHub API for the latest release; if its MSI
+  is newer, the app downloads it to the temp folder, checks its size, starts `msiexec` and
+  closes. Otherwise a dialog says this is the latest version, or that the check failed. The
+  app never checks by itself. The MSI starts the app when the installation is done. A
+  development build has no version in its title and always reports it is up to date. It
   needs the GitHub repository to be public, since the release API doesn't show private
   releases to anonymous callers.
 - `release.sh [major|minor|build]` bumps the version in both `winres.json` files, runs
@@ -605,8 +606,9 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   with everything in `dist/`: only installers, never a bare binary. That is the client and desk
   app MSIs and the Debian packages of the Linux client, the desk app and `helpbuoy-server`.
   The updaters pick their MSI by name prefix: `helpbuoy_` for the client, `helpbuoy-desk_`
-  for the desk app on Windows, which checks the same way, 10 seconds after start-up, and offers
-  the update on the connect screen, or on the Server tab once connected. For now only Linux and
+  for the desk app on Windows, which updates the same way: its title shows the version and an
+  "update" link sits in the top right corner (in the tab bar once connected). With sessions
+  open it asks to end them first. For now only Linux and
   Windows on amd64 are built (`OSES` and `ARCHES` in the Makefile).
 - The server also ships as a Debian 13 package (`make deb`, `packaging/debian/`): `helpbuoy-server`
   as a hardened systemd service under its own system user with its state in

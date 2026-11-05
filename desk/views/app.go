@@ -42,8 +42,9 @@ type Options struct {
 	// Screenshot, if set, saves a frame as PNG to this path once the window
 	// has settled, then quits (screenshot.sh, for the README).
 	Screenshot string
-	// CheckUpdate looks for a newer release, updateDelay after the start;
-	// nil never checks. Errors (offline, the API refusing) are ignored.
+	// CheckUpdate looks for a newer release, or returns nil when there is
+	// none. It only runs when the user clicks update in the top right
+	// corner; nil hides that link.
 	CheckUpdate func(ctx context.Context) (*update.Release, error)
 }
 
@@ -211,7 +212,6 @@ func New(opts Options) *App {
 		if a.cfg.ServerAddr != "" && a.cfg.ServerHostKey != "" && a.key != nil && a.keyErr == nil {
 			a.startConnect()
 		}
-		a.scheduleUpdate()
 	}
 	switch opts.Page {
 	case "register":
@@ -287,6 +287,10 @@ func (a *App) Frame() {
 	}
 	a.drain()
 	a.updateSessions()
+	modal := a.dialogShown()
+	if modal {
+		a.ui.Mute() // the dialog drawn last gets the input
+	}
 
 	rl.BeginDrawing()
 	rl.ClearBackground(ui.ColBackground)
@@ -295,6 +299,7 @@ func (a *App) Frame() {
 		a.drawKeyProblem()
 	case a.demo == nil && !a.reached:
 		a.drawStart()
+		a.drawUpdateLink(tabBarH)
 	case a.fullscreen && a.activeSession() != nil:
 		w, h := ui.WindowSize()
 		a.drawSession(a.activeSession(), rl.NewRectangle(0, 0, w, h))
@@ -303,6 +308,10 @@ func (a *App) Frame() {
 			a.setFullscreen(false)
 		}
 		a.drawWorkArea()
+	}
+	if modal {
+		a.ui.Unmute()
+		a.drawDialog()
 	}
 	if a.keysTo != nil && a.keysTo != a.activeSession() {
 		a.keysTo.release() // the session lost the keyboard: lift held keys
@@ -780,13 +789,15 @@ func (a *App) drawWorkArea() {
 		}
 		return max(fixedTabW, a.ui.Measure(ui.Bold, ui.SizeBody, a.tabTitle(t)).X+24)
 	}
+	// The update link takes the top right corner; the tabs keep clear of it.
+	room := w - a.updateLinkW()
 	total := float32(0)
 	for _, t := range a.tabs {
 		total += widthOf(t)
 	}
 	shrink := float32(1)
-	if total > w {
-		shrink = w / total
+	if total > room {
+		shrink = room / total
 	}
 	x := float32(0)
 	closeAt := -1
@@ -801,6 +812,7 @@ func (a *App) drawWorkArea() {
 		}
 		x += tw
 	}
+	a.drawUpdateLink(tabBarH)
 	if closeAt >= 0 {
 		if isRegister(a.tabs[closeAt].kind) {
 			a.closeRegister()
