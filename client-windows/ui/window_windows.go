@@ -151,10 +151,12 @@ func New(iconID uint16) *Window {
 		{w.lblKeyIntro, 24, 18, 412, 36, fontNormal},
 		{w.edtKey, 24, 56, 412, 62, fontNormal},
 		{w.btnCopy, 24, 128, 412, 46, fontBig},
-		{w.lblKeyFp, 24, 186, 424, 18, fontNormal},
-		{w.lblServerFp, 24, 206, 424, 18, fontNormal},
-		{w.lblKeyNotice, 24, 234, 412, 40, fontNormal},
-		{w.lnkChange, 24, 298, 412, 20, fontNormal},
+		// Label and fingerprint on separate lines, so a long translated
+		// label never pushes the fingerprint out of view.
+		{w.lblKeyFp, 24, 182, 412, 34, fontNormal},
+		{w.lblServerFp, 24, 217, 412, 34, fontNormal},
+		{w.lblKeyNotice, 24, 256, 412, 40, fontNormal},
+		{w.lnkChange, 24, 302, 412, 20, fontNormal},
 
 		{w.lblComment, 24, 44, 412, 34, fontHeading},
 		{w.lblWaiting, 24, 104, 412, 40, fontBig},
@@ -542,8 +544,8 @@ func (w *Window) apply(v app.View) {
 	show(w.lnkChange, key)
 	if key {
 		setText(w.edtKey, v.KeyLine)
-		setText(w.lblKeyFp, i18n.Trans("Key fingerprint: {0}", v.KeyFingerprint))
-		setText(w.lblServerFp, i18n.Trans("Server fingerprint: {0}", v.ServerFingerprint))
+		setText(w.lblKeyFp, i18n.Trans("Key fingerprint:\n{0}", v.KeyFingerprint))
+		setText(w.lblServerFp, i18n.Trans("Server fingerprint:\n{0}", v.ServerFingerprint))
 		notice := v.Notice
 		if notice == "" {
 			notice = i18n.Trans("Waiting for a techie to add this key. This window changes by itself when that is done.")
