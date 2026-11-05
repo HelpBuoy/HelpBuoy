@@ -5,10 +5,11 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/mevdschee/helpbuoy/proto/control"
-	"github.com/mevdschee/helpbuoy/proto/input"
-	"github.com/mevdschee/helpbuoy/proto/screen"
-	"github.com/mevdschee/helpbuoy/proto/serveraddr"
+	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/proto/input"
+	"github.com/helpbuoy/helpbuoy/proto/screen"
+	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 )
 
 func TestWheel(t *testing.T) {
@@ -39,7 +40,7 @@ func TestNormalize(t *testing.T) {
 }
 
 func TestMonitorTip(t *testing.T) {
-	if got := monitorTip(screen.Monitor{W: 1920, H: 1080, Primary: true, Name: "DELL"}); got != "DELL, 1920 x 1080, primary" {
+	if got := monitorTip(screen.Monitor{W: 1920, H: 1080, Primary: true, Name: "DELL"}); got != i18n.Trans("{0}, primary", "DELL, 1920 x 1080") {
 		t.Errorf("tip %q", got)
 	}
 	if got := monitorTip(screen.Monitor{W: 800, H: 600}); got != "800 x 600" {

@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/mevdschee/helpbuoy/proto/input"
+	"github.com/helpbuoy/helpbuoy/proto/input"
 )
 
 // Counter is the phase 2 input sink: it decodes and counts every message and

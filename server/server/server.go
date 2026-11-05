@@ -23,14 +23,14 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/proto/control"
-	"github.com/mevdschee/helpbuoy/proto/wire"
-	"github.com/mevdschee/helpbuoy/server/auth"
-	"github.com/mevdschee/helpbuoy/server/hostkey"
-	"github.com/mevdschee/helpbuoy/server/limits"
-	"github.com/mevdschee/helpbuoy/server/registry"
-	"github.com/mevdschee/helpbuoy/server/splice"
-	"github.com/mevdschee/helpbuoy/server/store"
+	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/wire"
+	"github.com/helpbuoy/helpbuoy/server/auth"
+	"github.com/helpbuoy/helpbuoy/server/hostkey"
+	"github.com/helpbuoy/helpbuoy/server/limits"
+	"github.com/helpbuoy/helpbuoy/server/registry"
+	"github.com/helpbuoy/helpbuoy/server/splice"
+	"github.com/helpbuoy/helpbuoy/server/store"
 )
 
 // KeepaliveRequest is the only global request the server answers, and the one

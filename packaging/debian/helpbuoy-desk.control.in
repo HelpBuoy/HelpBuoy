@@ -7,7 +7,7 @@ Depends: libc6 (>= 2.38), libx11-6, libgl1
 Recommends: libxcursor1, libxrandr2, libxinerama1, libxi6
 Section: net
 Priority: optional
-Homepage: https://github.com/mevdschee/helpbuoy
+Homepage: https://github.com/helpbuoy/helpbuoy
 Description: support desk for helpbuoy self-hosted remote support
  helpbuoy-desk is the app support techies use to see and control the
  screens of the people they help (helpbuoy on Windows and Linux). It

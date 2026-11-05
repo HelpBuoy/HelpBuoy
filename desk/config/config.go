@@ -18,7 +18,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/proto/serveraddr"
+	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 )
 
 // FileName is the settings file inside the data directory. The client app

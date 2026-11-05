@@ -7,9 +7,9 @@ import (
 	"os/user"
 	"strings"
 
-	"github.com/mevdschee/helpbuoy/proto/appkey"
-	"github.com/mevdschee/helpbuoy/proto/datadir"
-	"github.com/mevdschee/helpbuoy/proto/identity"
+	"github.com/helpbuoy/helpbuoy/proto/appkey"
+	"github.com/helpbuoy/helpbuoy/proto/datadir"
+	"github.com/helpbuoy/helpbuoy/proto/identity"
 )
 
 // AppName is the data directory name. It is not the client's "helpbuoy",

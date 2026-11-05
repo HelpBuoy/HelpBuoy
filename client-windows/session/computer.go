@@ -19,9 +19,9 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/client-windows/identity"
-	"github.com/mevdschee/helpbuoy/proto/control"
-	pid "github.com/mevdschee/helpbuoy/proto/identity"
+	"github.com/helpbuoy/helpbuoy/client-windows/identity"
+	"github.com/helpbuoy/helpbuoy/proto/control"
+	pid "github.com/helpbuoy/helpbuoy/proto/identity"
 )
 
 // Phase is what the computer is doing, as far as the window cares.

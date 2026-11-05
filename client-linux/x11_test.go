@@ -15,13 +15,13 @@ import (
 	"github.com/jezek/xgb/xproto"
 	"github.com/jezek/xgb/xtest"
 
-	"github.com/mevdschee/helpbuoy/client-linux/injector"
-	"github.com/mevdschee/helpbuoy/client-linux/xkeys"
-	"github.com/mevdschee/helpbuoy/client-windows/identity"
-	"github.com/mevdschee/helpbuoy/proto/inner"
-	"github.com/mevdschee/helpbuoy/proto/input"
-	"github.com/mevdschee/helpbuoy/proto/screen"
-	"github.com/mevdschee/helpbuoy/proto/wire"
+	"github.com/helpbuoy/helpbuoy/client-linux/injector"
+	"github.com/helpbuoy/helpbuoy/client-linux/xkeys"
+	"github.com/helpbuoy/helpbuoy/client-windows/identity"
+	"github.com/helpbuoy/helpbuoy/proto/inner"
+	"github.com/helpbuoy/helpbuoy/proto/input"
+	"github.com/helpbuoy/helpbuoy/proto/screen"
+	"github.com/helpbuoy/helpbuoy/proto/wire"
 )
 
 // These tests need an X server they may take over, such as

@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/proto/serveraddr"
+	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 )
 
 func newKey(t *testing.T) ssh.PublicKey {

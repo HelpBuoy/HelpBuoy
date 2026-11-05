@@ -14,12 +14,12 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/proto/control"
-	"github.com/mevdschee/helpbuoy/server/auth"
-	"github.com/mevdschee/helpbuoy/server/fake"
-	"github.com/mevdschee/helpbuoy/server/limits"
-	"github.com/mevdschee/helpbuoy/server/server"
-	"github.com/mevdschee/helpbuoy/server/store"
+	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/server/auth"
+	"github.com/helpbuoy/helpbuoy/server/fake"
+	"github.com/helpbuoy/helpbuoy/server/limits"
+	"github.com/helpbuoy/helpbuoy/server/server"
+	"github.com/helpbuoy/helpbuoy/server/store"
 )
 
 const wait = 5 * time.Second

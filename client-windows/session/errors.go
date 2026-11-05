@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"syscall"
+
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
 )
 
 // ErrHostKeyChanged is returned when the server presents a host key other than
@@ -99,27 +101,27 @@ func isRefused(e syscall.Errno) bool {
 func Describe(err error) string {
 	switch Classify(err) {
 	case KindNameNotFound:
-		return "This name was not found. Check the server address."
+		return i18n.Trans("This name was not found. Check the server address.")
 	case KindRefused:
-		return "Nothing is answering at this address. Check the address and the port, and whether the server is running."
+		return i18n.Trans("Nothing is answering at this address. Check the address and the port, and whether the server is running.")
 	case KindTimeout:
-		return "The server did not answer in time. Check the address and your internet connection."
+		return i18n.Trans("The server did not answer in time. Check the address and your internet connection.")
 	case KindNotServer:
-		return "This address does not belong to a HelpBuoy server."
+		return i18n.Trans("This address does not belong to a HelpBuoy server.")
 	case KindRefusedKey:
-		return "The server refused this PC for now. Try again later."
+		return i18n.Trans("The server refused this PC for now. Try again later.")
 	case KindHostKeyChanged:
-		return "The server's identity changed, so HelpBuoy stopped connecting. Ask a techie before you continue. " +
-			"Restart HelpBuoy to answer the warning again."
+		return i18n.Trans("The server's identity changed, so HelpBuoy stopped connecting. Ask a techie before you continue. " +
+			"Restart HelpBuoy to answer the warning again.")
 	case KindTechieKey:
-		return "This key belongs to a techie on this server and can't be used here."
+		return i18n.Trans("This key belongs to a techie on this server and can't be used here.")
 	case KindServer:
 		var re *ServerError
 		errors.As(err, &re)
-		return "The server closed the connection: " + strings.TrimSuffix(re.Message, ".") + "."
+		return i18n.Trans("The server closed the connection: {0}.", strings.TrimSuffix(re.Message, "."))
 	}
 	if err == nil {
 		return ""
 	}
-	return "Could not connect: " + err.Error()
+	return i18n.Trans("Could not connect: {0}", err.Error())
 }

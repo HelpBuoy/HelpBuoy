@@ -11,11 +11,11 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/desk/serverconn"
-	"github.com/mevdschee/helpbuoy/desk/session"
-	"github.com/mevdschee/helpbuoy/proto/appkey"
-	"github.com/mevdschee/helpbuoy/proto/control"
-	"github.com/mevdschee/helpbuoy/proto/identity"
+	"github.com/helpbuoy/helpbuoy/desk/serverconn"
+	"github.com/helpbuoy/helpbuoy/desk/session"
+	"github.com/helpbuoy/helpbuoy/proto/appkey"
+	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/identity"
 )
 
 // demo fakes a server with a few computers so the UI can be seen and tried

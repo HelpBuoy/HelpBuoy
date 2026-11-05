@@ -7,12 +7,13 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/mevdschee/helpbuoy/desk/config"
-	"github.com/mevdschee/helpbuoy/desk/identity"
-	"github.com/mevdschee/helpbuoy/desk/localserver"
-	"github.com/mevdschee/helpbuoy/desk/serverconn"
-	"github.com/mevdschee/helpbuoy/desk/ui"
-	"github.com/mevdschee/helpbuoy/proto/serveraddr"
+	"github.com/helpbuoy/helpbuoy/desk/config"
+	"github.com/helpbuoy/helpbuoy/desk/identity"
+	"github.com/helpbuoy/helpbuoy/desk/localserver"
+	"github.com/helpbuoy/helpbuoy/desk/serverconn"
+	"github.com/helpbuoy/helpbuoy/desk/ui"
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 )
 
 // connectScreen is the state of the first screen: the server address and
@@ -27,7 +28,7 @@ type connectScreen struct {
 }
 
 func (s *connectScreen) init() {
-	s.addr.Placeholder = "Local server on this computer"
+	s.addr.Placeholder = i18n.Trans("Local server on this computer")
 	s.addr.Edit.Max = 260
 }
 
@@ -117,9 +118,9 @@ func (a *App) pollLocal() {
 		a.localWait = false
 		a.openConn("127.0.0.1:" + strconv.Itoa(a.addr.Port))
 	case localserver.StateExited:
-		msg := "The server on this computer could not start."
+		msg := i18n.Trans("The server on this computer could not start.")
 		if st.Err != nil {
-			msg = "The server on this computer could not start: " + st.Err.Error()
+			msg = i18n.Trans("The server on this computer could not start: {0}", st.Err)
 		}
 		a.disconnect()
 		a.cs.err = msg
@@ -133,15 +134,15 @@ func (a *App) statusBeforeOnline(ev serverconn.StatusEvent) {
 	case serverconn.StatusAuthFailed:
 		a.notTechie = true // shows the key screen; the connection keeps retrying
 	case serverconn.StatusUnreachable:
-		msg := "Nothing answered at this address."
+		msg := i18n.Trans("Nothing answered at this address.")
 		if ev.Err != nil {
-			msg = "Could not connect: " + ev.Err.Error()
+			msg = i18n.Trans("Could not connect: {0}", ev.Err)
 		}
 		a.disconnect()
 		a.cs.err = msg
 	case serverconn.StatusIdentityChanged:
 		a.disconnect()
-		a.cs.err = "The server at this address shows a different key than the first time."
+		a.cs.err = i18n.Trans("The server at this address shows a different key than the first time.")
 		a.cs.changedKey = true
 	}
 }
@@ -175,47 +176,51 @@ func (a *App) drawConnect(x, y, w float32) float32 {
 		rl.DrawLineV(rl.NewVector2(x, y), rl.NewVector2(x+w, y), ui.ColBorder)
 		y += 24
 	}
-	c.Text(ui.Bold, ui.SizeHeading, "Connect to your computer", x, y, ui.ColText)
+	c.Text(ui.Bold, ui.SizeHeading, i18n.Trans("Connect to your computer"), x, y, ui.ColText)
 	y += 36
-	y += c.Paragraph(ui.Regular, ui.SizeBody, "Type the server address you told the computer to use, for example helpme.example.com.", x, y, w, ui.ColMuted)
+	y += c.Paragraph(ui.Regular, ui.SizeBody, i18n.Trans("Type the server address you told the computer to use, for example helpme.example.com."), x, y, w, ui.ColMuted)
 	y += 14
-	fieldW := w - 130
+	connectL, connectingL := i18n.Trans("Connect"), i18n.Trans("Connecting…")
+	bw := max(a.btnW(connectL, 120), a.btnW(connectingL, 120))
+	fieldW := w - bw - 10
 	res := c.TextField("start/addr", rl.NewRectangle(x, y, fieldW, 38), &s.addr)
 	if res.Changed {
 		s.err, s.changedKey, s.confirmTrust = "", false, false
 	}
-	label := "Connect"
+	label := connectL
 	if busy {
-		label = "Connecting…"
+		label = connectingL
 	}
-	if c.Button("start/connect", rl.NewRectangle(x+fieldW+10, y, 120, 38), label, ui.Primary, busy) || res.Submitted && !busy {
+	if c.Button("start/connect", rl.NewRectangle(x+fieldW+10, y, bw, 38), label, ui.Primary, busy) || res.Submitted && !busy {
 		a.startConnect()
 	}
 	y += 44
 	if a.upd.checking {
-		y += c.Paragraph(ui.Regular, ui.SizeSmall, "Checking for updates…", x, y, w, ui.ColMuted)
+		y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Checking for updates…"), x, y, w, ui.ColMuted)
 		return y
 	}
-	y += c.Paragraph(ui.Regular, ui.SizeSmall, "Leave empty to run a local server on this computer, with you as its techie.", x, y, w, ui.ColMuted)
+	y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Leave empty to run a local server on this computer, with you as its techie."), x, y, w, ui.ColMuted)
 	if s.err != "" {
 		y += 10
 		y += c.Paragraph(ui.Regular, ui.SizeSmall, s.err, x, y, w, ui.ColError)
 	}
 	if s.changedKey {
 		y += 6
-		y += c.Paragraph(ui.Regular, ui.SizeSmall, "Someone may be intercepting the connection, or the server was reinstalled. Check with the server admin (helpbuoy-server hostkey) before trusting the new key.", x, y, w, ui.ColMuted)
+		y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Someone may be intercepting the connection, or the server was reinstalled. Check with the server admin (helpbuoy-server hostkey) before trusting the new key."), x, y, w, ui.ColMuted)
 		y += 10
 		if s.confirmTrust {
-			if c.Button("start/trust/confirm", rl.NewRectangle(x, y, 190, 34), "Trust the new key", ui.Danger, false) {
+			trustL, cancelL := i18n.Trans("Trust the new key"), i18n.Trans("Cancel")
+			tw := a.btnW(trustL, 190)
+			if c.Button("start/trust/confirm", rl.NewRectangle(x, y, tw, 34), trustL, ui.Danger, false) {
 				a.cfg.ForgetHostKey()
 				a.saveConfig()
 				s.changedKey, s.confirmTrust = false, false
 				a.startConnect()
 			}
-			if c.Button("start/trust/cancel", rl.NewRectangle(x+200, y, 90, 34), "Cancel", ui.Normal, false) {
+			if c.Button("start/trust/cancel", rl.NewRectangle(x+tw+10, y, a.btnW(cancelL, 90), 34), cancelL, ui.Normal, false) {
 				s.confirmTrust = false
 			}
-		} else if c.Button("start/trust", rl.NewRectangle(x, y, 210, 34), "Trust the new key…", ui.Normal, false) {
+		} else if l := i18n.Trans("Trust the new key…"); c.Button("start/trust", rl.NewRectangle(x, y, a.btnW(l, 210), 34), l, ui.Normal, false) {
 			s.confirmTrust = true
 		}
 		y += 34
@@ -228,28 +233,30 @@ func (a *App) drawConnect(x, y, w float32) float32 {
 func (a *App) drawNotTechie(x, y, w float32) float32 {
 	c := a.ui
 	s := &a.cs
-	c.Text(ui.Bold, ui.SizeHeading, "Send your key to get added", x, y, ui.ColText)
+	c.Text(ui.Bold, ui.SizeHeading, i18n.Trans("Send your key to get added"), x, y, ui.ColText)
 	y += 36
-	y += c.Paragraph(ui.Regular, ui.SizeBody, "The server at "+a.addr.String()+" does not know this techie yet. Send this public key to a techie on it (Add techie on the Techies tab) or to its admin (helpbuoy-server techie add).", x, y, w, ui.ColMuted)
+	y += c.Paragraph(ui.Regular, ui.SizeBody, i18n.Trans("The server at {0} does not know this techie yet. Send this public key to a techie on it (Add techie on the Techies tab) or to its admin (helpbuoy-server techie add).", a.addr.String()), x, y, w, ui.ColMuted)
 	y += 12
 	for _, l := range c.Wrap(ui.Mono, ui.SizeSmall, a.key.Line, w) {
 		c.Text(ui.Mono, ui.SizeSmall, l, x, y, ui.ColText)
 		y += 18
 	}
 	y += 10
-	if c.Button("start/copy", rl.NewRectangle(x, y, 170, 36), "Copy public key", ui.Primary, false) {
+	copyL := i18n.Trans("Copy public key")
+	cw := a.btnW(copyL, 170)
+	if c.Button("start/copy", rl.NewRectangle(x, y, cw, 36), copyL, ui.Primary, false) {
 		rl.SetClipboardText(a.key.Line)
 		s.copiedAt = c.Now
 	}
 	if c.Now.Sub(s.copiedAt) < 2*time.Second {
-		c.TextIn(ui.Regular, ui.SizeSmall, "Copied", rl.NewRectangle(x+182, y, 100, 36), ui.ColOK)
+		c.TextIn(ui.Regular, ui.SizeSmall, i18n.Trans("Copied"), rl.NewRectangle(x+cw+12, y, 100, 36), ui.ColOK)
 	}
 	y += 46
-	c.Text(ui.Regular, ui.SizeSmall, "Key fingerprint: "+a.key.Fingerprint, x, y, ui.ColMuted)
+	c.Text(ui.Regular, ui.SizeSmall, i18n.Trans("Key fingerprint: {0}", a.key.Fingerprint), x, y, ui.ColMuted)
 	y += 24
-	c.Text(ui.Regular, ui.SizeSmall, "This screen changes by itself once the key is added.", x, y, ui.ColMuted)
-	y += 30
-	if c.Button("start/back", rl.NewRectangle(x, y, 220, 34), "Use a different server address", ui.Flat, false) {
+	y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("This screen changes by itself once the key is added."), x, y, w, ui.ColMuted)
+	y += 11
+	if l := i18n.Trans("Use a different server address"); c.Button("start/back", rl.NewRectangle(x, y, a.btnW(l, 220), 34), l, ui.Flat, false) {
 		a.disconnect()
 	}
 	return y + 34

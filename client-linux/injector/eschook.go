@@ -7,7 +7,7 @@ import (
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
 
-	"github.com/mevdschee/helpbuoy/client-linux/xkeys"
+	"github.com/helpbuoy/helpbuoy/client-linux/xkeys"
 )
 
 // escPoll is how often the Esc hook reads the key state.

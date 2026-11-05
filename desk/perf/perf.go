@@ -15,8 +15,8 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/mevdschee/helpbuoy/desk/render"
-	"github.com/mevdschee/helpbuoy/desk/session"
+	"github.com/helpbuoy/helpbuoy/desk/render"
+	"github.com/helpbuoy/helpbuoy/desk/session"
 )
 
 // Frames is the number of measured frames per scenario.

@@ -15,6 +15,8 @@ import (
 	"golang.org/x/image/font/gofont/gobold"
 	"golang.org/x/image/font/gofont/gomono"
 	"golang.org/x/image/font/gofont/goregular"
+
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
 )
 
 // FontKind selects one of the embedded Go fonts.
@@ -106,7 +108,8 @@ func New() *Context {
 func (c *Context) Scale() float32 { return c.scale }
 
 // codepoints covers ASCII, Latin-1, Latin Extended-A and the few symbols the
-// app draws, so user@machine names in most European languages render.
+// app draws, so user@machine names in most European languages render, plus
+// every character the embedded translations use.
 var codepoints = func() []rune {
 	var cp []rune
 	for r := rune(32); r < 127; r++ {
@@ -115,7 +118,18 @@ var codepoints = func() []rune {
 	for r := rune(0xa0); r <= 0x17f; r++ {
 		cp = append(cp, r)
 	}
-	return append(cp, '…', '•', '–', '—', '←', '→', '▲', '►', '▼', '◄', '✓')
+	cp = append(cp, '…', '•', '–', '—', '←', '→', '▲', '►', '▼', '◄', '✓')
+	seen := map[rune]bool{}
+	for _, r := range cp {
+		seen[r] = true
+	}
+	for _, r := range i18n.Chars() {
+		if !seen[r] {
+			seen[r] = true
+			cp = append(cp, r)
+		}
+	}
+	return cp
 }()
 
 // font returns the font for kind and size, loading it on first use.

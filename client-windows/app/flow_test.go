@@ -8,10 +8,10 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/client-windows/config"
-	"github.com/mevdschee/helpbuoy/client-windows/identity"
-	"github.com/mevdschee/helpbuoy/client-windows/internal/fakeserver"
-	"github.com/mevdschee/helpbuoy/proto/update"
+	"github.com/helpbuoy/helpbuoy/client-windows/config"
+	"github.com/helpbuoy/helpbuoy/client-windows/identity"
+	"github.com/helpbuoy/helpbuoy/client-windows/internal/fakeserver"
+	"github.com/helpbuoy/helpbuoy/proto/update"
 )
 
 func startServer(t *testing.T) *fakeserver.Server {

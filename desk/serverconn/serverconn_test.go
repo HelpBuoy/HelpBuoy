@@ -13,8 +13,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/desk/config"
-	"github.com/mevdschee/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/desk/config"
+	"github.com/helpbuoy/helpbuoy/proto/control"
 )
 
 func newSigner(t *testing.T) ssh.Signer {

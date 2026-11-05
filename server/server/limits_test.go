@@ -8,11 +8,11 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/proto/control"
-	"github.com/mevdschee/helpbuoy/server/fake"
-	"github.com/mevdschee/helpbuoy/server/limits"
-	"github.com/mevdschee/helpbuoy/server/server"
-	"github.com/mevdschee/helpbuoy/server/store"
+	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/server/fake"
+	"github.com/helpbuoy/helpbuoy/server/limits"
+	"github.com/helpbuoy/helpbuoy/server/server"
+	"github.com/helpbuoy/helpbuoy/server/store"
 )
 
 // dialFrom connects from a given loopback source address and reports the

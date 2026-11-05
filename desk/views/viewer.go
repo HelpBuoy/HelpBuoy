@@ -9,12 +9,13 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/mevdschee/helpbuoy/desk/keymap"
-	"github.com/mevdschee/helpbuoy/desk/render"
-	"github.com/mevdschee/helpbuoy/desk/session"
-	"github.com/mevdschee/helpbuoy/desk/ui"
-	"github.com/mevdschee/helpbuoy/proto/input"
-	"github.com/mevdschee/helpbuoy/proto/screen"
+	"github.com/helpbuoy/helpbuoy/desk/keymap"
+	"github.com/helpbuoy/helpbuoy/desk/render"
+	"github.com/helpbuoy/helpbuoy/desk/session"
+	"github.com/helpbuoy/helpbuoy/desk/ui"
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/proto/input"
+	"github.com/helpbuoy/helpbuoy/proto/screen"
 )
 
 // sessionTab is the viewer state of one session.
@@ -158,7 +159,7 @@ func (a *App) drawSession(st *sessionTab, area rl.Rectangle) {
 	st.screen.Draw(l.dest)
 	c.PopClip()
 	if !st.screen.Ready() {
-		c.TextCentered(ui.Regular, ui.SizeBody, "Waiting for the screen…", view, ui.ColMuted)
+		c.TextCentered(ui.Regular, ui.SizeBody, i18n.Trans("Waiting for the screen…"), view, ui.ColMuted)
 	}
 	onBars := a.drawScrollbars(st, l, scale)
 
@@ -471,20 +472,20 @@ func drawPointer(p rl.Vector2) {
 }
 
 // qualityLabels are the toolbar labels of screen.QualityMode values, by value.
-var qualityLabels = []string{"Auto", "Sharp", "Fast"}
+var qualityLabels = []string{i18n.Trans("Auto"), i18n.Trans("Sharp"), i18n.Trans("Fast")}
 
 var qualityTips = []string{
-	"Auto: the computer balances sharpness and frame rate",
-	"Sharp: lossless text and images, at a lower frame rate",
-	"Fast: higher frame rate, softer images",
+	i18n.Trans("Auto: the computer balances sharpness and frame rate"),
+	i18n.Trans("Sharp: lossless text and images, at a lower frame rate"),
+	i18n.Trans("Fast: higher frame rate, softer images"),
 }
 
 // viewLabels are the toolbar labels of viewMode values, by value.
-var viewLabels = []string{"Fit", "1:1"}
+var viewLabels = []string{i18n.Trans("Fit"), "1:1"}
 
 var viewTips = []string{
-	"Fit: scale the screen to the window (Right Ctrl+S)",
-	"1:1: one remote pixel per screen pixel, scroll at the edges (Right Ctrl+S)",
+	i18n.Trans("Fit: scale the screen to the window (Right Ctrl+S)"),
+	i18n.Trans("1:1: one remote pixel per screen pixel, scroll at the edges (Right Ctrl+S)"),
 }
 
 // drawToolbar draws the session toolbar: End session, special keys,
@@ -509,13 +510,13 @@ func (a *App) drawToolbar(st *sessionTab, r rl.Rectangle) {
 	}
 	stats := a.statsText(st)
 
-	fsLabel := "Fullscreen"
+	fsLabel := i18n.Trans("Fullscreen")
 	if a.fullscreen {
-		fsLabel = "Exit fullscreen"
+		fsLabel = i18n.Trans("Exit fullscreen")
 	}
-	const resizeLabel = "Resize"
-	wEnd, wWin, wAlt := c.ButtonWidth("End session"), c.ButtonWidth("Win"), c.ButtonWidth("Alt+Tab")
-	wRefresh, wFs := c.ButtonWidth("Refresh"), c.ButtonWidth(fsLabel)
+	endLabel, refreshLabel, resizeLabel := i18n.Trans("End session"), i18n.Trans("Refresh"), i18n.Trans("Resize")
+	wEnd, wWin, wAlt := c.ButtonWidth(endLabel), c.ButtonWidth("Win"), c.ButtonWidth("Alt+Tab")
+	wRefresh, wFs := c.ButtonWidth(refreshLabel), c.ButtonWidth(fsLabel)
 	wResize := float32(0)
 	if !a.fullscreen {
 		wResize = c.ButtonWidth(resizeLabel)
@@ -550,7 +551,7 @@ func (a *App) drawToolbar(st *sessionTab, r rl.Rectangle) {
 		x += w + gap
 		return hit
 	}
-	if btn("end", "End session") {
+	if btn("end", endLabel) {
 		st.s.Close() // the tab closes when the session is done
 	}
 	x += group - gap
@@ -564,11 +565,11 @@ func (a *App) drawToolbar(st *sessionTab, r rl.Rectangle) {
 		}
 	}
 	if showRefresh {
-		if btn("refresh", "Refresh") {
+		if btn("refresh", refreshLabel) {
 			st.s.Refresh()
 		}
 		if c.Hover(rl.NewRectangle(x-wRefresh-gap, y, wRefresh, bh)) {
-			c.Tooltip("Get a full, sharp copy of the screen")
+			c.Tooltip(i18n.Trans("Get a full, sharp copy of the screen"))
 		}
 	}
 	if showMon {
@@ -601,7 +602,7 @@ func (a *App) drawToolbar(st *sessionTab, r rl.Rectangle) {
 		a.setFullscreen(!a.fullscreen)
 	}
 	if c.Hover(rl.NewRectangle(rx, y, wFs, bh)) {
-		c.Tooltip("Fullscreen; move the pointer to the top edge for this toolbar (Right Ctrl+F)")
+		c.Tooltip(i18n.Trans("Fullscreen; move the pointer to the top edge for this toolbar (Right Ctrl+F)"))
 	}
 	if showResize {
 		rx -= gap + wResize
@@ -609,7 +610,7 @@ func (a *App) drawToolbar(st *sessionTab, r rl.Rectangle) {
 			a.resizeToComputer(st)
 		}
 		if c.Hover(rl.NewRectangle(rx, y, wResize, bh)) {
-			c.Tooltip("Resize the window to show the remote screen at 1:1 (Right Ctrl+R)")
+			c.Tooltip(i18n.Trans("Resize the window to show the remote screen at 1:1 (Right Ctrl+R)"))
 		}
 	}
 	rx -= gap + wView
@@ -625,7 +626,7 @@ func (a *App) drawToolbar(st *sessionTab, r rl.Rectangle) {
 		sx -= wStats
 		c.TextIn(ui.Regular, ui.SizeSmall, stats, rl.NewRectangle(sx, r.Y, wStats, r.Height), ui.ColMuted)
 		if c.Hover(rl.NewRectangle(sx, r.Y, wStats, r.Height)) {
-			c.Tooltip("Frames per second, round trip time to the computer, and screen data received")
+			c.Tooltip(i18n.Trans("Frames per second, round trip time to the computer, and screen data received"))
 		}
 	}
 
@@ -638,7 +639,7 @@ func (a *App) drawToolbar(st *sessionTab, r rl.Rectangle) {
 	} else if um := hello.UserMachine; um != "" && !strings.EqualFold(um, name) {
 		c.TextIn(ui.Regular, ui.SizeSmall, c.Ellipsize(ui.Regular, ui.SizeSmall, um, sx-x-16), rl.NewRectangle(x+8, r.Y, sx-x, r.Height), ui.ColMuted)
 		if c.Hover(rl.NewRectangle(x, r.Y, sx-x, r.Height)) {
-			c.Tooltip("The user and machine the computer reports")
+			c.Tooltip(i18n.Trans("The user and machine the computer reports"))
 		}
 	}
 }
@@ -670,7 +671,7 @@ func monitorTip(m screen.Monitor) string {
 		s = m.Name + ", " + s
 	}
 	if m.Primary {
-		s += ", primary"
+		s = i18n.Trans("{0}, primary", s)
 	}
 	return s
 }

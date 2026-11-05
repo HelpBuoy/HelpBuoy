@@ -12,11 +12,11 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/client-windows/capture"
-	"github.com/mevdschee/helpbuoy/proto/encode"
-	"github.com/mevdschee/helpbuoy/proto/inner"
-	"github.com/mevdschee/helpbuoy/proto/screen"
-	"github.com/mevdschee/helpbuoy/proto/wire"
+	"github.com/helpbuoy/helpbuoy/client-windows/capture"
+	"github.com/helpbuoy/helpbuoy/proto/encode"
+	"github.com/helpbuoy/helpbuoy/proto/inner"
+	"github.com/helpbuoy/helpbuoy/proto/screen"
+	"github.com/helpbuoy/helpbuoy/proto/wire"
 )
 
 // FrameEncoder turns captures into frames; *encode.Encoder implements it.

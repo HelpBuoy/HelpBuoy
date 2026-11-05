@@ -10,10 +10,11 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/mevdschee/helpbuoy/desk/config"
-	"github.com/mevdschee/helpbuoy/desk/serverconn"
-	"github.com/mevdschee/helpbuoy/desk/ui"
-	"github.com/mevdschee/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/desk/config"
+	"github.com/helpbuoy/helpbuoy/desk/serverconn"
+	"github.com/helpbuoy/helpbuoy/desk/ui"
+	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
 )
 
 // drawComputersPage draws the Computers tab: the computers, online first,
@@ -21,8 +22,8 @@ import (
 func (a *App) drawComputersPage(r rl.Rectangle) {
 	c := a.ui
 	rl.DrawRectangleRec(r, ui.ColPanel)
-	c.Text(ui.Bold, ui.SizeHeading, "Computers", r.X+16, r.Y+14, ui.ColText)
-	a.addButton("computers/add", "Add computer", tabRegister, r)
+	c.Text(ui.Bold, ui.SizeHeading, i18n.Trans("Computers"), r.X+16, r.Y+14, ui.ColText)
+	a.addButton("computers/add", i18n.Trans("Add computer"), tabRegister, r)
 	list := rl.NewRectangle(r.X, r.Y+56, r.Width, r.Height-56)
 	rl.DrawLineV(rl.NewVector2(r.X, list.Y), rl.NewVector2(r.X+r.Width, list.Y), ui.ColBorder)
 	a.drawComputerList(list)
@@ -40,17 +41,17 @@ func (a *App) addButton(id, label string, k tabKind, r rl.Rectangle) {
 // statusText describes the server connection for the UI.
 func (a *App) statusText() (text, detail string, col rl.Color) {
 	if a.demo != nil {
-		return "Online", "demo mode, no server", ui.ColOK
+		return i18n.Trans("Online"), i18n.Trans("demo mode, no server"), ui.ColOK
 	}
 	if a.key == nil {
-		return "No key", "", ui.ColError
+		return i18n.Trans("No key"), "", ui.ColError
 	}
 	if a.conn == nil {
-		return "Not connected", "", ui.ColMuted
+		return i18n.Trans("Not connected"), "", ui.ColMuted
 	}
 	addr := a.addr.String()
 	if config.IsLocal(a.addr) {
-		addr += " (on this computer)"
+		addr = i18n.Trans("{0} (on this computer)", addr)
 	}
 	errText := ""
 	if a.status.Err != nil {
@@ -58,18 +59,18 @@ func (a *App) statusText() (text, detail string, col rl.Color) {
 	}
 	switch a.status.Status {
 	case serverconn.StatusOnline:
-		return "Online", addr, ui.ColOK
+		return i18n.Trans("Online"), addr, ui.ColOK
 	case serverconn.StatusAuthFailed:
-		return "This key is not a techie on the server anymore", "Disconnect and connect again to see the key to send to the server admin.", ui.ColError
+		return i18n.Trans("This key is not a techie on the server anymore"), i18n.Trans("Disconnect and connect again to see the key to send to the server admin."), ui.ColError
 	case serverconn.StatusUnreachable:
-		return "Server unreachable", errText, ui.ColError
+		return i18n.Trans("Server unreachable"), errText, ui.ColError
 	case serverconn.StatusIdentityChanged:
-		return "Server identity changed", "The server's key differs from the pinned one. Disconnect and connect again to decide.", ui.ColError
+		return i18n.Trans("Server identity changed"), i18n.Trans("The server's key differs from the pinned one. Disconnect and connect again to decide."), ui.ColError
 	}
 	if errText != "" {
-		return "Reconnecting to " + addr, errText, ui.ColWarn
+		return i18n.Trans("Reconnecting to {0}", addr), errText, ui.ColWarn
 	}
-	return "Connecting to " + addr, "", ui.ColWarn
+	return i18n.Trans("Connecting to {0}", addr), "", ui.ColWarn
 }
 
 // sortedComputers splits the presence into online and offline computers, each
@@ -100,7 +101,7 @@ func (a *App) drawComputerList(r rl.Rectangle) {
 	c := a.ui
 	online, offline := sortedComputers(a.presence)
 	if a.presence != nil && len(online)+len(offline) == 0 {
-		c.Paragraph(ui.Regular, ui.SizeSmall, "No registered computers yet. Use Add computer to add one.", 16, r.Y+16, r.Width-32, ui.ColMuted)
+		c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("No registered computers yet. Use Add computer to add one."), 16, r.Y+16, r.Width-32, ui.ColMuted)
 		return
 	}
 	if a.presence == nil {
@@ -113,7 +114,7 @@ func (a *App) drawComputerList(r rl.Rectangle) {
 	off := c.BeginScroll("computers", r, contentH)
 	y := r.Y + off
 	if len(online) == 0 {
-		c.Text(ui.Regular, ui.SizeSmall, "No computers online.", 16, y+14, ui.ColMuted)
+		c.Text(ui.Regular, ui.SizeSmall, i18n.Trans("No computers online."), 16, y+14, ui.ColMuted)
 		y += 44
 		contentH += 44
 	}
@@ -129,7 +130,7 @@ func (a *App) drawComputerList(r rl.Rectangle) {
 			arrow = "▼"
 		}
 		c.TextIn(ui.Regular, ui.SizeSmall, arrow, rl.NewRectangle(16, y, 20, 40), ui.ColMuted)
-		c.TextIn(ui.Bold, ui.SizeSmall, fmt.Sprintf("Offline (%d)", len(offline)), rl.NewRectangle(34, y, r.Width, 40), ui.ColMuted)
+		c.TextIn(ui.Bold, ui.SizeSmall, i18n.Trans("Offline ({0})", len(offline)), rl.NewRectangle(34, y, r.Width, 40), ui.ColMuted)
 		if hover {
 			c.SetCursor(rl.MouseCursorPointingHand)
 		}
@@ -172,24 +173,29 @@ func (a *App) drawComputerRow(ci control.ComputerInfo, r rl.Rectangle) {
 	}
 	x += 16
 
-	// Right side action area.
+	// Right side action area. Buttons grow with longer (translated) labels.
+	removeL, cancelL, renameL := i18n.Trans("Remove"), i18n.Trans("Cancel"), i18n.Trans("Rename")
+	connectL, askingL := i18n.Trans("Connect"), i18n.Trans("Asking…")
+	wConfirm, wCancel := a.btnW(removeL, 74), a.btnW(cancelL, 68)
+	wRename, wRemove := a.btnW(renameL, 66), a.btnW(removeL, 66)
+	wConnect := max(a.btnW(connectL, 86), a.btnW(askingL, 86), a.btnW(cancelL, 86))
 	actionW := float32(0)
 	confirming := a.confirmRemove == ci.Fingerprint
 	canRename := a.online() && a.rename.busy[ci.Fingerprint] == ""
 	switch {
 	case editing:
 	case confirming:
-		actionW = 150
+		actionW = wConfirm + 6 + wCancel + 2
 	case hover:
-		actionW = 70
+		actionW = wRename + 4
 		if tabIdx < 0 {
-			actionW += 70
+			actionW += wRemove + 4
 		}
 		if canConnect || canCancel {
-			actionW += 92
+			actionW += wConnect + 6
 		}
 	case canConnect || canCancel:
-		actionW = 92
+		actionW = wConnect + 6
 	}
 	if editing {
 		a.drawRenameField(ci, rl.NewRectangle(x, r.Y+5, r.X+r.Width-x-12, 28))
@@ -207,10 +213,10 @@ func (a *App) drawComputerRow(ci control.ComputerInfo, r rl.Rectangle) {
 		}
 	}
 	if n := a.rename.busy[ci.Fingerprint]; n != "" {
-		sub, subCol = "Renaming to "+n+"…", ui.ColMuted
+		sub, subCol = i18n.Trans("Renaming to {0}…", n), ui.ColMuted
 	}
 	if confirming {
-		sub, subCol = "Remove this computer?", ui.ColError
+		sub, subCol = i18n.Trans("Remove this computer?"), ui.ColError
 	}
 	c.Text(ui.Regular, ui.SizeSmall, c.Ellipsize(ui.Regular, ui.SizeSmall, sub, nameW), x, r.Y+30, subCol)
 
@@ -219,43 +225,43 @@ func (a *App) drawComputerRow(ci control.ComputerInfo, r rl.Rectangle) {
 	actionClicked := false
 	switch {
 	case confirming:
-		if c.Button(id+"/confirm", rl.NewRectangle(ax, ay, 74, 30), "Remove", ui.Danger, false) {
+		if c.Button(id+"/confirm", rl.NewRectangle(ax, ay, wConfirm, 30), removeL, ui.Danger, false) {
 			a.unregister(ci)
 			actionClicked = true
 		}
-		if c.Button(id+"/cancel", rl.NewRectangle(ax+80, ay, 68, 30), "Cancel", ui.Flat, false) {
+		if c.Button(id+"/cancel", rl.NewRectangle(ax+wConfirm+6, ay, wCancel, 30), cancelL, ui.Flat, false) {
 			a.confirmRemove = ""
 			actionClicked = true
 		}
 	case hover || canConnect || canCancel:
 		bx := ax
 		if hover {
-			if c.Button(id+"/rename", rl.NewRectangle(bx, ay, 66, 30), "Rename", ui.Flat, !canRename) {
+			if c.Button(id+"/rename", rl.NewRectangle(bx, ay, wRename, 30), renameL, ui.Flat, !canRename) {
 				a.startRename(ci)
 				actionClicked = true
 			}
-			bx += 70
+			bx += wRename + 4
 			if tabIdx < 0 {
-				if c.Button(id+"/remove", rl.NewRectangle(bx, ay, 66, 30), "Remove", ui.Flat, !a.online()) {
+				if c.Button(id+"/remove", rl.NewRectangle(bx, ay, wRemove, 30), removeL, ui.Flat, !a.online()) {
 					a.confirmRemove = ci.Fingerprint
 					actionClicked = true
 				}
-				bx += 70
+				bx += wRemove + 4
 			}
 		}
 		if canConnect {
 			busy := a.opening[ci.Fingerprint]
-			label := "Connect"
+			label := connectL
 			if busy {
-				label = "Asking…"
+				label = askingL
 			}
-			if c.Button(id+"/connect", rl.NewRectangle(bx, ay, 86, 30), label, ui.Primary, busy || !a.online()) {
+			if c.Button(id+"/connect", rl.NewRectangle(bx, ay, wConnect, 30), label, ui.Primary, busy || !a.online()) {
 				a.connectComputer(ci)
 				actionClicked = true
 			}
 		}
 		if canCancel {
-			if c.Button(id+"/cancelconnect", rl.NewRectangle(bx, ay, 86, 30), "Cancel", ui.Normal, false) {
+			if c.Button(id+"/cancelconnect", rl.NewRectangle(bx, ay, wConnect, 30), cancelL, ui.Normal, false) {
 				a.cancelConnect(ci.Fingerprint)
 				actionClicked = true
 			}
@@ -349,9 +355,9 @@ func (a *App) endRename() {
 func (a *App) drawRenameField(ci control.ComputerInfo, r rl.Rectangle) {
 	c := a.ui
 	res := c.TextField(renameFieldID, r, &a.rename.field)
-	hint, col := "Enter to save, Esc to cancel", ui.ColMuted
+	hint, col := i18n.Trans("Enter to save, Esc to cancel"), ui.ColMuted
 	if a.rename.bad {
-		hint, col = fmt.Sprintf("1 to %d printable characters", maxComputerName), ui.ColError
+		hint, col = i18n.Trans("1 to {0} printable characters.", maxComputerName), ui.ColError
 	}
 	c.Text(ui.Regular, ui.SizeSmall, c.Ellipsize(ui.Regular, ui.SizeSmall, hint, r.Width), r.X, r.Y+r.Height+3, col)
 	if res.Changed {
@@ -389,7 +395,7 @@ func (a *App) commitRename(ci control.ComputerInfo) {
 	a.run(a.backend.RenameComputer(fp, name), func(err error) {
 		delete(a.rename.busy, fp)
 		if err != nil {
-			a.notes[fp] = note{text: "Could not rename: " + err.Error(), until: time.Now().Add(6 * time.Second)}
+			a.notes[fp] = note{text: i18n.Trans("Could not rename: {0}", err), until: time.Now().Add(6 * time.Second)}
 		}
 	})
 }
@@ -398,22 +404,22 @@ func (a *App) commitRename(ci control.ComputerInfo) {
 func (a *App) rowSubline(ci control.ComputerInfo, tabIdx int) (string, rl.Color) {
 	switch {
 	case tabIdx >= 0:
-		return "In session", ui.ColAccent
+		return i18n.Trans("In session"), ui.ColAccent
 	case a.waiting[ci.Fingerprint] != nil:
-		return "Waiting for the user to allow the session…", ui.ColWarn
+		return i18n.Trans("Waiting for the user to allow the session…"), ui.ColWarn
 	case ci.InSessionWith != "" && ci.InSessionWith != a.me:
-		return "In session with " + ci.InSessionWith, ui.ColMuted
+		return i18n.Trans("In session with {0}", ci.InSessionWith), ui.ColMuted
 	case ci.Online && ci.Request != nil && ci.Request.TakenBy != a.me:
-		return ci.Request.TakenBy + " is connecting", ui.ColMuted
+		return i18n.Trans("{0} is connecting", ci.Request.TakenBy), ui.ColMuted
 	case ci.Online:
 		if ci.UserMachine != "" && !strings.EqualFold(ci.UserMachine, ci.Name) {
 			return ci.UserMachine, ui.ColMuted
 		}
-		return "Online", ui.ColMuted
+		return i18n.Trans("Online"), ui.ColMuted
 	case !ci.LastSeen.IsZero():
-		return "Last seen " + lastSeen(ci.LastSeen, time.Now()), ui.ColMuted
+		return i18n.Trans("Last seen {0}", lastSeen(ci.LastSeen, time.Now())), ui.ColMuted
 	}
-	return "Never connected", ui.ColMuted
+	return i18n.Trans("Never connected"), ui.ColMuted
 }
 
 // lastSeen formats a time relative to now: a clock time today, otherwise a date.
@@ -423,11 +429,24 @@ func lastSeen(t, now time.Time) string {
 	y2, m2, d2 := now.Date()
 	switch {
 	case y1 == y2 && m1 == m2 && d1 == d2:
-		return "today " + t.Format("15:04")
+		return i18n.Trans("today {0}", t.Format("15:04"))
 	case y1 == y2:
-		return t.Format("2 Jan")
+		return fmt.Sprintf("%d %s", t.Day(), shortMonth(t.Month()))
 	}
-	return t.Format("2 Jan 2006")
+	return fmt.Sprintf("%d %s %d", t.Day(), shortMonth(t.Month()), t.Year())
+}
+
+// shortMonth is the abbreviated month name in the user's language.
+func shortMonth(m time.Month) string {
+	names := [...]string{
+		i18n.Trans("Jan"), i18n.Trans("Feb"), i18n.Trans("Mar"), i18n.Trans("Apr"),
+		i18n.Trans("May"), i18n.Trans("Jun"), i18n.Trans("Jul"), i18n.Trans("Aug"),
+		i18n.Trans("Sep"), i18n.Trans("Oct"), i18n.Trans("Nov"), i18n.Trans("Dec"),
+	}
+	if m < time.January || m > time.December {
+		return ""
+	}
+	return names[m-1]
 }
 
 // connectComputer asks a computer's user to allow a session with this techie.
@@ -443,7 +462,7 @@ func (a *App) connectComputer(ci control.ComputerInfo) {
 		delete(a.opening, fp)
 		if err != nil {
 			delete(a.opened, reqID)
-			a.notes[fp] = note{text: "Could not connect: " + err.Error(), until: time.Now().Add(6 * time.Second)}
+			a.notes[fp] = note{text: i18n.Trans("Could not connect: {0}", err), until: time.Now().Add(6 * time.Second)}
 			return
 		}
 		if _, ok := a.opened[reqID]; ok {
@@ -476,7 +495,7 @@ func (a *App) unregister(ci control.ComputerInfo) {
 	fp := ci.Fingerprint
 	a.run(a.backend.UnregisterComputer(fp), func(err error) {
 		if err != nil {
-			a.notes[fp] = note{text: "Could not remove: " + err.Error(), until: time.Now().Add(6 * time.Second)}
+			a.notes[fp] = note{text: i18n.Trans("Could not remove: {0}", err), until: time.Now().Add(6 * time.Second)}
 		}
 	})
 }

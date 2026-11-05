@@ -13,9 +13,9 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/client-windows/identity"
-	"github.com/mevdschee/helpbuoy/client-windows/internal/fakeserver"
-	"github.com/mevdschee/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/client-windows/identity"
+	"github.com/helpbuoy/helpbuoy/client-windows/internal/fakeserver"
+	"github.com/helpbuoy/helpbuoy/proto/control"
 )
 
 // testHandler records what the computer reports.

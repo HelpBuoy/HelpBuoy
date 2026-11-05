@@ -24,9 +24,9 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/mevdschee/helpbuoy/desk/perf"
-	"github.com/mevdschee/helpbuoy/desk/views"
-	"github.com/mevdschee/helpbuoy/proto/update"
+	"github.com/helpbuoy/helpbuoy/desk/perf"
+	"github.com/helpbuoy/helpbuoy/desk/views"
+	"github.com/helpbuoy/helpbuoy/proto/update"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".

@@ -859,3 +859,30 @@ computer can stay online in the background; `computer-macos/` and `computer-linu
   it the first time (right-click, Open). Is that acceptable for techies, or is a Developer ID
   signature and notarization (needs a Mac or a signing service) required?
 - Is JPEG enough for video-heavy work, or is the Media Foundation H.264 path needed in v1?
+
+## 11. Translations
+
+The Windows client and the desk app are translated; `helpbuoy-server` stays English. The
+approach is deliberately minimal, with no dependency:
+
+- **`proto/i18n`**: one function, `i18n.Trans(text string, args ...any) string`. The English
+  text is the key (`i18n.Trans("Connect")`, `i18n.Trans("Allow {0} ({1}) to help you?", name,
+  fingerprint)`), so there is no English catalog and call sites stay readable. After lookup,
+  each `{0}`, `{1}`, ... is replaced with `fmt.Sprint` of the argument at that index, so
+  translators can reorder or repeat placeholders freely. No `fmt.Sprintf`, so a stray `%` in a
+  translation is harmless. A placeholder without a matching argument is left as is.
+- **Catalogs**: one flat JSON object per language mapping English to translated text,
+  `proto/i18n/locales/nl.json` and so on, compiled into every binary with
+  `//go:embed locales/*.json`. Nothing is read from disk at run time.
+- **Language**: picked once at start from the OS (Windows `GetUserDefaultUILanguage`, Linux
+  `LANG`, macOS `AppleLanguages`). An unknown language, or a string missing from the
+  catalog, shows English.
+- **No plurals**: counted strings are phrased so the number needs no agreement
+  ("Computers online: 3").
+- **Test**: every key in every catalog must appear as an `i18n.Trans` string literal in the
+  code, and its translation must use the same set of `{n}` placeholders.
+- **Desk app fonts**: the codepoint set in `desk/ui/ui.go` adds the characters used by the
+  embedded catalogs. Scripts the Go fonts lack (CJK, Arabic, Hebrew) are out of scope.
+
+Dutch, German, French, Spanish and Italian are done (about 210 strings each). Rejected:
+go-i18n, `x/text` with `gotext`, and gettext `.po`, all more machinery than this needs.

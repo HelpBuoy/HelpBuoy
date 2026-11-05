@@ -16,7 +16,7 @@ import (
 	"github.com/jezek/xgb/randr"
 	"github.com/jezek/xgb/xproto"
 
-	"github.com/mevdschee/helpbuoy/client-linux/xkeys"
+	"github.com/helpbuoy/helpbuoy/client-linux/xkeys"
 )
 
 // xwin is the X side of the window: the connection, the window, atoms,

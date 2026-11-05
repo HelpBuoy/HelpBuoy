@@ -1,11 +1,11 @@
-module github.com/mevdschee/helpbuoy/client-linux
+module github.com/helpbuoy/helpbuoy/client-linux
 
 go 1.26.0
 
 require (
 	github.com/jezek/xgb v1.3.1
-	github.com/mevdschee/helpbuoy/client-windows v0.0.0
-	github.com/mevdschee/helpbuoy/proto v0.0.0
+	github.com/helpbuoy/helpbuoy/client-windows v0.0.0
+	github.com/helpbuoy/helpbuoy/proto v0.0.0
 	golang.org/x/image v0.47.0
 	golang.org/x/sys v0.49.0
 )
@@ -17,6 +17,6 @@ require (
 )
 
 replace (
-	github.com/mevdschee/helpbuoy/client-windows => ../client-windows
-	github.com/mevdschee/helpbuoy/proto => ../proto
+	github.com/helpbuoy/helpbuoy/client-windows => ../client-windows
+	github.com/helpbuoy/helpbuoy/proto => ../proto
 )

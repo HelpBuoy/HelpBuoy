@@ -10,10 +10,10 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/proto/control"
-	"github.com/mevdschee/helpbuoy/server/fake"
-	"github.com/mevdschee/helpbuoy/server/server"
-	"github.com/mevdschee/helpbuoy/server/store"
+	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/server/fake"
+	"github.com/helpbuoy/helpbuoy/server/server"
+	"github.com/helpbuoy/helpbuoy/server/store"
 )
 
 // computerFPs maps computer connections made by env.computer to their fingerprints.

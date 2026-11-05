@@ -12,11 +12,11 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/client-windows/config"
-	"github.com/mevdschee/helpbuoy/client-windows/identity"
-	"github.com/mevdschee/helpbuoy/client-windows/internal/fakeserver"
-	"github.com/mevdschee/helpbuoy/client-windows/session"
-	"github.com/mevdschee/helpbuoy/proto/appkey"
+	"github.com/helpbuoy/helpbuoy/client-windows/config"
+	"github.com/helpbuoy/helpbuoy/client-windows/identity"
+	"github.com/helpbuoy/helpbuoy/client-windows/internal/fakeserver"
+	"github.com/helpbuoy/helpbuoy/client-windows/session"
+	"github.com/helpbuoy/helpbuoy/proto/appkey"
 )
 
 type fakeUI struct {

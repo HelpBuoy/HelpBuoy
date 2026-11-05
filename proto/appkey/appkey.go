@@ -19,7 +19,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/proto/identity"
+	"github.com/helpbuoy/helpbuoy/proto/identity"
 )
 
 // File names inside the data directory.

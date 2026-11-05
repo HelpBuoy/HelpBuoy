@@ -4,7 +4,6 @@ package ui
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,7 +11,8 @@ import (
 	"github.com/rodrigocfd/windigo/co"
 	"github.com/rodrigocfd/windigo/ui"
 
-	"github.com/mevdschee/helpbuoy/proto/update"
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/proto/update"
 )
 
 // maybeOfferUpdate offers the release in the current view, once, when no
@@ -40,16 +40,16 @@ func (w *Window) offerUpdate(r update.Release) {
 		return
 	}
 	version := w.ctrl.Version()
-	msg := fmt.Sprintf("HelpBuoy %s is available (you have %s).\n\n"+
-		"Download and install it now? HelpBuoy closes during the installation.", r.Version, version)
+	msg := i18n.Trans("HelpBuoy {0} is available (you have {1}).", r.Version, version) + "\n\n" +
+		i18n.Trans("Download and install it now? HelpBuoy closes during the installation.")
 	w.dialogs++
-	ret, _ := w.wnd.Hwnd().MessageBox(msg, "Update available", co.MB_YESNO|co.MB_ICONINFORMATION)
+	ret, _ := w.wnd.Hwnd().MessageBox(msg, i18n.Trans("Update available"), co.MB_YESNO|co.MB_ICONINFORMATION)
 	w.dialogs--
 	if ret != co.ID_YES {
 		w.ctrl.DismissUpdate()
 		return
 	}
-	w.updating = "Downloading HelpBuoy " + r.Version + "..."
+	w.updating = i18n.Trans("Downloading HelpBuoy {0}...", r.Version)
 	w.apply(w.view)
 	go func() {
 		path, err := update.Download(context.Background(), r, os.TempDir())
@@ -66,7 +66,7 @@ func (w *Window) offerUpdate(r update.Release) {
 			if err != nil {
 				w.updating = ""
 				w.apply(w.view)
-				ui.MsgError(w.wnd, Title, "The update could not be installed", err.Error())
+				ui.MsgError(w.wnd, Title, i18n.Trans("The update could not be installed"), err.Error())
 				w.ctrl.DismissUpdate()
 				return
 			}

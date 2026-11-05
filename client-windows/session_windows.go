@@ -9,14 +9,14 @@ import (
 	"os"
 	"time"
 
-	"github.com/mevdschee/helpbuoy/client-windows/capture"
-	"github.com/mevdschee/helpbuoy/client-windows/config"
-	"github.com/mevdschee/helpbuoy/client-windows/injector"
-	"github.com/mevdschee/helpbuoy/client-windows/perfmode"
-	"github.com/mevdschee/helpbuoy/client-windows/session"
-	"github.com/mevdschee/helpbuoy/proto/appkey"
-	"github.com/mevdschee/helpbuoy/proto/encode"
-	"github.com/mevdschee/helpbuoy/proto/screen"
+	"github.com/helpbuoy/helpbuoy/client-windows/capture"
+	"github.com/helpbuoy/helpbuoy/client-windows/config"
+	"github.com/helpbuoy/helpbuoy/client-windows/injector"
+	"github.com/helpbuoy/helpbuoy/client-windows/perfmode"
+	"github.com/helpbuoy/helpbuoy/client-windows/session"
+	"github.com/helpbuoy/helpbuoy/proto/appkey"
+	"github.com/helpbuoy/helpbuoy/proto/encode"
+	"github.com/helpbuoy/helpbuoy/proto/screen"
 )
 
 // newScreenRunner returns the runner of real sessions: GDI capture, the

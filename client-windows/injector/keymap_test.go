@@ -3,7 +3,7 @@ package injector
 import (
 	"testing"
 
-	"github.com/mevdschee/helpbuoy/proto/input"
+	"github.com/helpbuoy/helpbuoy/proto/input"
 )
 
 // TestTableCoversInputCodes checks that every key code the techie may send
