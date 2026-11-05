@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"io"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -152,52 +153,30 @@ func TestDisconnect(t *testing.T) {
 	waitOffline(t, server2, e.fp())
 }
 
-// TestUpdateCheckDelayed: the start connects right away and does not check
-// for updates before UpdateDelay.
-func TestUpdateCheckDelayed(t *testing.T) {
-	e := newEnv(t)
-	registered(t, e)
-	checked := make(chan struct{}, 1)
-	c, ui := e.controller()
-	c.d.UpdateDelay = time.Hour
-	c.d.CheckUpdate = func(context.Context) (*update.Release, error) {
-		checked <- struct{}{}
-		return nil, nil
-	}
-	c.Start()
-	ui.wait(t, "ready", readyMain)
-	if len(checked) != 0 {
-		t.Fatal("checked before UpdateDelay")
-	}
-}
-
-// TestUpdateOfferedWhenIdle: the check runs after UpdateDelay without
-// holding up connecting; its release is offered once the computer is idle.
-func TestUpdateOfferedWhenIdle(t *testing.T) {
+// TestUpdateOnlyOnClick: the start never checks for updates; only
+// LatestRelease (clicking the version) does, and it returns what it finds.
+func TestUpdateOnlyOnClick(t *testing.T) {
 	e := newEnv(t)
 	registered(t, e)
 	release := &update.Release{Version: "9.9.9", MsiURL: "https://x/a.msi"}
-	unblock := make(chan struct{})
+	var checks atomic.Int32
 	c, ui := e.controller()
-	c.d.UpdateDelay = 20 * time.Millisecond
 	c.d.CheckUpdate = func(context.Context) (*update.Release, error) {
-		<-unblock
+		checks.Add(1)
 		return release, nil
 	}
 	c.Start()
-	ui.wait(t, "ready without the check", readyMain)
-	close(unblock)
-	ui.wait(t, "offer", func(v View) bool { return v.Update == release && readyMain(v) })
-
-	gate := make(chan struct{})
-	ui.answer(true, gate)
-	connectTechie(t, e.server, e.fp())
-	v := ui.wait(t, "asking", func(v View) bool { return v.Asking })
-	if v.Update != nil {
-		t.Fatal("offered while a techie connects")
+	ui.wait(t, "ready", readyMain)
+	if n := checks.Load(); n != 0 {
+		t.Fatalf("%d checks at the start", n)
 	}
-	close(gate)
-	ui.wait(t, "offer again", func(v View) bool { return v.Update == release && readyMain(v) })
-	c.DismissUpdate()
-	ui.wait(t, "dismissed", func(v View) bool { return v.Update == nil })
+	r, err := c.LatestRelease(context.Background())
+	if err != nil || r != release || checks.Load() != 1 {
+		t.Fatalf("LatestRelease = %v, %v after %d checks", r, err, checks.Load())
+	}
+
+	c.d.CheckUpdate = nil
+	if r, err := c.LatestRelease(context.Background()); r != nil || err != nil {
+		t.Fatalf("without CheckUpdate: %v, %v", r, err)
+	}
 }

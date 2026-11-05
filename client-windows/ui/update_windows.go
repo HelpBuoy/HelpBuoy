@@ -15,39 +15,50 @@ import (
 	"github.com/helpbuoy/helpbuoy/proto/update"
 )
 
-// maybeOfferUpdate offers the release in the current view, once, when no
-// dialog is open. The controller only puts a release in the view while the
-// computer is idle (no request, no session).
-func (w *Window) maybeOfferUpdate() {
-	r := w.view.Update
-	if r == nil || w.updateAsked || w.dialogs > 0 || w.wnd.Hwnd() == 0 {
-		return
+// versionText is the text of the version link on the waiting screen.
+func versionText(version string) string {
+	if update.IsRelease(version) {
+		version = "v" + version
 	}
-	w.updateAsked = true
-	rel := *r
-	// Ask outside the current message handler, so a render in progress is
-	// not held up by the message box.
-	go w.wnd.UiThread(func() { w.offerUpdate(rel) })
+	return "<a>" + version + "</a>"
 }
 
-// offerUpdate asks whether to install r, then downloads it, starts msiexec
-// and closes the app, which ends any session and disconnects. Declining, or
-// a failed installation, dismisses the offer for this run.
-func (w *Window) offerUpdate(r update.Release) {
-	if w.view.Update == nil {
-		w.updateAsked = false // no longer idle; offer it when it is again
+// checkForUpdate is the version link on the waiting screen. It asks for the
+// latest release and, when it is newer, installs it; otherwise it says this
+// version is the latest.
+func (w *Window) checkForUpdate() {
+	if w.updating != "" {
 		return
 	}
-	version := w.ctrl.Version()
-	msg := i18n.Trans("HelpBuoy {0} is available (you have {1}).", r.Version, version) + "\n\n" +
-		i18n.Trans("Download and install it now? HelpBuoy closes during the installation.")
-	w.dialogs++
-	ret, _ := w.wnd.Hwnd().MessageBox(msg, i18n.Trans("Update available"), co.MB_YESNO|co.MB_ICONINFORMATION)
-	w.dialogs--
-	if ret != co.ID_YES {
-		w.ctrl.DismissUpdate()
-		return
-	}
+	w.updating = i18n.Trans("Checking for updates...")
+	w.apply(w.view)
+	go func() {
+		r, err := w.ctrl.LatestRelease(context.Background())
+		if w.wnd.Hwnd() == 0 {
+			return
+		}
+		w.wnd.UiThread(func() {
+			if err == nil && r != nil {
+				w.install(*r)
+				return
+			}
+			w.updating = ""
+			w.apply(w.view)
+			w.dialogs++
+			if err != nil {
+				ui.MsgError(w.wnd, Title, i18n.Trans("Could not check for updates"), err.Error())
+			} else {
+				ui.MsgOk(w.wnd, Title, i18n.Trans("HelpBuoy is up to date"),
+					i18n.Trans("You have the latest version, {0}.", w.ctrl.Version()))
+			}
+			w.dialogs--
+		})
+	}()
+}
+
+// install downloads r, starts msiexec and closes the app, which disconnects.
+// The MSI starts the new version when it is done.
+func (w *Window) install(r update.Release) {
 	w.updating = i18n.Trans("Downloading HelpBuoy {0}...", r.Version)
 	w.apply(w.view)
 	go func() {
@@ -65,8 +76,9 @@ func (w *Window) offerUpdate(r update.Release) {
 			if err != nil {
 				w.updating = ""
 				w.apply(w.view)
+				w.dialogs++
 				ui.MsgError(w.wnd, Title, i18n.Trans("The update could not be installed"), err.Error())
-				w.ctrl.DismissUpdate()
+				w.dialogs--
 				return
 			}
 			w.wnd.Hwnd().PostMessage(co.WM_CLOSE, 0, 0)

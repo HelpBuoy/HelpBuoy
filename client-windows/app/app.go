@@ -1,7 +1,7 @@
 // Package app is the computer's logic between the window and the server
 // connection: which screen to show (the server address with Connect, the key
 // to send, waiting for a techie with Disconnect), the stored configuration,
-// Remove key and the update offer. It has
+// Remove key and the update check. It has
 // no GUI dependencies; the window renders the View it is given and forwards
 // button presses.
 package app
@@ -74,12 +74,6 @@ type View struct {
 	// generic defaults when the server has none or is not known.
 	Title       string
 	Instruction string
-
-	// Update is a newer release to offer. It is only set while the computer
-	// is idle (address screen, or waiting for a techie), so the offer never
-	// interrupts the user. The window calls DismissUpdate when the user
-	// declines it.
-	Update *update.Release
 }
 
 // UI is the window, as the controller sees it.
@@ -107,22 +101,14 @@ type Deps struct {
 	EscHook     func(onEsc func()) (stop func())
 	AppVersion  string
 	UserMachine string
-	// CheckUpdate looks for a newer release; nil never checks. It is called
-	// once in the background, UpdateDelay after Start, and a release it
-	// finds is offered when the computer is idle.
-	// Errors (offline, the API refusing) are ignored: next start tries again.
+	// CheckUpdate looks for a newer release, or returns nil when there is
+	// none; nil never finds one. It only runs when the user clicks the
+	// version on the waiting screen (LatestRelease).
 	CheckUpdate func(ctx context.Context) (*update.Release, error)
-	// UpdateDelay is how long after Start the update check runs; 0 means
-	// DefaultUpdateDelay.
-	UpdateDelay time.Duration
 	// Tune adjusts the session options, for tests.
 	Tune   func(*session.Options)
 	Logger *slog.Logger
 }
-
-// DefaultUpdateDelay is how long after the start the update check runs, so
-// it never holds up starting the app.
-const DefaultUpdateDelay = 10 * time.Second
 
 // Controller connects the window, the configuration and the server computer.
 // Its methods are meant to be called from the UI thread; they never block on
@@ -146,11 +132,6 @@ type Controller struct {
 	inputErr string
 	closed   bool
 	closing  <-chan struct{}
-
-	newRelease    *update.Release // newer release, until offered
-	updateStarted bool
-	updateCancel  context.CancelFunc
-	updateTimer   *time.Timer // starts the update check after UpdateDelay
 
 	saveMu sync.Mutex
 
@@ -213,10 +194,6 @@ func (c *Controller) viewLocked() View {
 			v.Instruction = i18n.Trans("A techie can now ask to connect. You will be asked first, " +
 				"and pressing Esc always takes back control.")
 		}
-	}
-	idle := v.Screen == ScreenAddress && !v.Connecting || v.Screen == ScreenMain && v.Ready
-	if idle {
-		v.Update = c.newRelease
 	}
 	return v
 }
@@ -291,8 +268,7 @@ func describeKeyError(err error) string {
 }
 
 // Start loads the key and the configuration and connects to the last server
-// address. UpdateDelay later it checks for a newer release in the
-// background. Without a stored address it shows the empty address screen;
+// address. Without a stored address it shows the empty address screen;
 // the address can only be changed once connecting failed or after
 // Disconnect.
 func (c *Controller) Start() {
@@ -300,13 +276,6 @@ func (c *Controller) Start() {
 	c.loadLocked()
 	if addr := c.storedAddrLocked(); addr != "" && c.key != nil && c.keyErr == nil {
 		c.startComputerLocked(addr)
-	}
-	if c.d.CheckUpdate != nil && c.updateTimer == nil {
-		delay := c.d.UpdateDelay
-		if delay <= 0 {
-			delay = DefaultUpdateDelay
-		}
-		c.updateTimer = time.AfterFunc(delay, c.checkUpdate)
 	}
 	c.mu.Unlock()
 	c.update()
@@ -319,37 +288,6 @@ func (c *Controller) storedAddrLocked() string {
 		return c.cfg.LastAddress
 	}
 	return c.cfg.ServerAddress
-}
-
-// checkUpdate runs Deps.CheckUpdate once and keeps a release it finds for
-// the offer, which the view shows while the computer is idle.
-func (c *Controller) checkUpdate() {
-	c.mu.Lock()
-	if c.closed || c.updateStarted {
-		c.mu.Unlock()
-		return
-	}
-	c.updateStarted = true
-	ctx, cancel := context.WithCancel(context.Background())
-	c.updateCancel = cancel
-	c.mu.Unlock()
-
-	r, err := c.d.CheckUpdate(ctx)
-	if err != nil {
-		c.log.Info("update check failed", "err", err)
-	} else if r != nil {
-		c.log.Info("update available", "version", r.Version)
-	}
-	c.mu.Lock()
-	if c.closed {
-		c.mu.Unlock()
-		return
-	}
-	if err == nil && r != nil {
-		c.newRelease = r
-	}
-	c.mu.Unlock()
-	c.update()
 }
 
 func (c *Controller) loadLocked() {
@@ -500,12 +438,6 @@ func (c *Controller) RemoveKey() error {
 func (c *Controller) Close() {
 	c.mu.Lock()
 	c.closed = true
-	if c.updateCancel != nil {
-		c.updateCancel()
-	}
-	if c.updateTimer != nil {
-		c.updateTimer.Stop()
-	}
 	if c.computer != nil {
 		c.closing = c.computer.Done()
 	}
@@ -528,16 +460,26 @@ func (c *Controller) WaitClosed(d time.Duration) {
 	}
 }
 
-// Version is the app version, for the update offer.
+// Version is the app version, shown on the waiting screen.
 func (c *Controller) Version() string { return c.d.AppVersion }
 
-// DismissUpdate is called when the user declined View.Update, or its
-// installation failed, so it is not offered again in this run.
-func (c *Controller) DismissUpdate() {
-	c.mu.Lock()
-	c.newRelease = nil
-	c.mu.Unlock()
-	c.update()
+// LatestRelease asks for a release newer than Version and returns nil when
+// there is none (or for a development build). It blocks, so the window
+// calls it outside the UI thread, when the user clicks the version.
+func (c *Controller) LatestRelease(ctx context.Context) (*update.Release, error) {
+	if c.d.CheckUpdate == nil {
+		return nil, nil
+	}
+	r, err := c.d.CheckUpdate(ctx)
+	switch {
+	case err != nil:
+		c.log.Info("update check failed", "err", err)
+	case r != nil:
+		c.log.Info("update available", "version", r.Version)
+	default:
+		c.log.Info("no update available", "version", c.d.AppVersion)
+	}
+	return r, err
 }
 
 // handler receives the events of one computer generation.

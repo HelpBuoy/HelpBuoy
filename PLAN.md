@@ -592,14 +592,14 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   per-user MSI (`installer/helpbuoy.wxs`, no UAC prompt) that installs it into
   `%LOCALAPPDATA%\Programs\helpbuoy` with a Start menu shortcut. Because the exe is never
   patched, it can be Authenticode-signed (`osslsigncode`) once per release.
-- **Updates**, like otp4win: a release build asks the GitHub API for the latest release
-  10 seconds after start-up, so the check never holds up starting or connecting, and if its
-  MSI is newer, offers "Download and install it now?". Yes downloads the MSI to the temp
-  folder, checks its size, starts `msiexec` and closes the app; No dismisses the offer until
-  the next start. The offer waits until the computer is idle: no prompt while a techie
-  connects or during a session. The check can't be turned off;
-  development builds and offline starts skip it silently. It needs the GitHub repository to
-  be public, since the release API doesn't show private releases to anonymous callers.
+- **Updates**, like otp4win, but only on request: the waiting screen shows the version as a
+  text link in the bottom right corner (for example "v0.4.18"). Clicking it asks the GitHub
+  API for the latest release; if its MSI is newer, the app downloads it to the temp folder,
+  checks its size, starts `msiexec` and closes. Otherwise a dialog says this is the latest
+  version, or that the check failed. The app never checks by itself. The MSI starts the app
+  when the installation is done. A development build always reports it is up to date. It
+  needs the GitHub repository to be public, since the release API doesn't show private
+  releases to anonymous callers.
 - `release.sh [major|minor|build]` bumps the version in both `winres.json` files, runs
   `make vet test dist`, commits, tags `v<version>`, pushes and creates the GitHub release
   with everything in `dist/`: only installers, never a bare binary. That is the client and desk
