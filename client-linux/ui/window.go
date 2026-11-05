@@ -24,6 +24,9 @@ const Title = "HelpBuoy"
 // Client area size in 96-DPI units, as on Windows.
 const clientW, clientH = 460, 330
 
+// contentW is the width of the content between the 24-unit side margins.
+const contentW = clientW - 48
+
 // statusY is the position of the waiting screen's status line; it moves
 // down by titleH when the server's title is shown above it.
 const statusY, titleH = 160, 26
@@ -183,6 +186,7 @@ func (w *Window) Run(ctrl *app.Controller) error {
 	if w.fonts, err = newFonts(w.scale); err != nil {
 		return err
 	}
+	w.fitButtons()
 	w.back = image.NewRGBA(image.Rect(0, 0, w.px(clientW), w.px(clientH)))
 	xproto.MapWindow(x.c, x.win)
 
@@ -605,6 +609,35 @@ func (w *Window) apply(v app.View) {
 	if w.focus != nil && !w.focus.focusable() && len(w.dialogs) == 0 {
 		w.focusDefault()
 	}
+	w.fitButtons()
+}
+
+// buttonW returns the width, in 96-DPI units, a button needs for its text:
+// at least minW, at most the content width.
+func (w *Window) buttonW(b *widget, minW int) int {
+	return min(contentW, max(minW, w.fonts.width(b.font, b.text)*96/w.px(96)+32))
+}
+
+// fitButtons sizes the window's buttons to their (translated) text, keeping
+// each one's anchor: Connect and Close stay right-aligned, Disconnect stays
+// centered and Remove key stays left-aligned. The address field gives up the
+// room Connect takes.
+func (w *Window) fitButtons() {
+	if w.fonts == nil {
+		return
+	}
+	right := 24 + contentW
+	b := w.btnConnect
+	b.w = w.buttonW(b, 102)
+	b.x = right - b.w
+	w.edtAddr.w = b.x - 10 - w.edtAddr.x
+	b = w.btnClose
+	b.w = w.buttonW(b, 100)
+	b.x = right - b.w
+	b = w.btnDisconnect
+	b.w = w.buttonW(b, 160)
+	b.x = clientW/2 - b.w/2
+	w.btnRemoveKey.w = w.buttonW(w.btnRemoveKey, 160)
 }
 
 // focusDefault focuses the first focusable widget of the screen.

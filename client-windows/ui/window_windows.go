@@ -160,10 +160,10 @@ func New(iconID uint16) *Window {
 		{w.lblWaiting, 24, 104, 412, 40, fontBig},
 		{w.lblInfoTitle, 24, 152, 412, 28, fontHeading},
 		{w.lblStatus, 24, statusY, 412, 64, fontNormal},
-		{w.btnDisconnect, 130, 258, 200, 32, fontNormal},
+		{w.btnDisconnect, 150, 258, 160, 32, fontNormal},
 
 		{w.lblKeyErr, 24, 24, 412, 190, fontNormal},
-		{w.btnRemoveKey, 24, 226, 200, 32, fontNormal},
+		{w.btnRemoveKey, 24, 226, 160, 32, fontNormal},
 	}
 	w.events()
 	return w
@@ -264,6 +264,7 @@ func (w *Window) events() {
 		}
 		w.createFonts()
 		w.resizeClient()
+		w.fitButtons()
 		w.layout()
 		w.edtAddr.LimitText(300)
 		w.apply(app.View{Screen: -1}) // hide everything until the first view
@@ -286,6 +287,7 @@ func (w *Window) events() {
 			win.SIZE{Cx: rc.Right - rc.Left, Cy: rc.Bottom - rc.Top}, co.SWP_NOZORDER|co.SWP_NOACTIVATE)
 		w.createFonts()
 		w.resizeClient()
+		w.fitButtons()
 		w.layout()
 		return 0
 	})
@@ -390,6 +392,82 @@ func (w *Window) layout() {
 			win.SIZE{Cx: w.scale(it.w), Cy: w.scale(it.h)}, true)
 		h.SendMessage(co.WM_SETFONT, win.WPARAM(w.fonts[it.font]), 1)
 	}
+}
+
+// contentW is the width of the content between the 24-unit side margins.
+const contentW = clientW - 48
+
+// item returns the layout entry of c.
+func (w *Window) item(c ui.Window) *item {
+	for i := range w.items {
+		if w.items[i].ctl == c {
+			return &w.items[i]
+		}
+	}
+	return nil
+}
+
+// place moves c to its layout entry at the current DPI.
+func (w *Window) place(c ui.Window) {
+	if it := w.item(c); it != nil {
+		c.Hwnd().MoveWindow(win.POINT{X: w.scale(it.x), Y: w.scale(it.y)},
+			win.SIZE{Cx: w.scale(it.w), Cy: w.scale(it.h)}, true)
+	}
+}
+
+// textW returns the width of text in font f, in 96-DPI units. The &
+// accelerator prefix is not drawn, so it is not measured.
+func (w *Window) textW(f fontKind, text string) int {
+	h := w.wnd.Hwnd()
+	hdc, err := h.GetDC()
+	if err != nil {
+		return 0
+	}
+	defer h.ReleaseDC(hdc)
+	old, _ := hdc.SelectObjectFont(w.fonts[f])
+	defer hdc.SelectObjectFont(old)
+	sz, err := hdc.GetTextExtentPoint32(stripAccel(text))
+	if err != nil || w.dpi == 0 {
+		return 0
+	}
+	return int(sz.Cx) * 96 / w.dpi
+}
+
+// stripAccel removes the & accelerator prefixes; && stays a single &.
+func stripAccel(s string) string {
+	var b []rune
+	rs := []rune(s)
+	for i := 0; i < len(rs); i++ {
+		if rs[i] == '&' {
+			if i+1 < len(rs) && rs[i+1] == '&' {
+				i++
+			} else {
+				continue
+			}
+		}
+		b = append(b, rs[i])
+	}
+	return string(b)
+}
+
+// fitButtons sizes the window's buttons to their (translated) text, at
+// least their English width and at most the content width, keeping each
+// one's anchor: Connect stays right-aligned (the address field gives up the
+// room), Disconnect stays centered and Remove key stays left-aligned. It
+// only updates the layout entries; layout or place moves the controls.
+func (w *Window) fitButtons() {
+	fit := func(b *ui.Button, minW int) *item {
+		it := w.item(b)
+		it.w = min(contentW, max(minW, w.textW(it.font, b.Text())+32))
+		return it
+	}
+	right := 24 + contentW
+	c := fit(w.btnConnect, 102)
+	c.x = right - c.w
+	w.item(w.edtAddr).w = c.x - 10 - 24
+	d := fit(w.btnDisconnect, 160)
+	d.x = clientW/2 - d.w/2
+	fit(w.btnRemoveKey, 160)
 }
 
 // moveStatus puts the status line of the waiting screen below the server's
@@ -511,6 +589,8 @@ func (w *Window) apply(v app.View) {
 		} else {
 			setText(w.btnDisconnect, i18n.Trans("&Disconnect"))
 		}
+		w.fitButtons()
+		w.place(w.btnDisconnect)
 		w.btnDisconnect.Hwnd().EnableWindow(w.updating == "")
 	}
 
