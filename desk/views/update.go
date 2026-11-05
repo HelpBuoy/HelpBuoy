@@ -23,7 +23,7 @@ type downloadResult struct {
 	err  error
 }
 
-// updater is the update that starts when the user clicks update in the top
+// updater is the update that starts when the user clicks Check for updates in the top
 // right corner: the check, the download and the dialog that tells how it
 // went.
 type updater struct {
@@ -47,7 +47,7 @@ func (a *App) updateLinkW() float32 {
 	if a.opts.CheckUpdate == nil {
 		return 0
 	}
-	label := i18n.Trans("update")
+	label := i18n.Trans("Check for updates")
 	if a.upd.busy() {
 		label = a.updateStatus()
 	}
@@ -62,7 +62,7 @@ func (a *App) updateStatus() string {
 	return i18n.Trans("Checking for updates…")
 }
 
-// drawUpdateLink draws "update" in the top right corner, in a bar of height
+// drawUpdateLink draws "Check for updates" in the top right corner, in a bar of height
 // h, where the app updates itself (Options.CheckUpdate). Clicking it checks
 // for a newer release and installs it; meanwhile it shows the progress.
 func (a *App) drawUpdateLink(h float32) {
@@ -71,7 +71,7 @@ func (a *App) drawUpdateLink(h float32) {
 	}
 	c := a.ui
 	w, _ := ui.WindowSize()
-	label := i18n.Trans("update")
+	label := i18n.Trans("Check for updates")
 	if a.upd.busy() {
 		label = a.updateStatus()
 	}
@@ -111,7 +111,7 @@ func (a *App) pollUpdate() {
 					i18n.Trans("You have the latest version, {0}.", a.opts.Version)}
 			case a.sessionCount() > 0:
 				u.dialog = &dialog{i18n.Trans("HelpBuoy Desk {0} is available", res.r.Version),
-					i18n.Trans("End the open sessions first, then click update again.")}
+					i18n.Trans("End the open sessions first, then click Check for updates again.")}
 			default:
 				a.startDownload(*res.r)
 			}

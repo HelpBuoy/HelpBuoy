@@ -79,7 +79,7 @@ type Window struct {
 	lblInfoTitle  *ui.Static // the server's title, above the status line
 	btnDisconnect *ui.Button
 	lblComment    *ui.Static
-	lnkUpdate     *ui.SysLink // "update", bottom right
+	lnkUpdate     *ui.SysLink // "Check for updates", bottom right
 	// ScreenKeyError
 	lblKeyErr    *ui.Static
 	btnRemoveKey *ui.Button
@@ -138,7 +138,7 @@ func New(iconID uint16) *Window {
 	w.lblInfoTitle = static("", co.SS_CENTER)
 	w.btnDisconnect = button(i18n.Trans("&Disconnect"), co.BS_PUSHBUTTON)
 	w.lblComment = static("", co.SS_CENTER)
-	w.lnkUpdate = link("<a>"+i18n.Trans("update")+"</a>", co.LWS_RIGHT)
+	w.lnkUpdate = link("<a>"+i18n.Trans("Check for updates")+"</a>", co.LWS_RIGHT)
 
 	w.lblKeyErr = static("", co.SS_LEFT)
 	w.btnRemoveKey = button(i18n.Trans("Remove &key..."), co.BS_PUSHBUTTON)

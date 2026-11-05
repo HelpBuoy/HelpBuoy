@@ -43,7 +43,7 @@ type Options struct {
 	// has settled, then quits (screenshot.sh, for the README).
 	Screenshot string
 	// CheckUpdate looks for a newer release, or returns nil when there is
-	// none. It only runs when the user clicks update in the top right
+	// none. It only runs when the user clicks Check for updates in the top right
 	// corner; nil hides that link.
 	CheckUpdate func(ctx context.Context) (*update.Release, error)
 }

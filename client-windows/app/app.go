@@ -465,7 +465,7 @@ func (c *Controller) Version() string { return c.d.AppVersion }
 
 // LatestRelease asks for a release newer than Version and returns nil when
 // there is none (or for a development build). It blocks, so the window
-// calls it outside the UI thread, when the user clicks update.
+// calls it outside the UI thread, when the user clicks Check for updates.
 func (c *Controller) LatestRelease(ctx context.Context) (*update.Release, error) {
 	if c.d.CheckUpdate == nil {
 		return nil, nil

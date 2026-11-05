@@ -593,7 +593,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   `%LOCALAPPDATA%\Programs\helpbuoy` with a Start menu shortcut. Because the exe is never
   patched, it can be Authenticode-signed (`osslsigncode`) once per release.
 - **Updates**, like otp4win, but only on request. Like most apps, the window title shows the
-  version ("HelpBuoy v0.4.19"), and the waiting screen has an "update" text link in the
+  version ("HelpBuoy v0.4.19"), and the waiting screen has a "Check for updates" text link in the
   bottom right corner. Clicking it asks the GitHub API for the latest release; if its MSI
   is newer, the app downloads it to the temp folder, checks its size, starts `msiexec` and
   closes. Otherwise a dialog says this is the latest version, or that the check failed. The
@@ -607,7 +607,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   app MSIs and the Debian packages of the Linux client, the desk app and `helpbuoy-server`.
   The updaters pick their MSI by name prefix: `helpbuoy_` for the client, `helpbuoy-desk_`
   for the desk app on Windows, which updates the same way: its title shows the version and an
-  "update" link sits in the top right corner (in the tab bar once connected). With sessions
+  "Check for updates" link sits in the top right corner (in the tab bar once connected). With sessions
   open it asks to end them first. For now only Linux and
   Windows on amd64 are built (`OSES` and `ARCHES` in the Makefile).
 - The server also ships as a Debian 13 package (`make deb`, `packaging/debian/`): `helpbuoy-server`
