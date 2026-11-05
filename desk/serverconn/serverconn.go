@@ -242,6 +242,17 @@ func (c *Conn) Connect(fingerprint, requestID string) <-chan error {
 	})
 }
 
+// CancelRequest stops waiting for the user to allow the Connect with
+// requestID. The server sends no reply.
+func (c *Conn) CancelRequest(requestID string) {
+	c.mu.Lock()
+	cc := c.cc
+	c.mu.Unlock()
+	if cc != nil {
+		cc.Send(&control.CancelRequest{RequestID: requestID})
+	}
+}
+
 // command sends a message with the next Seq. The returned channel receives
 // exactly one value: nil, the server's error, ErrNotConnected or ErrTimeout.
 func (c *Conn) command(build func(seq uint32) any) <-chan error {

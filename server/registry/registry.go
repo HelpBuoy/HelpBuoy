@@ -427,12 +427,20 @@ func (r *Registry) computerHello(c *Conn, m *control.ComputerHello) error {
 func (r *Registry) cancelRequest(c *Conn, m *control.CancelRequest) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if c.role != control.RoleComputer {
+	switch c.role {
+	case control.RoleComputer:
+		// This also closes the session channels if they are being opened or open.
+		if q := c.req; q != nil && q.id == m.RequestID {
+			r.endRequestLocked(q, control.RequestCancelled, true)
+		}
+	case control.RoleTechie:
+		// The techie who connected gives up waiting for the user; the
+		// computer is told so it closes its question.
+		if q := r.requests[m.RequestID]; q != nil && q.techie == c {
+			r.endRequestLocked(q, control.RequestCancelled, true)
+		}
+	default:
 		return fmt.Errorf("%w: CancelRequest from %s", ErrNotAllowed, c.role)
-	}
-	// This also closes the session channels if they are being opened or open.
-	if q := c.req; q != nil && q.id == m.RequestID {
-		r.endRequestLocked(q, control.RequestCancelled, true)
 	}
 	return nil
 }

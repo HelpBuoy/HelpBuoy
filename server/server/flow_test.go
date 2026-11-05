@@ -408,6 +408,32 @@ func TestTechieComputerHelloIgnored(t *testing.T) {
 	assertOpen(t, c)
 }
 
+// TestTechieCancelsRequest: the techie who connected stops waiting; the
+// computer is told and another techie's cancel is ignored.
+func TestTechieCancelsRequest(t *testing.T) {
+	e := newEnv(t, nil)
+	h := e.techie("alice")
+	bob := e.techie("bob")
+	c, ck := e.computer("anna@PC")
+
+	id := connectTo(t, h, c, 1)
+	bob.Send(&control.CancelRequest{RequestID: id})
+	assertOpen(t, bob)
+	presenceWhere(t, h, func(p *control.Presence) bool {
+		r := computerInfo(p, fp(ck)).Request
+		return r != nil && r.ID == id
+	})
+	h.Send(&control.CancelRequest{RequestID: id})
+	if st := mustWait[control.RequestStateMsg](t, c, nil); st.RequestID != id || st.State != control.RequestCancelled {
+		t.Errorf("techie cancel %+v", st)
+	}
+	presenceWhere(t, h, func(p *control.Presence) bool { return computerInfo(p, fp(ck)).Request == nil })
+	if _, err := openSession(c, id); openReason(err) != ssh.Prohibited {
+		t.Errorf("session after techie cancel: %v", err)
+	}
+	assertOpen(t, h)
+}
+
 // TestCancelTakenRequest: the computer cancels after SessionReady (the user
 // refused the techie), before and while the session channel is being opened.
 func TestCancelTakenRequest(t *testing.T) {

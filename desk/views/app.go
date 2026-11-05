@@ -70,6 +70,7 @@ type backend interface {
 	RenameComputer(fingerprint, name string) <-chan error
 	UnregisterComputer(fingerprint string) <-chan error
 	Connect(fingerprint, requestID string) <-chan error
+	CancelRequest(requestID string)
 	SetServerInfo(title, instruction string) <-chan error
 }
 

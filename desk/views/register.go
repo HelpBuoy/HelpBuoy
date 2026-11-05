@@ -261,7 +261,6 @@ func (a *App) register(p *registerPage) {
 		return
 	}
 	name := strings.TrimSpace(p.name.Edit.String())
-	shown := name
 	p.busy, p.result = true, ""
 	send := a.backend.RegisterComputer
 	if p.techie {
@@ -273,9 +272,16 @@ func (a *App) register(p *registerPage) {
 			p.result, p.failed = "Not registered: "+err.Error(), true
 			return
 		}
-		p.result, p.failed = "Registered "+shown+".", false
-		p.key.Edit.SetText("")
-		p.name.Edit.SetText("")
-		p.nameFor = ""
+		// Back to the list, where the new entry shows. A Register tab of
+		// the other kind opened meanwhile stays.
+		k := tabRegister
+		if p.techie {
+			k = tabRegisterTechie
+		}
+		if cur, ok := a.registerOpen(); ok && cur == k {
+			a.closeRegister()
+		} else {
+			p.reset()
+		}
 	})
 }
