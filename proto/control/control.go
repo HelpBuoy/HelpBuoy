@@ -136,7 +136,8 @@ type ServerInfo struct {
 }
 
 // DefaultInstruction is what computers show when the server's instruction line
-// is empty. An empty title shows nothing.
+// is empty. An empty title shows nothing. The apps show the same text through
+// i18n.Trans so it is translated; keep them in sync.
 const DefaultInstruction = "A techie can now ask to connect. You will be asked first, " +
 	"and pressing Esc always takes back control."
 

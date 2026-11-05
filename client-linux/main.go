@@ -37,6 +37,7 @@ import (
 	"github.com/mevdschee/helpbuoy/client-windows/session"
 	"github.com/mevdschee/helpbuoy/proto/appkey"
 	"github.com/mevdschee/helpbuoy/proto/encode"
+	"github.com/mevdschee/helpbuoy/proto/i18n"
 	pid "github.com/mevdschee/helpbuoy/proto/identity"
 	"github.com/mevdschee/helpbuoy/proto/screen"
 )
@@ -128,11 +129,11 @@ func main() {
 		// and input only reaches X11 windows: refuse instead of showing
 		// the techie a black screen.
 		log.Warn("Wayland session, sharing is not supported")
-		w.Unsupported = "This computer uses a Wayland desktop. HelpBuoy can only share " +
+		w.Unsupported = i18n.Trans("This computer uses a Wayland desktop. HelpBuoy can only share " +
 			"and control X11 desktops for now.\n\n" +
 			"To get help, log out, choose an X11 session on the login screen " +
 			"(on GNOME: the gear button, \"GNOME on Xorg\"; on KDE: \"Plasma (X11)\"), " +
-			"log in and start HelpBuoy again."
+			"log in and start HelpBuoy again.")
 	}
 	ctrl := app.New(app.Deps{
 		UI:        w,

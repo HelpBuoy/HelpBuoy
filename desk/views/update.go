@@ -10,6 +10,7 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 
 	"github.com/mevdschee/helpbuoy/desk/ui"
+	"github.com/mevdschee/helpbuoy/proto/i18n"
 	"github.com/mevdschee/helpbuoy/proto/update"
 )
 
@@ -92,7 +93,7 @@ func (a *App) pollUpdate() {
 				err = exec.Command("msiexec", "/i", res.path, "/l*v", log).Start()
 			}
 			if err != nil {
-				u.err = "The update could not be installed: " + err.Error()
+				u.err = i18n.Trans("The update could not be installed: {0}", err)
 				a.dismissUpdate()
 				return
 			}
@@ -149,22 +150,24 @@ func (a *App) drawUpdateOffer(x, y, w float32, blocked string) float32 {
 	if u.release == nil {
 		return y
 	}
-	c.Text(ui.Bold, ui.SizeBody, "HelpBuoy Desk "+u.release.Version+" is available", x, y, ui.ColText)
+	c.Text(ui.Bold, ui.SizeBody, i18n.Trans("HelpBuoy Desk {0} is available", u.release.Version), x, y, ui.ColText)
 	y += 26
 	if u.downloading {
-		y += c.Paragraph(ui.Regular, ui.SizeSmall, "Downloading HelpBuoy Desk "+u.release.Version+"…", x, y, w, ui.ColMuted)
+		y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Downloading HelpBuoy Desk {0}…", u.release.Version), x, y, w, ui.ColMuted)
 		return y + 12
 	}
-	y += c.Paragraph(ui.Regular, ui.SizeSmall, "You have "+a.opts.Version+". HelpBuoy Desk closes during the installation.", x, y, w, ui.ColMuted)
+	y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("You have {0}. HelpBuoy Desk closes during the installation.", a.opts.Version), x, y, w, ui.ColMuted)
 	y += 10
-	if c.Button("update/install", rl.NewRectangle(x, y, 140, 34), "Install now", ui.Primary, blocked != "") {
+	installL, laterL := i18n.Trans("Install now"), i18n.Trans("Not now")
+	wi, wl := a.btnW(installL, 140), a.btnW(laterL, 110)
+	if c.Button("update/install", rl.NewRectangle(x, y, wi, 34), installL, ui.Primary, blocked != "") {
 		a.installUpdate()
 	}
-	if c.Button("update/later", rl.NewRectangle(x+150, y, 110, 34), "Not now", ui.Normal, false) {
+	if c.Button("update/later", rl.NewRectangle(x+wi+10, y, wl, 34), laterL, ui.Normal, false) {
 		a.dismissUpdate()
 	}
 	if blocked != "" {
-		c.Text(ui.Regular, ui.SizeSmall, blocked, x+272, y+9, ui.ColMuted)
+		c.Text(ui.Regular, ui.SizeSmall, blocked, x+wi+10+wl+12, y+9, ui.ColMuted)
 	}
 	return y + 46
 }

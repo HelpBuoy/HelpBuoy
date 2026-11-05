@@ -17,13 +17,11 @@ import (
 
 	"github.com/mevdschee/helpbuoy/client-windows/app"
 	"github.com/mevdschee/helpbuoy/client-windows/session"
+	"github.com/mevdschee/helpbuoy/proto/i18n"
 )
 
 // Title is the window title.
 const Title = "HelpBuoy"
-
-// copyKeyText is the label of the Copy key button.
-const copyKeyText = "C&opy key"
 
 // dialogWidth is the width of the task dialogs in dialog units, wide
 // enough for a SHA256 fingerprint on one line (task dialogs do not break
@@ -120,28 +118,28 @@ func New(iconID uint16) *Window {
 		return ui.NewSysLink(p, ui.OptsSysLink().Text(text).Size(1, 1).CtrlStyle(0))
 	}
 
-	w.lblHeading = static("Connect to a techie", co.SS_LEFT)
-	w.lblAddrHint = static("Type the server address a techie gave you, for example helpme.example.com.", co.SS_LEFT)
+	w.lblHeading = static(i18n.Trans("Connect to a techie"), co.SS_LEFT)
+	w.lblAddrHint = static(i18n.Trans("Type the server address a techie gave you, for example helpme.example.com."), co.SS_LEFT)
 	w.edtAddr = ui.NewEdit(p, ui.OptsEdit())
-	w.btnConnect = button("&Connect", co.BS_DEFPUSHBUTTON)
+	w.btnConnect = button(i18n.Trans("&Connect"), co.BS_DEFPUSHBUTTON)
 	w.lblAddrError = static("", co.SS_LEFT)
 
-	w.lblKeyIntro = static("Paste this key into a chat with a techie (for example WhatsApp).", co.SS_LEFT)
+	w.lblKeyIntro = static(i18n.Trans("Paste this key into a chat with a techie (for example WhatsApp)."), co.SS_LEFT)
 	w.edtKey = ui.NewEdit(p, ui.OptsEdit().CtrlStyle(co.ES_MULTILINE|co.ES_READONLY|co.ES_AUTOVSCROLL))
-	w.btnCopy = button(copyKeyText, co.BS_PUSHBUTTON)
+	w.btnCopy = button(i18n.Trans("C&opy key"), co.BS_PUSHBUTTON)
 	w.lblKeyFp = static("", co.SS_LEFT)
 	w.lblServerFp = static("", co.SS_LEFT)
 	w.lblKeyNotice = static("", co.SS_LEFT)
-	w.lnkChange = link(`<a>Use a different server address</a>`)
+	w.lnkChange = link("<a>" + i18n.Trans("Use a different server address") + "</a>")
 
 	w.lblWaiting = static("", co.SS_CENTER)
 	w.lblStatus = static("", co.SS_CENTER)
 	w.lblInfoTitle = static("", co.SS_CENTER)
-	w.btnDisconnect = button("&Disconnect", co.BS_PUSHBUTTON)
+	w.btnDisconnect = button(i18n.Trans("&Disconnect"), co.BS_PUSHBUTTON)
 	w.lblComment = static("", co.SS_CENTER)
 
 	w.lblKeyErr = static("", co.SS_LEFT)
-	w.btnRemoveKey = button("Remove &key...", co.BS_PUSHBUTTON)
+	w.btnRemoveKey = button(i18n.Trans("Remove &key..."), co.BS_PUSHBUTTON)
 
 	w.items = []item{
 		{w.lblHeading, 24, 22, 412, 30, fontHeading},
@@ -153,19 +151,19 @@ func New(iconID uint16) *Window {
 		{w.lblKeyIntro, 24, 18, 412, 36, fontNormal},
 		{w.edtKey, 24, 56, 412, 62, fontNormal},
 		{w.btnCopy, 24, 128, 412, 46, fontBig},
-		{w.lblKeyFp, 24, 186, 412, 18, fontNormal},
-		{w.lblServerFp, 24, 206, 412, 18, fontNormal},
+		{w.lblKeyFp, 24, 186, 424, 18, fontNormal},
+		{w.lblServerFp, 24, 206, 424, 18, fontNormal},
 		{w.lblKeyNotice, 24, 234, 412, 40, fontNormal},
-		{w.lnkChange, 24, 298, 260, 20, fontNormal},
+		{w.lnkChange, 24, 298, 412, 20, fontNormal},
 
 		{w.lblComment, 24, 44, 412, 34, fontHeading},
 		{w.lblWaiting, 24, 104, 412, 40, fontBig},
 		{w.lblInfoTitle, 24, 152, 412, 28, fontHeading},
 		{w.lblStatus, 24, statusY, 412, 64, fontNormal},
-		{w.btnDisconnect, 150, 258, 160, 32, fontNormal},
+		{w.btnDisconnect, 130, 258, 200, 32, fontNormal},
 
 		{w.lblKeyErr, 24, 24, 412, 190, fontNormal},
-		{w.btnRemoveKey, 24, 226, 160, 32, fontNormal},
+		{w.btnRemoveKey, 24, 226, 200, 32, fontNormal},
 	}
 	w.events()
 	return w
@@ -203,25 +201,25 @@ func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie, oldFP stri
 	quoted := `"` + who + `"`
 	if oldFP == "" {
 		cfg.HMainIcon = win.TdcIconTdi(co.TDICON_WARNING)
-		cfg.MainInstruction = "Allow " + quoted + " to take control of this computer?"
-		cfg.Content = "Key fingerprint:\n" + h.Fingerprint + "\n\n" +
-			"Only allow this if you asked this person for help. You can take back " +
-			"control at any time by pressing Esc."
+		cfg.MainInstruction = i18n.Trans("Allow {0} to take control of this computer?", quoted)
+		cfg.Content = i18n.Trans("Key fingerprint:") + "\n" + h.Fingerprint + "\n\n" +
+			i18n.Trans("Only allow this if you asked this person for help. You can take back "+
+				"control at any time by pressing Esc.")
 		cfg.Buttons = []win.TASKDIALOG_BUTTON{
-			{Id: co.ID_OK, Text: "&Allow"},
-			{Id: co.ID_CANCEL, Text: "&Cancel"},
+			{Id: co.ID_OK, Text: i18n.Trans("&Allow")},
+			{Id: co.ID_CANCEL, Text: i18n.Trans("&Cancel")},
 		}
 		cfg.DefaultButtonId = uint16(co.ID_OK)
 	} else {
 		cfg.HMainIcon = win.TdcIconTdi(co.TDICON_ERROR)
-		cfg.MainInstruction = "Warning: the key of " + quoted + " has changed"
-		cfg.Content = "Key last time:\n" + oldFP + "\n\n" +
-			"Key now:\n" + h.Fingerprint + "\n\n" +
-			"This may be someone pretending to be a techie. Do not continue " +
-			"unless the techie confirmed by phone that they have a new key."
+		cfg.MainInstruction = i18n.Trans("Warning: the key of {0} has changed", quoted)
+		cfg.Content = i18n.Trans("Key last time:") + "\n" + oldFP + "\n\n" +
+			i18n.Trans("Key now:") + "\n" + h.Fingerprint + "\n\n" +
+			i18n.Trans("This may be someone pretending to be a techie. Do not continue "+
+				"unless the techie confirmed by phone that they have a new key.")
 		cfg.Buttons = []win.TASKDIALOG_BUTTON{
-			{Id: co.ID_CANCEL, Text: "&Cancel"},
-			{Id: co.ID_OK, Text: "Allow &anyway"},
+			{Id: co.ID_CANCEL, Text: i18n.Trans("&Cancel")},
+			{Id: co.ID_OK, Text: i18n.Trans("Allow &anyway")},
 		}
 		cfg.DefaultButtonId = uint16(co.ID_CANCEL)
 	}
@@ -443,14 +441,14 @@ func (w *Window) apply(v app.View) {
 		if w.updating != "" {
 			setText(w.lblAddrError, w.updating)
 		} else if v.Connecting {
-			setText(w.btnConnect, "Connecting...")
+			setText(w.btnConnect, i18n.Trans("Connecting..."))
 			if v.CheckingUpdate {
-				setText(w.lblAddrError, "Checking for updates...")
+				setText(w.lblAddrError, i18n.Trans("Checking for updates..."))
 			} else {
 				setText(w.lblAddrError, "")
 			}
 		} else {
-			setText(w.btnConnect, "&Connect")
+			setText(w.btnConnect, i18n.Trans("&Connect"))
 			setText(w.lblAddrError, v.Error)
 			if entered || prev.Connecting {
 				w.edtAddr.Focus()
@@ -466,11 +464,11 @@ func (w *Window) apply(v app.View) {
 	show(w.lnkChange, key)
 	if key {
 		setText(w.edtKey, v.KeyLine)
-		setText(w.lblKeyFp, "Key fingerprint: "+v.KeyFingerprint)
-		setText(w.lblServerFp, "Server fingerprint: "+v.ServerFingerprint)
+		setText(w.lblKeyFp, i18n.Trans("Key fingerprint: {0}", v.KeyFingerprint))
+		setText(w.lblServerFp, i18n.Trans("Server fingerprint: {0}", v.ServerFingerprint))
 		notice := v.Notice
 		if notice == "" {
-			notice = "Waiting for a techie to add this key. This window changes by itself when that is done."
+			notice = i18n.Trans("Waiting for a techie to add this key. This window changes by itself when that is done.")
 		}
 		setText(w.lblKeyNotice, notice)
 		if entered {
@@ -490,7 +488,7 @@ func (w *Window) apply(v app.View) {
 		setText(w.lblComment, v.KeyComment)
 		waiting := ""
 		if v.Ready {
-			waiting = "Waiting for a techie"
+			waiting = i18n.Trans("Waiting for a techie")
 		}
 		setText(w.lblWaiting, waiting)
 		status := v.Error
@@ -509,9 +507,9 @@ func (w *Window) apply(v app.View) {
 		// During a session (window minimized) the button ends just the
 		// session; afterwards it disconnects again.
 		if v.InSession {
-			setText(w.btnDisconnect, "&End session")
+			setText(w.btnDisconnect, i18n.Trans("&End session"))
 		} else {
-			setText(w.btnDisconnect, "&Disconnect")
+			setText(w.btnDisconnect, i18n.Trans("&Disconnect"))
 		}
 		w.btnDisconnect.Hwnd().EnableWindow(w.updating == "")
 	}
@@ -520,9 +518,9 @@ func (w *Window) apply(v app.View) {
 	show(w.lblKeyErr, keyErr)
 	show(w.btnRemoveKey, keyErr)
 	if keyErr {
-		setText(w.lblKeyErr, v.Error+"\n\nFolder: "+v.KeyDir+
-			"\n\nThe key is never replaced on its own. Remove key deletes it and makes a new one; "+
-			"a techie will have to register this PC again.")
+		setText(w.lblKeyErr, v.Error+"\n\n"+i18n.Trans("Folder: {0}", v.KeyDir)+"\n\n"+
+			i18n.Trans("The key is never replaced on its own. Remove key deletes it and makes a new one; "+
+				"a techie will have to register this PC again."))
 	}
 
 	caption := Title
@@ -573,15 +571,15 @@ func (w *Window) warnServerKey(hk session.HostKeyChangedError) {
 		Flags:           co.TDF_ALLOW_DIALOG_CANCELLATION | co.TDF_POSITION_RELATIVE_TO_WINDOW,
 		Width:           dialogWidth,
 		HMainIcon:       win.TdcIconTdi(co.TDICON_ERROR),
-		MainInstruction: "Warning: the identity of the server has changed",
-		Content: "Key last time:\n" + hk.OldFingerprint + "\n\n" +
-			"Key now:\n" + hk.NewFingerprint + "\n\n" +
-			"This may be someone pretending to be your server. HelpBuoy stopped connecting. " +
-			"Only continue if a techie confirmed by phone that the server has a new key " +
-			"and the new fingerprint above matches what they read to you.",
+		MainInstruction: i18n.Trans("Warning: the identity of the server has changed"),
+		Content: i18n.Trans("Key last time:") + "\n" + hk.OldFingerprint + "\n\n" +
+			i18n.Trans("Key now:") + "\n" + hk.NewFingerprint + "\n\n" +
+			i18n.Trans("This may be someone pretending to be your server. HelpBuoy stopped connecting. "+
+				"Only continue if a techie confirmed by phone that the server has a new key "+
+				"and the new fingerprint above matches what they read to you."),
 		Buttons: []win.TASKDIALOG_BUTTON{
-			{Id: co.ID_CANCEL, Text: "&Cancel"},
-			{Id: co.ID_OK, Text: "&Trust the new key"},
+			{Id: co.ID_CANCEL, Text: i18n.Trans("&Cancel")},
+			{Id: co.ID_OK, Text: i18n.Trans("&Trust the new key")},
 		},
 		DefaultButtonId: uint16(co.ID_CANCEL),
 	}
@@ -629,26 +627,39 @@ func (w *Window) copyText(text string, btn *ui.Button) {
 	if err != nil {
 		return
 	}
-	setText(btn, "Copied")
+	setText(btn, i18n.Trans("Copied"))
 	time.AfterFunc(2*time.Second, func() {
 		if w.wnd.Hwnd() != 0 {
 			w.wnd.UiThread(func() {
 				if btn.Hwnd().IsWindow() {
-					setText(btn, copyKeyText)
+					setText(btn, i18n.Trans("C&opy key"))
 				}
 			})
 		}
 	})
 }
 
+// confirmRemoveKey asks before Remove key. It builds the task dialog itself
+// rather than using ui.MsgOkCancel, whose Cancel button is not translated.
 func (w *Window) confirmRemoveKey() {
-	if !ui.MsgOkCancel(w.wnd, Title, "Remove the key of this PC?",
-		"This deletes the key and the settings of this app. A new key is made, and your "+
-			"techie will have to register this PC again before you can ask for help.",
-		"&Remove key") {
+	cfg := win.TASKDIALOGCONFIG{
+		HwndParent:      w.wnd.Hwnd(),
+		WindowTitle:     Title,
+		Flags:           co.TDF_ALLOW_DIALOG_CANCELLATION | co.TDF_POSITION_RELATIVE_TO_WINDOW,
+		HMainIcon:       win.TdcIconTdi(co.TDICON_WARNING),
+		MainInstruction: i18n.Trans("Remove the key of this PC?"),
+		Content: i18n.Trans("This deletes the key and the settings of this app. A new key is made, and your " +
+			"techie will have to register this PC again before you can ask for help."),
+		Buttons: []win.TASKDIALOG_BUTTON{
+			{Id: co.ID_OK, Text: i18n.Trans("&Remove key")},
+			{Id: co.ID_CANCEL, Text: i18n.Trans("&Cancel")},
+		},
+	}
+	id, err := win.TaskDialogIndirect(&cfg)
+	if err != nil || id != co.ID_OK {
 		return
 	}
 	if err := w.ctrl.RemoveKey(); err != nil {
-		ui.MsgError(w.wnd, Title, "The key could not be removed", err.Error())
+		ui.MsgError(w.wnd, Title, i18n.Trans("The key could not be removed"), err.Error())
 	}
 }

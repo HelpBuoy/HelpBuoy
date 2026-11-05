@@ -1,11 +1,13 @@
 package ui
 
 import (
+	"strconv"
 	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
 	"github.com/mevdschee/helpbuoy/desk/ui/textedit"
+	"github.com/mevdschee/helpbuoy/proto/i18n"
 )
 
 // ButtonKind selects a button's look.
@@ -157,9 +159,9 @@ func (c *Context) Tab(id string, r rl.Rectangle, title string, active, session, 
 			rl.DrawRectangleRounded(closeR, 0.3, 4, ColPressed)
 			c.SetCursor(rl.MouseCursorPointingHand)
 			if session {
-				c.Tooltip("End session")
+				c.Tooltip(i18n.Trans("End session"))
 			} else {
-				c.Tooltip("Close")
+				c.Tooltip(i18n.Trans("Close"))
 			}
 		}
 		drawCross(closeR, ColMuted)
@@ -415,7 +417,7 @@ func (c *Context) Segmented(id string, x, y, h float32, labels []string, selecte
 	for i, l := range labels {
 		w := c.Measure(Regular, SizeSmall, l).X + 20
 		r := rl.NewRectangle(x, y, w, h)
-		sid := id + "/" + l
+		sid := id + "/" + strconv.Itoa(i) // labels may be translated
 		fg := ColText
 		switch {
 		case i == selected:

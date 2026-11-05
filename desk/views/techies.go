@@ -9,6 +9,7 @@ import (
 
 	"github.com/mevdschee/helpbuoy/desk/ui"
 	"github.com/mevdschee/helpbuoy/proto/control"
+	"github.com/mevdschee/helpbuoy/proto/i18n"
 )
 
 // sortedTechies returns the techies of the presence, online first, each
@@ -47,8 +48,8 @@ func helping(p *control.Presence, techie string) []string {
 func (a *App) drawTechiesPage(r rl.Rectangle) {
 	c := a.ui
 	rl.DrawRectangleRec(r, ui.ColPanel)
-	c.Text(ui.Bold, ui.SizeHeading, "Techies", r.X+16, r.Y+14, ui.ColText)
-	a.addButton("techies/add", "Add techie", tabRegisterTechie, r)
+	c.Text(ui.Bold, ui.SizeHeading, i18n.Trans("Techies"), r.X+16, r.Y+14, ui.ColText)
+	a.addButton("techies/add", i18n.Trans("Add techie"), tabRegisterTechie, r)
 	list := rl.NewRectangle(r.X, r.Y+56, r.Width, r.Height-56)
 	rl.DrawLineV(rl.NewVector2(r.X, list.Y), rl.NewVector2(r.X+r.Width, list.Y), ui.ColBorder)
 	if a.presence == nil {
@@ -56,7 +57,7 @@ func (a *App) drawTechiesPage(r rl.Rectangle) {
 	}
 	hs := sortedTechies(a.presence)
 	if len(hs) == 0 {
-		c.Text(ui.Regular, ui.SizeSmall, "No techies on this server.", list.X+16, list.Y+14, ui.ColMuted)
+		c.Text(ui.Regular, ui.SizeSmall, i18n.Trans("No techies on this server."), list.X+16, list.Y+14, ui.ColMuted)
 		return
 	}
 	off := c.BeginScroll("techies", list, float32(len(hs))*rowH)
@@ -87,25 +88,27 @@ func (a *App) drawTechieRow(h control.TechieInfo, r rl.Rectangle) {
 
 	me := h.Name == a.me
 	confirming := a.confirmRemove == h.Fingerprint
+	removeL, cancelL := i18n.Trans("Remove"), i18n.Trans("Cancel")
+	wConfirm, wCancel, wRemove := a.btnW(removeL, 74), a.btnW(cancelL, 68), a.btnW(removeL, 66)
 	actionW := float32(0)
 	switch {
 	case confirming:
-		actionW = 150
+		actionW = wConfirm + 6 + wCancel + 2
 	case hover && !me:
-		actionW = 70
+		actionW = wRemove + 4
 	}
 	w := r.X + r.Width - x - actionW - 16
 	name := h.Name
 	if me {
-		name += " (you)"
+		name = i18n.Trans("{0} (you)", name)
 	}
 	c.Text(ui.Regular, ui.SizeBody, c.Ellipsize(ui.Regular, ui.SizeBody, name, w), x, r.Y+8, nameCol)
 	sub, subCol := h.Fingerprint, ui.ColMuted
 	switch names := helping(a.presence, h.Name); {
 	case len(names) > 0:
-		sub, subCol = "Helping "+strings.Join(names, ", "), ui.ColAccent
+		sub, subCol = i18n.Trans("Helping {0}", strings.Join(names, ", ")), ui.ColAccent
 	case !h.Online:
-		sub = "Offline · " + h.Fingerprint
+		sub = i18n.Trans("Offline · {0}", h.Fingerprint)
 	}
 	if n, ok := a.notes[h.Fingerprint]; ok {
 		sub, subCol = n.text, ui.ColError
@@ -114,7 +117,7 @@ func (a *App) drawTechieRow(h control.TechieInfo, r rl.Rectangle) {
 		}
 	}
 	if confirming {
-		sub, subCol = "Remove this techie?", ui.ColError
+		sub, subCol = i18n.Trans("Remove this techie?"), ui.ColError
 	}
 	c.Text(ui.Regular, ui.SizeSmall, c.Ellipsize(ui.Regular, ui.SizeSmall, sub, w), x, r.Y+30, subCol)
 
@@ -122,14 +125,14 @@ func (a *App) drawTechieRow(h control.TechieInfo, r rl.Rectangle) {
 	ay := r.Y + (r.Height-30)/2
 	switch {
 	case confirming:
-		if c.Button(id+"/confirm", rl.NewRectangle(ax, ay, 74, 30), "Remove", ui.Danger, false) {
+		if c.Button(id+"/confirm", rl.NewRectangle(ax, ay, wConfirm, 30), removeL, ui.Danger, false) {
 			a.unregisterTechie(h)
 		}
-		if c.Button(id+"/cancel", rl.NewRectangle(ax+80, ay, 68, 30), "Cancel", ui.Flat, false) {
+		if c.Button(id+"/cancel", rl.NewRectangle(ax+wConfirm+6, ay, wCancel, 30), cancelL, ui.Flat, false) {
 			a.confirmRemove = ""
 		}
 	case hover && !me:
-		if c.Button(id+"/remove", rl.NewRectangle(ax, ay, 66, 30), "Remove", ui.Flat, !a.online()) {
+		if c.Button(id+"/remove", rl.NewRectangle(ax, ay, wRemove, 30), removeL, ui.Flat, !a.online()) {
 			a.confirmRemove = h.Fingerprint
 		}
 	}
@@ -144,7 +147,7 @@ func (a *App) unregisterTechie(h control.TechieInfo) {
 	fp := h.Fingerprint
 	a.run(a.backend.UnregisterTechie(h.Name), func(err error) {
 		if err != nil {
-			a.notes[fp] = note{text: "Could not remove: " + err.Error(), until: time.Now().Add(6 * time.Second)}
+			a.notes[fp] = note{text: i18n.Trans("Could not remove: {0}", err), until: time.Now().Add(6 * time.Second)}
 		}
 	})
 }

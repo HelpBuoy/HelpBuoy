@@ -2,13 +2,13 @@ package views
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 	"golang.org/x/crypto/ssh"
 
 	"github.com/mevdschee/helpbuoy/desk/ui"
+	"github.com/mevdschee/helpbuoy/proto/i18n"
 	"github.com/mevdschee/helpbuoy/proto/identity"
 )
 
@@ -35,13 +35,13 @@ func (p *registerPage) init(techie bool) {
 	p.techie = techie
 	p.key.Mono = true
 	if techie {
-		p.key.Placeholder = "Paste the key the techie sent you (ssh-ed25519 AAAA…)"
-		p.name.Placeholder = "Name, e.g. bob"
+		p.key.Placeholder = i18n.Trans("Paste the key the techie sent you (ssh-ed25519 AAAA…)")
+		p.name.Placeholder = i18n.Trans("Name, e.g. bob")
 		p.name.Edit.Max = maxTechieName
 		return
 	}
-	p.key.Placeholder = "Paste the key the user sent you (ssh-ed25519 AAAA…)"
-	p.name.Placeholder = "Name, e.g. Anna laptop"
+	p.key.Placeholder = i18n.Trans("Paste the key the user sent you (ssh-ed25519 AAAA…)")
+	p.name.Placeholder = i18n.Trans("Name, e.g. Anna laptop")
 	p.name.Edit.Max = maxComputerName
 }
 
@@ -121,9 +121,9 @@ func (p *registerPage) nameOK() bool {
 func parseMessage(err error) string {
 	switch {
 	case errors.Is(err, identity.ErrNotEd25519):
-		return "This is not a HelpBuoy key. Ask the user to copy the key shown in the app."
+		return i18n.Trans("This is not a HelpBuoy key. Ask the user to copy the key shown in the app.")
 	case errors.Is(err, identity.ErrNoKey):
-		return "No HelpBuoy key found in this text. Ask the user to copy the key shown in the app."
+		return i18n.Trans("No HelpBuoy key found in this text. Ask the user to copy the key shown in the app.")
 	}
 	return err.Error()
 }
@@ -137,14 +137,14 @@ func (a *App) registerPageFor(p *registerPage) func(x, y, w float32) float32 {
 func (a *App) drawRegister(p *registerPage, x, y, w float32) float32 {
 	c := a.ui
 	id := "reg/"
-	title, intro := "Register computer", "Paste the key line the user sent you in the chat. Extra words, quotes and line breaks are fine."
-	nameLabel, fpLabel := "NAME (as techies see it in the computer list)", "FINGERPRINT (compare with the user on the phone)"
-	maxName, nameRule := maxComputerName, "printable characters"
+	title, intro := i18n.Trans("Register computer"), i18n.Trans("Paste the key line the user sent you in the chat. Extra words, quotes and line breaks are fine.")
+	nameLabel, fpLabel := i18n.Trans("NAME (as techies see it in the computer list)"), i18n.Trans("FINGERPRINT (compare with the user on the phone)")
+	nameRule := i18n.Trans("1 to {0} printable characters.", maxComputerName)
 	if p.techie {
 		id = "regtechie/"
-		title, intro = "Register techie", "Paste the key line the other techie sent you. Their app shows it when they connect to this server before being added. They can then help all its computers."
-		nameLabel, fpLabel = "NAME (one word, as computers and techies see it)", "FINGERPRINT (compare with the techie on the phone)"
-		maxName, nameRule = maxTechieName, "characters without spaces"
+		title, intro = i18n.Trans("Register techie"), i18n.Trans("Paste the key line the other techie sent you. Their app shows it when they connect to this server before being added. They can then help all its computers.")
+		nameLabel, fpLabel = i18n.Trans("NAME (one word, as computers and techies see it)"), i18n.Trans("FINGERPRINT (compare with the techie on the phone)")
+		nameRule = i18n.Trans("1 to {0} characters without spaces.", maxTechieName)
 	}
 	c.Text(ui.Bold, ui.SizeHeading, title, x, y, ui.ColText)
 	y += 34
@@ -168,7 +168,7 @@ func (a *App) drawRegister(p *registerPage, x, y, w float32) float32 {
 		c.Text(ui.Regular, ui.SizeSmall, nameLabel, x, y, ui.ColMuted)
 		y += 20
 		if p.name.Edit.String() == "" && strings.TrimSpace(p.comment) == "" {
-			y += c.Paragraph(ui.Regular, ui.SizeSmall, "The key has no name. Type one to register it as:", x, y, w, ui.ColWarn)
+			y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("The key has no name. Type one to register it as:"), x, y, w, ui.ColWarn)
 			y += 4
 		}
 		if c.TextField(id+"name", rl.NewRectangle(x, y, min(w, 420), 40), &p.name).Submitted {
@@ -176,7 +176,7 @@ func (a *App) drawRegister(p *registerPage, x, y, w float32) float32 {
 		}
 		y += 48
 		if n := p.name.Edit.String(); n != "" && !p.nameOK() {
-			c.Text(ui.Regular, ui.SizeSmall, fmt.Sprintf("1 to %d %s.", maxName, nameRule), x, y, ui.ColError)
+			c.Text(ui.Regular, ui.SizeSmall, nameRule, x, y, ui.ColError)
 			y += 22
 		}
 		c.Text(ui.Regular, ui.SizeSmall, fpLabel, x, y, ui.ColMuted)
@@ -184,14 +184,14 @@ func (a *App) drawRegister(p *registerPage, x, y, w float32) float32 {
 		y = a.bigFingerprint(fp, x, y, w)
 		y += 10
 		if known := a.registeredAs(fp); known != "" {
-			c.Text(ui.Regular, ui.SizeBody, "Already registered as "+known+".", x, y, ui.ColWarn)
-			y += 28
+			y += c.Paragraph(ui.Regular, ui.SizeBody, known, x, y, w, ui.ColWarn)
+			y += 6
 		}
 	}
 
 	if rfp := a.serverFingerprint(); rfp != "" && !p.techie {
 		y += 8
-		c.Text(ui.Regular, ui.SizeSmall, "SERVER FINGERPRINT the user's app should show", x, y, ui.ColMuted)
+		c.Text(ui.Regular, ui.SizeSmall, i18n.Trans("SERVER FINGERPRINT the user's app should show"), x, y, ui.ColMuted)
 		y += 22
 		c.Text(ui.Mono, ui.SizeBody, rfp, x, y, ui.ColText)
 		y += 32
@@ -199,16 +199,17 @@ func (a *App) drawRegister(p *registerPage, x, y, w float32) float32 {
 
 	y += 8
 	ready := p.pubKey != nil && p.nameOK()
-	label := "Register"
+	regL, regingL := i18n.Trans("Register"), i18n.Trans("Registering…")
+	label := regL
 	if p.busy {
-		label = "Registering…"
+		label = regingL
 	}
-	if c.Button(id+"submit", rl.NewRectangle(x, y, 140, 38), label, ui.Primary, !ready || p.busy || !a.online()) || (res.Submitted && ready) {
+	if c.Button(id+"submit", rl.NewRectangle(x, y, max(a.btnW(regL, 140), a.btnW(regingL, 140)), 38), label, ui.Primary, !ready || p.busy || !a.online()) || (res.Submitted && ready) {
 		a.register(p)
 	}
 	y += 48
 	if !a.online() {
-		c.Text(ui.Regular, ui.SizeSmall, "Registering needs a connection to the server.", x, y, ui.ColMuted)
+		c.Text(ui.Regular, ui.SizeSmall, i18n.Trans("Registering needs a connection to the server."), x, y, ui.ColMuted)
 		y += 22
 	}
 	if p.result != "" {
@@ -237,19 +238,19 @@ func (a *App) bigFingerprint(fp string, x, y, w float32) float32 {
 }
 
 // registeredAs describes what a fingerprint is registered as on the
-// server ("computer anna@PC", "techie bob"), or "".
+// server ("Already registered as computer anna@PC."), or "".
 func (a *App) registeredAs(fp string) string {
 	if a.presence == nil {
 		return ""
 	}
 	for _, c := range a.presence.Computers {
 		if c.Fingerprint == fp {
-			return "computer " + c.Name
+			return i18n.Trans("Already registered as computer {0}.", c.Name)
 		}
 	}
 	for _, h := range a.presence.Techies {
 		if h.Fingerprint == fp {
-			return "techie " + h.Name
+			return i18n.Trans("Already registered as techie {0}.", h.Name)
 		}
 	}
 	return ""
@@ -269,7 +270,7 @@ func (a *App) register(p *registerPage) {
 	a.run(send(p.line, name), func(err error) {
 		p.busy = false
 		if err != nil {
-			p.result, p.failed = "Not registered: "+err.Error(), true
+			p.result, p.failed = i18n.Trans("Not registered: {0}", err), true
 			return
 		}
 		// Back to the list, where the new entry shows. A Register tab of

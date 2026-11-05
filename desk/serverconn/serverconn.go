@@ -21,6 +21,7 @@ import (
 
 	"github.com/mevdschee/helpbuoy/desk/config"
 	"github.com/mevdschee/helpbuoy/proto/control"
+	"github.com/mevdschee/helpbuoy/proto/i18n"
 )
 
 // Status is the state of the server connection as shown in the UI.
@@ -55,9 +56,9 @@ func (s Status) String() string {
 
 // Errors reported by the connection and by commands.
 var (
-	ErrNotTechie    = errors.New("this key is not a techie on the server")
-	ErrNotConnected = errors.New("not connected to the server")
-	ErrTimeout      = errors.New("the server did not answer")
+	ErrNotTechie    = errors.New(i18n.Trans("this key is not a techie on the server"))
+	ErrNotConnected = errors.New(i18n.Trans("not connected to the server"))
+	ErrTimeout      = errors.New(i18n.Trans("the server did not answer"))
 )
 
 // Options configure a Conn.

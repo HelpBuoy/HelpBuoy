@@ -18,7 +18,7 @@ import (
 	"github.com/mevdschee/helpbuoy/client-windows/config"
 	"github.com/mevdschee/helpbuoy/client-windows/session"
 	"github.com/mevdschee/helpbuoy/proto/appkey"
-	"github.com/mevdschee/helpbuoy/proto/control"
+	"github.com/mevdschee/helpbuoy/proto/i18n"
 	"github.com/mevdschee/helpbuoy/proto/serveraddr"
 	"github.com/mevdschee/helpbuoy/proto/update"
 )
@@ -217,7 +217,8 @@ func (c *Controller) viewLocked() View {
 	if v.Screen == ScreenMain {
 		v.Title, v.Instruction = c.serverInfoLocked()
 		if v.Instruction == "" {
-			v.Instruction = control.DefaultInstruction
+			v.Instruction = i18n.Trans("A techie can now ask to connect. You will be asked first, " +
+				"and pressing Esc always takes back control.")
 		}
 	}
 	idle := v.Screen == ScreenAddress && !v.Connecting || v.Screen == ScreenMain && v.Ready
@@ -250,7 +251,7 @@ func (c *Controller) screenLocked() View {
 	v.KeyComment = c.key.Comment
 	v.ServerFingerprint = c.st.ServerFingerprint
 
-	lost := "The connection to the server was lost. Trying again..."
+	lost := i18n.Trans("The connection to the server was lost. Trying again...")
 	switch p := c.st.Phase; {
 	case c.computer == nil && c.checking:
 		v.Screen, v.Address, v.Connecting, v.CheckingUpdate = ScreenAddress, c.pendingAddr, true, true
@@ -275,7 +276,7 @@ func (c *Controller) screenLocked() View {
 	case p == session.PhaseReady:
 		v.Screen, v.Ready = ScreenMain, true
 	case p == session.PhaseAsking:
-		v.Screen, v.Asking, v.Notice = ScreenMain, true, "A techie wants to connect."
+		v.Screen, v.Asking, v.Notice = ScreenMain, true, i18n.Trans("A techie wants to connect.")
 	case p == session.PhaseInSession:
 		v.Screen, v.InSession = ScreenMain, true
 	case !c.reached:
@@ -291,11 +292,11 @@ func (c *Controller) screenLocked() View {
 func describeKeyError(err error) string {
 	switch {
 	case err == nil:
-		return "The key of this PC could not be loaded."
+		return i18n.Trans("The key of this PC could not be loaded.")
 	case errors.Is(err, appkey.ErrDamaged):
-		return "The key of this PC can't be used. " + capitalize(err.Error()) + "."
+		return i18n.Trans("The key of this PC can't be used.") + " " + capitalize(err.Error()) + "."
 	}
-	return "The key of this PC could not be loaded or created: " + err.Error()
+	return i18n.Trans("The key of this PC could not be loaded or created: {0}", err.Error())
 }
 
 // Start loads the key and the configuration, checks for a newer release and

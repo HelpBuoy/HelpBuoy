@@ -27,6 +27,7 @@ import (
 	"github.com/mevdschee/helpbuoy/desk/ui"
 	"github.com/mevdschee/helpbuoy/proto/appkey"
 	"github.com/mevdschee/helpbuoy/proto/control"
+	"github.com/mevdschee/helpbuoy/proto/i18n"
 	"github.com/mevdschee/helpbuoy/proto/serveraddr"
 	"github.com/mevdschee/helpbuoy/proto/update"
 )
@@ -467,7 +468,7 @@ func (a *App) setPresence(p *control.Presence) {
 		if w.seen {
 			delete(a.waiting, c.Fingerprint)
 			delete(a.opened, w.id)
-			a.notes[c.Fingerprint] = note{text: "Not allowed: the user refused or did not answer", until: time.Now().Add(10 * time.Second)}
+			a.notes[c.Fingerprint] = note{text: i18n.Trans("Not allowed: the user refused or did not answer"), until: time.Now().Add(10 * time.Second)}
 		}
 	}
 }
@@ -479,7 +480,7 @@ func (a *App) incomingSession(d control.TechiesessionData, ch ssh.Channel) {
 	if err != nil || a.key == nil {
 		ch.Close()
 		if err != nil {
-			a.noteFor(d.ComputerName, "Session refused: "+err.Error())
+			a.noteFor(d.ComputerName, i18n.Trans("Session refused: {0}", err))
 		}
 		return
 	}
@@ -508,7 +509,7 @@ func (a *App) updateSessions() {
 		select {
 		case <-st.s.Done():
 			if err := st.s.Err(); err != nil && !isEnd(err) {
-				a.notes[st.s.Info.Fingerprint] = note{text: "Session failed: " + err.Error(), until: time.Now().Add(8 * time.Second)}
+				a.notes[st.s.Info.Fingerprint] = note{text: i18n.Trans("Session failed: {0}", err), until: time.Now().Add(8 * time.Second)}
 			}
 			a.closeTab(i)
 			i--
@@ -768,14 +769,15 @@ func (a *App) drawWorkArea() {
 	rl.DrawLineV(rl.NewVector2(0, bar.Height), rl.NewVector2(w, bar.Height), ui.ColBorder)
 	// Fixed tabs are narrower than session tabs; all shrink together when
 	// they do not fit.
+	// A translated title may need more room than the usual width.
 	widthOf := func(t *tab) float32 {
 		switch {
 		case t.kind == tabSession:
 			return sessionTabW
 		case isRegister(t.kind):
-			return registerTabW
+			return max(registerTabW, a.ui.Measure(ui.Bold, ui.SizeBody, a.tabTitle(t)).X+56)
 		}
-		return fixedTabW
+		return max(fixedTabW, a.ui.Measure(ui.Bold, ui.SizeBody, a.tabTitle(t)).X+24)
 	}
 	total := float32(0)
 	for _, t := range a.tabs {
@@ -825,15 +827,15 @@ func (a *App) drawWorkArea() {
 func (a *App) tabTitle(t *tab) string {
 	switch t.kind {
 	case tabComputers:
-		return "Computers"
+		return i18n.Trans("Computers")
 	case tabTechies:
-		return "Techies"
+		return i18n.Trans("Techies")
 	case tabRegister:
-		return "Register computer"
+		return i18n.Trans("Register computer")
 	case tabRegisterTechie:
-		return "Register techie"
+		return i18n.Trans("Register techie")
 	case tabServer:
-		return "Server"
+		return i18n.Trans("Server")
 	}
 	return a.sessionName(t.sess)
 }
@@ -865,23 +867,25 @@ func (a *App) drawKeyProblem() {
 	const pad = 32
 	x, y, width := box.X+pad, box.Y+pad, box.Width-2*pad
 	if a.keyRemoved {
-		c.Text(ui.Bold, ui.SizeHeading, "The key was removed", x, y, ui.ColText)
+		c.Text(ui.Bold, ui.SizeHeading, i18n.Trans("The key was removed"), x, y, ui.ColText)
 		y += 36
-		y += c.Paragraph(ui.Regular, ui.SizeBody, "Start the app again to create a new key. The server admin, or another techie (Add techie on the Techies tab), then adds the new key.", x, y, width, ui.ColMuted)
+		y += c.Paragraph(ui.Regular, ui.SizeBody, i18n.Trans("Start the app again to create a new key. The server admin, or another techie (Add techie on the Techies tab), then adds the new key."), x, y, width, ui.ColMuted)
 	} else {
-		c.Text(ui.Bold, ui.SizeHeading, "The techie key can't be used", x, y, ui.ColText)
+		c.Text(ui.Bold, ui.SizeHeading, i18n.Trans("The techie key can't be used"), x, y, ui.ColText)
 		y += 36
 		y += c.Paragraph(ui.Regular, ui.SizeBody, a.keyErr.Error(), x, y, width, ui.ColError)
 		if a.dir != "" {
 			y += 10
-			y += c.Paragraph(ui.Regular, ui.SizeSmall, "Folder: "+a.dir, x, y, width, ui.ColMuted)
+			y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Folder: {0}", a.dir), x, y, width, ui.ColMuted)
 		}
 		if errors.Is(a.keyErr, appkey.ErrDamaged) && a.dir != "" {
 			y += 12
-			y += c.Paragraph(ui.Regular, ui.SizeBody, "The key is never replaced on its own. Remove key deletes it and makes a new one on the next start; the server admin or another techie must then add the new key.", x, y, width, ui.ColMuted)
+			y += c.Paragraph(ui.Regular, ui.SizeBody, i18n.Trans("The key is never replaced on its own. Remove key deletes it and makes a new one on the next start; the server admin or another techie must then add the new key."), x, y, width, ui.ColMuted)
 			y += 16
 			if a.confirmKey {
-				if c.Button("keyproblem/confirm", rl.NewRectangle(x, y, 160, 36), "Remove key", ui.Danger, false) {
+				removeL, cancelL := i18n.Trans("Remove key"), i18n.Trans("Cancel")
+				rw := a.btnW(removeL, 160)
+				if c.Button("keyproblem/confirm", rl.NewRectangle(x, y, rw, 36), removeL, ui.Danger, false) {
 					if err := identity.Remove(a.dir); err != nil {
 						a.keyErr = err
 					} else {
@@ -889,19 +893,25 @@ func (a *App) drawKeyProblem() {
 					}
 					a.confirmKey = false
 				}
-				if c.Button("keyproblem/cancel", rl.NewRectangle(x+172, y, 100, 36), "Cancel", ui.Normal, false) {
+				if c.Button("keyproblem/cancel", rl.NewRectangle(x+rw+12, y, a.btnW(cancelL, 100), 36), cancelL, ui.Normal, false) {
 					a.confirmKey = false
 				}
-			} else if c.Button("keyproblem/remove", rl.NewRectangle(x, y, 160, 36), "Remove key…", ui.Normal, false) {
+			} else if l := i18n.Trans("Remove key…"); c.Button("keyproblem/remove", rl.NewRectangle(x, y, a.btnW(l, 160), 36), l, ui.Normal, false) {
 				a.confirmKey = true
 			}
 			y += 36
 		}
 	}
 	y += 24
-	if c.Button("keyproblem/quit", rl.NewRectangle(x, y, 100, 36), "Quit", ui.Primary, false) {
+	if l := i18n.Trans("Quit"); c.Button("keyproblem/quit", rl.NewRectangle(x, y, a.btnW(l, 100), 36), l, ui.Primary, false) {
 		a.quit = true
 	}
 	y += 36
 	a.cs.boxH = y - box.Y + pad
+}
+
+// btnW is the width of a button with label: at least minW, wider when the
+// label (translated, or bold on a Primary or Danger button) needs it.
+func (a *App) btnW(label string, minW float32) float32 {
+	return max(minW, a.ui.Measure(ui.Bold, ui.SizeBody, label).X+16)
 }

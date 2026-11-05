@@ -15,12 +15,11 @@ import (
 	"github.com/mevdschee/helpbuoy/client-linux/xkeys"
 	"github.com/mevdschee/helpbuoy/client-windows/app"
 	"github.com/mevdschee/helpbuoy/client-windows/session"
+	"github.com/mevdschee/helpbuoy/proto/i18n"
 )
 
 // Title is the window title.
 const Title = "HelpBuoy"
-
-const copyKeyText = "Copy key"
 
 // Client area size in 96-DPI units, as on Windows.
 const clientW, clientH = 460, 330
@@ -113,33 +112,33 @@ func New(icons [][]byte) *Window {
 	}
 
 	w.lblHeading = label(24, 22, 412, 30, fontHeading, alignLeft)
-	w.lblHeading.text = "Connect to a techie"
+	w.lblHeading.text = i18n.Trans("Connect to a techie")
 	w.lblAddrHint = label(24, 62, 412, 36, fontNormal, alignLeft)
-	w.lblAddrHint.text = "Type the server address a techie gave you, for example helpme.example.com."
+	w.lblAddrHint.text = i18n.Trans("Type the server address a techie gave you, for example helpme.example.com.")
 	w.edtAddr = newWidget(kindField, 24, 106, 300, 28, fontNormal)
 	w.edtAddr.field.limit = 300
-	w.btnConnect = button("Connect", 334, 106, 102, 28, fontNormal, w.connect)
+	w.btnConnect = button(i18n.Trans("Connect"), 334, 106, 102, 28, fontNormal, w.connect)
 	w.btnConnect.isDefault = true
 	w.lblAddrError = label(24, 146, 412, 80, fontNormal, alignLeft)
 	w.lblAddrError.color = colError
 
 	w.lblKeyIntro = label(24, 18, 412, 36, fontNormal, alignLeft)
-	w.lblKeyIntro.text = "Paste this key into a chat with a techie (for example WhatsApp)."
+	w.lblKeyIntro.text = i18n.Trans("Paste this key into a chat with a techie (for example WhatsApp).")
 	w.edtKey = newWidget(kindKeyBox, 24, 56, 412, 62, fontNormal)
-	w.btnCopy = button(copyKeyText, 24, 128, 412, 46, fontBig, w.copyKey)
+	w.btnCopy = button(i18n.Trans("Copy key"), 24, 128, 412, 46, fontBig, w.copyKey)
 	w.lblKeyFp = label(24, 182, 412, 34, fontNormal, alignLeft)
 	w.lblServerFp = label(24, 217, 412, 34, fontNormal, alignLeft)
 	w.lblKeyNotice = label(24, 256, 412, 36, fontNormal, alignLeft)
 	w.lblKeyNotice.color = colGray
 	w.lnkChange = newWidget(kindLink, 24, 302, 260, 20, fontNormal)
-	w.lnkChange.text = "Use a different server address"
+	w.lnkChange.text = i18n.Trans("Use a different server address")
 	w.lnkChange.onClick = func() { w.ctrl.Disconnect() }
 
 	w.lblComment = label(24, 44, 412, 34, fontHeading, alignCenter)
 	w.lblWaiting = label(24, 104, 412, 40, fontBig, alignCenter)
 	w.lblInfoTitle = label(24, 152, 412, 28, fontHeading, alignCenter)
 	w.lblStatus = label(24, statusY, 412, 64, fontNormal, alignCenter)
-	w.btnDisconnect = button("Disconnect", 150, 258, 160, 32, fontNormal, func() {
+	w.btnDisconnect = button(i18n.Trans("Disconnect"), 150, 258, 160, 32, fontNormal, func() {
 		if w.view.InSession {
 			w.ctrl.EndSession()
 		} else {
@@ -149,12 +148,12 @@ func New(icons [][]byte) *Window {
 
 	w.lblKeyErr = label(24, 24, 412, 190, fontNormal, alignLeft)
 	w.lblKeyErr.color = colError
-	w.btnRemoveKey = button("Remove key...", 24, 226, 160, 32, fontNormal, w.confirmRemoveKey)
+	w.btnRemoveKey = button(i18n.Trans("Remove key..."), 24, 226, 160, 32, fontNormal, w.confirmRemoveKey)
 
 	w.lblUnsupHeading = label(24, 22, 412, 30, fontHeading, alignLeft)
-	w.lblUnsupHeading.text = "This desktop can't be shared"
+	w.lblUnsupHeading.text = i18n.Trans("This desktop can't be shared")
 	w.lblUnsup = label(24, 62, 412, 180, fontNormal, alignLeft)
-	w.btnClose = button("Close", 336, 278, 100, 30, fontNormal, func() { w.closing = true })
+	w.btnClose = button(i18n.Trans("Close"), 336, 278, 100, 30, fontNormal, func() { w.closing = true })
 	w.btnClose.isDefault = true
 
 	w.widgets = []*widget{
@@ -232,7 +231,7 @@ func (w *Window) Run(ctrl *app.Controller) error {
 		case <-tick.C:
 			if !w.copiedAt.IsZero() && time.Since(w.copiedAt) > 2*time.Second {
 				w.copiedAt = time.Time{}
-				w.btnCopy.text = copyKeyText
+				w.btnCopy.text = i18n.Trans("Copy key")
 			}
 		}
 		if w.closing {
@@ -284,19 +283,19 @@ func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie, oldFP stri
 	d := &dialog{}
 	if oldFP == "" {
 		d.icon = iconWarning
-		d.heading = "Allow " + quoted + " to take control of this computer?"
-		d.body = "Key fingerprint:\n" + h.Fingerprint + "\n\n" +
-			"Only allow this if you asked this person for help. You can take back " +
-			"control at any time by pressing Esc."
-		d.setButtons(0, 1, "Allow", "Cancel")
+		d.heading = i18n.Trans("Allow {0} to take control of this computer?", quoted)
+		d.body = i18n.Trans("Key fingerprint:\n{0}\n\n"+
+			"Only allow this if you asked this person for help. You can take back "+
+			"control at any time by pressing Esc.", h.Fingerprint)
+		d.setButtons(0, 1, i18n.Trans("Allow"), i18n.Trans("Cancel"))
 	} else {
 		d.icon = iconError
-		d.heading = "Warning: the key of " + quoted + " has changed"
-		d.body = "Key last time:\n" + oldFP + "\n" +
-			"Key now:\n" + h.Fingerprint + "\n\n" +
-			"This may be someone pretending to be a techie. Do not continue " +
-			"unless the techie confirmed by phone that they have a new key."
-		d.setButtons(0, 0, "Cancel", "Allow anyway")
+		d.heading = i18n.Trans("Warning: the key of {0} has changed", quoted)
+		d.body = i18n.Trans("Key last time:\n{0}\n"+
+			"Key now:\n{1}\n\n"+
+			"This may be someone pretending to be a techie. Do not continue "+
+			"unless the techie confirmed by phone that they have a new key.", oldFP, h.Fingerprint)
+		d.setButtons(0, 0, i18n.Trans("Cancel"), i18n.Trans("Allow anyway"))
 	}
 	allow := 0
 	if oldFP != "" {
@@ -420,24 +419,24 @@ func (w *Window) copyKey() {
 	if w.view.KeyLine == "" || !w.x.copy(w.view.KeyLine) {
 		return
 	}
-	w.btnCopy.text = "Copied"
+	w.btnCopy.text = i18n.Trans("Copied")
 	w.copiedAt = time.Now()
 }
 
 func (w *Window) confirmRemoveKey() {
 	d := &dialog{
 		icon:    iconWarning,
-		heading: "Remove the key of this PC?",
-		body: "This deletes the key and the settings of this app. A new key is made, and your " +
-			"techie will have to register this PC again before you can ask for help.",
+		heading: i18n.Trans("Remove the key of this PC?"),
+		body: i18n.Trans("This deletes the key and the settings of this app. A new key is made, and your " +
+			"techie will have to register this PC again before you can ask for help."),
 	}
-	d.setButtons(1, 1, "Remove key", "Cancel")
+	d.setButtons(1, 1, i18n.Trans("Remove key"), i18n.Trans("Cancel"))
 	d.done = func(i int) {
 		if i != 0 {
 			return
 		}
 		if err := w.ctrl.RemoveKey(); err != nil {
-			w.message(iconError, "The key could not be removed", err.Error())
+			w.message(iconError, i18n.Trans("The key could not be removed"), err.Error())
 		}
 	}
 	w.openDialog(d)
@@ -446,7 +445,7 @@ func (w *Window) confirmRemoveKey() {
 // message shows a dialog with only OK.
 func (w *Window) message(icon iconKind, heading, body string) {
 	d := &dialog{icon: icon, heading: heading, body: body}
-	d.setButtons(0, 0, "OK")
+	d.setButtons(0, 0, i18n.Trans("OK"))
 	w.openDialog(d)
 }
 
@@ -460,14 +459,15 @@ func (w *Window) maybeWarnServerKey() {
 	change := *hk
 	d := &dialog{
 		icon:    iconError,
-		heading: "Warning: the identity of the server has changed",
-		body: "Key last time:\n" + change.OldFingerprint + "\n" +
-			"Key now:\n" + change.NewFingerprint + "\n\n" +
-			"This may be someone pretending to be your server. HelpBuoy stopped connecting. " +
-			"Only continue if a techie confirmed by phone that the server has a new key " +
+		heading: i18n.Trans("Warning: the identity of the server has changed"),
+		body: i18n.Trans("Key last time:\n{0}\n"+
+			"Key now:\n{1}\n\n"+
+			"This may be someone pretending to be your server. HelpBuoy stopped connecting. "+
+			"Only continue if a techie confirmed by phone that the server has a new key "+
 			"and the new fingerprint above matches what they read to you.",
+			change.OldFingerprint, change.NewFingerprint),
 	}
-	d.setButtons(0, 0, "Cancel", "Trust the new key")
+	d.setButtons(0, 0, i18n.Trans("Cancel"), i18n.Trans("Trust the new key"))
 	d.done = func(i int) {
 		if i == 1 {
 			w.ctrl.TrustServerKey(change.NewFingerprint)
@@ -505,10 +505,10 @@ func (w *Window) apply(v app.View) {
 		w.edtAddr.enabled = !v.Connecting
 		w.btnConnect.enabled = !v.Connecting
 		if v.Connecting {
-			w.btnConnect.text = "Connecting..."
+			w.btnConnect.text = i18n.Trans("Connecting...")
 			w.lblAddrError.text = ""
 		} else {
-			w.btnConnect.text = "Connect"
+			w.btnConnect.text = i18n.Trans("Connect")
 			w.lblAddrError.text = v.Error
 			if entered || prev.Connecting {
 				w.focus = w.edtAddr
@@ -521,11 +521,11 @@ func (w *Window) apply(v app.View) {
 	show(key, w.lblKeyIntro, w.edtKey, w.btnCopy, w.lblKeyFp, w.lblServerFp, w.lblKeyNotice, w.lnkChange)
 	if key {
 		w.edtKey.text = v.KeyLine
-		w.lblKeyFp.text = "Key fingerprint:\n" + v.KeyFingerprint
-		w.lblServerFp.text = "Server fingerprint:\n" + v.ServerFingerprint
+		w.lblKeyFp.text = i18n.Trans("Key fingerprint:\n{0}", v.KeyFingerprint)
+		w.lblServerFp.text = i18n.Trans("Server fingerprint:\n{0}", v.ServerFingerprint)
 		notice := v.Notice
 		if notice == "" {
-			notice = "Waiting for a techie to add this key. This window changes by itself when that is done."
+			notice = i18n.Trans("Waiting for a techie to add this key. This window changes by itself when that is done.")
 		}
 		w.lblKeyNotice.text = notice
 		if entered {
@@ -545,7 +545,7 @@ func (w *Window) apply(v app.View) {
 		w.lblComment.text = v.KeyComment
 		w.lblWaiting.text = ""
 		if v.Ready {
-			w.lblWaiting.text = "Waiting for a techie"
+			w.lblWaiting.text = i18n.Trans("Waiting for a techie")
 		}
 		status := v.Error
 		if status == "" {
@@ -563,9 +563,9 @@ func (w *Window) apply(v app.View) {
 		// During a session (window minimized) the button ends just the
 		// session; afterwards it disconnects again.
 		if v.InSession {
-			w.btnDisconnect.text = "End session"
+			w.btnDisconnect.text = i18n.Trans("End session")
 		} else {
-			w.btnDisconnect.text = "Disconnect"
+			w.btnDisconnect.text = i18n.Trans("Disconnect")
 		}
 		if entered {
 			w.focus = w.btnDisconnect
@@ -575,9 +575,9 @@ func (w *Window) apply(v app.View) {
 	keyErr := v.Screen == app.ScreenKeyError
 	show(keyErr, w.lblKeyErr, w.btnRemoveKey)
 	if keyErr {
-		w.lblKeyErr.text = v.Error + "\n\nFolder: " + v.KeyDir +
-			"\n\nThe key is never replaced on its own. Remove key deletes it and makes a new one; " +
-			"a techie will have to register this PC again."
+		w.lblKeyErr.text = v.Error + "\n\n" + i18n.Trans("Folder: {0}", v.KeyDir) + "\n\n" +
+			i18n.Trans("The key is never replaced on its own. Remove key deletes it and makes a new one; "+
+				"a techie will have to register this PC again.")
 		if entered {
 			w.focus = w.btnRemoveKey
 		}

@@ -1,7 +1,6 @@
 package views
 
 import (
-	"fmt"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/mevdschee/helpbuoy/desk/ui"
 	"github.com/mevdschee/helpbuoy/proto/control"
+	"github.com/mevdschee/helpbuoy/proto/i18n"
 )
 
 // The server's limits for the title and instruction line.
@@ -28,9 +28,10 @@ type infoForm struct {
 }
 
 func (f *infoForm) init() {
-	f.title.Placeholder = "Empty: no title"
+	f.title.Placeholder = i18n.Trans("Empty: no title")
 	f.title.Edit.Max = maxTitle
-	f.instruction.Placeholder = "Empty: " + control.DefaultInstruction
+	f.instruction.Placeholder = i18n.Trans("Empty: {0}", i18n.Trans("A techie can now ask to connect. You will be asked first, "+
+		"and pressing Esc always takes back control."))
 	f.instruction.Edit.Max = maxInstruction
 }
 
@@ -76,13 +77,13 @@ func (a *App) setServerInfo(info *control.ServerInfo) {
 func (a *App) drawServerInfo(x, y, w float32) float32 {
 	c := a.ui
 	f := &a.infoForm
-	y += c.Paragraph(ui.Regular, ui.SizeSmall, "Computers waiting for a techie show this title and instruction line, for example your company name and \"Call +1 234 567 890 for support\". The grey text shows what an empty field gives.", x, y, w, ui.ColMuted)
+	y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Computers waiting for a techie show this title and instruction line, for example your company name and \"Call +1 234 567 890 for support\". The grey text shows what an empty field gives."), x, y, w, ui.ColMuted)
 	y += 6
 	fw := min(w, 560)
-	y = label(c, "Title", x, y)
+	y = label(c, i18n.Trans("Title"), x, y)
 	r1 := c.TextField("server/title", rl.NewRectangle(x, y, fw, 40), &f.title)
 	y += 48
-	y = label(c, "Instruction", x, y)
+	y = label(c, i18n.Trans("Instruction"), x, y)
 	r2 := c.TextField("server/instruction", rl.NewRectangle(x, y, fw, 40), &f.instruction)
 	y += 48
 	if r1.Changed || r2.Changed {
@@ -91,16 +92,17 @@ func (a *App) drawServerInfo(x, y, w float32) float32 {
 	title, instr := f.title.Edit.String(), f.instruction.Edit.String()
 	valid := validLine(title, maxTitle) && validLine(instr, maxInstruction)
 	if !valid {
-		c.Text(ui.Regular, ui.SizeSmall, fmt.Sprintf("Title up to %d, instruction up to %d printable characters.", maxTitle, maxInstruction), x, y, ui.ColError)
-		y += 22
+		y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Title up to {0}, instruction up to {1} printable characters.", maxTitle, maxInstruction), x, y, w, ui.ColError)
+		y += 3
 	}
 	changed := a.info != nil && (strings.TrimSpace(title) != a.info.Title || strings.TrimSpace(instr) != a.info.Instruction)
 	ready := valid && changed && !f.busy && a.online()
-	text := "Save"
+	saveL, savingL := i18n.Trans("Save"), i18n.Trans("Saving…")
+	text := saveL
 	if f.busy {
-		text = "Saving…"
+		text = savingL
 	}
-	if c.Button("server/saveinfo", rl.NewRectangle(x, y, 130, 34), text, ui.Primary, !ready) || ((r1.Submitted || r2.Submitted) && ready) {
+	if c.Button("server/saveinfo", rl.NewRectangle(x, y, max(a.btnW(saveL, 130), a.btnW(savingL, 130)), 34), text, ui.Primary, !ready) || ((r1.Submitted || r2.Submitted) && ready) {
 		a.saveServerInfo(title, instr)
 	}
 	y += 44
@@ -124,10 +126,10 @@ func (a *App) saveServerInfo(title, instruction string) {
 	a.run(a.backend.SetServerInfo(title, instruction), func(err error) {
 		f.busy = false
 		if err != nil {
-			f.result, f.failed = "Not saved: "+err.Error(), true
+			f.result, f.failed = i18n.Trans("Not saved: {0}", err), true
 			return
 		}
-		f.result, f.failed = "Saved.", false
+		f.result, f.failed = i18n.Trans("Saved."), false
 	})
 }
 
@@ -140,7 +142,7 @@ func label(c *ui.Context, text string, x, y float32) float32 {
 // fingerprint to read out to users, and Disconnect.
 func (a *App) drawServer(x, y, w float32) float32 {
 	c := a.ui
-	c.Text(ui.Bold, ui.SizeHeading, "Server", x, y, ui.ColText)
+	c.Text(ui.Bold, ui.SizeHeading, i18n.Trans("Server"), x, y, ui.ColText)
 	y += 40
 	text, detail, col := a.statusText()
 	rl.DrawCircleV(rl.NewVector2(x+5, y+9), 4.5, col)
@@ -151,15 +153,15 @@ func (a *App) drawServer(x, y, w float32) float32 {
 	}
 	y += 12
 	if a.demo == nil {
-		y = label(c, "Address", x, y)
+		y = label(c, i18n.Trans("Address"), x, y)
 		c.Text(ui.Regular, ui.SizeBody, c.Ellipsize(ui.Regular, ui.SizeBody, a.addr.String(), w), x, y, ui.ColText)
 		y += 30
 	}
-	y = label(c, "Server fingerprint (computers show this on first contact)", x, y)
+	y = label(c, i18n.Trans("Server fingerprint (computers show this on first contact)"), x, y)
 	if fp := a.serverFingerprint(); fp != "" {
 		c.Text(ui.Mono, ui.SizeBody, fp, x, y, ui.ColText)
 	} else {
-		c.Text(ui.Regular, ui.SizeBody, "Not known yet; pinned on the first connection.", x, y, ui.ColMuted)
+		c.Text(ui.Regular, ui.SizeBody, i18n.Trans("Not known yet; pinned on the first connection."), x, y, ui.ColMuted)
 	}
 	y += 34
 	if a.info != nil {
@@ -167,17 +169,18 @@ func (a *App) drawServer(x, y, w float32) float32 {
 	}
 	if a.demo == nil {
 		busy := a.sessionCount() > 0
-		r := rl.NewRectangle(x, y, 130, 34)
-		if c.Button("server/disconnect", r, "Disconnect", ui.Normal, busy) {
+		discL := i18n.Trans("Disconnect")
+		r := rl.NewRectangle(x, y, a.btnW(discL, 130), 34)
+		if c.Button("server/disconnect", r, discL, ui.Normal, busy) {
 			a.disconnect()
 		}
 		if busy {
-			c.Text(ui.Regular, ui.SizeSmall, "End the open sessions first.", x+142, y+9, ui.ColMuted)
+			c.Text(ui.Regular, ui.SizeSmall, i18n.Trans("End the open sessions first."), x+r.Width+12, y+9, ui.ColMuted)
 		}
 		y += 46
 	}
 	if a.cfgErr != nil {
-		y += c.Paragraph(ui.Regular, ui.SizeSmall, "Settings file: "+a.cfgErr.Error(), x, y, w, ui.ColError)
+		y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Settings file: {0}", a.cfgErr), x, y, w, ui.ColError)
 		y += 8
 	}
 
@@ -185,7 +188,7 @@ func (a *App) drawServer(x, y, w float32) float32 {
 	if a.upd.release != nil || a.upd.err != "" {
 		blocked := ""
 		if a.sessionCount() > 0 {
-			blocked = "End the open sessions first."
+			blocked = i18n.Trans("End the open sessions first.")
 		}
 		y = a.drawUpdateOffer(x, y, w, blocked)
 	}
