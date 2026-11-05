@@ -348,6 +348,9 @@ Role caps and timeouts:
   approval at the PC for that techie, and Esc or exiting the client application always ends the
   session locally, even if the server misbehaves.
 - **Pending keys** are never shown to anyone.
+- **Unknown servers**: anyone can run a server and give it any title. The clients will check
+  each techie that asks to connect with helpbuoy.com, without a public list, and show which
+  company that techie works for if HelpBuoy checked it (12).
 - **Server compromise**: sees metadata (who, when, how much) and can deny service. Because the
   server vouches for techies, a compromised server *could* present a techie key of its own to a
   computer that files a request. It can't do so silently for a techie the computer has already
@@ -888,3 +891,276 @@ approach is deliberately minimal, with no dependency:
 
 Dutch, German, French, Spanish and Italian are done (about 210 strings each). Rejected:
 go-i18n, `x/text` with `gotext`, and gettext `.po`, all more machinery than this needs.
+
+## 12. Verified techies (planned)
+
+Not built yet. When a techie asks to connect, the client checks with helpbuoy.com whether
+that techie works for a company HelpBuoy checked, and the approval dialog says so:
+"Verified: Alice de Vries, Example Inc". There is no public list: who our customers are
+must never be readable or enumerable from what we publish. Scam reports go to the email
+address on the site, with the server address the scammer used.
+
+### 12.1 The problem
+
+Remote support tools are popular with scammers. They call someone, pretend to be the
+bank, Microsoft or the police, and talk the victim through installing the tool and
+letting them in. HelpBuoy already makes this harder than most: the user allows every
+session, Esc always takes back control, and there is no unattended access. But anyone
+can run `helpbuoy-server`, give it a title like "Microsoft Support", tell the victim its
+address and ask them to click Allow.
+
+### 12.2 Requirements
+
+1. At the moment someone asks to take control, the user sees whether a company HelpBuoy
+   checked is behind it.
+2. Nobody can list or enumerate our customers: not from anything we publish, and not by
+   scanning the internet for servers and checking each one.
+3. A scammer can't look verified: not with a server title, a lookalike address, or values
+   or files copied from a verified company.
+4. Checked on every connection request, without a cache, so a removal works at once.
+5. The check during a connection request uses static files on helpbuoy.com over HTTPS, at
+   URLs that can't be guessed. Only the one-time eIDAS identity check (12.6) uses a small
+   service.
+6. No signed statements, and no secrets (tokens, TOTP) for servers to manage.
+7. Unverified servers keep working: families, IT shops and the local server of the desk
+   app are warned about, never blocked.
+8. When helpbuoy.com can't be reached, the client says so and never shows "Verified".
+9. Adding or removing a verification is adding or deleting a file and releasing the site.
+10. helpbuoy.com learns as little as possible, and the privacy text on the site says what.
+11. A techie's name is never taken on anyone's word, the company's included: it comes from
+    the techie's bank or from an eIDAS eID (itsme), checked by HelpBuoy (12.6).
+
+### 12.3 One file per techie key
+
+The techie's public key is the one thing the client gets only at the right moment and a
+scanner never gets: the server sends it to a registered computer in `SessionReady`, when
+that techie asks to connect (3.3). Unregistered keys never get a `SessionReady`, and only
+techies get `Presence`. So the file's name is derived from the techie key:
+
+```
+https://helpbuoy.com/verified/<id>.json
+id = hex(SHA-256("helpbuoy verified techie v1\n" + techie key in wire format))
+```
+
+```json
+{
+  "key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA...",
+  "name": "Alice de Vries",
+  "eid": "bank",
+  "company": "Example Inc",
+  "country": "NL",
+  "verified": "2026-11-05"
+}
+```
+
+- **Not enumerable:** to compute an id you need a techie's public key, and to get one you
+  must be a registered computer on that company's server and have that techie ask to
+  connect to you. Scanning servers only yields host keys, which are not part of the id.
+  The id is 256 bits, there is no index, list or directory listing, and an unknown id
+  gives the same 404 as any missing page. A company's own users can at most learn about
+  their own company.
+- **Not needed: the server's host key.** A server can announce any techie key in
+  `SessionReady`, so a scammer's server could make the dialog show a verified name, if
+  they somehow got that techie's public key. But the inner SSH connection only accepts
+  that techie key (4), and proving it takes the techie's private key, which only that
+  techie's desk app has. So the session fails and the scammer never gets control. The
+  badge can only lead to a session with the real techie. Leaving the host key out means a
+  file stays valid when the company reinstalls its server, and one file covers a techie
+  who works on several of the company's servers.
+- **Matching:** the client ignores a file whose `key` is not the techie key from
+  `SessionReady`.
+- **`name`** comes from the techie's bank or eID, and **`eid`** says which: `bank` or
+  `itsme` (12.6). **`company`** comes from our check of the company. The client shows them in its own text and
+  style; the server's title and the techie name the server sends can say anything and
+  never make anything look verified.
+- **The files live in `static/verified/` of the site repository**, which must stay
+  private (it is now). If the site repository is ever made public, the files move to a
+  separate private repository that is copied in when the site is built. The site keeps
+  directory listing off for `/verified/`, and no page or sitemap links to the files.
+- **Trust:** the files are trusted because they come from helpbuoy.com over HTTPS, with
+  Go's normal certificate checks; there is no signature. So a file is as safe as
+  whatever can change what helpbuoy.com serves: the domain, the TLS certificate, the web
+  host and push access to the site's production remote.
+- **A tool** in this repository (`tools/verifyid`) prints the id and the file for a techie
+  key line, so adding a techie is copying its output into the site.
+
+The server and the protocol don't change: the client already has the techie key.
+
+### 12.4 When the client checks
+
+On every `SessionReady`, without a cache:
+
+- The check starts as soon as the request arrives. The approval dialog opens with the
+  result, or after 3 seconds with "could not be checked yet" and updates when the answer
+  arrives.
+- Only `https://helpbuoy.com/verified/<id>.json`: no redirects, no plain HTTP, no other
+  host and no address from configuration. At most 4 KB and 10 seconds.
+- A 404 means not verified. Any other status, a timeout or a file that does not parse
+  means "could not be checked". Neither is ever shown as verified.
+- The request carries nothing but the id, with `helpbuoy/<version>` as User-Agent.
+  helpbuoy.com does see the computer's IP address and which techie id it asked for, so
+  the privacy text on the site must say so, and the access logs should be kept short or
+  without the path (12.9).
+
+Before registration nothing can be checked, so the first connection to any new server
+gets the same general warning (12.5). That is fine: the scam needs the Allow click, and
+that is where the check happens.
+
+### 12.5 What the user sees
+
+When a techie asks to connect:
+
+- **Verified:** "Verified: Alice de Vries, Example Inc", above the usual question with the
+  techie's name and key fingerprint, and below it a small line with how: "Identity
+  checked through their bank" or "Identity checked with itsme". Both models get the same
+  main line: the user can't weigh one method against the other, and a difference in the
+  badge would only raise doubt. The approval dialog also shows the server address.
+- **Not verified:** "This person is not verified by HelpBuoy. Only allow this if you know
+  them personally. Banks, Microsoft and the police never ask for this."
+- **Could not be checked:** "HelpBuoy could not check who this person is." Never shown as
+  verified.
+
+Before the first connection to a new server, the address screen shows a full warning:
+"Only continue if someone you know personally gave you this address. If someone called
+you unexpectedly, hang up: banks, Microsoft and the police never ask you to install
+this." Continue only works after 5 seconds. It is shown once per server key, so people
+who run their own server see it once per computer.
+
+Nothing is ever blocked: an unverified techie can still be allowed. Blocking unverified
+techies can come later as an option for managed installs.
+
+The desk app does not check: its user is the techie.
+
+### 12.6 Getting verified
+
+Verification is for paying customers only. A company is checked once, and each of its
+techies proves their name in one of two models:
+
+| | Bank verified | eIDAS verified |
+|---|---|---|
+| Name from | the techie's own bank account, by a transfer of EUR 0.01 | itsme, an eIDAS eID |
+| Proves | control of a personal account in that name, at an EU bank that identified its holder | the person, checked by itsme against a passport or ID card |
+| Our cost | nothing, a few minutes per techie | a broker subscription, EUR 500 to 1,800 a year |
+| Plan | part of a paid support plan, such as Email support | a higher plan, priced to cover the broker |
+
+We start with bank verified only, and add eIDAS verified once enough customers ask for it
+or one customer covers the broker on its own. Which plans include which model is still to
+decide. Neither model is called better in the apps (12.5).
+
+**The company.** A paying company asks by email and we check it once:
+
+1. The company is registered (for example in the Dutch KvK), under the name it gives.
+   Later this can be eHerkenning, the Dutch eIDAS means for acting on behalf of a company.
+2. Its server address is on a domain of that company.
+3. A contact person at the company, writing from an email address on that domain,
+   confirms which techies work for it. The contact person is kept in our own records,
+   never in the files.
+
+The company's word only says that a person works there, never what their name is.
+
+**The techie, in both models:**
+
+1. The company's contact asks us for an invitation for a named techie, and we send a
+   one-time code (like `HB-7F3K9Q`) that only works for that company and expires after a
+   week. So only techies of paying companies can start.
+2. In the desk app the techie clicks "Verify my identity" and enters the code. The app
+   signs the code with the techie key. This proves the person who has the code controls
+   that key: a key line alone is never enough, otherwise anyone could put their name on
+   someone else's key.
+
+**Bank verified:**
+
+3. The desk app shows the techie's key line with the signature, to send to us by email
+   (a Copy button), and asks the techie to transfer EUR 0.01 from their own personal
+   account to HelpBuoy, with the code as the only description.
+4. We find the transfer with that code and take the account holder's name exactly as the
+   bank gives it, initials included ("A.J. de Vries"). Only a personal account with one
+   holder counts: not a joint account ("A de Vries en/of B Jansen") and not a business
+   account. The name must match the person the company named; otherwise we ask.
+5. `tools/verifyid` checks the signature over the code with the key line, and prints the
+   file with that name and `"eid": "bank"`.
+
+The name comes from a bank that must identify its account holders, but it proves control
+of an account, not who sits at the keyboard: someone could have a friend or a mule
+account make the transfer. That is why the company's confirmation stays the real gate,
+and why this model is shown as "checked through their bank", not as eIDAS.
+
+At first we read the transfers in the bank app, which is fine for a few techies a month.
+Next, a small tool reads the CAMT.053 export of the business account and prints the files
+for all codes in it. Reading the account automatically (the bank's own API, or a PSD2
+account information provider, whose access must be renewed every 90 to 180 days) only
+when the volume asks for it.
+
+**eIDAS verified:**
+
+3. The desk app opens `https://verify.helpbuoy.com/` in the browser with the techie's key
+   line, the code and the signature. The page checks them and sends the techie to itsme,
+   which returns the verified name.
+4. The page prints the file with that name and `"eid": "itsme"`, for us to check and add.
+   The service keeps nothing itself, and nothing else itsme returns (no date of birth,
+   address or BSN) is stored anywhere.
+
+itsme is used in Belgium and, since June 2026, in the Netherlands, where it replaces iDIN
+(iDIN is expected to end as a separate service in 2027 or 2028). Other notified eIDs, like
+the German ID card, can be added through the same broker when customers need them.
+`verify.helpbuoy.com` is the only service HelpBuoy runs, it is only needed for this model,
+and during connection requests nothing talks to it.
+
+itsme is reached through a broker that also offers other eIDs, such as Signicat, CM.com
+or Criipto. Costs, from their price lists in November 2026 (to confirm with a quote):
+
+- A subscription of about EUR 50 to 150 per month: Signicat Starter from NOK 499 (one
+  eID, one market), CM.com Basic EUR 149 (its listed tiers are for iDIN; itsme on
+  request). This is the real cost: about EUR 500 to 1,800 a year.
+- About EUR 0.50 to 0.65 per identification, once per techie (again after a key change or
+  every two years), so negligible.
+- Sometimes a one-time connection fee, around EUR 150.
+
+**In both models** the verified identity is stored only as the techie's file (12.3),
+completed with the company. We add it and release the site; publishing stays a manual
+step, so nothing writes to the site by itself. We check the company again every year,
+and a techie verifies again when their key changes (a new desk app install) or every two
+years.
+
+### 12.7 Removing a techie
+
+We delete the techie's file and release the site when:
+
+- the company tells us the techie left (it must, the same day it removes them from its
+  server; otherwise they would stay verified for the company even on a server of their
+  own), or the techie's key changed;
+- the techie or company is used for scams;
+- the company no longer exists, stops paying for its plan or does not answer the yearly
+  check (then all its files).
+
+Because the clients check on every request, the next request already shows the techie
+as not verified. Removing is never wrong: the company can ask again, and the techie
+verifies again.
+
+### 12.8 Rules that stay
+
+These keep HelpBuoy a poor tool for scammers, verified or not:
+
+- The user allows every session. No unattended access, and the techie can't turn the
+  question off.
+- Esc always takes back control. The techie can never block the user's own keyboard or
+  mouse.
+- The user's screen is never blanked or hidden. Scammers use that to hide what they do
+  in the victim's bank.
+
+### 12.9 To do on the site
+
+- A warning at the top of the download page, like RustDesk's: only install HelpBuoy if
+  someone you know personally asked you to.
+- The support plans (`data/plans.yaml`) must offer verified techies, once it is decided
+  which plan includes it.
+- The privacy text in `content/imprint.md` must say that the clients ask helpbuoy.com,
+  on every connection request, whether the techie is verified, and what that request
+  reveals: the IP address, the app version and the id of the techie key. The web host's
+  access logs then contain those ids, so they should be kept short or without the path.
+- The same text must describe how techies are verified: by a bank transfer, where we
+  receive the account holder's name and IBAN (the IBAN is not used and is not in the
+  file, but stays on our bank statement), or with itsme on `verify.helpbuoy.com`, and
+  which broker is used. Only the name, the method and the date are kept, in the
+  techie's file, until the techie is removed, and the name is shown to the people a
+  techie asks to connect to.
