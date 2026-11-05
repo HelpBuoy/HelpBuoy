@@ -1046,16 +1046,16 @@ servers can come later as an option for managed installs.
 ### 12.7 Getting verified
 
 Verification is for paying customers only, as part of a support plan; which plans
-include it is still to decide. A company asks by email and we check it once:
+include it is still to decide. A company asks in our portal and we check it once:
 
 1. The company is registered (for example in the Dutch KvK), under the name it gives.
    Later this can be eHerkenning, the Dutch eIDAS means for acting on behalf of a company.
 2. Its server address is on a domain of that company.
-3. A contact person at the company, writing from an email address on that domain, asks
-   for the verification and agrees to the rules in 12.8. The contact person is kept in
-   our own records, never in the file.
+3. A contact person at the company, signed in to the portal with an email address on
+   that domain, asks for the verification and agrees to the rules in 12.8. The contact
+   person is kept in our own records, never in the file.
 4. The company's admin runs `helpbuoy-server verification` on the server, which prints
-   the host key line and the id, and the contact person sends that output to us.
+   the host key line and the id, and the contact person enters both in our portal.
 5. We connect to the server address ourselves and check that it presents that host key.
    This proves the key belongs to the server on the company's domain. We can't check the
    id without the salt, but a wrong id only means the company's own file is never found.
@@ -1063,8 +1063,8 @@ include it is still to decide. A company asks by email and we check it once:
    so nothing writes to the site by itself.
 
 `helpbuoy-server verification --rotate` makes a new salt, sends it to everyone online
-(12.4) and prints the new id. The company sends it to us, we add the new file and delete
-the old one. The same goes for a new host key.
+(12.4) and prints the new id. The company enters it in our portal, we add the new file
+and delete the old one. The same goes for a new host key.
 
 We check the company again every year.
 
