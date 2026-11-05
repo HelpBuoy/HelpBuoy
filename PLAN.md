@@ -284,6 +284,7 @@ Techie commands carry a sequence number and the server answers each with a `Repl
 | `SetServerInfo` | techie → server | new title (up to 64 characters) and instruction line (up to 160), one line each, empty to clear; stored in `state.json` |
 | `Reply` | server → techie | answer to a techie command: sequence number and error text if it failed |
 | `Registered` | server → computer | the key is now registered (no name: that is only for techies) |
+| `Verification` | server → computer, techie | planned (12.4): the server's salt for the verified server check; to registered computers right after `Hello` and `Registered`, to techies right after `Hello`, and again when it is rotated; never to pending keys |
 | `RequestHelp` | computer → server | (no content) |
 | `CancelRequest` | computer → server | request id |
 | `RequestStateMsg` | server → computer | request id and state (open / taken / cancelled / expired / ended) |
@@ -917,7 +918,8 @@ address and ask them to click Allow.
    scanning the internet for servers and checking each one.
 3. A scammer can't look verified: not with a server title, a lookalike address, or values
    or files copied from a verified company.
-4. Checked on every connection request, without a cache, so a removal works at once.
+4. Checked on every connection request, without a cache in the client or on the way, so a
+   removal works at once.
 5. The check uses only static files on helpbuoy.com over HTTPS, at URLs that can't be
    guessed. HelpBuoy runs no service for it.
 6. No signed statements, and nothing for server admins to manage: the server makes its
@@ -944,6 +946,7 @@ id = hex(SHA-256("helpbuoy verified server v1\n" + host key in wire format + sal
 ```json
 {
   "hostkey": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA...",
+  "addresses": ["helpme.example.com"],
   "company": "Example Inc",
   "country": "NL",
   "verified": "2026-11-06"
@@ -962,6 +965,21 @@ id = hex(SHA-256("helpbuoy verified server v1\n" + host key in wire format + sal
   that host key in the SSH handshake takes the server's private key. Unlike a badge per
   techie, this is checked before the dialog says anything, not by a session that fails
   afterwards.
+- **Why the file holds the host key:** the id already depends on the host key, so a
+  scammer's own key never finds the file. But we can't check the id a company gives us
+  without its salt (12.7). A dishonest company could show us its real server at its
+  domain and give us the id of a second server, run elsewhere for scams. The `hostkey`
+  field, which we did check, is what stops that: the client must always compare it, and
+  it must never be dropped as redundant.
+- **Not cloneable without the company's DNS:** the host private key and the salt are in
+  the state directory, so whoever has a copy of it (a backup, a departing admin, malware
+  running as that user, or a techie laptop running the desk app's local server, which
+  uses the same directory (7.1)) can run the same server anywhere. That is why the file
+  also lists the server's `addresses`, the host names we checked on the company's domain
+  (12.7). The client only shows the badge if the host name of the address it stored for
+  this server is one of them, and shows that address in the badge. A clone then also
+  needs to take over the company's DNS. A host name is compared without port, in lower
+  case and without a trailing dot; an IP address never matches.
 - **A leaked salt** only tells someone that one server is verified, nothing more. It can
   be rotated (12.7).
 - **`company`** and **`country`** come from our check of the company (12.7). The client
@@ -980,7 +998,13 @@ What this design gives up: there is no techie name in the file, only the company
 techie the company adds to its server is vouched for by the company, and the badge can
 only be taken away from the whole server, not from one techie. A new host key (a
 reinstall without keeping the state directory) needs a new file, but registered
-computers already refuse a changed host key (3.5), so that is a new setup anyway.
+computers already refuse a changed host key (3.5), so that is a new setup anyway. A new
+or changed host name needs a changed file.
+
+The state directory of a verified server must be guarded like a private key. When a
+company thinks a copy has leaked, it tells us and we delete the file (12.8). Getting the
+badge back takes a new host key, which every registered computer sees as a changed
+server identity (3.5), so the company has to tell its users to expect that warning.
 
 ### 12.4 Protocol change
 
@@ -1005,9 +1029,12 @@ On every `SessionReady`, without a cache:
   arrives.
 - Only `https://helpbuoy.com/verified/<id>.json`: no redirects, no plain HTTP, no other
   host and no address from configuration. At most 4 KB and 10 seconds.
-- A 404 means not verified. A file whose `hostkey` is not the pinned host key also means
-  not verified. Any other status, a timeout or a file that does not parse means "could
+- A 404 means not verified. A file whose `hostkey` is not the pinned host key, or whose
+  `addresses` don't hold the host name of the stored server address, also means not
+  verified. Any other status, a timeout or a file that does not parse means "could
   not be checked". Neither is ever shown as verified.
+- The request sends `Cache-Control: no-cache`, so a proxy on the way can't answer it
+  from its cache.
 - The request carries nothing but the id, with `helpbuoy/<version>` as User-Agent.
   helpbuoy.com does see the computer's IP address and which server id it asked for, so
   the privacy text on the site must say so, and the access logs should be kept short or
@@ -1025,10 +1052,12 @@ techie, so it never checks techies.
 
 When a techie asks to connect:
 
-- **Verified:** "Verified: Example Inc", above the usual question with the techie's name
+- **Verified:** "Verified: Example Inc, Netherlands", with the server address on the line
+  below ("Server: helpme.example.com"), above the usual question with the techie's name
   and key fingerprint, and below it a small line: "HelpBuoy checked this company. It
-  vouches for its support staff." The techie's name is the one the company's server
-  gives. The approval dialog also shows the server address.
+  vouches for its support staff." The country comes from the file, the address is the
+  one the client stored and matched (12.5), and the techie's name is the one the
+  company's server gives.
 - **Not verified:** "This person is not verified by HelpBuoy. Only allow this if you know
   them personally. Banks, Microsoft and the police never ask for this."
 - **Could not be checked:** "HelpBuoy could not check who this person is." Never shown as
@@ -1050,21 +1079,31 @@ include it is still to decide. A company asks in our portal and we check it once
 
 1. The company is registered (for example in the Dutch KvK), under the name it gives.
    Later this can be eHerkenning, the Dutch eIDAS means for acting on behalf of a company.
-2. Its server address is on a domain of that company.
-3. A contact person at the company, signed in to the portal with an email address on
+2. The company does real support work: it says what it does and for whom, and that
+   matches its registration and its website. A paying customer is not automatically an
+   honest one, and tech support scams are often run by registered companies. We refuse
+   a company whose name or domain resembles a bank, a large tech company, a government
+   body, the police or HelpBuoy itself, and one that finds its customers by calling
+   people unasked. When in doubt, we refuse.
+3. Its server addresses are host names on a domain of that company.
+4. A contact person at the company, signed in to the portal with an email address on
    that domain, asks for the verification and agrees to the rules in 12.8. The contact
    person is kept in our own records, never in the file.
-4. The company's admin runs `helpbuoy-server verification` on the server, which prints
-   the host key line and the id, and the contact person enters both in our portal.
-5. We connect to the server address ourselves and check that it presents that host key.
-   This proves the key belongs to the server on the company's domain. We can't check the
-   id without the salt, but a wrong id only means the company's own file is never found.
-6. We write the file under that id and release the site; publishing stays a manual step,
+5. The company's admin runs `helpbuoy-server verification` on the server, which prints
+   the host key line and the id, and the contact person enters both in our portal, with
+   the server's host names.
+6. We connect to each host name ourselves and check that it presents that host key.
+   This proves the key belongs to a server on the company's domain. We can't check the
+   id without the salt, which is why the client also checks the file's `hostkey` and
+   `addresses` (12.3). An id that is simply wrong only means the company's own file is
+   never found.
+7. We write the file under that id and release the site; publishing stays a manual step,
    so nothing writes to the site by itself.
 
 `helpbuoy-server verification --rotate` makes a new salt, sends it to everyone online
 (12.4) and prints the new id. The company enters it in our portal, we add the new file
-and delete the old one. The same goes for a new host key.
+and delete the old one. The same goes for a new host key. A new or removed host name
+only changes the file, after we checked the new name as in step 6.
 
 We check the company again every year.
 
@@ -1072,13 +1111,15 @@ We check the company again every year.
 
 We delete the server's file and release the site when:
 
-- the company asks, or its server's host key or salt changed;
+- the company asks, or its server's host key or salt changed, or a copy of its state
+  directory may have leaked (12.3);
 - the server or company is used for scams;
 - the company no longer exists, stops paying for its plan or does not answer the yearly
   check (then all its files).
 
-Because the clients check on every request, the next request already shows the server
-as not verified. Removing is never wrong: the company can ask again.
+Because the clients check on every request and the site serves these files uncached
+(12.10), the next request already shows the server as not verified. Removing is never
+wrong: the company can ask again.
 
 The company is responsible for every techie key on its server, and must remove a techie
 who leaves the same day. A rogue techie at a verified company can only be stopped by the
@@ -1105,6 +1146,9 @@ These keep HelpBuoy a poor tool for scammers, verified or not:
   on every connection request, whether the server is verified, and what that request
   reveals: the IP address, the app version and the id of the server. The web host's
   access logs then contain those ids, so they should be kept short or without the path.
+- The web host and any CDN must serve `/verified/`, 404s included, with
+  `Cache-Control: no-store`, so a deleted file is gone at once. A release purges any
+  cache for `/verified/`, and after removing a server we check that its URL answers 404.
 - The same text must say what we keep about a verified company: the company name, country
   and date in its file, and the contact person in our own records, until the
   verification is removed.
