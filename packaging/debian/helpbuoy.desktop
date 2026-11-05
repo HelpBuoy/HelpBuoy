@@ -2,10 +2,13 @@
 Type=Application
 Name=HelpBuoy
 GenericName=Remote Support
+GenericName[nl]=Hulp op afstand
 Comment=Let a support techie see and control your screen
+Comment[nl]=Laat een helper je scherm zien en bedienen
 Exec=helpbuoy
 Icon=helpbuoy
 Terminal=false
 Categories=Network;RemoteAccess;
 Keywords=remote;support;help;screen;
+Keywords[nl]=afstand;ondersteuning;hulp;scherm;remote;support;
 StartupWMClass=HelpBuoy
