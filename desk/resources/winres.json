@@ -11,7 +11,7 @@
       "0409": {
         "identity": {
           "name": "helpbuoy.desk",
-          "version": "0.4.19.24"
+          "version": "0.4.20.25"
         },
         "description": "HelpBuoy Desk",
         "minimum-os": "win10",
@@ -35,8 +35,8 @@
     "#1": {
       "0000": {
         "fixed": {
-          "file_version": "0.4.19.24",
-          "product_version": "0.4.19.24"
+          "file_version": "0.4.20.25",
+          "product_version": "0.4.20.25"
         },
         "info": {
           "0409": {
@@ -44,8 +44,8 @@
             "InternalName": "helpbuoy-desk",
             "OriginalFilename": "helpbuoy-desk.exe",
             "ProductName": "HelpBuoy",
-            "ProductVersion": "0.4.19",
-            "FileVersion": "0.4.19"
+            "ProductVersion": "0.4.20",
+            "FileVersion": "0.4.20"
           }
         }
       }
