@@ -9,9 +9,9 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/mevdschee/helpbuoy/desk/ui"
-	"github.com/mevdschee/helpbuoy/proto/i18n"
-	"github.com/mevdschee/helpbuoy/proto/update"
+	"github.com/helpbuoy/helpbuoy/desk/ui"
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/proto/update"
 )
 
 // updateWait is how long the start waits for the update check before it

@@ -6,7 +6,7 @@ Installed-Size: @SIZE@
 Depends: systemd | systemd-standalone-sysusers
 Section: net
 Priority: optional
-Homepage: https://github.com/mevdschee/helpbuoy
+Homepage: https://github.com/helpbuoy/helpbuoy
 Description: server for helpbuoy self-hosted remote support
  helpbuoy-server is the SSH server of HelpBuoy. Support techies (helpbuoy-desk) and the
  people they help (helpbuoy.exe on Windows) connect to it on one port;

@@ -19,9 +19,9 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/desk/config"
-	"github.com/mevdschee/helpbuoy/proto/control"
-	"github.com/mevdschee/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/desk/config"
+	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
 )
 
 // Status is the state of the server connection as shown in the UI.

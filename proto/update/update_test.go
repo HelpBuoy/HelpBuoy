@@ -44,21 +44,21 @@ func TestParseRelease(t *testing.T) {
 		"tag_name": "v0.3.0", "draft": false, "prerelease": false,
 		"assets": [
 			{"name": "notes.txt", "browser_download_url": "https://example.com/notes.txt", "size": 10},
-			{"name": "helpbuoy-desk_0.3.0_amd64.msi", "browser_download_url": "https://github.com/mevdschee/helpbuoy/releases/download/v0.3.0/helpbuoy-desk_0.3.0_amd64.msi", "size": 4509696},
-			{"name": "helpbuoy_0.3.0_amd64.msi", "browser_download_url": "https://github.com/mevdschee/helpbuoy/releases/download/v0.3.0/helpbuoy_0.3.0_amd64.msi", "size": 3912192}
+			{"name": "helpbuoy-desk_0.3.0_amd64.msi", "browser_download_url": "https://github.com/helpbuoy/helpbuoy/releases/download/v0.3.0/helpbuoy-desk_0.3.0_amd64.msi", "size": 4509696},
+			{"name": "helpbuoy_0.3.0_amd64.msi", "browser_download_url": "https://github.com/helpbuoy/helpbuoy/releases/download/v0.3.0/helpbuoy_0.3.0_amd64.msi", "size": 3912192}
 		]}`)
 	r, ok := ParseRelease(data, ClientMSI)
 	if !ok {
 		t.Fatal("no release found")
 	}
 	want := Release{Version: "0.3.0", MsiName: "helpbuoy_0.3.0_amd64.msi", MsiSize: 3912192,
-		MsiURL: "https://github.com/mevdschee/helpbuoy/releases/download/v0.3.0/helpbuoy_0.3.0_amd64.msi"}
+		MsiURL: "https://github.com/helpbuoy/helpbuoy/releases/download/v0.3.0/helpbuoy_0.3.0_amd64.msi"}
 	if r != want {
 		t.Errorf("got %+v", r)
 	}
 	r, ok = ParseRelease(data, DeskMSI)
 	want = Release{Version: "0.3.0", MsiName: "helpbuoy-desk_0.3.0_amd64.msi", MsiSize: 4509696,
-		MsiURL: "https://github.com/mevdschee/helpbuoy/releases/download/v0.3.0/helpbuoy-desk_0.3.0_amd64.msi"}
+		MsiURL: "https://github.com/helpbuoy/helpbuoy/releases/download/v0.3.0/helpbuoy-desk_0.3.0_amd64.msi"}
 	if !ok || r != want {
 		t.Errorf("desk: got %+v, %v", r, ok)
 	}

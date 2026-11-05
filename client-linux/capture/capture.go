@@ -19,7 +19,7 @@ import (
 	"github.com/jezek/xgb/xfixes"
 	"github.com/jezek/xgb/xproto"
 
-	wcapture "github.com/mevdschee/helpbuoy/client-windows/capture"
+	wcapture "github.com/helpbuoy/helpbuoy/client-windows/capture"
 )
 
 // Screen is the X display in $DISPLAY.

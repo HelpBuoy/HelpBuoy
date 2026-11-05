@@ -13,7 +13,7 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 
-	"github.com/mevdschee/helpbuoy/proto/screen"
+	"github.com/helpbuoy/helpbuoy/proto/screen"
 )
 
 type slot struct {

@@ -6,8 +6,8 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/mevdschee/helpbuoy/desk/ui/textedit"
-	"github.com/mevdschee/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/desk/ui/textedit"
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
 )
 
 // ButtonKind selects a button's look.

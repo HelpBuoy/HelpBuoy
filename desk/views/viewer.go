@@ -9,13 +9,13 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/mevdschee/helpbuoy/desk/keymap"
-	"github.com/mevdschee/helpbuoy/desk/render"
-	"github.com/mevdschee/helpbuoy/desk/session"
-	"github.com/mevdschee/helpbuoy/desk/ui"
-	"github.com/mevdschee/helpbuoy/proto/i18n"
-	"github.com/mevdschee/helpbuoy/proto/input"
-	"github.com/mevdschee/helpbuoy/proto/screen"
+	"github.com/helpbuoy/helpbuoy/desk/keymap"
+	"github.com/helpbuoy/helpbuoy/desk/render"
+	"github.com/helpbuoy/helpbuoy/desk/session"
+	"github.com/helpbuoy/helpbuoy/desk/ui"
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/proto/input"
+	"github.com/helpbuoy/helpbuoy/proto/screen"
 )
 
 // sessionTab is the viewer state of one session.

@@ -16,7 +16,7 @@ import (
 	"golang.org/x/image/font/gofont/gomono"
 	"golang.org/x/image/font/gofont/goregular"
 
-	"github.com/mevdschee/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
 )
 
 // FontKind selects one of the embedded Go fonts.

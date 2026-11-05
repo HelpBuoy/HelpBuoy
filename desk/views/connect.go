@@ -7,13 +7,13 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/mevdschee/helpbuoy/desk/config"
-	"github.com/mevdschee/helpbuoy/desk/identity"
-	"github.com/mevdschee/helpbuoy/desk/localserver"
-	"github.com/mevdschee/helpbuoy/desk/serverconn"
-	"github.com/mevdschee/helpbuoy/desk/ui"
-	"github.com/mevdschee/helpbuoy/proto/i18n"
-	"github.com/mevdschee/helpbuoy/proto/serveraddr"
+	"github.com/helpbuoy/helpbuoy/desk/config"
+	"github.com/helpbuoy/helpbuoy/desk/identity"
+	"github.com/helpbuoy/helpbuoy/desk/localserver"
+	"github.com/helpbuoy/helpbuoy/desk/serverconn"
+	"github.com/helpbuoy/helpbuoy/desk/ui"
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 )
 
 // connectScreen is the state of the first screen: the server address and

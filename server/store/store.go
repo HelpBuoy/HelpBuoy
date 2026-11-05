@@ -19,8 +19,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mevdschee/helpbuoy/proto/control"
-	"github.com/mevdschee/helpbuoy/server/auth"
+	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/server/auth"
 )
 
 // File names inside the state directory.

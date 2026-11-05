@@ -15,8 +15,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/proto/control"
-	"github.com/mevdschee/helpbuoy/server/fake"
+	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/server/fake"
 )
 
 func main() {

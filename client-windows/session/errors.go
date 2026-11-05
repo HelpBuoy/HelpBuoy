@@ -8,7 +8,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/mevdschee/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
 )
 
 // ErrHostKeyChanged is returned when the server presents a host key other than

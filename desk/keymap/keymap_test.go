@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/mevdschee/helpbuoy/proto/input"
+	"github.com/helpbuoy/helpbuoy/proto/input"
 )
 
 // w3c lists every W3C code the techie must be able to send: the full

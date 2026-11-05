@@ -12,10 +12,10 @@ import (
 
 	"github.com/jezek/xgb/xproto"
 
-	"github.com/mevdschee/helpbuoy/client-linux/xkeys"
-	"github.com/mevdschee/helpbuoy/client-windows/app"
-	"github.com/mevdschee/helpbuoy/client-windows/session"
-	"github.com/mevdschee/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/client-linux/xkeys"
+	"github.com/helpbuoy/helpbuoy/client-windows/app"
+	"github.com/helpbuoy/helpbuoy/client-windows/session"
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
 )
 
 // Title is the window title.

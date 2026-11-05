@@ -1,6 +1,6 @@
 [Unit]
 Description=helpbuoy server
-Documentation=https://github.com/mevdschee/helpbuoy
+Documentation=https://github.com/helpbuoy/helpbuoy
 After=network-online.target
 Wants=network-online.target
 

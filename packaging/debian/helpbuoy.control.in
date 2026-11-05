@@ -5,7 +5,7 @@ Maintainer: Maurits van der Schee <maurits@vdschee.nl>
 Installed-Size: @SIZE@
 Section: net
 Priority: optional
-Homepage: https://github.com/mevdschee/helpbuoy
+Homepage: https://github.com/helpbuoy/helpbuoy
 Description: client for helpbuoy self-hosted remote support
  helpbuoy lets a support techie (helpbuoy-desk) see and control this
  computer's screen through a helpbuoy-server. The screen and input run

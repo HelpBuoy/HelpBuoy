@@ -5,11 +5,11 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/mevdschee/helpbuoy/proto/control"
-	"github.com/mevdschee/helpbuoy/proto/i18n"
-	"github.com/mevdschee/helpbuoy/proto/input"
-	"github.com/mevdschee/helpbuoy/proto/screen"
-	"github.com/mevdschee/helpbuoy/proto/serveraddr"
+	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/proto/input"
+	"github.com/helpbuoy/helpbuoy/proto/screen"
+	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 )
 
 func TestWheel(t *testing.T) {

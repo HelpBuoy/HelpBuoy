@@ -64,7 +64,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/proto/wire"
+	"github.com/helpbuoy/helpbuoy/proto/wire"
 )
 
 // SSH names.

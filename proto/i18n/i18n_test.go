@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mevdschee/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/control"
 )
 
 func TestFill(t *testing.T) {

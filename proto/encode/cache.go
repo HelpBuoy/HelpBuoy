@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"hash/maphash"
 
-	"github.com/mevdschee/helpbuoy/proto/screen"
+	"github.com/helpbuoy/helpbuoy/proto/screen"
 )
 
 // lru is the encoder's view of the techie's tile cache: which content hash

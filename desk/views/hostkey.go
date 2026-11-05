@@ -1,6 +1,6 @@
 package views
 
-import "github.com/mevdschee/helpbuoy/proto/input"
+import "github.com/helpbuoy/helpbuoy/proto/input"
 
 // hostKey is the key that, held down, turns the next key into a viewer
 // shortcut instead of input for the remote side, like Remmina's host key.

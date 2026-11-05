@@ -8,7 +8,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/mevdschee/helpbuoy/proto/screen"
+	"github.com/helpbuoy/helpbuoy/proto/screen"
 )
 
 const (

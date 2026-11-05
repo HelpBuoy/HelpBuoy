@@ -23,16 +23,16 @@ import (
 	"github.com/rodrigocfd/windigo/co"
 	"github.com/rodrigocfd/windigo/win"
 
-	"github.com/mevdschee/helpbuoy/client-windows/app"
-	"github.com/mevdschee/helpbuoy/client-windows/config"
-	"github.com/mevdschee/helpbuoy/client-windows/identity"
-	"github.com/mevdschee/helpbuoy/client-windows/injector"
-	"github.com/mevdschee/helpbuoy/client-windows/session"
-	"github.com/mevdschee/helpbuoy/client-windows/ui"
-	"github.com/mevdschee/helpbuoy/proto/appkey"
-	pid "github.com/mevdschee/helpbuoy/proto/identity"
-	"github.com/mevdschee/helpbuoy/proto/screen"
-	"github.com/mevdschee/helpbuoy/proto/update"
+	"github.com/helpbuoy/helpbuoy/client-windows/app"
+	"github.com/helpbuoy/helpbuoy/client-windows/config"
+	"github.com/helpbuoy/helpbuoy/client-windows/identity"
+	"github.com/helpbuoy/helpbuoy/client-windows/injector"
+	"github.com/helpbuoy/helpbuoy/client-windows/session"
+	"github.com/helpbuoy/helpbuoy/client-windows/ui"
+	"github.com/helpbuoy/helpbuoy/proto/appkey"
+	pid "github.com/helpbuoy/helpbuoy/proto/identity"
+	"github.com/helpbuoy/helpbuoy/proto/screen"
+	"github.com/helpbuoy/helpbuoy/proto/update"
 )
 
 // version is set at build time with -ldflags "-X main.version=...". Release

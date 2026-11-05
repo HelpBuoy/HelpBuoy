@@ -7,9 +7,9 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/desk/ui"
-	"github.com/mevdschee/helpbuoy/proto/i18n"
-	"github.com/mevdschee/helpbuoy/proto/identity"
+	"github.com/helpbuoy/helpbuoy/desk/ui"
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/proto/identity"
 )
 
 // registerPage is the state of the Register computer or Register techie page.

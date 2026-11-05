@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/mevdschee/helpbuoy/proto/input"
+	"github.com/helpbuoy/helpbuoy/proto/input"
 )
 
 // recorder is a backend that records events as strings.

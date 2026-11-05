@@ -19,10 +19,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mevdschee/helpbuoy/proto/control"
-	"github.com/mevdschee/helpbuoy/server/auth"
-	"github.com/mevdschee/helpbuoy/server/splice"
-	"github.com/mevdschee/helpbuoy/server/store"
+	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/server/auth"
+	"github.com/helpbuoy/helpbuoy/server/splice"
+	"github.com/helpbuoy/helpbuoy/server/store"
 )
 
 // Peer is one SSH connection as the registry sees it.

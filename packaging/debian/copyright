@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: helpbuoy
 Upstream-Contact: Maurits van der Schee <maurits@vdschee.nl>
-Source: https://github.com/mevdschee/helpbuoy
+Source: https://github.com/helpbuoy/helpbuoy
 
 Files: *
 Copyright: 2026 Maurits van der Schee

@@ -15,9 +15,9 @@ import (
 	"github.com/rodrigocfd/windigo/ui"
 	"github.com/rodrigocfd/windigo/win"
 
-	"github.com/mevdschee/helpbuoy/client-windows/app"
-	"github.com/mevdschee/helpbuoy/client-windows/session"
-	"github.com/mevdschee/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/client-windows/app"
+	"github.com/helpbuoy/helpbuoy/client-windows/session"
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
 )
 
 // Title is the window title.

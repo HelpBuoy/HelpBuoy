@@ -6,7 +6,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
-	"github.com/mevdschee/helpbuoy/proto/screen"
+	"github.com/helpbuoy/helpbuoy/proto/screen"
 )
 
 // benchFrame builds a frame of 64x64 tile ops covering share (0..1] of a

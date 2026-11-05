@@ -17,7 +17,7 @@ import (
 )
 
 // LatestReleaseURL is the GitHub API endpoint for the newest release.
-const LatestReleaseURL = "https://api.github.com/repos/mevdschee/helpbuoy/releases/latest"
+const LatestReleaseURL = "https://api.github.com/repos/helpbuoy/helpbuoy/releases/latest"
 
 // Limits for the release query and the MSI download.
 const (

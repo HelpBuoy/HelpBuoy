@@ -15,10 +15,10 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/proto/control"
-	"github.com/mevdschee/helpbuoy/proto/input"
-	"github.com/mevdschee/helpbuoy/proto/screen"
-	"github.com/mevdschee/helpbuoy/proto/wire"
+	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/input"
+	"github.com/helpbuoy/helpbuoy/proto/screen"
+	"github.com/helpbuoy/helpbuoy/proto/wire"
 )
 
 // fakeCodec encodes everything as JSON, standing in for proto/screen and

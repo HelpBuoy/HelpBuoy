@@ -25,11 +25,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mevdschee/helpbuoy/proto/datadir"
-	"github.com/mevdschee/helpbuoy/server/auth"
-	"github.com/mevdschee/helpbuoy/server/logfile"
-	"github.com/mevdschee/helpbuoy/server/server"
-	"github.com/mevdschee/helpbuoy/server/store"
+	"github.com/helpbuoy/helpbuoy/proto/datadir"
+	"github.com/helpbuoy/helpbuoy/server/auth"
+	"github.com/helpbuoy/helpbuoy/server/logfile"
+	"github.com/helpbuoy/helpbuoy/server/server"
+	"github.com/helpbuoy/helpbuoy/server/store"
 )
 
 // State of the local server.

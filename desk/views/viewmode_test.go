@@ -7,7 +7,7 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/mevdschee/helpbuoy/proto/input"
+	"github.com/helpbuoy/helpbuoy/proto/input"
 )
 
 func near(a, b float32) bool { return math.Abs(float64(a-b)) < 0.01 }

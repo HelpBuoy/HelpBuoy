@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/mevdschee/helpbuoy/proto/input"
+	"github.com/helpbuoy/helpbuoy/proto/input"
 )
 
 // recorder collects the batches an Injector sends.

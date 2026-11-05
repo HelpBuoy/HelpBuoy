@@ -20,14 +20,14 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/mevdschee/helpbuoy/proto/control"
-	"github.com/mevdschee/helpbuoy/proto/datadir"
-	"github.com/mevdschee/helpbuoy/proto/serveraddr"
-	"github.com/mevdschee/helpbuoy/server/auth"
-	"github.com/mevdschee/helpbuoy/server/hostkey"
-	"github.com/mevdschee/helpbuoy/server/logfile"
-	"github.com/mevdschee/helpbuoy/server/server"
-	"github.com/mevdschee/helpbuoy/server/store"
+	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/datadir"
+	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
+	"github.com/helpbuoy/helpbuoy/server/auth"
+	"github.com/helpbuoy/helpbuoy/server/hostkey"
+	"github.com/helpbuoy/helpbuoy/server/logfile"
+	"github.com/helpbuoy/helpbuoy/server/server"
+	"github.com/helpbuoy/helpbuoy/server/store"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".

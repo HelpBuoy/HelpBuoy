@@ -5,7 +5,7 @@ import (
 	"image"
 	"time"
 
-	"github.com/mevdschee/helpbuoy/proto/screen"
+	"github.com/helpbuoy/helpbuoy/proto/screen"
 )
 
 // tileBytes is the scratch space per tile in e.tilePix.

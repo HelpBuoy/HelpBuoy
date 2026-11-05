@@ -12,7 +12,7 @@ import (
 	"github.com/jezek/xgb/xproto"
 	"github.com/jezek/xgb/xtest"
 
-	"github.com/mevdschee/helpbuoy/client-linux/xkeys"
+	"github.com/helpbuoy/helpbuoy/client-linux/xkeys"
 )
 
 // xBackend injects with XTEST on its own X connection.

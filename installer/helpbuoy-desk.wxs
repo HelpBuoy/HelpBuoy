@@ -17,7 +17,7 @@
 
     <Icon Id="helpbuoy.ico" SourceFile="$(var.IconPath)"/>
     <Property Id="ARPPRODUCTICON" Value="helpbuoy.ico"/>
-    <Property Id="ARPURLINFOABOUT" Value="https://github.com/mevdschee/helpbuoy"/>
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/helpbuoy/helpbuoy"/>
 
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="LocalAppDataFolder">

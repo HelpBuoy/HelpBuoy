@@ -4,7 +4,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/mevdschee/helpbuoy/proto/screen"
+	"github.com/helpbuoy/helpbuoy/proto/screen"
 )
 
 // rateCtl is the rate controller (PLAN.md 5.5). It estimates the link from

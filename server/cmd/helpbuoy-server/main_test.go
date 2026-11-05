@@ -10,9 +10,9 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/mevdschee/helpbuoy/proto/control"
-	"github.com/mevdschee/helpbuoy/server/auth"
-	"github.com/mevdschee/helpbuoy/server/store"
+	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/server/auth"
+	"github.com/helpbuoy/helpbuoy/server/store"
 )
 
 func TestRunExitCodes(t *testing.T) {
