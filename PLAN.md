@@ -15,7 +15,9 @@ other, and splices their channels together.
   keeps techies and registered computers in a small state directory. No service, no container.
 - **desk/**: the cross-platform raylib app the *support techie* runs (`raylib-go`, no cgo). Many techies can be online at
   once, and each techie can run sessions with many computers at once.
-- **client-windows/**: the windigo app the person *receiving* help runs. On first start it asks
+- **client-windows/** and **client-linux/**: the app the person *receiving* help runs,
+  for Windows (windigo) and for Linux (X11). The Windows client is described here and in
+  section 6; the Linux client works the same way. On first start it asks
   for the server's `hostname:port` and shows its own application-specific SSH public key
   (generated once on first start, kept in AppData) with a **Copy** button, so the user can
   send it to the techie over a chat such as WhatsApp. After the first successful connection
@@ -49,7 +51,9 @@ Performance target: **as fast as RDP** for normal desktop work (section 5).
   without a port means 5959, so with the default users only type the host name. There are
   no per-techie or per-session ports. The default is above 1024, so the server needs no root
   and no capabilities.
-- **Runs unprivileged**: no root, no admin, no service registration, no Docker image. The
+- **Runs unprivileged**: no root, no admin, no Docker image. Started by hand or inside the
+  desk app it needs no service registration; on a Debian server it can also run as a
+  hardened systemd service under its own system user (6.5). The
   server runs as long as its process runs; when the machine or the process stops, computers and
   other techies simply see the server as unreachable until it is started again.
 - **Identity = key**. The server maps each public key to exactly one of: techie, registered
@@ -174,7 +178,7 @@ read or alter screen data or keystrokes.
 
 ```
 helpbuoy/
-├── go.work                      # use ./proto ./server ./desk ./client-windows
+├── go.work                      # use ./proto ./server ./desk ./client-windows ./client-linux
 ├── PLAN.md
 ├── proto/                       # shared, pure Go, no GUI deps
 │   ├── go.mod
@@ -205,16 +209,20 @@ helpbuoy/
 │   ├── ui/                      # minimal immediate-mode widgets, layout, fonts, DPI
 │   ├── views/                   # computer list, session tabs and viewer, register, settings
 │   └── keymap/                  # raylib key codes -> W3C code + scan code
-└── client-windows/              # windigo app, Windows 10 2004+ / Windows 11
-    ├── go.mod
-    ├── resources/               # manifest (PerMonitorV2 DPI, comctl6), icon, .syso
-    ├── identity/                # app key in %LOCALAPPDATA%\helpbuoy (via proto/appkey)
-    ├── config/                  # first-run address entry, stored config.json
-    ├── capture/                 # GDI capture, damage detection, scroll detection
-    ├── encode/                  # tile classification and encoding, per-viewer state
-    ├── injector/                # SendInput, key mapping, Esc hook
-    ├── session/                 # server connection, inner SSH server, the one viewer
-    └── ui/                      # main window, request form
+├── client-windows/              # windigo app, Windows 10 2004+ / Windows 11
+│   ├── go.mod
+│   ├── resources/               # manifest (PerMonitorV2 DPI, comctl6), icon, .syso
+│   ├── identity/                # app key in %LOCALAPPDATA%\helpbuoy (via proto/appkey)
+│   ├── config/                  # first-run address entry, stored config.json
+│   ├── capture/                 # GDI capture, damage detection, scroll detection
+│   ├── encode/                  # tile classification and encoding, per-viewer state
+│   ├── injector/                # SendInput, key mapping, Esc hook
+│   ├── session/                 # server connection, inner SSH server, the one viewer
+│   └── ui/                      # main window, request form
+└── client-linux/                # static X11 client (jezek/xgb, no cgo)
+    ├── capture/                 # X11 capture with MIT-SHM
+    ├── injector/                # XTEST input, Esc watch
+    └── ui/                      # its own X11 window and widgets
 ```
 
 ---
@@ -259,7 +267,7 @@ only by `UnregisterComputer` or `helpbuoy-server computer remove`. They are adde
 | `helpbuoy-server computer remove SHA256:...` | remove a registered computer; an online computer is disconnected |
 | `helpbuoy-server title ['Example Inc']` / `instruction ['Call +1 234 567 890 for support']` | print or set the title and instruction line the apps show (`''` clears); the same values techies edit on the desk app's Server tab |
 | `helpbuoy-server hostkey` | print the host key fingerprint, for techies to compare with what computers show |
-| `helpbuoy-server verification [--new \| --activate]` | planned (12.7): print the host key line and the id to enter in the HelpBuoy portal; `--new` prepares the next salt and prints its id, `--activate` makes it the current one |
+| `helpbuoy-server verification [--new \| --activate]` | planned (12.7): print the host key line and the id to enter in the HelpBuoy portal; `--new` prepares the next salt and prints its id, `--activate` makes it the current one at the next server start |
 
 **Techies are plain keys**: there are no certificates. A new techie sends
 their public key line to the server admin, who adds it with `helpbuoy-server techie add`. Removing it
@@ -275,7 +283,7 @@ Techie commands carry a sequence number and the server answers each with a `Repl
 
 | Message | Direction | Content |
 |---|---|---|
-| `Hello` | server → any | role, server time, limits |
+| `Hello` | server → any | role, server time, limits; planned: the server's salt for the verified server check, only for registered computers and techies, never for pending keys (12.4) |
 | `ServerInfo` | server → any | title and instruction line (e.g. "Example Inc", "Call +1 234 567 890 for support"), right after `Hello` and again whenever they change |
 | `ComputerHello` | computer → server | app version, current `user@machine` (the registered name comes from the key comment) |
 | `Presence` | server → techies | full snapshot after every change: registered computers (`user@machine`, fingerprint, online, open or taken request with id and time, in session with whom) and techies |
@@ -284,14 +292,17 @@ Techie commands carry a sequence number and the server answers each with a `Repl
 | `UnregisterTechie` | techie → server | name: removes another techie, like `helpbuoy-server techie remove`; an online techie is disconnected, and a techie cannot remove itself |
 | `SetServerInfo` | techie → server | new title (up to 64 characters) and instruction line (up to 160), one line each, empty to clear; stored in `state.json` |
 | `Reply` | server → techie | answer to a techie command: sequence number and error text if it failed |
-| `Registered` | server → computer | the key is now registered (no name: that is only for techies) |
-| `Verification` | server → computer, techie | planned (12.4): the server's salt for the verified server check; to registered computers right after `Hello` and `Registered`, to techies right after `Hello`, and again when a new salt is activated (12.7); never to pending keys |
+| `Registered` | server → computer | the key is now registered (no name: that is only for techies); planned: the salt, like `Hello` (12.4) |
 | `RequestHelp` | computer → server | (no content) |
 | `CancelRequest` | computer → server | request id |
 | `RequestStateMsg` | server → computer | request id and state (open / taken / cancelled / expired / ended) |
 | `OpenRequest` | techie → server | request id; the server lets only the first techie win |
 | `SessionReady` | server → computer | request id, techie name and public key: a techie wants to connect |
 | `Error` | server → any | reason, sent just before the server closes a connection on purpose |
+
+The apps skip a message of a type they don't know, and ignore JSON fields they don't
+know, so a newer server can add both without breaking older apps. The server stays strict:
+an unknown message from a peer closes its connection ("bad control message").
 
 Session channels carry small SSH-encoded extra data: the computer's open names the request id;
 the server's open towards the techie adds the computer's name, key line and current
@@ -597,15 +608,19 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   per-user MSI (`installer/helpbuoy.wxs`, no UAC prompt) that installs it into
   `%LOCALAPPDATA%\Programs\helpbuoy` with a Start menu shortcut. Because the exe is never
   patched, it can be Authenticode-signed (`osslsigncode`) once per release.
-- **Updates**, like otp4win, but only on request. Like most apps, the window title shows the
-  version ("HelpBuoy v0.4.19"), and the waiting screen has a "Check for updates" text link in the
-  bottom right corner. Clicking it asks the GitHub API for the latest release; if its MSI
-  is newer, the app downloads it to the temp folder, checks its size, starts `msiexec` and
-  closes. Otherwise a dialog says this is the latest version, or that the check failed. The
-  app never checks by itself. The MSI starts the app when the installation is done. A
-  development build has no version in its title and always reports it is up to date. It
-  needs the GitHub repository to be public, since the release API doesn't show private
-  releases to anonymous callers.
+- **Updates**, like otp4win, but only on request. Like most apps, the window title shows
+  the version ("HelpBuoy v0.4.19"), and the waiting screen has a "Check for updates" text
+  link in the bottom right corner. Clicking it asks the GitHub API for the latest release;
+  if its MSI is newer, the app downloads it to the temp folder, checks its size and its
+  Authenticode signature, starts `msiexec` and closes. Otherwise a dialog says this is the
+  latest version, or that the check failed. The app never checks by itself. The MSI starts
+  the app when the installation is done. A development build has no version in its title
+  and always reports it is up to date. It needs the GitHub repository to be public, since
+  the release API doesn't show private releases to anonymous callers. The signature check
+  (`WinVerifyTrust`, and the signing certificate must be ours) is planned; until then
+  anyone who controls the GitHub repository or its releases could push code to every
+  client that checks for updates, so it comes before any other feature that leans on users
+  trusting HelpBuoy (12).
 - `release.sh [major|minor|build]` bumps the version in both `winres.json` files, runs
   `make vet test dist`, commits, tags `v<version>`, pushes and creates the GitHub release
   with everything in `dist/`: only installers, never a bare binary. That is the client and desk
@@ -812,9 +827,15 @@ side by side with an RDP session on the same machine and network.
 Multi-monitor, performance mode, restart as administrator, code signing,
 server metrics endpoint (localhost only).
 
+**Phase 6 - verified servers (12)**
+The updater's signature check (6.5) first. Then the salt in `Hello` and `Registered`,
+`helpbuoy-server verification`, the check and dialog in both clients, the Server tab check
+in the desk app, the cleanup of server text, and the files, cache headers and privacy text
+on the site.
+
 **Later**: tray icon and optional "Start with Windows" (HKCU Run entry, no admin), so the
-computer can stay online in the background; `computer-macos/` and `computer-linux/` reusing `proto`, the encoder and the `Capturer` /
-`Injector` interfaces.
+computer can stay online in the background; `client-macos/` reusing `proto`, the encoder
+and the `Capturer` / `Injector` interfaces, like `client-linux/` does.
 
 ---
 
@@ -841,6 +862,15 @@ computer can stay online in the background; `computer-macos/` and `computer-linu
   user trusts the new key), or
   announces a different key for a techie the computer already knows (the computer must warn
   and not connect without the user's consent).
+- Verified servers (12): old apps keep working against a server that sends the salt; a
+  pending key never gets the salt; the id matches fixed test values; a salt of the wrong
+  length or a non-Ed25519 host key means not verified; host names match without port,
+  case or trailing dot, and an IP address never matches; a file with another `hostkey` or
+  without the host name is not verified; a malicious server that sends a verified
+  server's salt is not verified; a 500, a timeout, a redirect or a file over 4 KB is
+  "could not be checked"; a late answer never reaches a later request; server text with
+  check marks, "verified", control characters or bidi overrides is cleaned everywhere it
+  is shown; the update check refuses an MSI without our signature.
 - Performance: the replay harness from phase 3 in CI (client encoder against techie decoder,
   no GUI), with regression thresholds; `tc netem` runs at 20 ms / 80 ms RTT and 10 / 50 Mbit/s.
 - Session end tests (`faketechie`): End session on the techie closes the session and
@@ -898,7 +928,8 @@ go-i18n, `x/text` with `gotext`, and gettext `.po`, all more machinery than this
 
 Not built yet. When a techie asks to connect, the client checks with helpbuoy.com whether
 the server it is connected to belongs to a company HelpBuoy checked, and the approval
-dialog says so: "Verified: Example Inc". There is no public list: who our customers are
+dialog says so: "Verified: Example Inc, Netherlands". Both clients (Windows and Linux)
+make the check and show the same dialog. There is no public list: who our customers are
 must never be readable or enumerable from what we publish. Scam reports go to the email
 address on the site, with the server address the scammer used.
 
@@ -936,9 +967,9 @@ address and ask them to click Allow.
 
 A scanner can get any server's host key, so the host key alone can't name the file. The
 server therefore adds a value that a scanner never gets: a random 256-bit salt, made once
-on first start and kept in `state.json` next to the host key (3.2). The server sends it
-only to registered computers and techies, never to pending or unknown keys. `ServerInfo`
-goes to any key, so the salt gets its own message (12.4).
+when `state.json` has none (on the first start, or the first start after an upgrade) and
+kept there next to the host key (3.2). The server sends it only to registered computers
+and techies, never to pending or unknown keys (12.4).
 
 ```
 https://helpbuoy.com/verified/<id>.json
@@ -1007,7 +1038,10 @@ techie the company adds to its server is vouched for by the company, and the bad
 only be taken away from the whole server, not from one techie. A new host key (a
 reinstall without keeping the state directory) needs a new file, but registered
 computers already refuse a changed host key (3.5), so that is a new setup anyway. A new
-or changed host name needs a changed file.
+or changed host name needs a changed file. Computers that reach the server by a name we
+can't check from the internet (an internal name like `helpdesk.corp.local`) or by an IP
+address never get the badge, so a verified company should have all its computers use the
+public host name.
 
 The state directory of a verified server must be guarded like a private key. When a
 company thinks a copy has leaked, it tells us and we delete the file (12.8). Getting the
@@ -1016,6 +1050,9 @@ server identity (3.5), so the company has to tell its users to expect that warni
 
 Risks we accept:
 
+- **Whoever controls a verified server's process can vouch for anyone.** The server
+  announces the techie key in `SessionReady` (3.5), so a hacked server, or its admin,
+  can present any techie under the badge. Only the company's own security protects this.
 - **A rogue techie on a verified server is vouched for**, and so is someone using a
   hacked desk app of a techie there. Any techie can also add more techies with
   `RegisterTechie`, without us or the company's contact person seeing it. Only the
@@ -1031,40 +1068,42 @@ Risks we accept:
 
 ### 12.4 Protocol change
 
-One new control message (3.3):
+No new message: the salt is a `salt` field (hex) in `Hello`, only when the role is computer
+or techie, and in `Registered` (3.3). A pending key never gets it. Older apps ignore the
+field, so they keep working against a newer server. Since v0.4.22 the apps also skip
+message types they don't know (3.3), so a later change can still add a message.
 
-| Message | Direction | Content |
-|---|---|---|
-| `Verification` | server → computer, techie | the salt; to registered computers right after `Hello` and right after `Registered`, to techies right after `Hello`, and again to everyone when a new salt is activated (12.7) |
+The salt is exactly 32 bytes from `crypto/rand`. It is kept in `state.json` (0600, like
+the host key) and is never printed or logged: `helpbuoy-server verification` prints only
+the host key line and the id (12.7). Clients keep it only in memory for the connection, and
+treat a salt of any other length as no salt, so a broken server can never end up with an
+id a scanner could compute.
 
-A pending key never gets it. The salt is exactly 32 bytes from `crypto/rand`. It is kept
-in `state.json` (0600, like the host key) and is never printed or logged:
-`helpbuoy-server verification` prints only the host key line and the id (12.7). Clients
-keep it only in memory for the connection, and treat a salt of any other length as no
-salt, so a broken server can never end up with an id a scanner could compute.
-
-During a rotation (12.7) `state.json` also holds the next salt. It is not sent to
-anyone until it becomes the current one.
+During a rotation (12.7) `state.json` also holds the next salt. It is not sent to anyone
+until it becomes the current one, at the next server start: that start drops every
+connection, and each app gets the new salt in its next `Hello`.
 
 ### 12.5 When the client checks
 
 On every `SessionReady`, without a cache:
 
-- The client computes the id from the host key the server presented in this
-  connection's handshake, which is the one it pinned: a connection with a host key that
-  is not pinned (3.5) never gets this far. Only Ed25519 host keys count. Without a valid
-  salt (an older server), the server is "not verified", and there is no fallback to an id
-  without salt.
+- The client computes the id from the host key the server presented in this connection's
+  handshake, which is the one it pinned for the address of this connection: a connection
+  with a host key that is not pinned (3.5) never gets this far. Only Ed25519 host keys
+  count. Without a valid salt (an older server), the server is "not verified", and there
+  is no fallback to an id without salt.
 - The check starts as soon as the request arrives. The approval dialog opens with the
-  result, or after 3 seconds with "could not be checked yet" and updates when the answer
-  arrives. Each check belongs to one request id, so a late answer is dropped once that
-  request is answered, cancelled or expired, and can never show up in a later dialog.
+  result, or after 3 seconds with "Checking who runs this server..." and the same warning
+  as not verified (12.6), and updates when the answer arrives. Each check belongs to one
+  request id, so a late answer is dropped once that request is answered, cancelled or
+  expired, and can never show up in a later dialog.
 - Only `https://helpbuoy.com/verified/<id>.json`: no redirects, no plain HTTP, no other
   host and no address from configuration. At most 4 KB and 10 seconds.
 - A 404 means not verified. A file whose `hostkey` is not the pinned host key, or whose
-  `addresses` don't hold the host name of the stored server address, also means not
-  verified. Any other status, a timeout or a file that does not parse means "could
-  not be checked". Neither is ever shown as verified.
+  `addresses` don't hold the host name of the address of this connection, also means not
+  verified. At first contact that is the address the user just typed, even before it
+  replaces the stored server (section 0). Any other status, a timeout or a file that does
+  not parse means "could not be checked". Neither is ever shown as verified.
 - The request sends `Cache-Control: no-cache`, so a proxy on the way can't answer it
   from its cache.
 - The request carries nothing but the id, with `helpbuoy/<version>` as User-Agent.
@@ -1077,8 +1116,10 @@ the same general warning (12.6). That is fine: the scam needs the Allow click, a
 is where the check happens.
 
 The desk app makes the same check for its own server on the Server tab ("Verified:
-Example Inc" or "Not verified"), so the company can see its file works. It shows no
-approval dialog: its user is the techie.
+Example Inc, for helpme.example.com" with the file's host names, or "Not verified"), so
+the company can see its file works. It compares the host key only, not the address: on its
+local server (7.1) it connects to `localhost`, which is never in `addresses`, and its user
+is the techie, who sees which host names the badge is for. It shows no approval dialog.
 
 ### 12.6 What the user sees
 
@@ -1099,7 +1140,8 @@ When a techie asks to connect:
   same warning as not verified, never a softer one, so "it says could not be checked,
   that's normal" doesn't help a scammer.
 
-Before the first connection to a new server, the address screen shows a full warning:
+Right after the first successful connection to a new server, before the key screen
+(6.2), the client shows a full warning:
 "Only continue if someone you know personally gave you this address. If someone called
 you unexpectedly, hang up: banks, Microsoft and the police never ask you to install
 this." Continue only works after 5 seconds. It is shown once per server key, so people
@@ -1109,11 +1151,12 @@ Nothing is ever blocked: a techie on an unverified server can still be allowed. 
 unverified servers can come later as an option for managed installs.
 
 The server title, the instruction line and the techie name are text from the server, so
-they could try to imitate the badge. The client shows each on one line, removes control
-characters and bidi overrides (such as U+202E), and replaces a check mark (✓, ✔, ☑ and the
-like) or the word "verified", in any language the apps are translated to, with nothing.
-The badge has its own area of the dialog, with its own icon and color, where server text
-is never shown.
+they could try to imitate the badge. Everywhere the client shows them (the approval
+dialog, the waiting screen and the window caption, 6.3), it shows each on one line,
+removes control characters and bidi overrides (such as U+202E), and replaces a check mark
+(✓, ✔, ☑ and the like) or the word "verified", in any language the apps are translated to,
+with nothing. The badge has its own area of the dialog, with its own icon and color, where
+server text is never shown.
 
 ### 12.7 Getting verified
 
@@ -1147,10 +1190,12 @@ Rotating the salt takes two steps, so the badge never disappears in between.
 `helpbuoy-server verification --new` makes the next salt (12.4) and prints the next id,
 without changing anything for the clients. The company enters it in our portal and we add
 the new file next to the old one. Once the portal says the new file is live,
-`helpbuoy-server verification --activate` makes the next salt the current one and sends
-it to everyone online, and the company tells us in the portal so we delete the old file.
-A new host key goes the same way, as a new file next to the old one. A new or removed host name
-only changes the file, after we checked the new name as in step 6.
+`helpbuoy-server verification --activate` marks the next salt to become the current one
+at the next server start, and the company restarts the server when it suits them. We
+delete the old file when the company tells us in the portal it restarted, or 30 days
+after the new file went live, whichever comes first.
+A new host key goes the same way, as a new file next to the old one. A new or removed
+host name only changes the file, after we checked the new name as in step 6.
 
 We check the company again every year.
 
