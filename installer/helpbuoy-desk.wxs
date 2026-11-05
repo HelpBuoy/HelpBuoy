@@ -47,6 +47,13 @@
       </Directory>
     </Directory>
 
+    <!-- Start the app when the installation (or an update) is done, but not
+         when it is removed. -->
+    <CustomAction Id="LaunchApp" FileKey="helpbuoy_desk.exe" ExeCommand="" Return="asyncNoWait"/>
+    <InstallExecuteSequence>
+      <Custom Action="LaunchApp" After="InstallFinalize">NOT REMOVE</Custom>
+    </InstallExecuteSequence>
+
     <Feature Id="Main" Level="1">
       <ComponentRef Id="MainExecutable"/>
       <ComponentRef Id="StartMenuShortcut"/>
