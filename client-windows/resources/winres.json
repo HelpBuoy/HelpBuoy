@@ -14,7 +14,7 @@
       "0409": {
         "identity": {
           "name": "helpbuoy.client",
-          "version": "0.4.23.28"
+          "version": "0.4.24.29"
         },
         "description": "HelpBuoy computer",
         "minimum-os": "win10",
@@ -38,8 +38,8 @@
     "#1": {
       "0000": {
         "fixed": {
-          "file_version": "0.4.23.28",
-          "product_version": "0.4.23.28"
+          "file_version": "0.4.24.29",
+          "product_version": "0.4.24.29"
         },
         "info": {
           "0409": {
@@ -47,8 +47,8 @@
             "InternalName": "helpbuoy",
             "OriginalFilename": "helpbuoy.exe",
             "ProductName": "HelpBuoy",
-            "ProductVersion": "0.4.23",
-            "FileVersion": "0.4.23"
+            "ProductVersion": "0.4.24",
+            "FileVersion": "0.4.24"
           }
         }
       }
