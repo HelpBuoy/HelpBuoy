@@ -617,16 +617,16 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
 - **Updates**, like otp4win, but only on request. Like most apps, the window title shows
   the version ("HelpBuoy v0.4.19"), and the waiting screen has a "Check for updates" text
   link in the bottom right corner. Clicking it asks the GitHub API for the latest release;
-  if its MSI is newer, the app downloads it to the temp folder, checks its size and its
-  Authenticode signature, starts `msiexec` and closes. Otherwise a dialog says this is the
-  latest version, or that the check failed. The app never checks by itself. The MSI starts
-  the app when the installation is done. A development build has no version in its title
-  and always reports it is up to date. It needs the GitHub repository to be public, since
-  the release API doesn't show private releases to anonymous callers. The signature check
-  (`WinVerifyTrust`, and the signing certificate must be ours) is planned; until then
-  anyone who controls the GitHub repository or its releases could push code to every
-  client that checks for updates, so it comes before any other feature that leans on users
-  trusting HelpBuoy (12).
+  if its MSI is newer, the app downloads it to the temp folder, checks its size, starts
+  `msiexec` and closes. Otherwise a dialog says this is the latest version, or that the
+  check failed. The app never checks by itself. The MSI starts the app when the
+  installation is done. A development build has no version in its title and always reports
+  it is up to date. It needs the GitHub repository to be public, since the release API
+  doesn't show private releases to anonymous callers. Not planned, but it would be good
+  once releases are Authenticode-signed: the updater could check the MSI's signature
+  (`WinVerifyTrust`, with our certificate) before starting `msiexec`, so that whoever
+  controls the GitHub repository or its releases can't push code to every client that
+  checks for updates.
 - `release.sh [major|minor|build]` bumps the version in both `winres.json` files, runs
   `make vet test dist`, commits, tags `v<version>`, pushes and creates the GitHub release
   with everything in `dist/`: only installers, never a bare binary. That is the client and desk
@@ -833,10 +833,9 @@ side by side with an RDP session on the same machine and network.
 Multi-monitor, performance mode, restart as administrator, code signing,
 server metrics endpoint (localhost only).
 
-**Phase 6 - verified servers (12)** (apps and server done; the updater's signature
-check, the site and the portal are still to do)
-The updater's signature check (6.5), which needs a code signing certificate first. Then
-the salt in `Hello` and `Registered`, `helpbuoy-server verification` and `hostkey --new`,
+**Phase 6 - verified servers (12)** (apps and server done; the site and the portal are
+still to do)
+The salt in `Hello` and `Registered`, `helpbuoy-server verification` and `hostkey --new`,
 the check and dialog in both clients, the Server tab check in the desk app, the cleanup of
 server text (all in `proto/verify`, `server/salt` and the apps), and the files, cache
 headers and privacy text on the site.
@@ -880,8 +879,7 @@ and the `Capturer` / `Injector` interfaces, like `client-linux/` does.
   over 4 KB is "could not be checked"; a file whose `verified` date is more than 13 months
   ago is not verified; a flood of requests starts at most one check every 5 seconds; a
   late answer never reaches a later request; server text with check marks, "verified",
-  control characters or bidi overrides is cleaned everywhere it is shown; the update check
-  refuses an MSI without our signature.
+  control characters or bidi overrides is cleaned everywhere it is shown.
 - Performance: the replay harness from phase 3 in CI (client encoder against techie decoder,
   no GUI), with regression thresholds; `tc netem` runs at 20 ms / 80 ms RTT and 10 / 50 Mbit/s.
 - Session end tests (`faketechie`): End session on the techie closes the session and
@@ -937,14 +935,13 @@ go-i18n, `x/text` with `gotext`, and gettext `.po`, all more machinery than this
 
 ## 12. Verified servers
 
-The server and the apps are built (`proto/verify`, `server/salt`); the site, the portal
-and the updater's signature check (6.5) are not yet. When a techie asks to connect, the
-client checks with helpbuoy.com whether the server it is connected to belongs to a company
-HelpBuoy checked, and the approval dialog says so: "Verified: Example Inc, Netherlands".
-Both clients (Windows and Linux) make the check and show the same dialog. There is no
-public list: who our customers are must never be readable or enumerable from what we
-publish. Scam reports go to the email address on the site, with the server address the
-scammer used.
+The server and the apps are built (`proto/verify`, `server/salt`); the site and the portal
+are not yet. When a techie asks to connect, the client checks with helpbuoy.com whether
+the server it is connected to belongs to a company HelpBuoy checked, and the approval
+dialog says so: "Verified: Example Inc, Netherlands". Both clients (Windows and Linux)
+make the check and show the same dialog. There is no public list: who our customers are
+must never be readable or enumerable from what we publish. Scam reports go to the email
+address on the site, with the server address the scammer used.
 
 ### 12.1 The problem
 
