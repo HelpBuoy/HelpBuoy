@@ -169,7 +169,7 @@ func (r *Registry) Attach(p Peer, fp, ip string, admit func() (func(), error)) (
 	}
 	if old := r.conns[fp]; old != nil {
 		r.detachLocked(old)
-		old.peer.Kick("replaced by a newer connection with the same key")
+		old.peer.Kick(control.ReasonReplaced)
 		r.log.Info("conn replaced", "fp", fp, "role", string(old.role), "old_ip", old.ip, "ip", ip)
 	}
 	r.conns[fp] = c

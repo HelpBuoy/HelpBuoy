@@ -7,6 +7,7 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
+	"github.com/helpbuoy/helpbuoy/desk/serverconn"
 	"github.com/helpbuoy/helpbuoy/desk/ui"
 	"github.com/helpbuoy/helpbuoy/proto/control"
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
@@ -172,11 +173,19 @@ func (a *App) drawServer(x, y, w float32) float32 {
 		busy := a.sessionCount() > 0
 		discL := i18n.Trans("Disconnect")
 		r := rl.NewRectangle(x, y, a.btnW(discL, 130), 34)
+		if a.status.Status == serverconn.StatusReplaced {
+			recL := i18n.Trans("Reconnect")
+			rr := rl.NewRectangle(x, y, a.btnW(recL, 130), 34)
+			if c.Button("server/reconnect", rr, recL, ui.Primary, false) && a.conn != nil {
+				a.conn.Reconnect()
+			}
+			r.X = rr.X + rr.Width + 12
+		}
 		if c.Button("server/disconnect", r, discL, ui.Normal, busy) {
 			a.disconnect()
 		}
 		if busy {
-			c.Text(ui.Regular, ui.SizeSmall, i18n.Trans("End the open sessions first."), x+r.Width+12, y+9, ui.ColMuted)
+			c.Text(ui.Regular, ui.SizeSmall, i18n.Trans("End the open sessions first."), r.X+r.Width+12, y+9, ui.ColMuted)
 		}
 		y += 46
 	}

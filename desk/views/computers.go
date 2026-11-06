@@ -66,6 +66,8 @@ func (a *App) statusText() (text, detail string, col rl.Color) {
 		return i18n.Trans("Server unreachable"), errText, ui.ColError
 	case serverconn.StatusIdentityChanged:
 		return i18n.Trans("Server identity changed"), i18n.Trans("The server's key differs from the pinned one. Disconnect and connect again to decide."), ui.ColError
+	case serverconn.StatusReplaced:
+		return i18n.Trans("Connected from somewhere else"), i18n.Trans("Another desk app with this key connected to the server, so this one was disconnected. Reconnect takes the connection back."), ui.ColError
 	}
 	if errText != "" {
 		return i18n.Trans("Reconnecting to {0}", addr), errText, ui.ColWarn

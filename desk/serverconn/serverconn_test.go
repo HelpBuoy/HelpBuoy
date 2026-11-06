@@ -42,6 +42,7 @@ type fakeServer struct {
 	mu       sync.Mutex
 	received []any
 	conns    []ssh.Conn
+	ctrls    []*control.Conn
 	logins   int
 	payload  []byte // written on each session channel
 }
@@ -72,6 +73,19 @@ func (r *fakeServer) dropAll() {
 		c.Close()
 	}
 	r.conns = nil
+}
+
+// kickAll sends an Error with reason on every techie connection and closes
+// it, like the server's Kick.
+func (r *fakeServer) kickAll(reason string) {
+	r.mu.Lock()
+	ctrls := r.ctrls
+	r.ctrls = nil
+	r.mu.Unlock()
+	for _, cc := range ctrls {
+		cc.Send(&control.Error{Message: reason})
+	}
+	r.dropAll()
 }
 
 func (r *fakeServer) got() []any {
@@ -134,6 +148,12 @@ func (r *fakeServer) handle(nc net.Conn) {
 
 func (r *fakeServer) control(sc *ssh.ServerConn, ch ssh.Channel, role control.Role) {
 	cc := control.NewConn(ch)
+	if role == control.RoleTechie {
+		// Before Hello, so kickAll reaches every connection that is online.
+		r.mu.Lock()
+		r.ctrls = append(r.ctrls, cc)
+		r.mu.Unlock()
+	}
 	cc.Send(&control.Hello{Role: role, ServerVersion: "test", ServerTime: time.Now(), Name: "alice"})
 	if role != control.RoleTechie {
 		return
@@ -316,6 +336,42 @@ func TestReconnectAfterDrop(t *testing.T) {
 	if n < 2 {
 		t.Errorf("logins = %d", n)
 	}
+}
+
+// TestReplaced checks that a connection pushed off by another desk app with
+// the same key says so and waits for Reconnect instead of pushing back.
+func TestReplaced(t *testing.T) {
+	key := newSigner(t)
+	r := newFakeServer(t, key.PublicKey())
+	c := Start(fastOptions(r.addr(), key))
+	defer c.Close()
+	waitStatus(t, c, StatusOnline)
+	r.kickAll(control.ReasonReplaced)
+	st := waitStatus(t, c, StatusReplaced)
+	if !errors.Is(st.Err, ErrReplaced) {
+		t.Errorf("err = %v", st.Err)
+	}
+	time.Sleep(500 * time.Millisecond) // several backoffs
+	r.mu.Lock()
+	n := r.logins
+	r.mu.Unlock()
+	if n != 1 {
+		t.Fatalf("logins = %d after being replaced, want 1 (no retry)", n)
+	}
+	c.Reconnect()
+	waitStatus(t, c, StatusOnline)
+}
+
+// TestOtherKickRetries checks that other kick reasons still reconnect.
+func TestOtherKickRetries(t *testing.T) {
+	key := newSigner(t)
+	r := newFakeServer(t, key.PublicKey())
+	c := Start(fastOptions(r.addr(), key))
+	defer c.Close()
+	waitStatus(t, c, StatusOnline)
+	r.kickAll("bad control message: test")
+	waitStatus(t, c, StatusConnecting)
+	waitStatus(t, c, StatusOnline)
 }
 
 func TestNotTechie(t *testing.T) {

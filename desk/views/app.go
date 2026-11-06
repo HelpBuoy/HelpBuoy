@@ -439,6 +439,9 @@ func (a *App) handleEvent(ev serverconn.Event) {
 			a.me = ev.Hello.Name
 		}
 		a.startVerification(ev)
+		if ev.Status == serverconn.StatusReplaced {
+			a.openPage(tabServer) // says why, with Reconnect
+		}
 		if ev.Status == serverconn.StatusOnline {
 			a.reached, a.notTechie = true, false
 		} else {

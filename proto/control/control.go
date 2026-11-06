@@ -316,6 +316,11 @@ type Error struct {
 	Message string `json:"message"`
 }
 
+// ReasonReplaced is the Error message for a connection that was replaced by a
+// newer one with the same key. Apps recognize it by this exact text, so it
+// must not change.
+const ReasonReplaced = "replaced by a newer connection with the same key"
+
 // SessionChannelData is the extra data of the computer's ChannelSession open.
 type SessionChannelData struct {
 	RequestID string

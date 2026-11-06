@@ -33,6 +33,7 @@ const (
 	StatusAuthFailed                    // the server does not know this key as a techie
 	StatusUnreachable                   // nothing answered, or it is not an helpbuoy-server
 	StatusIdentityChanged               // the server's host key differs from the pinned one
+	StatusReplaced                      // a newer connection with this key took over
 	StatusClosed                        // Close was called
 )
 
@@ -48,6 +49,8 @@ func (s Status) String() string {
 		return "unreachable"
 	case StatusIdentityChanged:
 		return "server identity changed"
+	case StatusReplaced:
+		return "replaced"
 	case StatusClosed:
 		return "closed"
 	}
@@ -59,6 +62,7 @@ var (
 	ErrNotTechie    = errors.New(i18n.Trans("this key is not a techie on the server"))
 	ErrNotConnected = errors.New(i18n.Trans("not connected to the server"))
 	ErrTimeout      = errors.New(i18n.Trans("the server did not answer"))
+	ErrReplaced     = errors.New(i18n.Trans("this key connected to the server from another desk app"))
 )
 
 // Options configure a Conn.
@@ -316,8 +320,10 @@ func (c *Conn) run() {
 			backoff = c.opts.MinBackoff
 		}
 		wait := backoff
-		if st == StatusIdentityChanged {
-			wait = 365 * 24 * time.Hour // a hard error: only Reconnect retries
+		if st == StatusIdentityChanged || st == StatusReplaced {
+			// Only Reconnect retries: a hard error, or another desk app
+			// with this key, which retrying would only push off again.
+			wait = 365 * 24 * time.Hour
 		}
 		select {
 		case <-c.ctx.Done():
@@ -347,6 +353,8 @@ func classify(online bool, err error) Status {
 		return StatusIdentityChanged
 	case errors.Is(err, ErrNotTechie):
 		return StatusAuthFailed
+	case errors.Is(err, ErrReplaced):
+		return StatusReplaced
 	case online:
 		return StatusConnecting // was online; retrying
 	case err != nil && strings.Contains(err.Error(), "unable to authenticate"):
@@ -439,7 +447,7 @@ func (c *Conn) connect() (online bool, err error) {
 	case *control.Hello:
 		hello = m
 	case *control.Error:
-		return false, fmt.Errorf("server: %s", m.Message)
+		return false, serverError(m)
 	default:
 		return false, fmt.Errorf("server sent %T before hello", first)
 	}
@@ -478,9 +486,17 @@ func (c *Conn) connect() (online bool, err error) {
 			}
 			c.resolve(m.Seq, rerr)
 		case *control.Error:
-			return true, fmt.Errorf("server: %s", m.Message)
+			return true, serverError(m)
 		}
 	}
+}
+
+// serverError is the error for an Error message from the server.
+func serverError(m *control.Error) error {
+	if m.Message == control.ReasonReplaced {
+		return ErrReplaced
+	}
+	return fmt.Errorf("server: %s", m.Message)
 }
 
 // disconnect forgets the control conn and fails the outstanding commands.
