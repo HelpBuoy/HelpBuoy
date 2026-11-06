@@ -68,7 +68,9 @@ Performance target: **as fast as RDP** for normal desktop work (section 5).
 
 The computer is one generic exe; nothing is embedded or preconfigured. The only thing the user
 types is the server's `hostname:port`. Everything else is learned on the first successful
-connection and stored in `%LOCALAPPDATA%\helpbuoy\config.json`:
+connection and stored in `config.json` in the client's data directory:
+`%LOCALAPPDATA%\helpbuoy` on Windows, `$XDG_DATA_HOME/helpbuoy` (by default
+`~/.local/share/helpbuoy`) on Linux:
 
 | Field | Example | Learned |
 |---|---|---|
@@ -270,7 +272,7 @@ only by `UnregisterComputer` or `helpbuoy-server computer remove`. They are adde
 | `helpbuoy-server computer remove SHA256:...` | remove a registered computer; an online computer is disconnected |
 | `helpbuoy-server title ['Example Inc']` / `instruction ['Call +1 234 567 890 for support']` | print or set the title and instruction line the apps show (`''` clears); the same values techies edit on the desk app's Server tab |
 | `helpbuoy-server hostkey` | print the host key fingerprint, for techies to compare with what computers show |
-| `helpbuoy-server hostkey --new` | planned (12.3): replace the host key, keeping all techies and computers; every computer then shows the changed server identity warning (3.5) |
+| `helpbuoy-server hostkey --new` | planned (12.3): replace the host key, keeping all techies and computers; like `verification --activate` it takes effect at the next server start, since the running server only watches `state.json`; every computer then shows the changed server identity warning (3.5) |
 | `helpbuoy-server verification [--new \| --activate]` | planned (12.7): print the host key line and the id to enter in the HelpBuoy portal; `--new` prepares the next salt and prints its id, `--activate` makes it the current one at the next server start |
 
 **Techies are plain keys**: there are no certificates. A new techie sends
@@ -1033,12 +1035,11 @@ id = hex(SHA-256("helpbuoy verified server v1\n" + host key in wire format + sal
 - **Trust:** the files are trusted because they come from helpbuoy.com over HTTPS; there
   is no signature. So a file is as safe as whatever can change what helpbuoy.com serves:
   the domain, the TLS certificate, the web host and push access to the site's production
-  remote. Anyone who can intercept TLS can serve any file, with their own `hostkey` in
-  it: a TLS-inspecting company proxy, or a root certificate a victim was talked into
-  installing. So the clients don't use the operating system's root store for this
-  request, but a fixed set built into the app: the roots of the CA that issues
-  helpbuoy.com's certificate and of one backup CA, so changing CA never needs a client
-  release first. helpbuoy.com gets CAA records for those two CAs and DNSSEC (12.10).
+  remote. The clients use the operating system's normal certificate checks and ship no
+  root certificates of their own: pinning roots would tie every CA change to a client
+  release, a mistake there would make every check fail at once, and a company network
+  that inspects TLS would never see the badge. helpbuoy.com gets CAA records and DNSSEC
+  (12.10), which cost the apps nothing.
 
 What this design gives up: there is no techie name in the file, only the company. Every
 techie the company adds to its server is vouched for by the company, and the badge can
@@ -1048,15 +1049,15 @@ computers already refuse a changed host key (3.5), so that is a new setup anyway
 or changed host name needs a changed file. Computers that reach the server by a name we
 can't check from the internet (an internal name like `helpdesk.corp.local`) or by an IP
 address never get the badge, so a verified company should have all its computers use the
-public host name. On a network that inspects TLS, common in companies, the check always
-ends in "could not be checked", because the clients only trust the fixed root
-certificates (see Trust above); that is the right answer there, but such a company's own
-users never see the badge.
+public host name.
 
 The state directory of a verified server must be guarded like a private key. When a
 company thinks a copy has leaked, it tells us, and together we decide what it takes. A
 copy alone is not enough to look verified, because a clone also needs the company's DNS
-(above), so often a new salt (12.7) and closing the leak are enough and the badge stays.
+(above), so often closing the leak is enough and the badge stays. A new salt (12.7) does
+not help against a clone: whoever has the copy has the host key too, and can learn the
+new salt like anyone else, by getting a computer registered on the real server. It only
+keeps the fact that the server is verified from spreading further.
 Only when the DNS may be at risk too, or the leak can't be closed, do we delete the file
 (12.8) and does the company make a new host key with `helpbuoy-server hostkey --new`,
 which keeps all techies and computers. Every registered computer then shows the changed
@@ -1079,6 +1080,11 @@ Risks we accept:
   index SSH host keys, so the host key leads to the server's IP address. Someone with a
   leaked file can find that company's server, but still learns nothing about any other
   customer.
+- **Whoever can make a computer trust a forged helpbuoy.com certificate can show any
+  file**, with their own `hostkey` in it: a TLS-inspecting proxy, or a root certificate
+  the user was talked into installing. A company proxy is trusted by its own computers
+  anyway, and a scammer who can get a root certificate installed could get far worse
+  installed too, so this doesn't justify shipping our own roots (see Trust above).
 - **The web host sees which IP addresses ask for which id**, and with access to the
   files it can link computers to companies. We keep that to the web host we choose, and
   the privacy text says so (12.10).
@@ -1240,8 +1246,10 @@ change the company's verification.
 
 We delete the server's file and release the site when:
 
-- the company asks, or its server's host key or salt changed, or a copy of its state
-  directory may have leaked (12.3);
+- the company asks, or a copy of its state directory leaked and we decided the badge
+  can't stay (12.3);
+- its server's host key or salt changed: then we delete the old file as 12.7 describes,
+  once the new one is live;
 - the server or company is used for scams;
 - the company no longer exists, stops paying for its plan or does not answer the yearly
   check (then all its files).
@@ -1282,8 +1290,8 @@ These keep HelpBuoy a poor tool for scammers, verified or not:
   anyone else: such a list of paths is a list of our customers' ids.
 - No rate limit on `/verified/` that a large office behind one IP address could hit; the
   clients already limit themselves (12.5).
-- CAA records for helpbuoy.com that allow only the two CAs whose roots the clients carry
-  (12.3), and DNSSEC for the domain.
+- CAA records for helpbuoy.com that allow only the CA that issues its certificate, and
+  DNSSEC for the domain (12.3).
 - The same text must say what we keep about a verified company: the company name, country
   and date in its file, and the contact person in our own records, until the
   verification is removed.
