@@ -982,7 +982,7 @@ its own file next to the host key (3.2, 12.4). The server sends it only to regis
 computers and techies, never to pending or unknown keys (12.4).
 
 ```
-https://helpbuoy.com/verified/<id>.json
+https://www.helpbuoy.com/verified/<id>.json
 id = hex(SHA-256("helpbuoy verified server v1\n" + host key in wire format + salt))
 ```
 
@@ -1127,7 +1127,7 @@ On every `SessionReady`, without a cache:
   as not verified (12.6), and updates when the answer arrives. Each check belongs to one
   request id, so a late answer is dropped once that request is answered, cancelled or
   expired, and can never show up in a later dialog.
-- Only `https://helpbuoy.com/verified/<id>.json`: no redirects, no plain HTTP, no other
+- Only `https://www.helpbuoy.com/verified/<id>.json`: no redirects, no plain HTTP, no other
   host and no address from configuration. At most 4 KB and 10 seconds.
 - At most one check in flight, and at most one started every 5 seconds; the check for a
   request that comes sooner starts when the 5 seconds are up, so the dialog shows

@@ -25,7 +25,7 @@ import (
 const SaltSize = 32
 
 // BaseURL is where the files are. The clients use nothing else.
-const BaseURL = "https://helpbuoy.com/verified/"
+const BaseURL = "https://www.helpbuoy.com/verified/"
 
 const (
 	maxFile     = 4 << 10          // a larger file can't be checked
