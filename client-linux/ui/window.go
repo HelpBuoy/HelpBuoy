@@ -54,6 +54,8 @@ type Window struct {
 	btnDisconnect                                   *widget
 	// ScreenKeyError
 	lblKeyErr, btnRemoveKey *widget
+	// ScreenWarning
+	lblWarnHeading, lblWarnText, btnContinue *widget
 	// Unsupported
 	lblUnsupHeading, lblUnsup, btnClose *widget
 
@@ -84,11 +86,19 @@ type Window struct {
 // dialog is a modal question drawn over the whole window.
 type dialog struct {
 	icon    iconKind
+	badge   *badge // the verified server badge, drawn as a band at the top
 	heading string
 	body    string
 	buttons []*widget
 	cancel  int // index of the button Esc and closing choose
 	done    func(int)
+}
+
+// badge is the verified server badge (PLAN.md 12.6). It has its own band,
+// color and icon, where no text from the server is ever drawn.
+type badge struct {
+	heading string // "Verified: Example Inc, Netherlands"
+	server  string // "Server: helpme.example.com"
 }
 
 type iconKind int
@@ -153,6 +163,12 @@ func New(icons [][]byte) *Window {
 	w.lblKeyErr.color = colError
 	w.btnRemoveKey = button(i18n.Trans("Remove key..."), 24, 226, 160, 32, fontNormal, w.confirmRemoveKey)
 
+	w.lblWarnHeading = label(24, 22, 412, 56, fontHeading, alignLeft)
+	w.lblWarnHeading.text = i18n.Trans("Only continue if someone you know personally gave you this address.")
+	w.lblWarnText = label(24, 86, 412, 130, fontNormal, alignLeft)
+	w.btnContinue = button(i18n.Trans("Continue"), 24, 236, 160, 32, fontNormal, func() { w.ctrl.ContinueWarning() })
+	w.btnContinue.isDefault = true
+
 	w.lblUnsupHeading = label(24, 22, 412, 30, fontHeading, alignLeft)
 	w.lblUnsupHeading.text = i18n.Trans("This desktop can't be shared")
 	w.lblUnsup = label(24, 62, 412, 180, fontNormal, alignLeft)
@@ -164,6 +180,7 @@ func New(icons [][]byte) *Window {
 		w.lblKeyIntro, w.edtKey, w.btnCopy, w.lblKeyFp, w.lblServerFp, w.lblKeyNotice, w.lnkChange,
 		w.lblComment, w.lblWaiting, w.lblInfoTitle, w.lblStatus, w.btnDisconnect,
 		w.lblKeyErr, w.btnRemoveKey,
+		w.lblWarnHeading, w.lblWarnText, w.btnContinue,
 		w.lblUnsupHeading, w.lblUnsup, w.btnClose,
 	}
 	return w
@@ -279,31 +296,35 @@ func (w *Window) Render(v app.View) {
 	w.do(func() { w.apply(v) })
 }
 
+// checkWait is how long the approval dialog waits for the verified server
+// check before it opens with "Checking who runs this server..." (PLAN.md
+// 12.5).
+const checkWait = 3 * time.Second
+
 // ConfirmTechie implements app.UI with a dialog in the window that asks
-// whether the techie may take control. A changed techie key gets an error
-// icon, a warning headline and Cancel as the default button.
-func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie, oldFP string) bool {
-	quoted := `"` + h.Name + `"`
-	d := &dialog{}
-	if oldFP == "" {
-		d.icon = iconWarning
-		d.heading = i18n.Trans("Allow {0} to take control of this computer?", quoted)
-		d.body = i18n.Trans("Key fingerprint:\n{0}\n\n"+
-			"Only allow this if you asked this person for help. You can take back "+
-			"control at any time by pressing Esc.", h.Fingerprint)
-		d.setButtons(0, 1, i18n.Trans("Allow"), i18n.Trans("Cancel"))
-	} else {
-		d.icon = iconError
-		d.heading = i18n.Trans("Warning: the key of {0} has changed", quoted)
-		d.body = i18n.Trans("Key last time:\n{0}\n"+
-			"Key now:\n{1}\n\n"+
-			"This may be someone pretending to be a techie. Do not continue "+
-			"unless the techie confirmed by phone that they have a new key.", oldFP, h.Fingerprint)
-		d.setButtons(0, 0, i18n.Trans("Cancel"), i18n.Trans("Allow anyway"))
+// whether the techie may take control. A verified server gets a green band
+// with the company at the top, where no text from the server is shown
+// (PLAN.md 12.6). A changed techie key gets an error icon, a warning
+// headline and Cancel as the default button. While the verified server check
+// still runs the dialog says so, and it changes once the answer is in.
+func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie, oldFP string, b *app.Badges) bool {
+	select {
+	case <-b.Done():
+	case <-time.After(checkWait):
+	case <-ctx.Done():
+		return false
+	case <-w.quit:
+		return false
 	}
+	d := &dialog{}
+	fill := func() { techieDialog(d, h, oldFP, b.Badge()) }
+	fill()
 	allow := 0
 	if oldFP != "" {
+		d.setButtons(0, 0, i18n.Trans("Cancel"), i18n.Trans("Allow anyway"))
 		allow = 1
+	} else {
+		d.setButtons(0, 1, i18n.Trans("Allow"), i18n.Trans("Cancel"))
 	}
 	answer := make(chan int, 1)
 	d.done = func(i int) { answer <- i }
@@ -315,16 +336,54 @@ func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie, oldFP stri
 			answer <- d.cancel
 		}
 	})
-	select {
-	case i := <-answer:
-		return i == allow && ctx.Err() == nil
-	case <-ctx.Done():
-		// The question became moot (the techie gave up, the server
-		// connection was lost): close it as if Cancel was pressed.
-		w.do(func() { w.closeDialog(d, d.cancel) })
-		return false
-	case <-w.quit:
-		return false
+	checked := b.Done()
+	for {
+		select {
+		case i := <-answer:
+			return i == allow && ctx.Err() == nil
+		case <-checked:
+			checked = nil
+			w.do(fill)
+		case <-ctx.Done():
+			// The question became moot (the techie gave up, the server
+			// connection was lost): close it as if Cancel was pressed.
+			w.do(func() { w.closeDialog(d, d.cancel) })
+			return false
+		case <-w.quit:
+			return false
+		}
+	}
+}
+
+// techieDialog sets the texts of the approval dialog for techie h with
+// badge b; the buttons stay.
+func techieDialog(d *dialog, h session.Techie, oldFP string, b app.Badge) {
+	quoted := `"` + h.Name + `"`
+	esc := i18n.Trans("You can take back control at any time by pressing Esc.")
+	fingerprint := i18n.Trans("Key fingerprint:\n{0}", h.Fingerprint)
+	d.badge = nil
+	if b.Verified {
+		d.badge = &badge{heading: b.Heading, server: b.Server}
+	}
+	switch {
+	case oldFP != "":
+		d.icon = iconError
+		d.heading = i18n.Trans("Warning: the key of {0} has changed", quoted)
+		d.body = i18n.Trans("Key last time:\n{0}\n"+
+			"Key now:\n{1}\n\n"+
+			"This may be someone pretending to be a techie. Do not continue "+
+			"unless the techie confirmed by phone that they have a new key.", oldFP, h.Fingerprint)
+		if !b.Verified {
+			d.body += "\n\n" + b.Text
+		}
+	case b.Verified:
+		d.icon = iconNone
+		d.heading = i18n.Trans("Allow {0} to take control of this computer?", quoted)
+		d.body = b.Text + "\n\n" + fingerprint + "\n\n" + esc
+	default:
+		d.icon = iconWarning
+		d.heading = i18n.Trans("Allow {0} to take control of this computer?", quoted)
+		d.body = b.Text + "\n\n" + fingerprint + "\n\n" + esc
 	}
 }
 
@@ -521,8 +580,25 @@ func (w *Window) apply(v app.View) {
 		}
 	}
 
+	warn := v.Screen == app.ScreenWarning
+	show(warn, w.lblWarnHeading, w.lblWarnText, w.btnContinue)
+	if warn {
+		w.lblWarnText.text = i18n.Trans("If someone called you unexpectedly, hang up: banks, Microsoft and the "+
+			"police never ask you to install this.") + "\n\n" + i18n.Trans("Server: {0}", v.Address)
+		w.btnContinue.enabled = v.WarnWait == 0
+		if v.WarnWait > 0 {
+			w.btnContinue.text = i18n.Trans("Continue ({0})", v.WarnWait)
+		} else {
+			w.btnContinue.text = i18n.Trans("Continue")
+		}
+		if entered || (v.WarnWait == 0 && prev.WarnWait > 0) {
+			w.focus = w.btnContinue
+		}
+	}
+
 	key := v.Screen == app.ScreenKey
-	show(key, w.lblKeyIntro, w.edtKey, w.btnCopy, w.lblKeyFp, w.lblServerFp, w.lblKeyNotice, w.lnkChange)
+	show(key, w.lblKeyIntro, w.edtKey, w.btnCopy, w.lblKeyFp, w.lblServerFp, w.lblKeyNotice)
+	show(key || warn, w.lnkChange)
 	if key {
 		w.edtKey.text = v.KeyLine
 		w.lblKeyFp.text = i18n.Trans("Key fingerprint:\n{0}", v.KeyFingerprint)
@@ -907,20 +983,32 @@ func (w *Window) redraw() {
 }
 
 func (w *Window) drawDialog(c *canvas, d *dialog) {
+	top := w.px(24)
+	if d.badge != nil {
+		const bandH = 70
+		c.fill(image.Rect(0, 0, w.px(clientW), w.px(bandH)), colVerified)
+		r := image.Rect(w.px(24), w.px(19), w.px(24+32), w.px(19+32))
+		c.disc(r, colWhite)
+		checkMark(c, r, colVerified)
+		tr := image.Rect(w.px(70), w.px(12), w.px(clientW-24), w.px(bandH))
+		h := c.textBox(fontHeading, d.badge.heading, tr, alignLeft, colWhite)
+		tr.Min.Y += h + w.px(2)
+		c.textBox(fontNormal, d.badge.server, tr, alignLeft, colWhite)
+		top = w.px(bandH + 14)
+	}
 	x := 24
 	if d.icon != iconNone {
 		col := colWarning
 		if d.icon == iconError {
 			col = colError
 		}
-		r := image.Rect(w.px(24), w.px(22), w.px(24+32), w.px(22+32))
+		r := image.Rect(w.px(24), top-w.px(2), w.px(24+32), top+w.px(30))
 		c.disc(r, col)
 		lh := w.fonts.lineHeight(fontHeading)
 		tw := w.fonts.width(fontHeading, "!")
 		c.text(fontHeading, "!", r.Min.X+(r.Dx()-tw)/2, r.Min.Y+(r.Dy()-lh)/2, colWhite)
 		x = 70
 	}
-	top := w.px(24)
 	r := image.Rect(w.px(x), top, w.px(clientW-24), w.px(clientH))
 	h := c.textBox(fontHeading, d.heading, r, alignLeft, colText)
 	r.Min.Y += h + w.px(10)

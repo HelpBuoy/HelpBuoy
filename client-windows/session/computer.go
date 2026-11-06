@@ -22,6 +22,7 @@ import (
 	"github.com/helpbuoy/helpbuoy/client-windows/identity"
 	"github.com/helpbuoy/helpbuoy/proto/control"
 	pid "github.com/helpbuoy/helpbuoy/proto/identity"
+	"github.com/helpbuoy/helpbuoy/proto/verify"
 )
 
 // Phase is what the computer is doing, as far as the window cares.
@@ -79,10 +80,44 @@ type Handler interface {
 	// ConfirmTechie asks the user whether techie h may take control. It is
 	// called for every session, before the session channel is opened.
 	// oldFingerprint is set when the techie called h.Name showed a different
-	// key last time ("unreadable" if the pinned key can't be parsed). ctx
-	// ends when the question is moot (the server ended the request, or the
-	// connection was lost); the implementation should then stop asking.
-	ConfirmTechie(ctx context.Context, h Techie, oldFingerprint string) bool
+	// key last time ("unreadable" if the pinned key can't be parsed). v is
+	// the verified server check for this request, which may still be
+	// running. ctx ends when the question is moot (the server ended the
+	// request, or the connection was lost); the implementation should then
+	// stop asking.
+	ConfirmTechie(ctx context.Context, h Techie, oldFingerprint string, v *Verification) bool
+}
+
+// Verifier checks with helpbuoy.com whether the server is verified (PLAN.md
+// 12.5); see verify.Checker.Check.
+type Verifier func(ctx context.Context, hostKey ssh.PublicKey, salt []byte, addr string) verify.Result
+
+// Verification is the verified server check for one request. Done is closed
+// once Result is final.
+type Verification struct {
+	done chan struct{}
+	res  verify.Result
+}
+
+// Done is closed when the check finished.
+func (v *Verification) Done() <-chan struct{} { return v.done }
+
+// Result returns the outcome; before Done it is verify.Unknown.
+func (v *Verification) Result() verify.Result {
+	select {
+	case <-v.done:
+		return v.res
+	default:
+		return verify.Result{State: verify.Unknown}
+	}
+}
+
+// Finished returns a Verification that is already done with r, for tests and
+// for servers that can't be checked.
+func Finished(r verify.Result) *Verification {
+	v := &Verification{done: make(chan struct{}), res: r}
+	close(v.done)
+	return v
 }
 
 // Runner runs one session on the computer's sv-session channel: the inner SSH
@@ -118,6 +153,9 @@ type Options struct {
 	EscHook func(onEsc func()) (stop func())
 	// ParseKey parses a techie key line; default proto/identity.ParseLine.
 	ParseKey func(line string) (ssh.PublicKey, error)
+	// Verify checks whether the server is verified; nil treats every server
+	// as not verified.
+	Verify Verifier
 
 	DialTimeout time.Duration // TCP connect, SSH handshake and Hello; default 10 s
 	KeepAlive   time.Duration // default 15 s; the connection is dropped after 3 missed
@@ -141,6 +179,7 @@ type Computer struct {
 	stopped     bool
 	err         error
 	hostKey     ssh.PublicKey
+	salt        []byte // verification salt of this connection, nil without one
 	techies     map[string]string
 	conn        *serverConn // nil while disconnected
 	pending     bool
@@ -553,6 +592,7 @@ func (c *Computer) connected(rc *serverConn, h *control.Hello) error {
 	}
 	c.conn = rc
 	c.err = nil
+	c.salt, _ = verify.ParseSalt(h.Salt)
 	hostKey := identity.KeyLine(c.hostKey, "")
 	c.mu.Unlock()
 	if registered {
@@ -565,6 +605,7 @@ func (c *Computer) connected(rc *serverConn, h *control.Hello) error {
 func (c *Computer) disconnected() {
 	c.mu.Lock()
 	c.conn = nil
+	c.salt = nil
 	c.endRequestLocked()
 	end := c.endSession
 	c.mu.Unlock()
@@ -579,6 +620,7 @@ func (c *Computer) dispatch(rc *serverConn, m any) {
 	case *control.Registered:
 		c.mu.Lock()
 		c.pending = false
+		c.salt, _ = verify.ParseSalt(m.Salt)
 		hostKey := identity.KeyLine(c.hostKey, "")
 		c.mu.Unlock()
 		c.log.Info("registered")
@@ -677,7 +719,7 @@ func (c *Computer) runSession(rc *serverConn, sr control.SessionReady, ask conte
 		}
 	}
 	techie := Techie{Name: sr.TechieName, Fingerprint: fp}
-	if !c.opts.Handler.ConfirmTechie(ask, techie, oldFP) {
+	if !c.opts.Handler.ConfirmTechie(ask, techie, oldFP, c.verify(ask, log)) {
 		abort("user refused the techie", nil)
 		return
 	}
@@ -729,4 +771,28 @@ func (c *Computer) runSession(rc *serverConn, sr control.SessionReady, ask conte
 	c.endRequestLocked()
 	c.mu.Unlock()
 	c.notify()
+}
+
+// verify starts the verified server check for one request (PLAN.md 12.5).
+// It uses the host key of this connection, which is the pinned one, and the
+// address this computer connects to. The check ends with ask, so a late
+// answer never reaches a later request.
+func (c *Computer) verify(ask context.Context, log *slog.Logger) *Verification {
+	c.mu.Lock()
+	hostKey, salt := c.hostKey, c.salt
+	c.mu.Unlock()
+	if c.opts.Verify == nil || salt == nil {
+		return Finished(verify.Result{State: verify.NotVerified})
+	}
+	v := &Verification{done: make(chan struct{})}
+	go func() {
+		v.res = c.opts.Verify(ask, hostKey, salt, c.opts.Addr)
+		if v.res.Err != nil {
+			log.Info("verified server check", "state", v.res.State, "err", v.res.Err)
+		} else {
+			log.Info("verified server check", "state", v.res.State, "company", v.res.Company)
+		}
+		close(v.done)
+	}()
+	return v
 }

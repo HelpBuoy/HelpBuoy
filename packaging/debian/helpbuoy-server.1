@@ -29,6 +29,10 @@ helpbuoy-server \- server for helpbuoy self-hosted remote support
 .RI [ text ]
 .br
 .B helpbuoy-server hostkey
+.RB [ \-\-new ]
+.br
+.B helpbuoy-server verification
+.RB [ \-\-new ]
 .br
 .B helpbuoy-server version
 .SH DESCRIPTION
@@ -43,6 +47,16 @@ runs the server, by default on
 .BR :5959 .
 The other commands change or show the state directory; a running server picks
 up changes within a second.
+.PP
+.B verification
+prints the host key and the id a company enters in the HelpBuoy portal to get
+its server verified.
+.B \-\-new
+makes a new salt, used from the next server start on, and prints its id;
+restart the server only once the portal says the new file is live.
+.B hostkey \-\-new
+makes a new host key, used from the next server start on; every registered
+computer then warns that the server identity changed.
 .SH OPTIONS
 .TP
 .BI \-\-listen " addr"

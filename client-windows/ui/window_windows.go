@@ -7,6 +7,7 @@ package ui
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 	"unicode/utf16"
 	"unsafe"
@@ -83,6 +84,10 @@ type Window struct {
 	// ScreenKeyError
 	lblKeyErr    *ui.Static
 	btnRemoveKey *ui.Button
+	// ScreenWarning
+	lblWarnHeading *ui.Static
+	lblWarnText    *ui.Static
+	btnContinue    *ui.Button
 
 	dialogs     int    // modal windows open
 	serverAsked string // new server fingerprint the user was warned about
@@ -143,6 +148,10 @@ func New(iconID uint16) *Window {
 	w.lblKeyErr = static("", co.SS_LEFT)
 	w.btnRemoveKey = button(i18n.Trans("Remove &key..."), co.BS_PUSHBUTTON)
 
+	w.lblWarnHeading = static(i18n.Trans("Only continue if someone you know personally gave you this address."), co.SS_LEFT)
+	w.lblWarnText = static("", co.SS_LEFT)
+	w.btnContinue = button(i18n.Trans("C&ontinue"), co.BS_DEFPUSHBUTTON)
+
 	w.items = []item{
 		{w.lblHeading, 24, 22, 412, 30, fontHeading},
 		{w.lblAddrHint, 24, 62, 412, 36, fontNormal},
@@ -169,6 +178,10 @@ func New(iconID uint16) *Window {
 
 		{w.lblKeyErr, 24, 24, 412, 190, fontNormal},
 		{w.btnRemoveKey, 24, 226, 160, 32, fontNormal},
+
+		{w.lblWarnHeading, 24, 22, 412, 56, fontHeading},
+		{w.lblWarnText, 24, 86, 412, 130, fontNormal},
+		{w.btnContinue, 24, 236, 160, 32, fontNormal},
 	}
 	w.events()
 	return w
@@ -190,51 +203,132 @@ func (w *Window) Render(v app.View) {
 	w.wnd.UiThread(func() { w.apply(v) })
 }
 
+// Task dialog icons that windigo does not name: a shield with a green or
+// yellow banner across the dialog's top.
+const (
+	tdShieldSuccess = co.TDICON(0xfff8) // TD_SHIELD_SUCCESS_ICON
+	tdShieldWarning = co.TDICON(0xfffa) // TD_SHIELD_WARNING_ICON
+)
+
+// checkWait is how long the approval dialog waits for the verified server
+// check before it opens with "Checking who runs this server..." (PLAN.md
+// 12.5).
+const checkWait = 3 * time.Second
+
 // ConfirmTechie implements app.UI with a modal dialog that asks whether the
-// techie may take control. A changed techie key gets its own dialog with an
-// error icon, a warning headline and Cancel as the default button.
-func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie, oldFP string) bool {
+// techie may take control. A verified server gets a green banner with the
+// company, where no text from the server is shown (PLAN.md 12.6). A changed
+// techie key gets its own dialog with an error icon, a warning headline and
+// Cancel as the default button. While the verified server check still runs
+// the dialog says so, and it is shown again with the answer once it is in.
+func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie, oldFP string, b *app.Badges) bool {
 	if w.wnd.Hwnd() == 0 {
 		return false
 	}
-	who := h.Name
+	select {
+	case <-b.Done():
+	case <-time.After(checkWait):
+	case <-ctx.Done():
+		return false
+	}
+	for {
+		done := isClosed(b.Done())
+		cfg := techieDialog(h, oldFP, b.Badge())
+		var refresh atomic.Bool
+		shown := make(chan struct{})
+		if !done {
+			go func() {
+				select {
+				case <-b.Done():
+					refresh.Store(true)
+					w.wnd.UiThread(w.closeTaskDialog)
+				case <-shown:
+				}
+			}()
+		}
+		id, ok := w.askTaskDialog(ctx, &cfg)
+		close(shown)
+		switch {
+		case !ok || ctx.Err() != nil:
+			return false
+		case id == co.ID_OK:
+			return true
+		case refresh.Load():
+			continue // closed for the answer of the check: show it
+		}
+		return false
+	}
+}
+
+func isClosed(c <-chan struct{}) bool {
+	select {
+	case <-c:
+		return true
+	default:
+		return false
+	}
+}
+
+// techieDialog builds the approval dialog for techie h with badge b.
+func techieDialog(h session.Techie, oldFP string, b app.Badge) win.TASKDIALOGCONFIG {
 	cfg := win.TASKDIALOGCONFIG{
 		WindowTitle: Title,
 		Flags:       co.TDF_ALLOW_DIALOG_CANCELLATION | co.TDF_POSITION_RELATIVE_TO_WINDOW,
 		Width:       dialogWidth,
 	}
-	quoted := `"` + who + `"`
-	if oldFP == "" {
-		cfg.HMainIcon = win.TdcIconTdi(co.TDICON_WARNING)
-		cfg.MainInstruction = i18n.Trans("Allow {0} to take control of this computer?", quoted)
-		cfg.Content = i18n.Trans("Key fingerprint:") + "\n" + h.Fingerprint + "\n\n" +
-			i18n.Trans("Only allow this if you asked this person for help. You can take back "+
-				"control at any time by pressing Esc.")
-		cfg.Buttons = []win.TASKDIALOG_BUTTON{
-			{Id: co.ID_OK, Text: i18n.Trans("&Allow")},
-			{Id: co.ID_CANCEL, Text: i18n.Trans("&Cancel")},
-		}
-		cfg.DefaultButtonId = uint16(co.ID_OK)
-	} else {
+	quoted := `"` + h.Name + `"`
+	esc := i18n.Trans("You can take back control at any time by pressing Esc.")
+	fingerprint := i18n.Trans("Key fingerprint:") + "\n" + h.Fingerprint
+	switch {
+	case oldFP != "":
 		cfg.HMainIcon = win.TdcIconTdi(co.TDICON_ERROR)
 		cfg.MainInstruction = i18n.Trans("Warning: the key of {0} has changed", quoted)
 		cfg.Content = i18n.Trans("Key last time:") + "\n" + oldFP + "\n\n" +
 			i18n.Trans("Key now:") + "\n" + h.Fingerprint + "\n\n" +
 			i18n.Trans("This may be someone pretending to be a techie. Do not continue "+
 				"unless the techie confirmed by phone that they have a new key.")
+		// The badge goes in the footer, which has its own icon.
+		if b.Verified {
+			cfg.HFooterIcon = win.TdcIconTdi(co.TDICON_SHIELD)
+			cfg.Footer = b.Heading + "\n" + b.Server
+		} else {
+			cfg.HFooterIcon = win.TdcIconTdi(co.TDICON_WARNING)
+			cfg.Footer = b.Text
+		}
 		cfg.Buttons = []win.TASKDIALOG_BUTTON{
 			{Id: co.ID_CANCEL, Text: i18n.Trans("&Cancel")},
 			{Id: co.ID_OK, Text: i18n.Trans("Allow &anyway")},
 		}
 		cfg.DefaultButtonId = uint16(co.ID_CANCEL)
+		return cfg
+	case b.Verified:
+		cfg.HMainIcon = win.TdcIconTdi(tdShieldSuccess)
+		cfg.MainInstruction = b.Heading
+		cfg.Content = b.Server + "\n" + b.Text + "\n\n" +
+			i18n.Trans("Allow {0} to take control of this computer?", quoted) + "\n\n" +
+			fingerprint + "\n\n" + esc
+	default:
+		cfg.HMainIcon = win.TdcIconTdi(tdShieldWarning)
+		cfg.MainInstruction = i18n.Trans("Allow {0} to take control of this computer?", quoted)
+		cfg.Content = b.Text + "\n\n" + fingerprint + "\n\n" + esc
 	}
-	// When the question becomes moot (the techie gave up, the server
-	// connection was lost) the dialog is closed as if Cancel was pressed.
+	cfg.Buttons = []win.TASKDIALOG_BUTTON{
+		{Id: co.ID_OK, Text: i18n.Trans("&Allow")},
+		{Id: co.ID_CANCEL, Text: i18n.Trans("&Cancel")},
+	}
+	cfg.DefaultButtonId = uint16(co.ID_OK)
+	return cfg
+}
+
+// askTaskDialog shows cfg modally on the UI thread and returns the button
+// pressed. When ctx ends the question is moot (the techie gave up, the
+// server connection was lost) and the dialog is closed as if Cancel was
+// pressed. ok is false when the dialog was not shown.
+func (w *Window) askTaskDialog(ctx context.Context, cfg *win.TASKDIALOGCONFIG) (id co.ID, ok bool) {
 	stop := context.AfterFunc(ctx, func() {
 		w.wnd.UiThread(w.closeTaskDialog)
 	})
 	defer stop()
-	var ok bool
 	w.wnd.UiThread(func() {
 		if ctx.Err() != nil {
 			return
@@ -243,11 +337,11 @@ func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie, oldFP stri
 		cfg.HwndParent = w.wnd.Hwnd()
 		// Counted as a dialog, so the server key warning waits for it.
 		w.dialogs++
-		id, err := win.TaskDialogIndirect(&cfg)
+		got, err := win.TaskDialogIndirect(cfg)
 		w.dialogs--
-		ok = err == nil && id == co.ID_OK && ctx.Err() == nil
+		id, ok = got, err == nil
 	})
-	return ok
+	return id, ok
 }
 
 // closeTaskDialog closes the task dialog owned by the main window, if one
@@ -332,6 +426,7 @@ func (w *Window) events() {
 	w.btnConnect.On().BnClicked(w.connect)
 	w.btnCopy.On().BnClicked(func() { w.copyText(w.view.KeyLine, w.btnCopy) })
 	w.btnRemoveKey.On().BnClicked(w.confirmRemoveKey)
+	w.btnContinue.On().BnClicked(func() { w.ctrl.ContinueWarning() })
 	w.lnkChange.On().NmClick(func(_ *win.NMLINK) { w.ctrl.Disconnect() })
 	w.lnkUpdate.On().NmClick(func(_ *win.NMLINK) { w.checkForUpdate() })
 	w.btnDisconnect.On().BnClicked(func() {
@@ -540,11 +635,29 @@ func (w *Window) apply(v app.View) {
 		}
 	}
 
+	warn := v.Screen == app.ScreenWarning
+	for _, c := range []ui.Window{w.lblWarnHeading, w.lblWarnText, w.btnContinue} {
+		show(c, warn)
+	}
+	if warn {
+		setText(w.lblWarnText, i18n.Trans("If someone called you unexpectedly, hang up: banks, Microsoft and the "+
+			"police never ask you to install this.")+"\n\n"+i18n.Trans("Server: {0}", v.Address))
+		if v.WarnWait > 0 {
+			setText(w.btnContinue, i18n.Trans("Continue ({0})", v.WarnWait))
+		} else {
+			setText(w.btnContinue, i18n.Trans("C&ontinue"))
+		}
+		w.btnContinue.Hwnd().EnableWindow(v.WarnWait == 0)
+		if v.WarnWait == 0 && prev.WarnWait > 0 {
+			w.btnContinue.Focus()
+		}
+	}
+
 	key := v.Screen == app.ScreenKey
 	for _, c := range []ui.Window{w.lblKeyIntro, w.edtKey, w.btnCopy, w.lblKeyFp, w.lblServerFp, w.lblKeyNotice} {
 		show(c, key)
 	}
-	show(w.lnkChange, key)
+	show(w.lnkChange, key || warn)
 	if key {
 		setText(w.edtKey, v.KeyLine)
 		setText(w.lblKeyFp, i18n.Trans("Key fingerprint:\n{0}", v.KeyFingerprint))

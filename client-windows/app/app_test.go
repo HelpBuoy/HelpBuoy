@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -17,10 +18,14 @@ import (
 	"github.com/helpbuoy/helpbuoy/client-windows/internal/fakeserver"
 	"github.com/helpbuoy/helpbuoy/client-windows/session"
 	"github.com/helpbuoy/helpbuoy/proto/appkey"
+	"github.com/helpbuoy/helpbuoy/proto/verify"
 )
 
 type fakeUI struct {
 	views chan View
+	// ctrl, if set, gets Continue on the first connection warning as soon as
+	// it works, so tests about other screens pass through it.
+	ctrl *Controller
 
 	mu     sync.Mutex
 	refuse bool
@@ -36,8 +41,13 @@ func (u *fakeUI) answer(refuse bool, gate chan struct{}) {
 	u.mu.Unlock()
 }
 
-func (u *fakeUI) Render(v View) { u.views <- v }
-func (u *fakeUI) ConfirmTechie(ctx context.Context, _ session.Techie, _ string) bool {
+func (u *fakeUI) Render(v View) {
+	if v.Screen == ScreenWarning && v.WarnWait == 0 && u.ctrl != nil {
+		go u.ctrl.ContinueWarning()
+	}
+	u.views <- v
+}
+func (u *fakeUI) ConfirmTechie(ctx context.Context, _ session.Techie, _ string, _ *Badges) bool {
 	u.mu.Lock()
 	refuse, gate := u.refuse, u.gate
 	u.mu.Unlock()
@@ -133,8 +143,14 @@ func (e *env) controller() (*Controller, *fakeUI) {
 			}
 		},
 	})
+	ui.ctrl = c
 	e.t.Cleanup(c.Close)
 	return c, ui
+}
+
+func TestMain(m *testing.M) {
+	warnDelay = 50 * time.Millisecond
+	os.Exit(m.Run())
 }
 
 func (e *env) config() *config.Config {
@@ -393,5 +409,62 @@ func TestServerKeyChanged(t *testing.T) {
 	ui.wait(t, "ready", readyMain)
 	if got := e.config().ServerHostKey; got != identity.KeyLine(e.server.HostKey(), "") {
 		t.Fatalf("pinned %q", got)
+	}
+}
+
+func TestFirstConnectionWarning(t *testing.T) {
+	old := warnDelay
+	warnDelay = 400 * time.Millisecond
+	defer func() { warnDelay = old }()
+	e := newEnv(t)
+	c, ui := e.controller()
+	ui.ctrl = nil // press Continue by hand
+	c.Start()
+	ui.wait(t, "address screen", screenIs(ScreenAddress))
+	c.Connect(e.server.Addr())
+	v := ui.wait(t, "warning", screenIs(ScreenWarning))
+	if v.WarnWait == 0 {
+		t.Fatalf("Continue works at once: %+v", v)
+	}
+	c.ContinueWarning() // too early: ignored
+	if v := c.View(); v.Screen != ScreenWarning {
+		t.Fatalf("Continue worked before the delay: %v", v.Screen)
+	}
+	ui.wait(t, "Continue enabled", func(v View) bool { return v.Screen == ScreenWarning && v.WarnWait == 0 })
+	c.ContinueWarning()
+	ui.wait(t, "key screen", screenIs(ScreenKey))
+	if got := e.config().WarnedServers; len(got) != 1 || got[0] != ssh.FingerprintSHA256(e.server.HostKey()) {
+		t.Fatalf("warned servers %v", got)
+	}
+
+	// Once per server key: the next connection goes straight to the key.
+	c.Disconnect()
+	ui.wait(t, "address screen", screenIs(ScreenAddress))
+	c.Connect(e.server.Addr())
+	v = ui.wait(t, "key or warning screen", func(v View) bool { return v.Screen == ScreenKey || v.Screen == ScreenWarning })
+	if v.Screen != ScreenKey {
+		t.Fatal("the warning showed again for the same server key")
+	}
+}
+
+func TestBadge(t *testing.T) {
+	b := (&Badges{v: session.Finished(verify.Result{State: verify.Verified, Company: "Example Inc", Country: "NL"}),
+		addr: "HelpMe.Example.com:5959"}).Badge()
+	if !b.Verified || b.Heading != "Verified: Example Inc, Netherlands" || b.Server != "Server: helpme.example.com" {
+		t.Errorf("verified %+v", b)
+	}
+	b = (&Badges{v: session.Finished(verify.Result{State: verify.Verified, Company: "Example Inc", Country: "ZZ"})}).Badge()
+	if b.Heading != "Verified: Example Inc, ZZ" {
+		t.Errorf("unknown country %+v", b)
+	}
+	warn := "Only allow this if you know the person asking personally."
+	for state, want := range map[verify.State]string{
+		verify.NotVerified: "HelpBuoy has not verified who runs this server.",
+		verify.Unknown:     "HelpBuoy could not check who runs this server.",
+	} {
+		b := (&Badges{v: session.Finished(verify.Result{State: state})}).Badge()
+		if b.Verified || b.Heading != "" || !strings.HasPrefix(b.Text, want) || !strings.Contains(b.Text, warn) {
+			t.Errorf("%v: %+v", state, b)
+		}
 	}
 }

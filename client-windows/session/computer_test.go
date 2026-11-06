@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -16,6 +18,7 @@ import (
 	"github.com/helpbuoy/helpbuoy/client-windows/identity"
 	"github.com/helpbuoy/helpbuoy/client-windows/internal/fakeserver"
 	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/verify"
 )
 
 // testHandler records what the computer reports.
@@ -34,6 +37,7 @@ type testHandler struct {
 type asked struct {
 	techie Techie
 	oldFP  string
+	v      *Verification
 }
 
 func newHandler() *testHandler {
@@ -52,9 +56,9 @@ func (h *testHandler) TechiePinned(name, line string) {
 	h.mu.Unlock()
 }
 func (h *testHandler) ServerInfo(title, instruction string) {}
-func (h *testHandler) ConfirmTechie(ctx context.Context, techie Techie, oldFP string) bool {
+func (h *testHandler) ConfirmTechie(ctx context.Context, techie Techie, oldFP string, v *Verification) bool {
 	h.mu.Lock()
-	h.asked = append(h.asked, asked{techie, oldFP})
+	h.asked = append(h.asked, asked{techie, oldFP, v})
 	hold, refuse := h.hold, h.refuse
 	h.mu.Unlock()
 	if hold {
@@ -579,5 +583,57 @@ func TestServerErrorMessage(t *testing.T) {
 	}
 	if Classify(s.Err) != KindServer {
 		t.Fatalf("err %v", s.Err)
+	}
+}
+
+// verifyCall is one call of Options.Verify.
+type verifyCall struct {
+	hostKey ssh.PublicKey
+	salt    []byte
+	addr    string
+}
+
+func TestVerification(t *testing.T) {
+	calls := make(chan verifyCall, 4)
+	f := setup(t, func(o *Options) {
+		o.Verify = func(ctx context.Context, hk ssh.PublicKey, salt []byte, addr string) verify.Result {
+			calls <- verifyCall{hk, salt, addr}
+			return verify.Result{State: verify.Verified, Company: "Example Inc"}
+		}
+	})
+	salt := strings.Repeat("ab", verify.SaltSize)
+	f.server.SetSalt(salt)
+	_, techieLine := newKey(t, "alice")
+	startSession(t, f, techieLine)
+	call := <-calls
+	if !sameKey(call.hostKey, f.server.HostKey()) || hex.EncodeToString(call.salt) != salt || call.addr != f.server.Addr() {
+		t.Fatalf("Verify got %+v", call)
+	}
+	f.h.mu.Lock()
+	v := f.h.asked[0].v
+	f.h.mu.Unlock()
+	<-v.Done()
+	if r := v.Result(); r.State != verify.Verified || r.Company != "Example Inc" {
+		t.Fatalf("result %+v", r)
+	}
+}
+
+func TestVerificationWithoutSalt(t *testing.T) {
+	called := false
+	f := setup(t, func(o *Options) {
+		o.Verify = func(context.Context, ssh.PublicKey, []byte, string) verify.Result {
+			called = true
+			return verify.Result{State: verify.Verified}
+		}
+	})
+	f.server.SetSalt("abcd") // not 32 bytes: no salt
+	_, techieLine := newKey(t, "alice")
+	startSession(t, f, techieLine)
+	f.h.mu.Lock()
+	v := f.h.asked[0].v
+	f.h.mu.Unlock()
+	<-v.Done()
+	if r := v.Result(); r.State != verify.NotVerified || called {
+		t.Fatalf("result %+v, Verify called %v", r, called)
 	}
 }

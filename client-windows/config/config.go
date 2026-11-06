@@ -37,6 +37,10 @@ type Config struct {
 	// while a session runs (PLAN.md 5.2). Off by default; set it by hand in
 	// config.json.
 	PerformanceMode bool `json:"performance_mode,omitempty"`
+	// WarnedServers are the fingerprints of the server keys the first
+	// connection warning was shown and accepted for (PLAN.md 12.6), so it
+	// shows once per server key.
+	WarnedServers []string `json:"warned_servers,omitempty"`
 }
 
 // Registered reports whether the first-run flow has been completed.
@@ -50,6 +54,7 @@ func (c *Config) Clone() *Config {
 		return &Config{}
 	}
 	n := *c
+	n.WarnedServers = append([]string(nil), c.WarnedServers...)
 	if c.KnownTechies != nil {
 		n.KnownTechies = make(map[string]string, len(c.KnownTechies))
 		for k, v := range c.KnownTechies {

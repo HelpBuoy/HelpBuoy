@@ -164,6 +164,7 @@ func (a *App) drawServer(x, y, w float32) float32 {
 		c.Text(ui.Regular, ui.SizeBody, i18n.Trans("Not known yet; pinned on the first connection."), x, y, ui.ColMuted)
 	}
 	y += 34
+	y = a.drawVerification(x, y, w)
 	if a.info != nil {
 		y = a.drawServerInfo(x, y, w)
 	}

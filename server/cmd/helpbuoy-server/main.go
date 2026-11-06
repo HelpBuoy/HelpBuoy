@@ -23,9 +23,11 @@ import (
 	"github.com/helpbuoy/helpbuoy/proto/control"
 	"github.com/helpbuoy/helpbuoy/proto/datadir"
 	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
+	"github.com/helpbuoy/helpbuoy/proto/verify"
 	"github.com/helpbuoy/helpbuoy/server/auth"
 	"github.com/helpbuoy/helpbuoy/server/hostkey"
 	"github.com/helpbuoy/helpbuoy/server/logfile"
+	"github.com/helpbuoy/helpbuoy/server/salt"
 	"github.com/helpbuoy/helpbuoy/server/server"
 	"github.com/helpbuoy/helpbuoy/server/store"
 )
@@ -46,7 +48,11 @@ commands:
   computer remove SHA256:...             remove a registered computer
   title [TEXT]                           print or set the title the apps show ("" for none)
   instruction [TEXT]                     print or set the instruction line the apps show ("" for the default)
-  hostkey                                print the server host key and fingerprint
+  hostkey [--new]                        print the server host key and fingerprint; --new makes a
+                                         new host key, used from the next server start on
+  verification [--new]                   print the host key and the id to enter in the HelpBuoy
+                                         portal; --new makes a new salt, used from the next
+                                         server start on, and prints its id
   version                                print the version
 
 Every command except version takes --state DIR (default: $HELPBUOY_SERVER_STATE,
@@ -77,6 +83,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		err = infoCmd(args[0], args[1:], stdout, stderr)
 	case "hostkey":
 		err = hostkeyCmd(args[1:], stdout, stderr)
+	case "verification":
+		err = verificationCmd(args[1:], stdout, stderr)
 	case "version", "--version", "-v":
 		fmt.Fprintf(stdout, "helpbuoy-server %s\n", version)
 		return 0
@@ -401,6 +409,7 @@ func hostkeyCmd(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("hostkey", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	state := fs.String("state", "", "state directory")
+	newKey := fs.Bool("new", false, "make a new host key, used from the next server start on")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -412,11 +421,86 @@ func hostkeyCmd(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if *newKey {
+		s, err := hostkey.New(dir)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(stdout, hostkey.PublicLine(s))
+		fmt.Fprintln(stdout, auth.Fingerprint(s.PublicKey()))
+		fmt.Fprintln(stdout, "This host key is used from the next server start on. Every registered computer\n"+
+			"will then warn that the server identity changed; tell its users first, by your own\n"+
+			"channels. Techies and computers are kept.")
+		return nil
+	}
 	s, err := hostkey.LoadOrCreate(dir)
 	if err != nil {
 		return err
 	}
 	fmt.Fprintln(stdout, hostkey.PublicLine(s))
 	fmt.Fprintln(stdout, auth.Fingerprint(s.PublicKey()))
+	if n, ok, err := hostkey.Pending(dir); err != nil {
+		return err
+	} else if ok {
+		fmt.Fprintf(stdout, "from the next start: %s\n", auth.Fingerprint(n.PublicKey()))
+	}
+	return nil
+}
+
+// verificationCmd prints what a company enters in the HelpBuoy portal to get
+// its server verified (PLAN.md 12.7): the host key line and the id. It never
+// prints the salt itself.
+func verificationCmd(args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("verification", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	state := fs.String("state", "", "state directory")
+	next := fs.Bool("new", false, "make a new salt, used from the next server start on, and print its id")
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 0 {
+		return fmt.Errorf("%w: verification [--new]", errUsage)
+	}
+	dir, err := stateDir(*state)
+	if err != nil {
+		return err
+	}
+	// The host key and salt the server uses after its next start.
+	hk, pendingKey, err := hostkey.Pending(dir)
+	if err != nil {
+		return err
+	}
+	if !pendingKey {
+		if hk, err = hostkey.LoadOrCreate(dir); err != nil {
+			return err
+		}
+	}
+	var s []byte
+	pendingSalt := false
+	switch {
+	case *next:
+		s, err = salt.Next(dir)
+	default:
+		if s, pendingSalt, err = salt.Pending(dir); err == nil && !pendingSalt {
+			s, err = salt.LoadOrCreate(dir)
+		}
+	}
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "host key: %s\n", hostkey.PublicLine(hk))
+	fmt.Fprintf(stdout, "id:       %s\n", verify.ID(hk.PublicKey(), s))
+	switch {
+	case *next:
+		fmt.Fprintln(stdout, "This id is used from the next server start on. Enter it in the HelpBuoy portal\n"+
+			"and restart the server only once the portal says its file is live; until then\n"+
+			"computers would see this server as not verified.")
+	default:
+		if pendingKey || pendingSalt {
+			fmt.Fprintln(stdout, "This is the id from the next server start on; until then the server uses its\n"+
+				"current host key and salt.")
+		}
+	}
 	return nil
 }

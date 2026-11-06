@@ -144,6 +144,7 @@ func main() {
 		CheckUpdate: func(ctx context.Context) (*update.Release, error) {
 			return update.Check(ctx, update.LatestReleaseURL, version, update.ClientMSI)
 		},
+		Verify:      app.NewVerifier(version),
 		AppVersion:  version,
 		UserMachine: userMachine,
 		Logger:      log,

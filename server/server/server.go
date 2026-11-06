@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -29,6 +30,7 @@ import (
 	"github.com/helpbuoy/helpbuoy/server/hostkey"
 	"github.com/helpbuoy/helpbuoy/server/limits"
 	"github.com/helpbuoy/helpbuoy/server/registry"
+	"github.com/helpbuoy/helpbuoy/server/salt"
 	"github.com/helpbuoy/helpbuoy/server/splice"
 	"github.com/helpbuoy/helpbuoy/server/store"
 )
@@ -121,7 +123,23 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A new host key or salt made by the admin commands takes effect now,
+	// at the start (PLAN.md 12.4, 12.7).
+	if ok, err := hostkey.Apply(cfg.StateDir); err != nil {
+		return nil, err
+	} else if ok {
+		cfg.Log.Warn("new host key in use; computers will warn that the server identity changed")
+	}
 	signer, err := hostkey.LoadOrCreate(cfg.StateDir)
+	if err != nil {
+		return nil, err
+	}
+	if ok, err := salt.Apply(cfg.StateDir); err != nil {
+		return nil, err
+	} else if ok {
+		cfg.Log.Info("new verification salt in use")
+	}
+	vsalt, err := salt.LoadOrCreate(cfg.StateDir)
 	if err != nil {
 		return nil, err
 	}
@@ -147,6 +165,7 @@ func New(cfg Config) (*Server, error) {
 		PendingIdle:          cfg.PendingIdle,
 		MaxSessionsPerTechie: cfg.MaxSessionsPerTechie,
 		Version:              cfg.Version,
+		Salt:                 hex.EncodeToString(vsalt),
 		Mutate:               s.mutate,
 		Log:                  cfg.Log,
 	}, idx)

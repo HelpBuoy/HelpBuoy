@@ -30,6 +30,7 @@ import (
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
 	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 	"github.com/helpbuoy/helpbuoy/proto/update"
+	"github.com/helpbuoy/helpbuoy/proto/verify"
 )
 
 // Options configure the app.
@@ -46,6 +47,9 @@ type Options struct {
 	// none. It only runs when the user clicks Check for updates in the top right
 	// corner; nil hides that link.
 	CheckUpdate func(ctx context.Context) (*update.Release, error)
+	// Verify checks whether the connected server is verified, for the Server
+	// tab (PLAN.md 12.5); nil shows nothing about it.
+	Verify func(ctx context.Context, hostKey ssh.PublicKey, salt []byte) verify.Result
 }
 
 // Layout sizes in logical pixels.
@@ -131,6 +135,7 @@ type App struct {
 	presence *control.Presence
 	me       string              // our techie name from Hello
 	info     *control.ServerInfo // the server's title and instruction line, nil until received
+	verif    verification        // the verified server check of the current connection
 
 	local      *localserver.Server
 	localAdded int
@@ -433,6 +438,7 @@ func (a *App) handleEvent(ev serverconn.Event) {
 		if ev.Hello != nil {
 			a.me = ev.Hello.Name
 		}
+		a.startVerification(ev)
 		if ev.Status == serverconn.StatusOnline {
 			a.reached, a.notTechie = true, false
 		} else {

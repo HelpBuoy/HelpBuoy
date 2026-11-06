@@ -43,6 +43,9 @@ type Config struct {
 	PendingIdle          time.Duration // pending connections are closed after this (24 h)
 	MaxSessionsPerTechie int           // 20
 	Version              string        // server version for Hello
+	// Salt is the verification salt in hex. Hello and Registered carry it to
+	// registered computers and techies, never to pending keys (PLAN.md 12.4).
+	Salt string
 	// Mutate persists a change to the stored state. The implementation must
 	// call SetIndex with the new state before it returns.
 	Mutate func(fn func(*store.State) error) error
@@ -241,6 +244,9 @@ func (r *Registry) OpenControl(c *Conn) error {
 	if c.role == control.RoleTechie {
 		h.Name = c.name // computers are not told the name techies gave them
 	}
+	if c.role == control.RoleTechie || c.role == control.RoleComputer {
+		h.Salt = r.cfg.Salt
+	}
 	c.peer.Send(h)
 	c.peer.Send(r.serverInfoLocked())
 	if c.role == control.RoleTechie {
@@ -367,7 +373,7 @@ func (r *Registry) SetIndex(idx *store.Index) {
 				c.release = nil
 			}
 			r.lastSeen[fp] = r.cfg.Now()
-			send(c, &control.Registered{})
+			send(c, &control.Registered{Salt: r.cfg.Salt})
 			r.log.Info("pending promoted", "fp", fp, "name", id.Name, "ip", c.ip)
 		default:
 			reason := "key removed from the server"

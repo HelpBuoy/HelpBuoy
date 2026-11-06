@@ -40,7 +40,9 @@ type Options struct {
 	AutoConnect time.Duration
 	TechieName  string
 	TechieKey   string
-	Logger      *slog.Logger
+	// Salt is sent in Hello and Registered to registered computers.
+	Salt   string
+	Logger *slog.Logger
 }
 
 // Server is a running fake server.
@@ -107,6 +109,14 @@ func (r *Server) Addr() string { return r.ln.Addr().String() }
 // HostKey is the server's host key.
 func (r *Server) HostKey() ssh.PublicKey { return r.hostKey.PublicKey() }
 
+// SetSalt sets the verification salt (hex) sent to registered computers from
+// the next Hello or Registered on.
+func (r *Server) SetSalt(hex string) {
+	r.mu.Lock()
+	r.opts.Salt = hex
+	r.mu.Unlock()
+}
+
 // Received delivers control messages sent by computers (except ComputerHello).
 func (r *Server) Received() <-chan Received { return r.recv }
 
@@ -140,7 +150,10 @@ func (r *Server) Register(fp string) {
 	c := r.conns[fp]
 	r.mu.Unlock()
 	if c != nil && !was {
-		c.ctl.Send(control.Registered{})
+		r.mu.Lock()
+		salt := r.opts.Salt
+		r.mu.Unlock()
+		c.ctl.Send(control.Registered{Salt: salt})
 		r.autoConnect(fp)
 	}
 }
@@ -302,6 +315,9 @@ func (r *Server) control(c *conn) {
 	hello := control.Hello{Role: control.RolePending, ServerVersion: "fake", ServerTime: time.Now()}
 	if registered {
 		hello.Role = control.RoleComputer
+		r.mu.Lock()
+		hello.Salt = r.opts.Salt
+		r.mu.Unlock()
 	}
 	if err := c.ctl.Send(hello); err != nil {
 		return

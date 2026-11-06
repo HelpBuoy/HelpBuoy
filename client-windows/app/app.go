@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
 	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 	"github.com/helpbuoy/helpbuoy/proto/update"
+	"github.com/helpbuoy/helpbuoy/proto/verify"
 )
 
 // Screen is one of the window's layouts.
@@ -32,11 +34,18 @@ const (
 	ScreenKey                    // connected, key not registered: send this key to a techie
 	ScreenMain                   // registered: waiting for a techie to connect, Disconnect
 	ScreenKeyError               // the app key exists but can't be used
+	// ScreenWarning is the warning before the key screen of a server this PC
+	// never warned about (PLAN.md 12.6); Continue goes on to ScreenKey.
+	ScreenWarning
 )
 
 func (s Screen) String() string {
-	return [...]string{"address", "key", "main", "key-error"}[s]
+	return [...]string{"address", "key", "main", "key-error", "warning"}[s]
 }
+
+// warnDelay is how long the first connection warning shows before Continue
+// works. Tests shorten it.
+var warnDelay = 5 * time.Second
 
 // View is everything the window shows.
 type View struct {
@@ -69,6 +78,10 @@ type View struct {
 	// ScreenKeyError
 	KeyDir string
 
+	// ScreenWarning: WarnWait is the number of seconds before Continue
+	// works; 0 means it works now.
+	WarnWait int
+
 	// Title and Instruction are the server's title and instruction line
 	// (e.g. "Example Inc", "Call +1 234 567 890 for support"), or the
 	// generic defaults when the server has none or is not known.
@@ -82,9 +95,12 @@ type UI interface {
 	// and must not wait for the controller.
 	Render(v View)
 	// ConfirmTechie asks whether techie h may take control. oldFingerprint
-	// is set when that techie showed a different key last time. It may
-	// block; when ctx ends the question is moot and it should return false.
-	ConfirmTechie(ctx context.Context, h session.Techie, oldFingerprint string) bool
+	// is set when that techie showed a different key last time. b is what to
+	// show about the server: its Done is closed once the verified server
+	// check finished, after which Badge gives the final text (PLAN.md 12.6).
+	// It may block; when ctx ends the question is moot and it should return
+	// false.
+	ConfirmTechie(ctx context.Context, h session.Techie, oldFingerprint string, b *Badges) bool
 }
 
 // Deps are the controller's collaborators.
@@ -105,6 +121,9 @@ type Deps struct {
 	// none; nil never finds one. It only runs when the user clicks the
 	// update link on the waiting screen (LatestRelease).
 	CheckUpdate func(ctx context.Context) (*update.Release, error)
+	// Verify checks whether the server is verified; nil treats every server
+	// as not verified.
+	Verify session.Verifier
 	// Tune adjusts the session options, for tests.
 	Tune   func(*session.Options)
 	Logger *slog.Logger
@@ -130,6 +149,7 @@ type Controller struct {
 	info     *[2]string // title and instruction the running computer's server sent
 	lastErr  error      // why the last computer stopped, shown on the address screen
 	inputErr string
+	warnFrom time.Time // when the first connection warning was first shown; zero if not shown
 	closed   bool
 	closing  <-chan struct{}
 
@@ -239,6 +259,16 @@ func (c *Controller) screenLocked() View {
 				v.ServerKeyChange = hk
 			}
 		}
+	case p == session.PhasePending && !c.warnedLocked(c.st.ServerFingerprint):
+		v.Screen = ScreenWarning
+		v.Address = c.addr
+		if c.warnFrom.IsZero() {
+			c.warnFrom = time.Now()
+			go c.countDown(c.warnFrom)
+		}
+		if left := warnDelay - time.Since(c.warnFrom); left > 0 {
+			v.WarnWait = int((left + time.Second - 1) / time.Second)
+		}
 	case p == session.PhasePending:
 		v.Screen = ScreenKey
 	case p == session.PhaseReady:
@@ -312,6 +342,7 @@ func (c *Controller) startComputerLocked(addr string) {
 	c.addr = addr
 	c.reached, c.known, c.lastErr = false, false, nil
 	c.info = nil
+	c.warnFrom = time.Time{}
 	c.st = session.State{Phase: session.PhaseConnecting}
 	var hostKey string
 	var techies map[string]string
@@ -338,6 +369,7 @@ func (c *Controller) newComputerLocked(addr, hostKey string, techies map[string]
 		Handler:       handler{c, gen},
 		Runner:        runner,
 		EscHook:       c.d.EscHook,
+		Verify:        c.d.Verify,
 		Logger:        c.log,
 	}
 	if c.d.Tune != nil {
@@ -414,6 +446,39 @@ func (c *Controller) TrustServerKey(newFingerprint string) {
 	c.log.Warn("server host key change accepted by the user", "old", hk.OldFingerprint, "new", hk.NewFingerprint)
 	c.cfg.ServerHostKey = hk.NewKeyLine
 	c.startComputerLocked(c.addr)
+	c.mu.Unlock()
+	c.save()
+	c.update()
+}
+
+// warnedLocked reports whether the first connection warning was accepted for
+// the server key with fingerprint fp.
+func (c *Controller) warnedLocked(fp string) bool {
+	return fp == "" || slices.Contains(c.cfg.WarnedServers, fp)
+}
+
+// countDown renders once a second while the first connection warning that
+// started at from counts down.
+func (c *Controller) countDown(from time.Time) {
+	step := min(time.Second, warnDelay)
+	for d := step; d <= warnDelay; d += step {
+		time.Sleep(time.Until(from.Add(d)))
+		c.update()
+	}
+}
+
+// ContinueWarning is Continue on the first connection warning: it works
+// once the warning showed for five seconds, and the warning is not shown
+// again for this server key.
+func (c *Controller) ContinueWarning() {
+	c.mu.Lock()
+	fp := c.st.ServerFingerprint
+	if c.computer == nil || c.st.Phase != session.PhasePending || c.warnedLocked(fp) ||
+		c.warnFrom.IsZero() || time.Since(c.warnFrom) < warnDelay {
+		c.mu.Unlock()
+		return
+	}
+	c.cfg.WarnedServers = append(c.cfg.WarnedServers, fp)
 	c.mu.Unlock()
 	c.save()
 	c.update()
@@ -568,13 +633,20 @@ func (h handler) ServerInfo(title, instruction string) {
 		c.mu.Unlock()
 		return
 	}
-	c.info = &[2]string{title, instruction}
+	// Text from the server can say anything, so it can't imitate the
+	// verified badge (PLAN.md 12.6).
+	c.info = &[2]string{verify.Clean(title), verify.Clean(instruction)}
 	c.mu.Unlock()
 	c.update()
 }
 
-func (h handler) ConfirmTechie(ctx context.Context, techie session.Techie, oldFP string) bool {
-	return h.c.d.UI.ConfirmTechie(ctx, techie, oldFP)
+func (h handler) ConfirmTechie(ctx context.Context, techie session.Techie, oldFP string, v *session.Verification) bool {
+	c := h.c
+	c.mu.Lock()
+	addr := c.addr
+	c.mu.Unlock()
+	techie.Name = verify.Clean(techie.Name)
+	return c.d.UI.ConfirmTechie(ctx, techie, oldFP, &Badges{v: v, addr: addr})
 }
 
 // save writes the current configuration. Saves are serialized and each

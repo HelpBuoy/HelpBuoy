@@ -125,6 +125,10 @@ type Hello struct {
 	// Name is the techie's name, techies only. Computers are not told the name
 	// techies gave them; that name is only for techies.
 	Name string `json:"name,omitempty"`
+	// Salt is the server's verification salt in hex, for the verified server
+	// check (PLAN.md 12.4). Only registered computers and techies get it,
+	// never pending keys.
+	Salt string `json:"salt,omitempty"`
 }
 
 // ServerInfo is the server's title and instruction line, e.g. "Example Inc" and
@@ -278,7 +282,10 @@ type Reply struct {
 // Registered tells a pending connection that it is now a registered computer.
 // It carries no name: the name a computer is registered under is only for
 // techies.
-type Registered struct{}
+type Registered struct {
+	// Salt is the server's verification salt in hex, like Hello.Salt.
+	Salt string `json:"salt,omitempty"`
+}
 
 // CancelRequest refuses a techie's Connect (or ends it before the session
 // channel is opened). The techie who sent the Connect may send it too, to

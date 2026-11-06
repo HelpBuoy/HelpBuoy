@@ -254,7 +254,7 @@ A key can't be both techie and computer.
 
 State directory in the user's data directory, next to the desk app's own data:
 `~/.local/share/helpbuoy-server` on Linux, `~/Library/Application Support/helpbuoy-server` on macOS,
-`%LOCALAPPDATA%\helpbuoy-server` on Windows (override with `--state`). It holds `hostkey_ed25519` (0600), planned `verification_salt` (0600, 12.4) and `state.json` with techies
+`%LOCALAPPDATA%\helpbuoy-server` on Windows (override with `--state`). It holds `hostkey_ed25519` (0600), `verification_salt` (0600, 12.4) and `state.json` with techies
 (name, public key) and registered computers (key, `user@machine` name,
 registered by, registered at, last seen). Computer registrations never expire; they are removed
 only by `UnregisterComputer` or `helpbuoy-server computer remove`. They are added by
@@ -272,8 +272,8 @@ only by `UnregisterComputer` or `helpbuoy-server computer remove`. They are adde
 | `helpbuoy-server computer remove SHA256:...` | remove a registered computer; an online computer is disconnected |
 | `helpbuoy-server title ['Example Inc']` / `instruction ['Call +1 234 567 890 for support']` | print or set the title and instruction line the apps show (`''` clears); the same values techies edit on the desk app's Server tab |
 | `helpbuoy-server hostkey` | print the host key fingerprint, for techies to compare with what computers show |
-| `helpbuoy-server hostkey --new` | planned (12.3): replace the host key, keeping all techies and computers; like `verification --activate` it takes effect at the next server start, since the running server only watches `state.json`; every computer then shows the changed server identity warning (3.5) |
-| `helpbuoy-server verification [--new \| --activate]` | planned (12.7): print the host key line and the id to enter in the HelpBuoy portal; `--new` prepares the next salt and prints its id, `--activate` makes it the current one at the next server start |
+| `helpbuoy-server hostkey --new` | (12.3) replace the host key, keeping all techies and computers; like `verification --new` it takes effect at the next server start, since the running server only watches `state.json`; every computer then shows the changed server identity warning (3.5) |
+| `helpbuoy-server verification [--new]` | (12.7) print the host key line and the id to enter in the HelpBuoy portal; `--new` makes a new salt, used from the next server start on, and prints its id |
 
 **Techies are plain keys**: there are no certificates. A new techie sends
 their public key line to the server admin, who adds it with `helpbuoy-server techie add`. Removing it
@@ -289,7 +289,7 @@ Techie commands carry a sequence number and the server answers each with a `Repl
 
 | Message | Direction | Content |
 |---|---|---|
-| `Hello` | server → any | role, server time, limits; planned: the server's salt for the verified server check, only for registered computers and techies, never for pending keys (12.4) |
+| `Hello` | server → any | role, server time, limits; the server's salt for the verified server check (hex), only for registered computers and techies, never for pending keys (12.4) |
 | `ServerInfo` | server → any | title and instruction line (e.g. "Example Inc", "Call +1 234 567 890 for support"), right after `Hello` and again whenever they change |
 | `ComputerHello` | computer → server | app version, current `user@machine` (the registered name comes from the key comment) |
 | `Presence` | server → techies | full snapshot after every change: registered computers (`user@machine`, fingerprint, online, open or taken request with id and time, in session with whom) and techies |
@@ -298,7 +298,7 @@ Techie commands carry a sequence number and the server answers each with a `Repl
 | `UnregisterTechie` | techie → server | name: removes another techie, like `helpbuoy-server techie remove`; an online techie is disconnected, and a techie cannot remove itself |
 | `SetServerInfo` | techie → server | new title (up to 64 characters) and instruction line (up to 160), one line each, empty to clear; stored in `state.json` |
 | `Reply` | server → techie | answer to a techie command: sequence number and error text if it failed |
-| `Registered` | server → computer | the key is now registered (no name: that is only for techies); planned: the salt, like `Hello` (12.4) |
+| `Registered` | server → computer | the key is now registered (no name: that is only for techies); the salt, like `Hello` (12.4) |
 | `RequestHelp` | computer → server | (no content) |
 | `CancelRequest` | computer → server | request id |
 | `RequestStateMsg` | server → computer | request id and state (open / taken / cancelled / expired / ended) |
@@ -833,10 +833,12 @@ side by side with an RDP session on the same machine and network.
 Multi-monitor, performance mode, restart as administrator, code signing,
 server metrics endpoint (localhost only).
 
-**Phase 6 - verified servers (12)**
-The updater's signature check (6.5) first. Then the salt in `Hello` and `Registered`,
-`helpbuoy-server verification` and `hostkey --new`, the check and dialog in both clients,
-the Server tab check in the desk app, the cleanup of server text, and the files, cache
+**Phase 6 - verified servers (12)** (apps and server done; the updater's signature
+check, the site and the portal are still to do)
+The updater's signature check (6.5), which needs a code signing certificate first. Then
+the salt in `Hello` and `Registered`, `helpbuoy-server verification` and `hostkey --new`,
+the check and dialog in both clients, the Server tab check in the desk app, the cleanup of
+server text (all in `proto/verify`, `server/salt` and the apps), and the files, cache
 headers and privacy text on the site.
 
 **Later**: tray icon and optional "Start with Windows" (HKCU Run entry, no admin), so the
@@ -933,14 +935,16 @@ approach is deliberately minimal, with no dependency:
 Dutch, German, French, Spanish and Italian are done (about 210 strings each). Rejected:
 go-i18n, `x/text` with `gotext`, and gettext `.po`, all more machinery than this needs.
 
-## 12. Verified servers (planned)
+## 12. Verified servers
 
-Not built yet. When a techie asks to connect, the client checks with helpbuoy.com whether
-the server it is connected to belongs to a company HelpBuoy checked, and the approval
-dialog says so: "Verified: Example Inc, Netherlands". Both clients (Windows and Linux)
-make the check and show the same dialog. There is no public list: who our customers are
-must never be readable or enumerable from what we publish. Scam reports go to the email
-address on the site, with the server address the scammer used.
+The server and the apps are built (`proto/verify`, `server/salt`); the site, the portal
+and the updater's signature check (6.5) are not yet. When a techie asks to connect, the
+client checks with helpbuoy.com whether the server it is connected to belongs to a company
+HelpBuoy checked, and the approval dialog says so: "Verified: Example Inc, Netherlands".
+Both clients (Windows and Linux) make the check and show the same dialog. There is no
+public list: who our customers are must never be readable or enumerable from what we
+publish. Scam reports go to the email address on the site, with the server address the
+scammer used.
 
 ### 12.1 The problem
 
@@ -1097,19 +1101,20 @@ field, so they keep working against a newer server. Since v0.4.22 the apps also 
 message types they don't know (3.3), so a later change can still add a message.
 
 The salt is exactly 32 bytes from `crypto/rand`. It is kept in its own file,
-`verification_salt` in the state directory, created with `O_EXCL` and 0600 and never
+`verification_salt` in the state directory, created once with mode 0600 and never
 rewritten, exactly like `hostkey_ed25519`. Not in `state.json`: an older desk app or
 `helpbuoy-server` sharing the state directory (7.1) drops fields it doesn't know when it
 saves `state.json`, which would silently replace the salt and break the badge. The salt is
-never printed or logged: `helpbuoy-server verification` prints only
-the host key line and the id (12.7). Clients keep it only in memory for the connection, and
-treat a salt of any other length as no salt, so a broken server can never end up with an
-id a scanner could compute.
+never printed or logged: `helpbuoy-server verification` prints only the host key line and
+the id (12.7). Clients keep it only in memory for the connection, and treat a salt of any
+other length as no salt, so a broken server can never end up with an id a scanner could
+compute.
 
-During a rotation (12.7) the next salt is in `verification_salt.next`, made the same way.
-It is not sent to anyone until it becomes the current one, at the next server start,
-which renames it over `verification_salt`: that start drops every
-connection, and each app gets the new salt in its next `Hello`.
+During a rotation (12.7) the next salt is in `verification_salt.next`, made the same way,
+and the next server start renames it over `verification_salt`. It is not sent to anyone
+until then: that start drops every connection, and each app gets the new salt in its next
+`Hello`. A new host key from
+`hostkey --new` waits the same way, in `hostkey_ed25519.new`.
 
 ### 12.5 When the client checks
 
@@ -1220,14 +1225,15 @@ include it is still to decide. A company asks in our portal and we check it once
 7. We write the file under that id and release the site; publishing stays a manual step,
    so nothing writes to the site by itself.
 
-Rotating the salt takes two steps, so the badge never disappears in between.
-`helpbuoy-server verification --new` makes the next salt (12.4) and prints the next id,
-without changing anything for the clients. The company enters it in our portal and we add
-the new file next to the old one. Once the portal says the new file is live,
-`helpbuoy-server verification --activate` marks the next salt to become the current one
-at the next server start, and the company restarts the server when it suits them. We
-delete the old file when the company tells us in the portal it restarted, or 30 days
-after the new file went live, whichever comes first.
+To rotate the salt, `helpbuoy-server verification --new` makes the next salt (12.4) and
+prints its id; the server uses it from its next start on. The company enters the id in
+our portal and we add the new file next to the old one. The company should restart the
+server only once the portal says the new file is live. A restart before that, planned or
+not (a reboot, or a Debian package upgrade restarting the service), makes computers see
+the server as not verified until the file is live: the full warning shows, never a wrong
+badge, so that is acceptable for something as rare as a rotation. We delete the old file
+when the company tells us in the portal it restarted, or 30 days after the new file went
+live, whichever comes first.
 A new host key goes the same way, as a new file next to the old one. A new or removed
 host name only changes the file, after we checked the new name as in step 6.
 

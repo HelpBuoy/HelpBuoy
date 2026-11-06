@@ -22,6 +22,7 @@ service user on the service's state:
   sudo helpbuoy-serverctl computer remove SHA256:...
   sudo helpbuoy-serverctl title 'Example Inc'
   sudo helpbuoy-serverctl instruction 'Call +1 234 567 890 for support'
+  sudo helpbuoy-serverctl verification         # host key and id for the HelpBuoy portal
 
 The running server picks up changes within a second. Logs are in the
 journal (journalctl -u helpbuoy-server) and in /var/lib/helpbuoy-server/server.log.

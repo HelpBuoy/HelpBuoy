@@ -15,13 +15,49 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// FileName is the host key file inside the state directory.
-const FileName = "hostkey_ed25519"
+// FileName is the host key file inside the state directory. NewName holds a
+// new host key made by "hostkey --new"; it replaces the current one at the
+// next server start (PLAN.md 3.2, 12.3), keeping all techies and computers.
+const (
+	FileName = "hostkey_ed25519"
+	NewName  = FileName + ".new"
+)
 
 // LoadOrCreate loads the host key from dir, generating it on first use. An
 // existing file that can't be parsed is an error; it is never replaced.
 func LoadOrCreate(dir string) (ssh.Signer, error) {
-	p := filepath.Join(dir, FileName)
+	return loadOrCreate(dir, filepath.Join(dir, FileName))
+}
+
+// New makes the new host key that replaces the current one at the next
+// server start, or returns the one made before.
+func New(dir string) (ssh.Signer, error) {
+	return loadOrCreate(dir, filepath.Join(dir, NewName))
+}
+
+// Pending returns the new host key waiting for the next start, if any.
+func Pending(dir string) (ssh.Signer, bool, error) {
+	p := filepath.Join(dir, NewName)
+	if _, err := os.Stat(p); errors.Is(err, os.ErrNotExist) {
+		return nil, false, nil
+	}
+	s, err := loadOrCreate(dir, p)
+	return s, err == nil, err
+}
+
+// Apply makes a new host key the current one. Only the server calls it, when
+// it starts; a new key that can't be parsed is left alone and is an error.
+func Apply(dir string) (bool, error) {
+	if _, ok, err := Pending(dir); !ok || err != nil {
+		return false, err
+	}
+	if err := os.Rename(filepath.Join(dir, NewName), filepath.Join(dir, FileName)); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func loadOrCreate(dir, p string) (ssh.Signer, error) {
 	b, err := os.ReadFile(p)
 	if errors.Is(err, os.ErrNotExist) {
 		if err := create(dir, p); err != nil {
