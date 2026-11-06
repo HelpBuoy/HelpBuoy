@@ -1282,10 +1282,8 @@ These keep HelpBuoy a poor tool for scammers, verified or not:
   someone you know personally asked you to.
 - The support plans (`data/plans.yaml`) must offer verified servers, once it is decided
   which plan includes it.
-- The privacy text in `content/imprint.md` must say that the clients ask helpbuoy.com,
-  on every connection request, whether the server is verified, and what that request
-  reveals: the IP address, the app version and the id of the server. The web host's
-  access logs then contain those ids, so they should be kept short or without the path.
+- The web host's access logs contain the server ids of every verification request, so
+  they should be kept short or without the path.
 - The web host and any CDN must serve `/verified/`, 404s included, with
   `Cache-Control: no-store`, so a deleted file is gone at once. A release purges any
   cache for `/verified/`, and after removing a server we check that its URL answers 404.
@@ -1295,6 +1293,3 @@ These keep HelpBuoy a poor tool for scammers, verified or not:
   clients already limit themselves (12.5).
 - CAA records for helpbuoy.com that allow only the CA that issues its certificate, and
   DNSSEC for the domain (12.3).
-- The same text must say what we keep about a verified company: the company name, country
-  and date in its file, and the contact person in our own records, until the
-  verification is removed.
