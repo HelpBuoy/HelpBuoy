@@ -17,7 +17,10 @@ other, and splices their channels together.
   once, and each techie can run sessions with many computers at once.
 - **client-windows/** and **client-linux/**: the app the person *receiving* help runs,
   for Windows (windigo) and for Linux (X11). The Windows client is described here and in
-  section 6; the Linux client works the same way. On first start it asks
+  section 6; the Linux client works the same way, with two differences: it needs an X11
+  session (on Wayland it only explains how to log in with X11), and a local Esc ends the
+  session but also reaches the focused application, since X can't take one key away from
+  other applications without also taking the injected presses. On first start it asks
   for the server's `hostname:port` and shows its own application-specific SSH public key
   (generated once on first start, kept in AppData) with a **Copy** button, so the user can
   send it to the techie over a chat such as WhatsApp. After the first successful connection
@@ -249,7 +252,7 @@ A key can't be both techie and computer.
 
 State directory in the user's data directory, next to the desk app's own data:
 `~/.local/share/helpbuoy-server` on Linux, `~/Library/Application Support/helpbuoy-server` on macOS,
-`%LOCALAPPDATA%\helpbuoy-server` on Windows (override with `--state`). It holds `hostkey_ed25519` (0600) and `state.json` with techies
+`%LOCALAPPDATA%\helpbuoy-server` on Windows (override with `--state`). It holds `hostkey_ed25519` (0600), planned `verification_salt` (0600, 12.4) and `state.json` with techies
 (name, public key) and registered computers (key, `user@machine` name,
 registered by, registered at, last seen). Computer registrations never expire; they are removed
 only by `UnregisterComputer` or `helpbuoy-server computer remove`. They are added by
@@ -267,6 +270,7 @@ only by `UnregisterComputer` or `helpbuoy-server computer remove`. They are adde
 | `helpbuoy-server computer remove SHA256:...` | remove a registered computer; an online computer is disconnected |
 | `helpbuoy-server title ['Example Inc']` / `instruction ['Call +1 234 567 890 for support']` | print or set the title and instruction line the apps show (`''` clears); the same values techies edit on the desk app's Server tab |
 | `helpbuoy-server hostkey` | print the host key fingerprint, for techies to compare with what computers show |
+| `helpbuoy-server hostkey --new` | planned (12.3): replace the host key, keeping all techies and computers; every computer then shows the changed server identity warning (3.5) |
 | `helpbuoy-server verification [--new \| --activate]` | planned (12.7): print the host key line and the id to enter in the HelpBuoy portal; `--new` prepares the next salt and prints its id, `--activate` makes it the current one at the next server start |
 
 **Techies are plain keys**: there are no certificates. A new techie sends
@@ -829,9 +833,9 @@ server metrics endpoint (localhost only).
 
 **Phase 6 - verified servers (12)**
 The updater's signature check (6.5) first. Then the salt in `Hello` and `Registered`,
-`helpbuoy-server verification`, the check and dialog in both clients, the Server tab check
-in the desk app, the cleanup of server text, and the files, cache headers and privacy text
-on the site.
+`helpbuoy-server verification` and `hostkey --new`, the check and dialog in both clients,
+the Server tab check in the desk app, the cleanup of server text, and the files, cache
+headers and privacy text on the site.
 
 **Later**: tray icon and optional "Start with Windows" (HKCU Run entry, no admin), so the
 computer can stay online in the background; `client-macos/` reusing `proto`, the encoder
@@ -863,14 +867,17 @@ and the `Capturer` / `Injector` interfaces, like `client-linux/` does.
   announces a different key for a techie the computer already knows (the computer must warn
   and not connect without the user's consent).
 - Verified servers (12): old apps keep working against a server that sends the salt; a
-  pending key never gets the salt; the id matches fixed test values; a salt of the wrong
-  length or a non-Ed25519 host key means not verified; host names match without port,
-  case or trailing dot, and an IP address never matches; a file with another `hostkey` or
-  without the host name is not verified; a malicious server that sends a verified
-  server's salt is not verified; a 500, a timeout, a redirect or a file over 4 KB is
-  "could not be checked"; a late answer never reaches a later request; server text with
-  check marks, "verified", control characters or bidi overrides is cleaned everywhere it
-  is shown; the update check refuses an MSI without our signature.
+  pending key never gets the salt; an older binary saving `state.json` leaves the salt
+  unchanged; `hostkey --new` keeps every techie and computer; the id matches fixed test
+  values; a salt of the wrong length or a non-Ed25519 host key means not verified; host
+  names match without port, case or trailing dot, and an IP address never matches; a file
+  with another `hostkey` or without the host name is not verified; a malicious server that
+  sends a verified server's salt is not verified; a 500, a timeout, a redirect or a file
+  over 4 KB is "could not be checked"; a file whose `verified` date is more than 13 months
+  ago is not verified; a flood of requests starts at most one check every 5 seconds; a
+  late answer never reaches a later request; server text with check marks, "verified",
+  control characters or bidi overrides is cleaned everywhere it is shown; the update check
+  refuses an MSI without our signature.
 - Performance: the replay harness from phase 3 in CI (client encoder against techie decoder,
   no GUI), with regression thresholds; `tc netem` runs at 20 ms / 80 ms RTT and 10 / 50 Mbit/s.
 - Session end tests (`faketechie`): End session on the techie closes the session and
@@ -967,9 +974,9 @@ address and ask them to click Allow.
 
 A scanner can get any server's host key, so the host key alone can't name the file. The
 server therefore adds a value that a scanner never gets: a random 256-bit salt, made once
-when `state.json` has none (on the first start, or the first start after an upgrade) and
-kept there next to the host key (3.2). The server sends it only to registered computers
-and techies, never to pending or unknown keys (12.4).
+when there is none (on the first start, or the first start after an upgrade) and kept in
+its own file next to the host key (3.2, 12.4). The server sends it only to registered
+computers and techies, never to pending or unknown keys (12.4).
 
 ```
 https://helpbuoy.com/verified/<id>.json
@@ -1008,8 +1015,8 @@ id = hex(SHA-256("helpbuoy verified server v1\n" + host key in wire format + sal
   running as that user, or a techie laptop running the desk app's local server, which
   uses the same directory (7.1)) can run the same server anywhere. That is why the file
   also lists the server's `addresses`, the host names we checked on the company's domain
-  (12.7). The client only shows the badge if the host name of the address it stored for
-  this server is one of them, and shows that address in the badge. A clone then also
+  (12.7). The client only shows the badge if the host name of the address of this
+  connection is one of them (12.5), and shows that address in the badge. A clone then also
   needs to take over the company's DNS. A host name is compared without port, in lower
   case and without a trailing dot; an IP address never matches.
 - **A leaked salt** only tells someone that one server is verified, nothing more. It can
@@ -1041,12 +1048,22 @@ computers already refuse a changed host key (3.5), so that is a new setup anyway
 or changed host name needs a changed file. Computers that reach the server by a name we
 can't check from the internet (an internal name like `helpdesk.corp.local`) or by an IP
 address never get the badge, so a verified company should have all its computers use the
-public host name.
+public host name. On a network that inspects TLS, common in companies, the check always
+ends in "could not be checked", because the clients only trust the fixed root
+certificates (see Trust above); that is the right answer there, but such a company's own
+users never see the badge.
 
 The state directory of a verified server must be guarded like a private key. When a
-company thinks a copy has leaked, it tells us and we delete the file (12.8). Getting the
-badge back takes a new host key, which every registered computer sees as a changed
-server identity (3.5), so the company has to tell its users to expect that warning.
+company thinks a copy has leaked, it tells us, and together we decide what it takes. A
+copy alone is not enough to look verified, because a clone also needs the company's DNS
+(above), so often a new salt (12.7) and closing the leak are enough and the badge stays.
+Only when the DNS may be at risk too, or the leak can't be closed, do we delete the file
+(12.8) and does the company make a new host key with `helpbuoy-server hostkey --new`,
+which keeps all techies and computers. Every registered computer then shows the changed
+server identity warning (3.5). That is a risk of its own: "your helpdesk changed its key,
+click Trust" is exactly what a scammer would say, so a new host key is the last resort,
+and the company tells its users by its own channels, not through the server's title or
+instruction line.
 
 Risks we accept:
 
@@ -1073,14 +1090,19 @@ or techie, and in `Registered` (3.3). A pending key never gets it. Older apps ig
 field, so they keep working against a newer server. Since v0.4.22 the apps also skip
 message types they don't know (3.3), so a later change can still add a message.
 
-The salt is exactly 32 bytes from `crypto/rand`. It is kept in `state.json` (0600, like
-the host key) and is never printed or logged: `helpbuoy-server verification` prints only
+The salt is exactly 32 bytes from `crypto/rand`. It is kept in its own file,
+`verification_salt` in the state directory, created with `O_EXCL` and 0600 and never
+rewritten, exactly like `hostkey_ed25519`. Not in `state.json`: an older desk app or
+`helpbuoy-server` sharing the state directory (7.1) drops fields it doesn't know when it
+saves `state.json`, which would silently replace the salt and break the badge. The salt is
+never printed or logged: `helpbuoy-server verification` prints only
 the host key line and the id (12.7). Clients keep it only in memory for the connection, and
 treat a salt of any other length as no salt, so a broken server can never end up with an
 id a scanner could compute.
 
-During a rotation (12.7) `state.json` also holds the next salt. It is not sent to anyone
-until it becomes the current one, at the next server start: that start drops every
+During a rotation (12.7) the next salt is in `verification_salt.next`, made the same way.
+It is not sent to anyone until it becomes the current one, at the next server start,
+which renames it over `verification_salt`: that start drops every
 connection, and each app gets the new salt in its next `Hello`.
 
 ### 12.5 When the client checks
@@ -1099,11 +1121,18 @@ On every `SessionReady`, without a cache:
   expired, and can never show up in a later dialog.
 - Only `https://helpbuoy.com/verified/<id>.json`: no redirects, no plain HTTP, no other
   host and no address from configuration. At most 4 KB and 10 seconds.
+- At most one check in flight, and at most one started every 5 seconds; the check for a
+  request that comes sooner starts when the 5 seconds are up, so the dialog shows
+  "Checking who runs this server..." until then. So a hostile server can't use its
+  computers to flood helpbuoy.com.
 - A 404 means not verified. A file whose `hostkey` is not the pinned host key, or whose
   `addresses` don't hold the host name of the address of this connection, also means not
   verified. At first contact that is the address the user just typed, even before it
-  replaces the stored server (section 0). Any other status, a timeout or a file that does
-  not parse means "could not be checked". Neither is ever shown as verified.
+  replaces the stored server (section 0). A file whose `verified` date is more than 13
+  months ago also means not verified, so a company that drops out of the yearly check
+  (12.7) loses the badge even if we forget to delete its file. Any other status, a timeout
+  or a file that does not parse means "could not be checked". Neither is ever shown as
+  verified.
 - The request sends `Cache-Control: no-cache`, so a proxy on the way can't answer it
   from its cache.
 - The request carries nothing but the id, with `helpbuoy/<version>` as User-Agent.
@@ -1129,16 +1158,15 @@ When a techie asks to connect:
   below ("Server: helpme.example.com"), above the usual question with the techie's name
   and key fingerprint, and below it a small line: "HelpBuoy checked this company. It
   vouches for its support staff." The country comes from the file, the address is the
-  one the client stored and matched (12.5), and the techie's name is the one the
-  company's server gives.
+  one of this connection, matched against the file (12.5), and the techie's name is the
+  one the company's server gives.
 - **Not verified:** "HelpBuoy has not verified who runs this server. Only allow this if
   you know the person asking personally. Banks, Microsoft and the police never ask for
   this."
 - **Could not be checked:** "HelpBuoy could not check who runs this server. Only allow this
   if you know the person asking personally. Banks, Microsoft and the police never ask for
-  this." The
-  same warning as not verified, never a softer one, so "it says could not be checked,
-  that's normal" doesn't help a scammer.
+  this." The same warning as not verified, never a softer one, so "it says could not be
+  checked, that's normal" doesn't help a scammer.
 
 Right after the first successful connection to a new server, before the key screen
 (6.2), the client shows a full warning:
@@ -1197,7 +1225,8 @@ after the new file went live, whichever comes first.
 A new host key goes the same way, as a new file next to the old one. A new or removed
 host name only changes the file, after we checked the new name as in step 6.
 
-We check the company again every year.
+We check the company again every year and then set `verified` in its files to that date;
+the clients stop trusting a file 13 months after its `verified` date (12.5).
 
 The portal holds every verified company with its ids, host names and contact persons,
 so it is the most sensitive part: whoever gets into it can list our customers. It never
@@ -1249,6 +1278,10 @@ These keep HelpBuoy a poor tool for scammers, verified or not:
 - The web host and any CDN must serve `/verified/`, 404s included, with
   `Cache-Control: no-store`, so a deleted file is gone at once. A release purges any
   cache for `/verified/`, and after removing a server we check that its URL answers 404.
+- No analytics or "top pages" dashboard may cover `/verified/`, from the web host or
+  anyone else: such a list of paths is a list of our customers' ids.
+- No rate limit on `/verified/` that a large office behind one IP address could hit; the
+  clients already limit themselves (12.5).
 - CAA records for helpbuoy.com that allow only the two CAs whose roots the clients carry
   (12.3), and DNSSEC for the domain.
 - The same text must say what we keep about a verified company: the company name, country
