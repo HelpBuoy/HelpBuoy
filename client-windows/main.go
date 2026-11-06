@@ -13,6 +13,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"io"
 	"log/slog"
@@ -31,6 +32,7 @@ import (
 	"github.com/helpbuoy/helpbuoy/client-windows/ui"
 	"github.com/helpbuoy/helpbuoy/proto/appkey"
 	pid "github.com/helpbuoy/helpbuoy/proto/identity"
+	"github.com/helpbuoy/helpbuoy/proto/instance"
 	"github.com/helpbuoy/helpbuoy/proto/screen"
 	"github.com/helpbuoy/helpbuoy/proto/update"
 )
@@ -39,6 +41,9 @@ import (
 // builds use "v<major.minor.build>", which turns on the update check; "dev"
 // never checks.
 var version = "dev"
+
+// lockName is the lock file in the data directory (see proto/instance).
+const lockName = "helpbuoy.lock"
 
 // iconID is the RT_GROUP_ICON resource id from resources/winres.json.
 const iconID = 101
@@ -92,6 +97,22 @@ func main() {
 		removeKey = store.Reset
 	} else {
 		dir, dirErr := identity.Dir()
+		if dirErr == nil {
+			// One copy per user: two would share the key and keep pushing
+			// each other off the server. A second start shows the first.
+			lock, err := instance.Acquire(dir, lockName)
+			switch {
+			case errors.Is(err, instance.ErrRunning):
+				owner := instance.Owner(dir, lockName)
+				log.Info("already running", "pid", owner)
+				ui.ShowRunning(owner)
+				return
+			case err != nil:
+				log.Warn("no instance lock", "err", err) // go on without it
+			default:
+				defer lock.Unlock()
+			}
+		}
 		store = config.Store{Dir: dir}
 		loadKey = func() (*appkey.Key, error) {
 			if dirErr != nil {

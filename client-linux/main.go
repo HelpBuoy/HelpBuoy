@@ -39,8 +39,12 @@ import (
 	"github.com/helpbuoy/helpbuoy/proto/encode"
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
 	pid "github.com/helpbuoy/helpbuoy/proto/identity"
+	"github.com/helpbuoy/helpbuoy/proto/instance"
 	"github.com/helpbuoy/helpbuoy/proto/screen"
 )
+
+// lockName is the lock file in the data directory (see proto/instance).
+const lockName = "helpbuoy.lock"
 
 // version is set at build time with -ldflags "-X main.version=...".
 var version = "dev"
@@ -106,6 +110,24 @@ func main() {
 		removeKey = store.Reset
 	} else {
 		dir, dirErr := identity.Dir()
+		if dirErr == nil {
+			// One copy per user: two would share the key and keep pushing
+			// each other off the server. A second start shows the first.
+			lock, err := instance.Acquire(dir, lockName)
+			switch {
+			case errors.Is(err, instance.ErrRunning):
+				owner := instance.Owner(dir, lockName)
+				log.Info("already running", "pid", owner)
+				if err := ui.ShowRunning(owner); err != nil {
+					fmt.Fprintln(os.Stderr, i18n.Trans("HelpBuoy is already running. Look for its window or its button on the taskbar."))
+				}
+				return
+			case err != nil:
+				log.Warn("no instance lock", "err", err) // go on without it
+			default:
+				defer lock.Unlock()
+			}
+		}
 		store = config.Store{Dir: dir}
 		loadKey = func() (*appkey.Key, error) {
 			if dirErr != nil {

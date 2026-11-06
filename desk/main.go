@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -25,8 +26,10 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 	"golang.org/x/crypto/ssh"
 
+	"github.com/helpbuoy/helpbuoy/desk/identity"
 	"github.com/helpbuoy/helpbuoy/desk/perf"
 	"github.com/helpbuoy/helpbuoy/desk/views"
+	"github.com/helpbuoy/helpbuoy/proto/instance"
 	"github.com/helpbuoy/helpbuoy/proto/update"
 	"github.com/helpbuoy/helpbuoy/proto/verify"
 )
@@ -61,6 +64,34 @@ func main() {
 	}
 
 	rl.SetTraceLogLevel(rl.LogWarning)
+	// One desk app per data directory (so per user): two would share the
+	// key and keep pushing each other off the server. Demo mode, screenshots
+	// and the bench store nothing and never connect.
+	if !*demo && *screenshot == "" && !uploadBench {
+		dir := *dataDir
+		if dir == "" {
+			dir, _ = identity.Dir() // on error the app shows it later
+		}
+		if dir != "" {
+			lock, err := instance.Acquire(dir, "desk.lock")
+			switch {
+			case errors.Is(err, instance.ErrRunning):
+				rl.SetConfigFlags(rl.FlagWindowHighdpi | rl.FlagMsaa4xHint)
+				rl.InitWindow(views.RunningWidth, views.RunningHeight, "HelpBuoy Desk")
+				if img := rl.LoadImageFromMemory(".png", iconPNG, int32(len(iconPNG))); img != nil && img.Width > 0 {
+					rl.SetWindowIcon(*img)
+					rl.UnloadImage(img)
+				}
+				views.AlreadyRunning()
+				rl.CloseWindow()
+				return
+			case err != nil:
+				fmt.Fprintln(os.Stderr, "lock:", err) // go on without the lock
+			default:
+				defer lock.Unlock()
+			}
+		}
+	}
 	rl.SetConfigFlags(rl.FlagWindowResizable | rl.FlagWindowHighdpi | rl.FlagMsaa4xHint)
 	// Like most apps, the title shows the version: "HelpBuoy Desk v0.4.19".
 	title := "HelpBuoy Desk"
