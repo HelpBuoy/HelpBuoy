@@ -1,11 +1,12 @@
 # HelpBuoy
 
-Self-hosted remote support for Windows, a small alternative to TeamViewer QuickSupport.
+Self-hosted remote support for Windows, Linux and macOS, a small alternative to TeamViewer QuickSupport.
 
 - `server/`: `helpbuoy-server`, a single Go binary that speaks SSH on one port (default 5959). It authenticates keys and connects techies to computers. No shell, no file transfer, no forwarding.
 - `desk/`: the cross-platform app the support techie uses.
 - `client-windows/`: the Windows app the person receiving help runs. It shows its public key to send to the techie, and asks for approval before anyone takes control.
 - `client-linux/`: the same app for Linux. It is a single static binary that speaks the X11 protocol itself (with jezek/xgb), so it needs no libraries and runs on any X11 desktop. It can't share a Wayland desktop: there it says so and explains how to log in with an X11 session. A local Esc ends the session but still reaches the focused application.
+- `client-macos/`: the same app for macOS 12.3 and later, as one universal app for Intel and Apple silicon. It captures the screen with ScreenCaptureKit and injects input with CGEvent, and draws the same window as the Linux client. On first start it asks for the Screen Recording and Accessibility permissions and opens the right page of System Settings.
 
 A session only carries the screen (computer to techie) and mouse and keyboard input (techie to computer). See [PLAN.md](PLAN.md) for the design.
 
@@ -17,7 +18,19 @@ A session only carries the screen (computer to techie) and mouse and keyboard in
 
 - `./run.sh`: builds and starts a server, the desk app and the Windows client (in wine) on this machine for testing. All state lives in `.run/`; `./run.sh reset` clears it.
 - `./screenshot.sh [page]`: makes or updates `screenshot.png`, the desk app in demo mode at 800x500, for this README. Uses `xvfb-run` when installed, otherwise a window shows briefly.
-- `./release.sh [major|minor]`: bumps the version (build number by default), builds and tests everything, then tags, pushes and creates the GitHub release with the client and desk app MSIs and the client, desk app and server Debian packages.
+- `./release.sh [major|minor]`: bumps the version (build number by default), builds and tests everything, then tags, pushes and creates the GitHub release with the client and desk app MSIs, the client, desk app and server Debian packages and the zipped macOS client.
+
+## Building the macOS client
+
+Everything else builds with only Go, but the macOS client needs cgo for ScreenCaptureKit and AppKit. It is cross compiled on Linux with zig against the macOS 12.3 SDK, and the app bundle is signed ad hoc with rcodesign, since Apple silicon runs nothing unsigned:
+
+    mkdir -p ~/SDKs && cd ~/SDKs
+    curl -LO https://github.com/joseluisq/macosx-sdks/releases/download/12.3/MacOSX12.3.sdk.tar.xz
+    tar xf MacOSX12.3.sdk.tar.xz
+
+Install zig 0.16 (on the PATH, or in `~/SDKs/zig-0.16.0/`) and [rcodesign](https://github.com/indygreg/apple-platform-rs/releases) (on the PATH). Then `make zip-macos` writes `dist/helpbuoy_<version>_macos.zip`. `MACOSX_SDK`, `ZIG` and `RCODESIGN` override the locations; `RCODESIGN=` builds without signing.
+
+The app is not notarized yet (#5), so macOS blocks it the first time. The person who needs help unzips it, moves HelpBuoy to Applications and opens it once. When macOS says it can't check the app, they open System Settings, Privacy & Security, scroll down and click Open Anyway next to HelpBuoy. After every update macOS asks for the Screen Recording and Accessibility permissions again, because an ad hoc signature changes with every build.
 
 ## Alternatives
 

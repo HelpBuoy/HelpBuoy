@@ -47,7 +47,7 @@ func TestBase(t *testing.T) {
 }
 
 // apps are the directories, relative to this package, whose sources call Trans.
-var apps = []string{"../../client-windows", "../../client-linux", "../../desk"}
+var apps = []string{"../../client-windows", "../../client-linux", "../../client-macos", "../../desk"}
 
 var placeholder = regexp.MustCompile(`\{[0-9]+\}`)
 

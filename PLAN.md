@@ -20,7 +20,12 @@ other, and splices their channels together.
   section 6; the Linux client works the same way, with two differences: it needs an X11
   session (on Wayland it only explains how to log in with X11), and a local Esc ends the
   session but also reaches the focused application, since X can't take one key away from
-  other applications without also taking the injected presses. On first start it asks
+  other applications without also taking the injected presses. **client-macos/** shares the
+  Linux client's drawn window and works the same way too; before anything else it asks for
+  the Screen Recording and Accessibility permissions, and like Windows it swallows the local
+  Esc (a CGEventTap, which tells the injected Esc apart by a mark the injector puts on its
+  events). It captures each display at its size in points rather than Retina pixels, a
+  quarter of the pixels to encode and send. On first start it asks
   for the server's `hostname:port` and shows its own application-specific SSH public key
   (generated once on first start, kept in AppData) with a **Copy** button, so the user can
   send it to the techie over a chat such as WhatsApp. After the first successful connection
@@ -183,7 +188,7 @@ read or alter screen data or keystrokes.
 
 ```
 helpbuoy/
-├── go.work                      # use ./proto ./server ./desk ./client-windows ./client-linux
+├── go.work                      # use ./proto ./server ./desk ./client-windows ./client-linux ./client-macos
 ├── PLAN.md
 ├── proto/                       # shared, pure Go, no GUI deps
 │   ├── go.mod
@@ -224,10 +229,15 @@ helpbuoy/
 │   ├── injector/                # SendInput, key mapping, Esc hook
 │   ├── session/                 # server connection, inner SSH server, the one viewer
 │   └── ui/                      # main window, request form
-└── client-linux/                # static X11 client (jezek/xgb, no cgo)
-    ├── capture/                 # X11 capture with MIT-SHM
-    ├── injector/                # XTEST input, Esc watch
-    └── ui/                      # its own X11 window and widgets
+├── client-linux/                # static X11 client (jezek/xgb, no cgo)
+│   ├── capture/                 # X11 capture with MIT-SHM
+│   ├── injector/                # XTEST input, Esc watch
+│   └── ui/                      # its own drawn window and widgets, shown by a Host (X11 here)
+└── client-macos/                # macOS 12.3+ client (cgo, cross compiled with zig)
+    ├── capture/                 # ScreenCaptureKit at display points, NSCursor
+    ├── injector/                # CGEvent input, CGEventTap that swallows the local Esc
+    ├── macwin/                  # AppKit Host for client-linux/ui
+    └── perm/                    # Screen Recording and Accessibility checks
 ```
 
 ---
@@ -630,7 +640,9 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
 - `release.sh [major|minor|build]` bumps the version in both `winres.json` files, runs
   `make vet test dist`, commits, tags `v<version>`, pushes and creates the GitHub release
   with everything in `dist/`: only installers, never a bare binary. That is the client and desk
-  app MSIs and the Debian packages of the Linux client, the desk app and `helpbuoy-server`.
+  app MSIs, the Debian packages of the Linux client, the desk app and `helpbuoy-server`, and
+  the zipped macOS client (`helpbuoy_<version>_macos.zip`, a universal HelpBuoy.app signed ad
+  hoc with rcodesign, not notarized yet).
   The updaters pick their MSI by name prefix: `helpbuoy_` for the client, `helpbuoy-desk_`
   for the desk app on Windows, which updates the same way: its title shows the version and an
   "Check for updates" link sits in the top right corner (in the tab bar once connected). With sessions
@@ -841,8 +853,8 @@ server text (all in `proto/verify`, `server/salt` and the apps), and the files, 
 headers and privacy text on the site.
 
 **Later**: tray icon and optional "Start with Windows" (HKCU Run entry, no admin), so the
-computer can stay online in the background; `client-macos/` reusing `proto`, the encoder
-and the `Capturer` / `Injector` interfaces, like `client-linux/` does.
+computer can stay online in the background; an update check in the Linux and macOS
+clients.
 
 ---
 

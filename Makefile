@@ -3,6 +3,9 @@
 # Everything builds on Linux with only the Go toolchain and CGO_ENABLED=0:
 # helpbuoy-server, the Windows and Linux clients, and the raylib desk app (raylib-go purego,
 # which embeds the raylib shared library per OS/arch). No Docker, no C compiler.
+# The one exception is the macOS client, which needs cgo for ScreenCaptureKit
+# and AppKit: it is cross compiled with zig against a macOS SDK (README.md,
+# "Building the macOS client").
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 # Numeric version for Info.plist and the MSI: v1.2.3-4-gabc -> 1.2.3, anything else -> 0.0.1.
@@ -34,7 +37,7 @@ DESK_FILE_VERSION = $(shell jq -r '.RT_VERSION[]["0000"].fixed.file_version' des
 MSI := $(DIST)/helpbuoy_$(APP_VERSION)_amd64.msi
 DESK_MSI := $(DIST)/helpbuoy-desk_$(APP_VERSION)_amd64.msi
 
-.PHONY: help all test vet fuzz server client client-linux desk dist msi deb deb-client deb-desk icon clean
+.PHONY: help all test vet fuzz server client client-linux client-macos zip-macos desk dist msi deb deb-client deb-desk icon clean
 
 help:
 	@echo "make test     run proto and server tests"
@@ -43,8 +46,10 @@ help:
 	@echo "make server   build helpbuoy-server ($(TARGETS)) into $(BIN)/"
 	@echo "make client   build the Windows client ($(ARCHES)) into $(BIN)/"
 	@echo "make client-linux  build the static X11 Linux client ($(ARCHES)) into $(BIN)/"
+	@echo "make client-macos  build the universal macOS client into $(BIN)/ (needs zig and a macOS SDK)"
+	@echo "make zip-macos     zipped, ad hoc signed HelpBuoy.app in $(DIST)/ (needs rcodesign too)"
 	@echo "make desk     build the desk app ($(TARGETS)) into $(BIN)/"
-	@echo "make dist     all release packages in $(DIST)/: msi, deb, deb-client and deb-desk"
+	@echo "make dist     all release packages in $(DIST)/: msi, deb, deb-client, deb-desk and zip-macos"
 	@echo "make msi      per-user installers of the Windows client and desk app (needs wixl and msitools)"
 	@echo "make deb      Debian 13 package of helpbuoy-server with a systemd service (needs dpkg-deb)"
 	@echo "make deb-client  Debian package of the Linux client with a menu entry and icons (needs dpkg-deb)"
@@ -54,10 +59,10 @@ help:
 all: vet test server client client-linux desk
 
 test:
-	go test ./proto/... ./server/... ./client-linux/...
+	go test ./proto/... ./server/... ./client-linux/... ./client-macos/...
 
 vet:
-	go vet ./proto/... ./server/... ./desk/... ./client-windows/... ./client-linux/...
+	go vet ./proto/... ./server/... ./desk/... ./client-windows/... ./client-linux/... ./client-macos/...
 	GOOS=windows go vet ./client-windows/... ./desk/...
 	GOOS=darwin go vet ./desk/...
 
@@ -102,13 +107,49 @@ client-linux:
 			-o $(BIN)/linux-$$arch/helpbuoy ./client-linux || exit 1; \
 	done
 
+# The macOS client: cgo, cross compiled with zig against the macOS SDK, for
+# Intel and Apple silicon, merged into one universal binary. zig only
+# signs the arm64 slice; zip-macos signs the whole bundle with rcodesign.
+MACOSX_SDK ?= $(HOME)/SDKs/MacOSX12.3.sdk
+ZIG        ?= $(or $(shell command -v zig 2>/dev/null),$(HOME)/SDKs/zig-0.16.0/zig)
+RCODESIGN  ?= rcodesign
+MAC_MIN    := 12.3
+MAC_ARCHES := amd64 arm64
+MAC_ZIP    := $(DIST)/helpbuoy_$(APP_VERSION)_macos.zip
+
+client-macos:
+	@test -d "$(MACOSX_SDK)" || { echo "no macOS SDK in $(MACOSX_SDK); see README.md, set MACOSX_SDK" >&2; exit 1; }
+	@test -x "$$(command -v $(ZIG))" || { echo "no zig ($(ZIG)); see README.md, set ZIG" >&2; exit 1; }
+	@for arch in $(MAC_ARCHES); do \
+		zarch=x86_64; [ $$arch = arm64 ] && zarch=aarch64; \
+		echo "helpbuoy darwin/$$arch"; \
+		CGO_ENABLED=1 GOOS=darwin GOARCH=$$arch \
+		CC="$(ZIG) cc -target $$zarch-macos.$(MAC_MIN) --sysroot $(MACOSX_SDK) -iframework $(MACOSX_SDK)/System/Library/Frameworks -idirafter $(MACOSX_SDK)/usr/include" \
+		CGO_LDFLAGS="-F$(MACOSX_SDK)/System/Library/Frameworks -L/usr/lib" \
+		go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BIN)/darwin-$$arch/helpbuoy ./client-macos || exit 1; \
+	done
+	@mkdir -p $(BIN)/darwin-universal
+	GOWORK=off GO111MODULE=off go run tools/lipo/main.go -out $(BIN)/darwin-universal/helpbuoy \
+		$(foreach a,$(MAC_ARCHES),$(BIN)/darwin-$(a)/helpbuoy)
+
+# zip-macos: HelpBuoy.app, signed ad hoc, zipped. Set RCODESIGN= (empty) to
+# skip signing for a local test build.
+zip-macos: client-macos
+	@mkdir -p $(DIST)
+	@sign=; if [ -n "$(RCODESIGN)" ]; then \
+		sign=$$(command -v $(RCODESIGN)) || { echo "no rcodesign ($(RCODESIGN)); see README.md, or set RCODESIGN= to skip signing" >&2; exit 1; }; \
+	else echo "warning: HelpBuoy.app is not signed" >&2; fi; \
+	GOWORK=off GO111MODULE=off go run tools/macapp/main.go -app helpbuoy -name HelpBuoy -id helpbuoy.client \
+		-version $(APP_VERSION) -min $(MAC_MIN) -exe $(BIN)/darwin-universal/helpbuoy \
+		-icon client-macos/resources/icon.png -out $(MAC_ZIP) $${sign:+-rcodesign $$sign}
+
 # Release packages, all in $(DIST)/: an installer per app and platform, no
 # bare binaries. Windows gets per-user MSIs for the client and the desk app,
 # Debian gets .debs for the client, the desk app and helpbuoy-server, and
-# macOS (when darwin is in OSES) a zipped desk .app.
+# macOS a zipped client .app and (when darwin is in OSES) a zipped desk .app.
 dist:
 	@rm -rf $(DIST) && mkdir -p $(DIST)
-	@$(MAKE) --no-print-directory msi deb deb-client deb-desk
+	@$(MAKE) --no-print-directory msi deb deb-client deb-desk zip-macos
 	@for t in $(subst /,-,$(filter darwin/%,$(TARGETS))); do \
 		GOWORK=off GO111MODULE=off go run tools/macapp/main.go -app helpbuoy-desk -id helpbuoy.desk \
 			-version $(APP_VERSION) -exe $(BIN)/$$t/helpbuoy-desk \

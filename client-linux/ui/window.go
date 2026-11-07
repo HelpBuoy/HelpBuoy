@@ -1,8 +1,10 @@
-// Package ui is the computer's window on Linux (PLAN.md 6.2 and 6.3). It
-// speaks the X11 protocol directly with jezek/xgb and draws its own
-// controls with the Go fonts, so it needs no toolkit and no C libraries.
-// Like the Windows window, it only renders the app.View it is given and
-// forwards button presses to the app.Controller.
+// Package ui is the computer's window on Linux and macOS (PLAN.md 6.2 and
+// 6.3). It draws its own controls with the Go fonts into an RGBA buffer, so
+// it needs no toolkit; a Host shows the buffer and delivers input. On Linux
+// that is xwin, which speaks the X11 protocol directly with jezek/xgb and
+// needs no C libraries; the macOS client brings an AppKit host. Like the
+// Windows window, it only renders the app.View it is given and forwards
+// button presses to the app.Controller.
 package ui
 
 import (
@@ -10,9 +12,6 @@ import (
 	"image"
 	"time"
 
-	"github.com/jezek/xgb/xproto"
-
-	"github.com/helpbuoy/helpbuoy/client-linux/xkeys"
 	"github.com/helpbuoy/helpbuoy/client-windows/app"
 	"github.com/helpbuoy/helpbuoy/client-windows/session"
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
@@ -33,12 +32,13 @@ const statusY, titleH = 160, 26
 
 // Window is the computer's only window.
 type Window struct {
-	x     *xwin
-	ctrl  *app.Controller
-	icons [][]byte
-	scale float64
-	fonts *fonts
-	back  *image.RGBA
+	host   Host
+	opened bool // host.Open succeeded
+	ctrl   *app.Controller
+	icons  [][]byte
+	scale  float64
+	fonts  *fonts
+	back   *image.RGBA
 
 	calls chan func()
 	quit  chan struct{}
@@ -64,6 +64,15 @@ type Window struct {
 	Unsupported string
 	closing     bool // the Close button was pressed
 
+	// Permissions, when set before Run, are checked first: while one of
+	// them is not granted the window asks for them instead of starting the
+	// controller, and it starts once all are granted.
+	Permissions []Permission
+	// PermissionsNote is shown below the permissions, in gray.
+	PermissionsNote                           string
+	perms                                     []permRow // nil when the permissions screen is not shown
+	lblPermHeading, lblPermIntro, lblPermNote *widget
+
 	widgets []*widget
 	dialogs []*dialog // the last one is shown
 
@@ -71,16 +80,29 @@ type Window struct {
 	hover    *widget
 	pressed  *widget
 	hasFocus bool // the window has the keyboard focus
-	mapped   bool
 
 	serverAsked string
-	// lastRelease is the last key release; a press of the same key at the
-	// same time is auto-repeat.
-	lastRelease xproto.KeyReleaseEvent
 	copiedAt    time.Time
 
 	view     app.View
 	rendered bool
+}
+
+// Permission is something the user has to allow in the system settings
+// before the app can work, such as Screen Recording on macOS. At most two
+// fit in the window.
+type Permission struct {
+	Name    string      // "Screen Recording"
+	Text    string      // what it is for, one or two short lines
+	Granted func() bool // polled while the permissions are shown
+	Open    func()      // opens the place to allow it
+}
+
+// permRow is the widgets of one Permission.
+type permRow struct {
+	p                Permission
+	lblName, lblText *widget
+	btnOpen          *widget
 }
 
 // dialog is a modal question drawn over the whole window.
@@ -109,10 +131,14 @@ const (
 	iconError
 )
 
-// New returns the window; it opens with Run. icons are PNG files for the
-// window manager.
-func New(icons [][]byte) *Window {
-	w := &Window{icons: icons, calls: make(chan func()), quit: make(chan struct{})}
+// New returns the X11 window; it opens with Run. icons are PNG files for
+// the window manager.
+func New(icons [][]byte) *Window { return NewWithHost(&xwin{}, icons) }
+
+// NewWithHost returns a window shown by host; it opens with Run. icons are
+// PNG files the host may use.
+func NewWithHost(host Host, icons [][]byte) *Window {
+	w := &Window{host: host, icons: icons, calls: make(chan func()), quit: make(chan struct{})}
 	label := func(x, y, wd, h int, f fontKind, a align) *widget {
 		l := newWidget(kindLabel, x, y, wd, h, f)
 		l.align = a
@@ -175,6 +201,13 @@ func New(icons [][]byte) *Window {
 	w.btnClose = button(i18n.Trans("Close"), 336, 278, 100, 30, fontNormal, func() { w.closing = true })
 	w.btnClose.isDefault = true
 
+	w.lblPermHeading = label(24, 22, 412, 30, fontHeading, alignLeft)
+	w.lblPermHeading.text = i18n.Trans("Allow HelpBuoy to share this screen")
+	w.lblPermIntro = label(24, 60, 412, 40, fontNormal, alignLeft)
+	w.lblPermIntro.text = i18n.Trans("A techie can only see and control this computer after you allow these in the system settings.")
+	w.lblPermNote = label(24, 262, 412, 56, fontNormal, alignLeft)
+	w.lblPermNote.color = colGray
+
 	w.widgets = []*widget{
 		w.lblHeading, w.lblAddrHint, w.edtAddr, w.btnConnect, w.lblAddrError,
 		w.lblKeyIntro, w.edtKey, w.btnCopy, w.lblKeyFp, w.lblServerFp, w.lblKeyNotice, w.lnkChange,
@@ -182,42 +215,108 @@ func New(icons [][]byte) *Window {
 		w.lblKeyErr, w.btnRemoveKey,
 		w.lblWarnHeading, w.lblWarnText, w.btnContinue,
 		w.lblUnsupHeading, w.lblUnsup, w.btnClose,
+		w.lblPermHeading, w.lblPermIntro, w.lblPermNote,
 	}
 	return w
+}
+
+// showPermissions builds and shows the permissions screen. It reports
+// false, and shows nothing, when every permission is granted already.
+func (w *Window) showPermissions() bool {
+	missing := false
+	for _, p := range w.Permissions {
+		if !p.Granted() {
+			missing = true
+		}
+	}
+	if !missing {
+		return false
+	}
+	for i, p := range w.Permissions[:min(2, len(w.Permissions))] {
+		y := 108 + i*76
+		r := permRow{p: p}
+		r.lblName = newWidget(kindLabel, 24, y, 250, 22, fontNormal)
+		r.lblText = newWidget(kindLabel, 24, y+22, 250, 40, fontNormal)
+		r.lblText.text = p.Text
+		r.lblText.color = colGray
+		r.btnOpen = newWidget(kindButton, 290, y+6, 146, 32, fontNormal)
+		r.btnOpen.text = i18n.Trans("Open settings")
+		r.btnOpen.onClick = p.Open
+		for _, wd := range []*widget{r.lblName, r.lblText, r.btnOpen} {
+			wd.visible = true
+			w.widgets = append(w.widgets, wd)
+		}
+		w.perms = append(w.perms, r)
+	}
+	w.lblPermNote.text = w.PermissionsNote
+	for _, wd := range []*widget{w.lblPermHeading, w.lblPermIntro, w.lblPermNote} {
+		wd.visible = true
+	}
+	w.updatePermissions()
+	w.focusDefault()
+	return true
+}
+
+// updatePermissions shows which permissions are granted and reports
+// whether all are.
+func (w *Window) updatePermissions() bool {
+	all := true
+	for _, r := range w.perms {
+		ok := r.p.Granted()
+		if ok {
+			r.lblName.text = i18n.Trans("{0}: allowed", r.p.Name)
+			r.lblName.color = colText
+		} else {
+			r.lblName.text = i18n.Trans("{0}: not allowed yet", r.p.Name)
+			r.lblName.color = colError
+			all = false
+		}
+		r.btnOpen.enabled = !ok
+	}
+	if w.focus != nil && !w.focus.focusable() {
+		w.focusDefault()
+	}
+	return all
+}
+
+// hidePermissions removes the permissions screen.
+func (w *Window) hidePermissions() {
+	drop := map[*widget]bool{}
+	for _, r := range w.perms {
+		drop[r.lblName], drop[r.lblText], drop[r.btnOpen] = true, true, true
+	}
+	ws := w.widgets[:0]
+	for _, wd := range w.widgets {
+		if !drop[wd] {
+			ws = append(ws, wd)
+		}
+	}
+	w.widgets = ws
+	w.perms = nil
+	for _, wd := range []*widget{w.lblPermHeading, w.lblPermIntro, w.lblPermNote} {
+		wd.visible = false
+	}
+	w.focus, w.hover, w.pressed = nil, nil, nil
 }
 
 // Run opens the window, starts the controller and handles events until the
 // window is closed. It returns an error when there is no usable display.
 func (w *Window) Run(ctrl *app.Controller) error {
 	w.ctrl = ctrl
-	// The window size depends on the scale, which needs the connection.
-	x, err := openX(Title, func(dpi float64) (int, int) {
-		w.scale = max(1, dpi/96)
-		return w.px(clientW), w.px(clientH)
-	}, w.icons)
+	scale, err := w.host.Open(Title, clientW, clientH, w.icons)
 	if err != nil {
 		return err
 	}
-	w.x = x
-	defer x.close()
+	w.scale = max(1, scale)
+	w.opened = true
+	defer w.host.Close()
 	if w.fonts, err = newFonts(w.scale); err != nil {
 		return err
 	}
 	w.fitButtons()
 	w.back = image.NewRGBA(image.Rect(0, 0, w.px(clientW), w.px(clientH)))
-	xproto.MapWindow(x.c, x.win)
-
-	events := make(chan xgbEvent, 64)
-	go func() {
-		defer close(events)
-		for {
-			ev, err := x.c.WaitForEvent()
-			if ev == nil && err == nil {
-				return
-			}
-			events <- xgbEvent{ev, err}
-		}
-	}()
+	w.host.Show()
+	events := w.host.Events()
 
 	w.apply(app.View{Screen: -1})
 	if w.Unsupported != "" {
@@ -226,7 +325,7 @@ func (w *Window) Run(ctrl *app.Controller) error {
 			wd.visible = true
 		}
 		w.focus = w.btnClose
-	} else {
+	} else if !w.showPermissions() {
 		ctrl.Start()
 	}
 	defer close(w.quit)
@@ -239,10 +338,7 @@ func (w *Window) Run(ctrl *app.Controller) error {
 				ctrl.Close()
 				return nil
 			}
-			if e.err != nil {
-				continue // errors of requests nobody checks
-			}
-			if w.handle(e.ev) {
+			if w.handle(e) {
 				ctrl.Close()
 				w.closeDialogs()
 				return nil
@@ -250,6 +346,10 @@ func (w *Window) Run(ctrl *app.Controller) error {
 		case f := <-w.calls:
 			f()
 		case <-tick.C:
+			if w.perms != nil && w.updatePermissions() {
+				w.hidePermissions()
+				ctrl.Start()
+			}
 			if !w.copiedAt.IsZero() && time.Since(w.copiedAt) > 2*time.Second {
 				w.copiedAt = time.Time{}
 				w.btnCopy.text = i18n.Trans("Copy key")
@@ -261,11 +361,6 @@ func (w *Window) Run(ctrl *app.Controller) error {
 		}
 		w.redraw()
 	}
-}
-
-type xgbEvent struct {
-	ev  interface{}
-	err error
 }
 
 // do runs f on the UI goroutine and waits for it; after the window closed
@@ -479,7 +574,7 @@ func (w *Window) connect() {
 // copyKey puts the key line on the clipboard and shows "Copied" for a
 // moment.
 func (w *Window) copyKey() {
-	if w.view.KeyLine == "" || !w.x.copy(w.view.KeyLine) {
+	if w.view.KeyLine == "" || !w.host.Copy(w.view.KeyLine) {
 		return
 	}
 	w.btnCopy.text = i18n.Trans("Copied")
@@ -542,9 +637,9 @@ func (w *Window) maybeWarnServerKey() {
 
 // bringToFront shows the window and asks for the focus.
 func (w *Window) bringToFront() {
-	w.x.activate()
+	w.host.Activate()
 	if !w.hasFocus {
-		w.x.demandAttention(true)
+		w.host.DemandAttention(true)
 	}
 }
 
@@ -663,16 +758,16 @@ func (w *Window) apply(v app.View) {
 		}
 	}
 
-	if w.x != nil {
+	if w.opened {
 		caption := Title
 		if v.Title != "" {
 			caption = v.Title + " - " + Title
 		}
-		w.x.setTitle(caption)
+		w.host.SetTitle(caption)
 		// During a session the window gets out of the way; afterwards it
 		// comes back.
 		if v.InSession && !prev.InSession {
-			w.x.minimize()
+			w.host.Minimize()
 		} else if !v.InSession && prev.InSession {
 			w.bringToFront()
 		}
@@ -758,60 +853,37 @@ func (w *Window) moveFocus(back bool) {
 	}
 }
 
-// handle processes one X event and reports whether the window was closed.
-func (w *Window) handle(ev interface{}) bool {
-	x := w.x
+// handle processes one event of the host and reports whether the window
+// was closed.
+func (w *Window) handle(ev Event) bool {
 	switch e := ev.(type) {
-	case xproto.ExposeEvent:
-		if e.Count == 0 {
-			w.x.put(w.back)
+	case ExposeEvent:
+		w.host.Put(w.back)
+	case FocusEvent:
+		w.hasFocus = e.In
+		if e.In {
+			w.host.DemandAttention(false)
 		}
-	case xproto.MapNotifyEvent:
-		w.mapped = true
-	case xproto.UnmapNotifyEvent:
-		w.mapped = false
-	case xproto.FocusInEvent:
-		w.hasFocus = true
-		x.demandAttention(false)
-	case xproto.FocusOutEvent:
-		w.hasFocus = false
-	case xproto.ClientMessageEvent:
-		if e.Type == x.atoms["WM_PROTOCOLS"] && xproto.Atom(e.Data.Data32[0]) == x.atoms["WM_DELETE_WINDOW"] {
-			return true
+	case CloseEvent:
+		return true
+	case PasteEvent:
+		if w.focus != nil && w.focus.kind == kindField && w.focus.enabled {
+			w.focus.field.insert(e.Text)
 		}
-	case xproto.MappingNotifyEvent:
-		if km, err := xkeys.Load(x.c); err == nil {
-			x.km = km
+	case KeyEvent:
+		w.key(e)
+	case MouseEvent:
+		switch e.Kind {
+		case MouseDown:
+			w.mouseDown(e.X, e.Y)
+		case MouseUp:
+			w.mouseUp(e.X, e.Y)
+		case MouseMove:
+			w.mouseMove(e.X, e.Y, e.Drag)
+		case MouseLeave:
+			w.hover = nil
+			w.host.SetCursor(CursorArrow)
 		}
-	case xproto.SelectionRequestEvent:
-		x.selectionRequest(e)
-	case xproto.SelectionClearEvent:
-		x.clip = ""
-	case xproto.SelectionNotifyEvent:
-		if s, ok := x.pasted(e); ok && w.focus != nil && w.focus.kind == kindField && w.focus.enabled {
-			w.focus.field.insert(s)
-		}
-	case xproto.KeyPressEvent:
-		x.time = e.Time
-		repeat := e.Detail == w.lastRelease.Detail && e.Time == w.lastRelease.Time
-		w.key(e, repeat)
-	case xproto.KeyReleaseEvent:
-		w.lastRelease = e
-	case xproto.ButtonPressEvent:
-		x.time = e.Time
-		if e.Detail == 1 {
-			w.mouseDown(int(e.EventX), int(e.EventY))
-		}
-	case xproto.ButtonReleaseEvent:
-		x.time = e.Time
-		if e.Detail == 1 {
-			w.mouseUp(int(e.EventX), int(e.EventY))
-		}
-	case xproto.MotionNotifyEvent:
-		w.mouseMove(int(e.EventX), int(e.EventY), e.State&xproto.ButtonMask1 != 0)
-	case xproto.LeaveNotifyEvent:
-		w.hover = nil
-		x.setCursor(cursorArrow)
 	}
 	return false
 }
@@ -853,11 +925,11 @@ func (w *Window) mouseMove(px, py int, dragging bool) {
 	w.hover = wd
 	switch {
 	case wd != nil && wd.kind == kindField && wd.enabled:
-		w.x.setCursor(cursorText)
+		w.host.SetCursor(CursorText)
 	case wd != nil && wd.kind == kindLink && wd.enabled:
-		w.x.setCursor(cursorHand)
+		w.host.SetCursor(CursorHand)
 	default:
-		w.x.setCursor(cursorArrow)
+		w.host.SetCursor(CursorArrow)
 	}
 	if dragging && w.pressed != nil && w.pressed.kind == kindField && w.pressed.enabled {
 		f := w.pressed
@@ -875,27 +947,24 @@ func (w *Window) mouseUp(px, py int) {
 }
 
 // key handles a key press: dialog keys, focus movement, activation and
-// editing of the address field. Auto-repeat (repeat) only edits: a held
-// Enter must not click one button after the other as the screens change.
-func (w *Window) key(e xproto.KeyPressEvent, repeat bool) {
-	ks := w.x.km.Lookup(uint8(e.Detail), e.State)
-	ctrl := e.State&xkeys.ModControl != 0
-	shift := e.State&xkeys.ModShift != 0
+// editing of the address field. Auto-repeat only edits: a held Enter must
+// not click one button after the other as the screens change.
+func (w *Window) key(k KeyEvent) {
 	inField := w.focus != nil && w.focus.kind == kindField
-	activate := ks == xkeys.Return || ks == xkeys.KPEnter || ks == xkeys.Escape || ks == ' ' && !inField
-	if repeat && activate {
+	activate := k.Key == KeyEnter || k.Key == KeyEscape || k.Char == ' ' && !inField
+	if k.Repeat && activate {
 		return
 	}
-	if len(w.dialogs) > 0 && ks == xkeys.Escape {
+	if len(w.dialogs) > 0 && k.Key == KeyEscape {
 		d := w.dialogs[len(w.dialogs)-1]
 		w.closeDialog(d, d.cancel)
 		return
 	}
-	switch ks {
-	case xkeys.Tab:
-		w.moveFocus(shift)
+	switch k.Key {
+	case KeyTab:
+		w.moveFocus(k.Shift)
 		return
-	case xkeys.ISOLeftTab:
+	case KeyBackTab:
 		w.moveFocus(true)
 		return
 	}
@@ -905,7 +974,7 @@ func (w *Window) key(e xproto.KeyPressEvent, repeat bool) {
 	}
 	switch f.kind {
 	case kindButton, kindLink:
-		if ks == xkeys.Return || ks == xkeys.KPEnter || ks == ' ' {
+		if k.Key == KeyEnter || k.Char == ' ' {
 			if f.onClick != nil {
 				f.onClick()
 			}
@@ -917,52 +986,48 @@ func (w *Window) key(e xproto.KeyPressEvent, repeat bool) {
 	}
 	fd := f.field
 	switch {
-	case ks == xkeys.Return || ks == xkeys.KPEnter:
+	case k.Key == KeyEnter:
 		if f == w.edtAddr {
 			w.connect()
 		}
-	case ks == xkeys.BackSpace:
+	case k.Key == KeyBackspace:
 		fd.erase(true)
-	case ks == xkeys.Delete || ks == xkeys.KPDelete:
+	case k.Key == KeyDelete:
 		fd.erase(false)
-	case ks == xkeys.Left || ks == xkeys.KPLeft:
-		if ctrl {
-			fd.move(fd.wordLeft(), shift)
-		} else if a, _ := fd.selection(); !shift && fd.caret != fd.anchor {
+	case k.Key == KeyLeft:
+		if k.Word {
+			fd.move(fd.wordLeft(), k.Shift)
+		} else if a, _ := fd.selection(); !k.Shift && fd.caret != fd.anchor {
 			fd.move(a, false)
 		} else {
-			fd.move(fd.caret-1, shift)
+			fd.move(fd.caret-1, k.Shift)
 		}
-	case ks == xkeys.Right || ks == xkeys.KPRight:
-		if ctrl {
-			fd.move(fd.wordRight(), shift)
-		} else if _, b := fd.selection(); !shift && fd.caret != fd.anchor {
+	case k.Key == KeyRight:
+		if k.Word {
+			fd.move(fd.wordRight(), k.Shift)
+		} else if _, b := fd.selection(); !k.Shift && fd.caret != fd.anchor {
 			fd.move(b, false)
 		} else {
-			fd.move(fd.caret+1, shift)
+			fd.move(fd.caret+1, k.Shift)
 		}
-	case ks == xkeys.Home || ks == xkeys.KPHome:
-		fd.move(0, shift)
-	case ks == xkeys.End || ks == xkeys.KPEnd:
-		fd.move(len(fd.text), shift)
-	case ctrl && (ks == 'a' || ks == 'A'):
+	case k.Key == KeyHome:
+		fd.move(0, k.Shift)
+	case k.Key == KeyEnd:
+		fd.move(len(fd.text), k.Shift)
+	case k.Cmd && k.Char == 'a':
 		fd.selectAll()
-	case ctrl && (ks == 'c' || ks == 'C'), ctrl && ks == xkeys.Insert:
+	case k.Cmd && k.Char == 'c', k.Cmd && k.Key == KeyInsert:
 		if s := fd.selected(); s != "" {
-			w.x.copy(s)
+			w.host.Copy(s)
 		}
-	case ctrl && (ks == 'x' || ks == 'X'):
-		if s := fd.selected(); s != "" && w.x.copy(s) {
+	case k.Cmd && k.Char == 'x':
+		if s := fd.selected(); s != "" && w.host.Copy(s) {
 			fd.erase(true)
 		}
-	case ctrl && (ks == 'v' || ks == 'V'), shift && ks == xkeys.Insert:
-		w.x.requestPaste()
-	case ctrl || e.State&xkeys.ModMod1 != 0:
-		// Other shortcuts do nothing.
-	default:
-		if r := xkeys.Rune(ks); r != 0 {
-			fd.insert(string(r))
-		}
+	case k.Cmd && k.Char == 'v', k.Shift && k.Key == KeyInsert:
+		w.host.RequestPaste()
+	case k.Text != "":
+		fd.insert(k.Text)
 	}
 }
 
@@ -979,7 +1044,7 @@ func (w *Window) redraw() {
 			}
 		}
 	}
-	w.x.put(w.back)
+	w.host.Put(w.back)
 }
 
 func (w *Window) drawDialog(c *canvas, d *dialog) {
