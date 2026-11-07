@@ -864,8 +864,8 @@ the check and dialog in both clients, the Server tab check in the desk app, the 
 server text (all in `proto/verify`, `server/salt` and the apps), and the files, cache
 headers and privacy text on the site.
 
-**Phase 7 - Wayland and macOS** (built and released; not yet tried on a real Wayland
-desktop or a real Mac)
+**Phase 7 - Wayland and macOS** (done; the client and the desk app are tested on a real
+Wayland desktop and a real Mac)
 The Linux client shares Wayland desktops through the XDG remote desktop portal with
 PipeWire capture through `gst-launch-1.0`. `client-macos/` with ScreenCaptureKit (CGWindowListCreateImage on Macs without Metal: in a
 macOS 14 VM any display stream, also the one behind CGDisplayCreateImage, crashed WindowServer
@@ -920,6 +920,8 @@ clients.
   after it; injected Esc does not end the session; the next Connect asks the user again
   and gives a new session; refusing a Connect starts nothing; closing the client window ends the session and disconnects the computer
   from the server.
+- Linux and macOS: the client and the desk app are tried by hand on a Wayland desktop and
+  on a Mac.
 - Windows: capture and key-map tests on a `windows-latest` runner; manual matrix of Windows 11
   at 100/150/200% scaling, multiple monitors, RDP session, elevated window (including Esc while an elevated window has focus), and a side-by-side
   comparison with `mstsc` for the 5.1 scenarios.
