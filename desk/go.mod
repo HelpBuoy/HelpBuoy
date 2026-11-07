@@ -3,6 +3,7 @@ module github.com/helpbuoy/helpbuoy/desk
 go 1.26.0
 
 require (
+	github.com/ebitengine/purego v0.10.0
 	github.com/gen2brain/raylib-go/raylib v0.60.1
 	golang.org/x/crypto v0.58.0
 	golang.org/x/image v0.47.0
@@ -14,7 +15,6 @@ require (
 )
 
 require (
-	github.com/ebitengine/purego v0.10.0 // indirect
 	github.com/jupiterrider/ffi v0.7.0 // indirect
 	github.com/helpbuoy/helpbuoy/proto v0.0.0
 	github.com/helpbuoy/helpbuoy/server v0.0.0
