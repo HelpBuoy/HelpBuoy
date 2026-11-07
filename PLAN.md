@@ -45,7 +45,8 @@ other, and splices their channels together.
   A computer is helped by **one techie at a time**; a techie can help many computers at once.
 
 What a session can do, and nothing more:
-- **computer → techie**: GDI-captured screen updates and the cursor shape.
+- **computer → techie**: screen updates and the cursor shape (GDI on Windows, X11 or the
+  portal's PipeWire stream on Linux, ScreenCaptureKit on macOS).
 - **techie → computer**: mouse and keyboard input.
 - No file transfer, no clipboard, no shell, no audio.
 
@@ -650,13 +651,15 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   `make vet test dist`, commits, tags `v<version>`, pushes and creates the GitHub release
   with everything in `dist/`: only installers, never a bare binary. That is the client and desk
   app MSIs, the Debian packages of the Linux client, the desk app and `helpbuoy-server`, and
-  the zipped macOS client (`helpbuoy_<version>_macos.zip`, a universal HelpBuoy.app signed ad
-  hoc with rcodesign, not notarized yet).
+  the zipped macOS client and desk app (`helpbuoy_<version>_macos.zip` and
+  `helpbuoy-desk_<version>_macos.zip`, universal apps that are not signed or notarized; only
+  the arm64 slice carries the ad hoc signature zig and the Go linker give it).
   The updaters pick their MSI by name prefix: `helpbuoy_` for the client, `helpbuoy-desk_`
   for the desk app on Windows, which updates the same way: its title shows the version and an
   "Check for updates" link sits in the top right corner (in the tab bar once connected). With sessions
-  open it asks to end them first. For now only Linux and
-  Windows on amd64 are built (`OSES` and `ARCHES` in the Makefile).
+  open it asks to end them first. The Linux and macOS apps have no update check yet.
+  Linux and Windows are built for amd64 (`OSES` and `ARCHES` in the Makefile); the macOS apps
+  are built for amd64 and arm64 and merged into one universal binary with `tools/lipo`.
 - The server also ships as a Debian 13 package (`make deb`, `packaging/debian/`): `helpbuoy-server`
   as a hardened systemd service under its own system user with its state in
   `/var/lib/helpbuoy-server`, settings in `/etc/default/helpbuoy-server`, and `helpbuoy-serverctl` to run
@@ -735,7 +738,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
 - **Distribution**: an installer per OS containing only the desk app: a per-user MSI on
   Windows (`installer/helpbuoy-desk.wxs`, into `%LOCALAPPDATA%\Programs\helpbuoy-desk`), a
   Debian package (`make deb-desk`, needs glibc 2.38 for the embedded raylib, so Debian 13 or
-  Ubuntu 24.04) and the macOS `.app` bundle. The server is built in, so `helpbuoy-server`
+  Ubuntu 24.04) and a zipped universal `HelpBuoy Desk.app` for macOS 12.3 or later. The server is built in, so `helpbuoy-server`
   is not packaged with it; it ships separately as the Debian package. All built on Linux with
   `CGO_ENABLED=0`; the macOS `.app` is assembled by a script (Info.plist, `.icns` written in
   Go from the PNG icon). No Docker image.
@@ -861,6 +864,13 @@ the check and dialog in both clients, the Server tab check in the desk app, the 
 server text (all in `proto/verify`, `server/salt` and the apps), and the files, cache
 headers and privacy text on the site.
 
+**Phase 7 - Wayland and macOS** (built and released; not yet tried on a real Wayland
+desktop or a real Mac)
+The Linux client shares Wayland desktops through the XDG remote desktop portal with
+PipeWire capture through `gst-launch-1.0`. `client-macos/` with ScreenCaptureKit, CGEvent and
+an AppKit host for the shared drawn window from `client-linux/ui`, cross compiled with zig.
+The desk app ships as a universal `.app` as well. Both macOS apps are unsigned.
+
 **Later**: tray icon and optional "Start with Windows" (HKCU Run entry, no admin), so the
 computer can stay online in the background; an update check in the Linux and macOS
 clients.
@@ -922,14 +932,17 @@ clients.
 - Is TOFU for the server plus server-vouched techies enough, or should the computer also be able
   to check a short code (e.g. the first 8 characters of the server fingerprint) that the techie
   reads out before anything is stored?
-- macOS: an `.app` built on Linux is only ad-hoc signed, so Gatekeeper asks users to allow
-  it the first time (right-click, Open). Is that acceptable for techies, or is a Developer ID
-  signature and notarization (needs a Mac or a signing service) required?
+- macOS: both `.app`s are built on Linux and not signed, so Gatekeeper refuses them
+  the first time and users have to click Open Anyway in System Settings, Privacy & Security.
+  The client also loses its Screen Recording and Accessibility permissions with every update,
+  since the app has no stable signature. Is that acceptable for the people being
+  helped, or is a Developer ID signature and notarization (rcodesign can do both from Linux,
+  with an Apple developer account) required?
 - Is JPEG enough for video-heavy work, or is the Media Foundation H.264 path needed in v1?
 
 ## 11. Translations
 
-The Windows client and the desk app are translated; `helpbuoy-server` stays English. The
+The Windows, Linux and macOS clients and the desk app are translated; `helpbuoy-server` stays English. The
 approach is deliberately minimal, with no dependency:
 
 - **`proto/i18n`**: one function, `i18n.Trans(text string, args ...any) string`. The English

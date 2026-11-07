@@ -48,7 +48,7 @@ help:
 	@echo "make client   build the Windows client ($(ARCHES)) into $(BIN)/"
 	@echo "make client-linux  build the static Linux client (X11 and Wayland) ($(ARCHES)) into $(BIN)/"
 	@echo "make client-macos  build the universal macOS client into $(BIN)/ (needs zig and a macOS SDK)"
-	@echo "make zip-macos     zipped, ad hoc signed HelpBuoy.app and HelpBuoy Desk.app in $(DIST)/ (needs rcodesign too)"
+	@echo "make zip-macos     zipped HelpBuoy.app and HelpBuoy Desk.app in $(DIST)/"
 	@echo "make desk     build the desk app ($(TARGETS)) into $(BIN)/"
 	@echo "make desk-macos    build the universal macOS desk app into $(BIN)/"
 	@echo "make dist     all release packages in $(DIST)/: msi, deb, deb-client, deb-desk and zip-macos"
@@ -110,11 +110,12 @@ client-linux:
 	done
 
 # The macOS client: cgo, cross compiled with zig against the macOS SDK, for
-# Intel and Apple silicon, merged into one universal binary. zig only
-# signs the arm64 slice; zip-macos signs the whole bundle with rcodesign.
+# Intel and Apple silicon, merged into one universal binary. zig signs the
+# arm64 slice ad hoc, which is all Apple silicon needs to run it; the bundle
+# itself is not signed unless RCODESIGN is set.
 MACOSX_SDK ?= $(HOME)/SDKs/MacOSX12.3.sdk
 ZIG        ?= $(or $(shell command -v zig 2>/dev/null),$(HOME)/SDKs/zig-0.16.0/zig)
-RCODESIGN  ?= rcodesign
+RCODESIGN  ?=
 MAC_MIN    := 12.3
 MAC_ARCHES := amd64 arm64
 MAC_ZIP    := $(DIST)/helpbuoy_$(APP_VERSION)_macos.zip
@@ -138,7 +139,7 @@ client-macos:
 
 # The macOS desk app: pure Go like the other desk builds (raylib-go purego
 # embeds libraylib.dylib), so it needs no SDK or zig. The Go linker signs the
-# arm64 slice ad hoc; zip-macos signs the whole bundle.
+# arm64 slice ad hoc, like zig does for the client.
 desk-macos:
 	@for arch in $(MAC_ARCHES); do \
 		echo "helpbuoy-desk darwin/$$arch"; \
@@ -148,13 +149,13 @@ desk-macos:
 	@mkdir -p $(BIN)/darwin-universal
 	$(LIPO) -out $(BIN)/darwin-universal/helpbuoy-desk $(foreach a,$(MAC_ARCHES),$(BIN)/darwin-$(a)/helpbuoy-desk)
 
-# zip-macos: HelpBuoy.app and HelpBuoy Desk.app, signed ad hoc, zipped. Set
-# RCODESIGN= (empty) to skip signing for a local test build.
+# zip-macos: HelpBuoy.app and HelpBuoy Desk.app, zipped. The bundles are not
+# signed; set RCODESIGN=rcodesign to sign them ad hoc with rcodesign.
 zip-macos: client-macos desk-macos
 	@mkdir -p $(DIST)
 	@sign=; if [ -n "$(RCODESIGN)" ]; then \
-		sign=$$(command -v $(RCODESIGN)) || { echo "no rcodesign ($(RCODESIGN)); see README.md, or set RCODESIGN= to skip signing" >&2; exit 1; }; \
-	else echo "warning: the macOS apps are not signed" >&2; fi; \
+		sign=$$(command -v $(RCODESIGN)) || { echo "no rcodesign ($(RCODESIGN))" >&2; exit 1; }; \
+	fi; \
 	$(MACAPP) -app helpbuoy -name HelpBuoy -id helpbuoy.client \
 		-version $(APP_VERSION) -min $(MAC_MIN) -exe $(BIN)/darwin-universal/helpbuoy \
 		-icon client-macos/resources/icon.png -out $(MAC_ZIP) $${sign:+-rcodesign $$sign} && \

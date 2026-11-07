@@ -19,7 +19,7 @@
 # helpbuoy-server, zipped macOS apps of the client and desk app, all in
 # dist/), commits the version bump, tags and pushes it and creates the
 # GitHub release v<version> with all files in dist/. The macOS client needs
-# zig, a macOS SDK and rcodesign, see README.md.
+# zig and a macOS SDK, see README.md.
 set -e
 cd "$(dirname "$0")"
 
