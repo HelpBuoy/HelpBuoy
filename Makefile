@@ -42,7 +42,7 @@ help:
 	@echo "make fuzz     short fuzz run of the fuzz targets"
 	@echo "make server   build helpbuoy-server ($(TARGETS)) into $(BIN)/"
 	@echo "make client   build the Windows client ($(ARCHES)) into $(BIN)/"
-	@echo "make client-linux  build the static X11 Linux client ($(ARCHES)) into $(BIN)/"
+	@echo "make client-linux  build the static Linux client (X11 and Wayland) ($(ARCHES)) into $(BIN)/"
 	@echo "make desk     build the desk app ($(TARGETS)) into $(BIN)/"
 	@echo "make dist     all release packages in $(DIST)/: msi, deb, deb-client and deb-desk"
 	@echo "make msi      per-user installers of the Windows client and desk app (needs wixl and msitools)"

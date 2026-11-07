@@ -5,7 +5,7 @@ Self-hosted remote support for Windows, a small alternative to TeamViewer QuickS
 - `server/`: `helpbuoy-server`, a single Go binary that speaks SSH on one port (default 5959). It authenticates keys and connects techies to computers. No shell, no file transfer, no forwarding.
 - `desk/`: the cross-platform app the support techie uses.
 - `client-windows/`: the Windows app the person receiving help runs. It shows its public key to send to the techie, and asks for approval before anyone takes control.
-- `client-linux/`: the same app for Linux. It is a single static binary that speaks the X11 protocol itself (with jezek/xgb), so it needs no libraries and runs on any X11 desktop. It can't share a Wayland desktop: there it says so and explains how to log in with an X11 session. A local Esc ends the session but still reaches the focused application.
+- `client-linux/`: the same app for Linux. It is a single static binary that speaks the X11 protocol itself (with jezek/xgb), so it needs no libraries and runs on any X11 desktop. On a Wayland desktop (GNOME, KDE Plasma) it shares through the remote desktop portal, which asks the user which monitor to share, and reads the screen with GStreamer's `pipewiresrc` (packages `gstreamer1.0-pipewire` and `gstreamer1.0-tools`); without those it explains what to install. A local Esc ends the session but still reaches the focused application.
 
 A session only carries the screen (computer to techie) and mouse and keyboard input (techie to computer). See [PLAN.md](PLAN.md) for the design.
 

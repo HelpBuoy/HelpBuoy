@@ -16,11 +16,18 @@ other, and splices their channels together.
 - **desk/**: the cross-platform raylib app the *support techie* runs (`raylib-go`, no cgo). Many techies can be online at
   once, and each techie can run sessions with many computers at once.
 - **client-windows/** and **client-linux/**: the app the person *receiving* help runs,
-  for Windows (windigo) and for Linux (X11). The Windows client is described here and in
-  section 6; the Linux client works the same way, with two differences: it needs an X11
-  session (on Wayland it only explains how to log in with X11), and a local Esc ends the
+  for Windows (windigo) and for Linux (X11 and Wayland). The Windows client is described here and in
+  section 6; the Linux client works the same way, with three differences. On Wayland it
+  shares through the XDG remote desktop portal (RemoteDesktop with ScreenCast, over D-Bus):
+  after the user allows the techie, the compositor also asks which monitor to share, and
+  the frames come from the portal's PipeWire stream through a `gst-launch-1.0 pipewiresrc`
+  child process, which needs `gstreamer1.0-pipewire` and `gstreamer1.0-tools` (without
+  them, or without the portal, it explains what to install or how to log in with X11).
+  The portal's restore token is kept in the data directory, so later sessions may skip the
+  monitor choice. On X11 none of that is used. And a local Esc ends the
   session but also reaches the focused application, since X can't take one key away from
-  other applications without also taking the injected presses. On first start it asks
+  other applications without also taking the injected presses (on Wayland it is only seen
+  while an X11 window, such as HelpBuoy's own, has the focus). On first start it asks
   for the server's `hostname:port` and shows its own application-specific SSH public key
   (generated once on first start, kept in AppData) with a **Copy** button, so the user can
   send it to the techie over a chat such as WhatsApp. After the first successful connection
@@ -224,9 +231,11 @@ helpbuoy/
 │   ├── injector/                # SendInput, key mapping, Esc hook
 │   ├── session/                 # server connection, inner SSH server, the one viewer
 │   └── ui/                      # main window, request form
-└── client-linux/                # static X11 client (jezek/xgb, no cgo)
+└── client-linux/                # static X11 and Wayland client (jezek/xgb, godbus, no cgo)
     ├── capture/                 # X11 capture with MIT-SHM
-    ├── injector/                # XTEST input, Esc watch
+    ├── portal/                  # XDG remote desktop portal session (Wayland)
+    ├── pwcapture/               # PipeWire capture through gst-launch-1.0 (Wayland)
+    ├── injector/                # XTEST or portal input, Esc watch
     └── ui/                      # its own X11 window and widgets
 ```
 

@@ -2,8 +2,9 @@
 // and allows a techie to take control when the techie connects. It talks
 // the X11 protocol directly (jezek/xgb) and is built without cgo, so one
 // static binary runs on any Linux desktop with an X server, or XWayland
-// for its own window. Wayland desktops can't be shared: there the window
-// only explains how to log in with an X11 session.
+// for its own window. On Wayland it shares the desktop through the remote
+// desktop portal (D-Bus, see wayland.go), reading the PipeWire stream with
+// gst-launch-1.0; nothing of that is needed on X11.
 //
 // Hidden flags for testing: --demo uses a key that only lives in memory and
 // a temporary settings folder, so the real key and settings are untouched,
@@ -71,10 +72,6 @@ func main() {
 	log := newLogger(*logPath)
 	slog.SetDefault(log)
 	if *recDir != "" {
-		if wayland() {
-			fmt.Fprintln(os.Stderr, "helpbuoy: a Wayland desktop can't be recorded; log in with an X11 session")
-			os.Exit(1)
-		}
 		if err := record(*recDir, *recFor, *recFPS, log); err != nil {
 			fmt.Fprintln(os.Stderr, "helpbuoy:", err)
 			os.Exit(1)
@@ -146,16 +143,12 @@ func main() {
 	hello := screen.Hello{Hostname: hostname, UserMachine: userMachine, OS: "linux"}
 
 	w := ui.New([][]byte{icon48, icon32, icon16})
-	if *source == "screen" && wayland() {
+	onWayland := *source == "screen" && wayland()
+	if onWayland {
 		// Through XWayland the screen reads black except for X11 windows,
-		// and input only reaches X11 windows: refuse instead of showing
-		// the techie a black screen.
-		log.Warn("Wayland session, sharing is not supported")
-		w.Unsupported = i18n.Trans("This computer uses a Wayland desktop. HelpBuoy can only share " +
-			"and control X11 desktops for now.\n\n" +
-			"To get help, log out, choose an X11 session on the login screen " +
-			"(on GNOME: the gear button, \"GNOME on Xorg\"; on KDE: \"Plasma (X11)\"), " +
-			"log in and start HelpBuoy again.")
+		// and input only reaches X11 windows: share through the portal, or
+		// refuse instead of showing the techie a black screen.
+		w.Unsupported = waylandProblem(log)
 	}
 	ctrl := app.New(app.Deps{
 		UI:        w,
@@ -175,6 +168,9 @@ func main() {
 					Label:   userMachine,
 					Logger:  log,
 				}
+			}
+			if onWayland {
+				return newWaylandRunner(k, hello, store.Dir, log)
 			}
 			return newScreenRunner(k, hello, log)
 		},
@@ -199,16 +195,6 @@ func main() {
 		os.Exit(1)
 	}
 	ctrl.WaitClosed(time.Second)
-}
-
-// wayland reports whether the desktop session is Wayland. XDG_SESSION_TYPE
-// is what the login manager started; without it a Wayland socket is the
-// sign.
-func wayland() bool {
-	if t := os.Getenv("XDG_SESSION_TYPE"); t != "" {
-		return t == "wayland"
-	}
-	return os.Getenv("WAYLAND_DISPLAY") != ""
 }
 
 // screenSize returns the size of the X screen, or 0x0 without a display.
@@ -240,12 +226,19 @@ func newScreenRunner(k *appkey.Key, hello screen.Hello, log *slog.Logger) sessio
 }
 
 // record captures the primary monitor at fps for d into a new recording in
-// dir, for the replay benchmark.
+// dir, for the replay benchmark. On Wayland the compositor asks which
+// monitor.
 func record(dir string, d time.Duration, fps int, log *slog.Logger) error {
 	if fps <= 0 || fps > 60 {
 		return errors.New("--record-fps must be 1..60")
 	}
-	scr, err := capture.New(log)
+	var scr wcapture.Screen
+	var err error
+	if wayland() {
+		scr, err = openWayland("", log)
+	} else {
+		scr, err = capture.New(log)
+	}
 	if err != nil {
 		return err
 	}
