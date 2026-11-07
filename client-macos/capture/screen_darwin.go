@@ -2,7 +2,7 @@ package capture
 
 /*
 #cgo CFLAGS: -fobjc-arc
-#cgo LDFLAGS: -framework AppKit -framework CoreGraphics -framework CoreMedia -framework CoreVideo -framework ScreenCaptureKit
+#cgo LDFLAGS: -framework AppKit -framework CoreGraphics -framework CoreMedia -framework CoreVideo -framework Metal -framework ScreenCaptureKit
 #include <stdlib.h>
 #include "sck.h"
 */
@@ -75,7 +75,7 @@ func (s *Screen) Open(m wcapture.Monitor) (wcapture.Capturer, error) {
 		return nil, errors.New("capture: empty monitor")
 	}
 	cp := &Capturer{s: s, id: uint32(id), w: w, h: h}
-	if Backend == "cg" {
+	if backend() == "cg" {
 		cp.cg = true
 	} else {
 		var errBuf [256]C.char
@@ -91,7 +91,7 @@ func (s *Screen) Open(m wcapture.Monitor) (wcapture.Capturer, error) {
 	s.open[cp] = struct{}{}
 	s.mu.Unlock()
 	if cp.cg {
-		s.log.Info("CoreGraphics capture", "display", id, "size", image.Pt(w, h))
+		s.log.Info("CoreGraphics capture", "display", id, "size", image.Pt(w, h), "metal", hasMetal())
 	} else {
 		s.log.Info("ScreenCaptureKit stream", "display", id, "size", image.Pt(w, h))
 	}
@@ -132,6 +132,17 @@ func (s *Screen) CursorShape(handle uintptr) (wcapture.Shape, error) {
 		return wcapture.Shape{}, errors.New("capture: cursor shape changed")
 	}
 	return s.shape, nil
+}
+
+var (
+	metalOnce sync.Once
+	metal     bool
+)
+
+// hasMetal reports whether the Mac has a Metal device, asked once.
+func hasMetal() bool {
+	metalOnce.Do(func() { metal = C.hb_has_metal() != 0 })
+	return metal
 }
 
 // Close implements capture.Screen.

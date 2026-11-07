@@ -1,6 +1,7 @@
 #import <AppKit/AppKit.h>
 #import <CoreMedia/CoreMedia.h>
 #import <CoreVideo/CoreVideo.h>
+#import <Metal/Metal.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 #include <os/lock.h>
 #include <string.h>
@@ -239,8 +240,17 @@ void hb_stream_stop(hb_stream *s) {
 	free(s);
 }
 
+int hb_has_metal(void) {
+	id<MTLDevice> d = MTLCreateSystemDefaultDevice();
+	return d != nil;
+}
+
 int hb_cg_copy(uint32_t display, uint8_t *dst, int stride, int w, int h, char *err, int errlen) {
-	CGImageRef img = CGDisplayCreateImage(display);
+	// All on-screen windows composited, desktop included, over the
+	// display's bounds. Not CGDisplayCreateImage: on macOS 14 that goes
+	// through a display stream as well.
+	CGImageRef img = CGWindowListCreateImage(CGDisplayBounds(display), kCGWindowListOptionOnScreenOnly,
+	                                         kCGNullWindowID, kCGWindowImageNominalResolution);
 	if (!img) {
 		seterr(err, errlen, @"the screen can't be recorded");
 		return -1;

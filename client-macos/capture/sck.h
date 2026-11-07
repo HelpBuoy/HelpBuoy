@@ -39,9 +39,15 @@ int hb_cursor_pos(double *x, double *y);
 // It returns 0 with the size and hot spot in pixels, or -1.
 int hb_cursor_shape(double scale, uint8_t *rgba, int max, int *w, int *h, int *hotx, int *hoty);
 
-// hb_cg_copy grabs display with CGDisplayCreateImage and draws it scaled
-// into dst (w x h BGRA pixels, stride bytes per row), without the cursor.
-// It returns 1, or -1 with a message in err. Unlike a stream it makes a new
-// image on every call, and it stays away from WindowServer's display stream
-// surfaces, which crash WindowServer on some Intel Macs with macOS 14.
+// hb_has_metal reports whether the Mac has a Metal device. Without one
+// (a virtual machine), WindowServer composites in software and crashes in
+// WSSelectiveSharingUpdateDisplayStreamSurface as soon as a display stream
+// runs, which ScreenCaptureKit and, on macOS 14, CGDisplayCreateImage use.
+int hb_has_metal(void);
+
+// hb_cg_copy grabs display with CGWindowListCreateImage (every on-screen
+// window over the display's bounds, at points) and draws it into dst (w x h
+// BGRA pixels, stride bytes per row), without the cursor. It returns 1, or
+// -1 with a message in err. It makes a new image on every call and uses no
+// display stream.
 int hb_cg_copy(uint32_t display, uint8_t *dst, int stride, int w, int h, char *err, int errlen);

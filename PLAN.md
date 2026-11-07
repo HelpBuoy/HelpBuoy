@@ -867,8 +867,9 @@ headers and privacy text on the site.
 **Phase 7 - Wayland and macOS** (built and released; not yet tried on a real Wayland
 desktop or a real Mac)
 The Linux client shares Wayland desktops through the XDG remote desktop portal with
-PipeWire capture through `gst-launch-1.0`. `client-macos/` with ScreenCaptureKit (CoreGraphics on Intel: a ScreenCaptureKit stream
-crashed WindowServer on an Intel iMac with macOS 14, in its display stream surfaces), CGEvent and
+PipeWire capture through `gst-launch-1.0`. `client-macos/` with ScreenCaptureKit (CGWindowListCreateImage on Macs without Metal: in a
+macOS 14 VM any display stream, also the one behind CGDisplayCreateImage, crashed WindowServer
+in WSSelectiveSharingUpdateDisplayStreamSurface), CGEvent and
 an AppKit host for the shared drawn window from `client-linux/ui`, cross compiled with zig.
 The desk app ships as a universal `.app` as well. Both macOS apps are unsigned.
 

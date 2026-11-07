@@ -1,6 +1,6 @@
-// Package capture reads the macOS screen and cursor (PLAN.md 5.2). On Intel
-// Macs frames come from CGDisplayCreateImage (see Backend); otherwise they
-// come from ScreenCaptureKit, which only delivers a frame when something
+// Package capture reads the macOS screen and cursor (PLAN.md 5.2). On Macs
+// without Metal frames come from CGWindowListCreateImage (see Backend);
+// otherwise they come from ScreenCaptureKit, which only delivers a frame when something
 // changed and scales it on the GPU: displays are captured at their size in
 // points, not in Retina pixels, which is a quarter of the pixels to compare,
 // encode and send. Monitors, the cursor and the injector's mouse positions

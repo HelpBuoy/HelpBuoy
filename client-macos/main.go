@@ -11,8 +11,9 @@
 // a temporary settings folder, so the real key and settings are untouched,
 // and streams the test pattern unless --source screen is given; --log FILE
 // writes a debug log; --capture sck or cg picks ScreenCaptureKit or
-// CoreGraphics capture (CoreGraphics by default on Intel, where
-// ScreenCaptureKit can crash WindowServer on macOS 14).
+// CoreGraphics capture (by default CoreGraphics only on Macs without Metal,
+// such as virtual machines, where a ScreenCaptureKit stream crashes
+// WindowServer).
 package main
 
 import (
@@ -57,12 +58,12 @@ func main() {
 	demo := flag.Bool("demo", false, "use an in-memory key and temporary settings")
 	logPath := flag.String("log", "", "write a debug log to this file")
 	source := flag.String("source", "", "what sessions show: screen or pattern (default pattern with --demo, else screen)")
-	backend := flag.String("capture", capture.Backend, "how the screen is captured: sck (ScreenCaptureKit) or cg (CoreGraphics, the default on Intel)")
+	backend := flag.String("capture", "", "how the screen is captured: sck (ScreenCaptureKit) or cg (CoreGraphics); default sck, or cg without Metal")
 	flag.Parse()
 
 	log := newLogger(*logPath)
 	slog.SetDefault(log)
-	if *backend != "sck" && *backend != "cg" {
+	if *backend != "" && *backend != "sck" && *backend != "cg" {
 		fmt.Fprintln(os.Stderr, "--capture must be sck or cg")
 		os.Exit(2)
 	}

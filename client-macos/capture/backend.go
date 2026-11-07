@@ -1,17 +1,21 @@
+//go:build darwin
+
 package capture
 
-import "runtime"
-
 // Backend picks how frames are captured: "sck" for ScreenCaptureKit or "cg"
-// for CGDisplayCreateImage. ScreenCaptureKit crashes WindowServer on some
-// Intel Macs with macOS 14 (in WSSelectiveSharingUpdateDisplayStreamSurface,
-// as soon as the stream runs), so Intel Macs use CoreGraphics. Set it before
-// opening a monitor.
-var Backend = defaultBackend()
+// for CGWindowListCreateImage. Empty, the default, means sck on Macs with a
+// Metal device and cg without one: there (virtual machines) WindowServer
+// crashes in WSSelectiveSharingUpdateDisplayStreamSurface as soon as a
+// display stream runs. Set it before opening a monitor.
+var Backend = ""
 
-func defaultBackend() string {
-	if runtime.GOARCH == "amd64" {
-		return "cg"
+// backend resolves Backend.
+func backend() string {
+	if Backend != "" {
+		return Backend
 	}
-	return "sck"
+	if hasMetal() {
+		return "sck"
+	}
+	return "cg"
 }
