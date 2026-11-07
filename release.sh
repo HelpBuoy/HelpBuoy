@@ -1,7 +1,6 @@
 #!/bin/bash
 #
 # sudo apt install jq zip wixl msitools gh dpkg
-# plus zig, the macOS SDK and rcodesign for the macOS client (README.md)
 #
 # Releases a new version of helpbuoy:
 #
@@ -17,9 +16,10 @@
 #
 # The script builds the release packages with "make dist" (MSIs of the
 # client and desk app, Debian packages of the client, desk app and
-# helpbuoy-server, the zipped macOS client, all in dist/), commits the
-# version bump, tags and pushes it and creates the GitHub release v<version>
-# with all files in dist/.
+# helpbuoy-server, zipped macOS apps of the client and desk app, all in
+# dist/), commits the version bump, tags and pushes it and creates the
+# GitHub release v<version> with all files in dist/. The macOS client needs
+# zig, a macOS SDK and rcodesign, see README.md.
 set -e
 cd "$(dirname "$0")"
 

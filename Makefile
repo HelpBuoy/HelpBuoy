@@ -18,8 +18,9 @@ SHELL := /bin/bash
 BIN  := bin
 DIST := dist
 
-# Only Linux and Windows on amd64 for now; add darwin or arm64 here to build
-# them again (the MSI stays x64).
+# Only Linux and Windows on amd64 for now; add arm64 here to build it again
+# (the MSI stays x64). macOS has its own universal targets: client-macos and
+# desk-macos.
 OSES    := linux windows
 ARCHES  := amd64
 TARGETS := $(foreach os,$(OSES),$(addprefix $(os)/,$(ARCHES)))
@@ -37,7 +38,7 @@ DESK_FILE_VERSION = $(shell jq -r '.RT_VERSION[]["0000"].fixed.file_version' des
 MSI := $(DIST)/helpbuoy_$(APP_VERSION)_amd64.msi
 DESK_MSI := $(DIST)/helpbuoy-desk_$(APP_VERSION)_amd64.msi
 
-.PHONY: help all test vet fuzz server client client-linux client-macos zip-macos desk dist msi deb deb-client deb-desk icon clean
+.PHONY: help all test vet fuzz server client client-linux client-macos desk-macos zip-macos desk dist msi deb deb-client deb-desk icon clean
 
 help:
 	@echo "make test     run proto and server tests"
@@ -47,8 +48,9 @@ help:
 	@echo "make client   build the Windows client ($(ARCHES)) into $(BIN)/"
 	@echo "make client-linux  build the static X11 Linux client ($(ARCHES)) into $(BIN)/"
 	@echo "make client-macos  build the universal macOS client into $(BIN)/ (needs zig and a macOS SDK)"
-	@echo "make zip-macos     zipped, ad hoc signed HelpBuoy.app in $(DIST)/ (needs rcodesign too)"
+	@echo "make zip-macos     zipped, ad hoc signed HelpBuoy.app and HelpBuoy Desk.app in $(DIST)/ (needs rcodesign too)"
 	@echo "make desk     build the desk app ($(TARGETS)) into $(BIN)/"
+	@echo "make desk-macos    build the universal macOS desk app into $(BIN)/"
 	@echo "make dist     all release packages in $(DIST)/: msi, deb, deb-client, deb-desk and zip-macos"
 	@echo "make msi      per-user installers of the Windows client and desk app (needs wixl and msitools)"
 	@echo "make deb      Debian 13 package of helpbuoy-server with a systemd service (needs dpkg-deb)"
@@ -116,6 +118,9 @@ RCODESIGN  ?= rcodesign
 MAC_MIN    := 12.3
 MAC_ARCHES := amd64 arm64
 MAC_ZIP    := $(DIST)/helpbuoy_$(APP_VERSION)_macos.zip
+MAC_DESK_ZIP := $(DIST)/helpbuoy-desk_$(APP_VERSION)_macos.zip
+LIPO       := GOWORK=off GO111MODULE=off go run tools/lipo/main.go
+MACAPP     := GOWORK=off GO111MODULE=off go run tools/macapp/main.go
 
 client-macos:
 	@test -d "$(MACOSX_SDK)" || { echo "no macOS SDK in $(MACOSX_SDK); see README.md, set MACOSX_SDK" >&2; exit 1; }
@@ -129,32 +134,41 @@ client-macos:
 		go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BIN)/darwin-$$arch/helpbuoy ./client-macos || exit 1; \
 	done
 	@mkdir -p $(BIN)/darwin-universal
-	GOWORK=off GO111MODULE=off go run tools/lipo/main.go -out $(BIN)/darwin-universal/helpbuoy \
-		$(foreach a,$(MAC_ARCHES),$(BIN)/darwin-$(a)/helpbuoy)
+	$(LIPO) -out $(BIN)/darwin-universal/helpbuoy $(foreach a,$(MAC_ARCHES),$(BIN)/darwin-$(a)/helpbuoy)
 
-# zip-macos: HelpBuoy.app, signed ad hoc, zipped. Set RCODESIGN= (empty) to
-# skip signing for a local test build.
-zip-macos: client-macos
+# The macOS desk app: pure Go like the other desk builds (raylib-go purego
+# embeds libraylib.dylib), so it needs no SDK or zig. The Go linker signs the
+# arm64 slice ad hoc; zip-macos signs the whole bundle.
+desk-macos:
+	@for arch in $(MAC_ARCHES); do \
+		echo "helpbuoy-desk darwin/$$arch"; \
+		GOOS=darwin GOARCH=$$arch go build $(GOFLAGS) -ldflags "$(LDFLAGS)" \
+			-o $(BIN)/darwin-$$arch/helpbuoy-desk ./desk || exit 1; \
+	done
+	@mkdir -p $(BIN)/darwin-universal
+	$(LIPO) -out $(BIN)/darwin-universal/helpbuoy-desk $(foreach a,$(MAC_ARCHES),$(BIN)/darwin-$(a)/helpbuoy-desk)
+
+# zip-macos: HelpBuoy.app and HelpBuoy Desk.app, signed ad hoc, zipped. Set
+# RCODESIGN= (empty) to skip signing for a local test build.
+zip-macos: client-macos desk-macos
 	@mkdir -p $(DIST)
 	@sign=; if [ -n "$(RCODESIGN)" ]; then \
 		sign=$$(command -v $(RCODESIGN)) || { echo "no rcodesign ($(RCODESIGN)); see README.md, or set RCODESIGN= to skip signing" >&2; exit 1; }; \
-	else echo "warning: HelpBuoy.app is not signed" >&2; fi; \
-	GOWORK=off GO111MODULE=off go run tools/macapp/main.go -app helpbuoy -name HelpBuoy -id helpbuoy.client \
+	else echo "warning: the macOS apps are not signed" >&2; fi; \
+	$(MACAPP) -app helpbuoy -name HelpBuoy -id helpbuoy.client \
 		-version $(APP_VERSION) -min $(MAC_MIN) -exe $(BIN)/darwin-universal/helpbuoy \
-		-icon client-macos/resources/icon.png -out $(MAC_ZIP) $${sign:+-rcodesign $$sign}
+		-icon client-macos/resources/icon.png -out $(MAC_ZIP) $${sign:+-rcodesign $$sign} && \
+	$(MACAPP) -app helpbuoy-desk -name "HelpBuoy Desk" -id helpbuoy.desk \
+		-version $(APP_VERSION) -min $(MAC_MIN) -exe $(BIN)/darwin-universal/helpbuoy-desk \
+		-icon desk/resources/icon.png -out $(MAC_DESK_ZIP) $${sign:+-rcodesign $$sign}
 
 # Release packages, all in $(DIST)/: an installer per app and platform, no
 # bare binaries. Windows gets per-user MSIs for the client and the desk app,
 # Debian gets .debs for the client, the desk app and helpbuoy-server, and
-# macOS a zipped client .app and (when darwin is in OSES) a zipped desk .app.
+# macOS zipped universal .apps of the client and the desk app.
 dist:
 	@rm -rf $(DIST) && mkdir -p $(DIST)
 	@$(MAKE) --no-print-directory msi deb deb-client deb-desk zip-macos
-	@for t in $(subst /,-,$(filter darwin/%,$(TARGETS))); do \
-		GOWORK=off GO111MODULE=off go run tools/macapp/main.go -app helpbuoy-desk -id helpbuoy.desk \
-			-version $(APP_VERSION) -exe $(BIN)/$$t/helpbuoy-desk \
-			-icon desk/resources/icon.png -out $(DIST)/helpbuoy-desk_$(VERSION)_$$t.zip || exit 1; \
-	done
 	@cd $(DIST) && rm -f SHA256SUMS && sha256sum * > SHA256SUMS
 	@ls -l $(DIST)
 
