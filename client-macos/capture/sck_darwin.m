@@ -239,6 +239,29 @@ void hb_stream_stop(hb_stream *s) {
 	free(s);
 }
 
+int hb_cg_copy(uint32_t display, uint8_t *dst, int stride, int w, int h, char *err, int errlen) {
+	CGImageRef img = CGDisplayCreateImage(display);
+	if (!img) {
+		seterr(err, errlen, @"the screen can't be recorded");
+		return -1;
+	}
+	CGColorSpaceRef cs = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+	// BGRA in memory, like the stream's frames.
+	CGContextRef ctx = CGBitmapContextCreate(dst, w, h, 8, stride, cs, kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
+	CGColorSpaceRelease(cs);
+	if (!ctx) {
+		CGImageRelease(img);
+		seterr(err, errlen, @"no bitmap for the screen");
+		return -1;
+	}
+	CGContextSetBlendMode(ctx, kCGBlendModeCopy);
+	CGContextSetInterpolationQuality(ctx, kCGInterpolationMedium);
+	CGContextDrawImage(ctx, CGRectMake(0, 0, w, h), img);
+	CGContextRelease(ctx);
+	CGImageRelease(img);
+	return 1;
+}
+
 int hb_cursor_pos(double *x, double *y) {
 	CGEventRef e = CGEventCreate(NULL);
 	if (!e) {

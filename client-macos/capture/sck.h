@@ -38,3 +38,10 @@ int hb_cursor_pos(double *x, double *y);
 // point into rgba (premultiplied RGBA, top row first, at most max bytes).
 // It returns 0 with the size and hot spot in pixels, or -1.
 int hb_cursor_shape(double scale, uint8_t *rgba, int max, int *w, int *h, int *hotx, int *hoty);
+
+// hb_cg_copy grabs display with CGDisplayCreateImage and draws it scaled
+// into dst (w x h BGRA pixels, stride bytes per row), without the cursor.
+// It returns 1, or -1 with a message in err. Unlike a stream it makes a new
+// image on every call, and it stays away from WindowServer's display stream
+// surfaces, which crash WindowServer on some Intel Macs with macOS 14.
+int hb_cg_copy(uint32_t display, uint8_t *dst, int stride, int w, int h, char *err, int errlen);

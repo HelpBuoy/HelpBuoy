@@ -10,7 +10,9 @@
 // Hidden flags for testing: --demo uses a key that only lives in memory and
 // a temporary settings folder, so the real key and settings are untouched,
 // and streams the test pattern unless --source screen is given; --log FILE
-// writes a debug log.
+// writes a debug log; --capture sck or cg picks ScreenCaptureKit or
+// CoreGraphics capture (CoreGraphics by default on Intel, where
+// ScreenCaptureKit can crash WindowServer on macOS 14).
 package main
 
 import (
@@ -55,10 +57,16 @@ func main() {
 	demo := flag.Bool("demo", false, "use an in-memory key and temporary settings")
 	logPath := flag.String("log", "", "write a debug log to this file")
 	source := flag.String("source", "", "what sessions show: screen or pattern (default pattern with --demo, else screen)")
+	backend := flag.String("capture", capture.Backend, "how the screen is captured: sck (ScreenCaptureKit) or cg (CoreGraphics, the default on Intel)")
 	flag.Parse()
 
 	log := newLogger(*logPath)
 	slog.SetDefault(log)
+	if *backend != "sck" && *backend != "cg" {
+		fmt.Fprintln(os.Stderr, "--capture must be sck or cg")
+		os.Exit(2)
+	}
+	capture.Backend = *backend
 	if *source == "" {
 		*source = "screen"
 		if *demo {

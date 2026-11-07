@@ -74,19 +74,27 @@ func (s *Screen) Open(m wcapture.Monitor) (wcapture.Capturer, error) {
 	if w <= 0 || h <= 0 {
 		return nil, errors.New("capture: empty monitor")
 	}
-	var errBuf [256]C.char
-	st := C.hb_stream_start(C.uint32_t(id), C.int(w), C.int(h), &errBuf[0], C.int(len(errBuf)))
-	if st == nil {
-		return nil, fmt.Errorf("capture: %s", C.GoString(&errBuf[0]))
+	cp := &Capturer{s: s, id: uint32(id), w: w, h: h}
+	if Backend == "cg" {
+		cp.cg = true
+	} else {
+		var errBuf [256]C.char
+		cp.st = C.hb_stream_start(C.uint32_t(id), C.int(w), C.int(h), &errBuf[0], C.int(len(errBuf)))
+		if cp.st == nil {
+			return nil, fmt.Errorf("capture: %s", C.GoString(&errBuf[0]))
+		}
 	}
-	cp := &Capturer{s: s, st: st, w: w, h: h}
 	for i := range cp.bufs {
 		cp.bufs[i] = image.NewRGBA(image.Rect(0, 0, w, h))
 	}
 	s.mu.Lock()
 	s.open[cp] = struct{}{}
 	s.mu.Unlock()
-	s.log.Info("ScreenCaptureKit stream", "display", id, "size", image.Pt(w, h))
+	if cp.cg {
+		s.log.Info("CoreGraphics capture", "display", id, "size", image.Pt(w, h))
+	} else {
+		s.log.Info("ScreenCaptureKit stream", "display", id, "size", image.Pt(w, h))
+	}
 	return cp, nil
 }
 
@@ -138,15 +146,18 @@ func (s *Screen) Close() error {
 	return nil
 }
 
-// Capturer is a running stream of one display.
+// Capturer captures one display, from a stream or with CoreGraphics.
 type Capturer struct {
-	s    *Screen
-	st   *C.hb_stream
-	w, h int
-	seq  C.uint64_t
-	bufs [2]*image.RGBA
-	last int // index of the buffer returned last, -1 before the first frame
-	got  bool
+	s      *Screen
+	st     *C.hb_stream // nil with cg
+	cg     bool         // CGDisplayCreateImage on every Capture
+	id     uint32
+	closed bool
+	w, h   int
+	seq    C.uint64_t
+	bufs   [2]*image.RGBA
+	last   int // index of the buffer returned last, -1 before the first frame
+	got    bool
 }
 
 // firstFrame is how long Capture waits for the stream's first frame.
@@ -157,8 +168,22 @@ const firstFrame = 2 * time.Second
 // again; the other buffer is filled with the next new frame, which keeps an
 // image valid until the second following call.
 func (cp *Capturer) Capture() (*image.RGBA, error) {
-	if cp.st == nil {
+	if cp.closed {
 		return nil, errors.New("capture: closed")
+	}
+	if cp.cg {
+		next := 0
+		if cp.got {
+			next = 1 - cp.last
+		}
+		img := cp.bufs[next]
+		var errBuf [256]C.char
+		if C.hb_cg_copy(C.uint32_t(cp.id), (*C.uint8_t)(unsafe.Pointer(&img.Pix[0])), C.int(img.Stride),
+			C.int(cp.w), C.int(cp.h), &errBuf[0], C.int(len(errBuf))) < 0 {
+			return nil, fmt.Errorf("capture: %s", C.GoString(&errBuf[0]))
+		}
+		cp.last, cp.got = next, true
+		return img, nil
 	}
 	deadline := time.Now().Add(firstFrame)
 	for {
@@ -187,11 +212,14 @@ func (cp *Capturer) Capture() (*image.RGBA, error) {
 
 // Close implements capture.Capturer.
 func (cp *Capturer) Close() error {
-	if cp.st == nil {
+	if cp.closed {
 		return nil
 	}
-	C.hb_stream_stop(cp.st)
-	cp.st = nil
+	cp.closed = true
+	if cp.st != nil {
+		C.hb_stream_stop(cp.st)
+		cp.st = nil
+	}
 	cp.s.mu.Lock()
 	delete(cp.s.open, cp)
 	cp.s.mu.Unlock()

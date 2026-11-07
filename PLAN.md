@@ -46,7 +46,7 @@ other, and splices their channels together.
 
 What a session can do, and nothing more:
 - **computer → techie**: screen updates and the cursor shape (GDI on Windows, X11 or the
-  portal's PipeWire stream on Linux, ScreenCaptureKit on macOS).
+  portal's PipeWire stream on Linux, ScreenCaptureKit or CoreGraphics on macOS).
 - **techie → computer**: mouse and keyboard input.
 - No file transfer, no clipboard, no shell, no audio.
 
@@ -244,7 +244,7 @@ helpbuoy/
 │   ├── injector/                # XTEST or portal input, Esc watch
 │   └── ui/                      # its own drawn window and widgets, shown by a Host (X11 here)
 └── client-macos/                # macOS 12.3+ client (cgo, cross compiled with zig)
-    ├── capture/                 # ScreenCaptureKit at display points, NSCursor
+    ├── capture/                 # ScreenCaptureKit or CoreGraphics at display points, NSCursor
     ├── injector/                # CGEvent input, CGEventTap that swallows the local Esc
     ├── macwin/                  # AppKit Host for client-linux/ui
     └── perm/                    # Screen Recording and Accessibility checks
@@ -867,7 +867,8 @@ headers and privacy text on the site.
 **Phase 7 - Wayland and macOS** (built and released; not yet tried on a real Wayland
 desktop or a real Mac)
 The Linux client shares Wayland desktops through the XDG remote desktop portal with
-PipeWire capture through `gst-launch-1.0`. `client-macos/` with ScreenCaptureKit, CGEvent and
+PipeWire capture through `gst-launch-1.0`. `client-macos/` with ScreenCaptureKit (CoreGraphics on Intel: a ScreenCaptureKit stream
+crashed WindowServer on an Intel iMac with macOS 14, in its display stream surfaces), CGEvent and
 an AppKit host for the shared drawn window from `client-linux/ui`, cross compiled with zig.
 The desk app ships as a universal `.app` as well. Both macOS apps are unsigned.
 
