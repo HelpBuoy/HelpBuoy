@@ -46,7 +46,7 @@ help:
 	@echo "make fuzz     short fuzz run of the fuzz targets"
 	@echo "make server   build helpbuoy-server ($(TARGETS)) into $(BIN)/"
 	@echo "make client   build the Windows client ($(ARCHES)) into $(BIN)/"
-	@echo "make client-linux  build the static X11 Linux client ($(ARCHES)) into $(BIN)/"
+	@echo "make client-linux  build the static Linux client (X11 and Wayland) ($(ARCHES)) into $(BIN)/"
 	@echo "make client-macos  build the universal macOS client into $(BIN)/ (needs zig and a macOS SDK)"
 	@echo "make zip-macos     zipped, ad hoc signed HelpBuoy.app and HelpBuoy Desk.app in $(DIST)/ (needs rcodesign too)"
 	@echo "make desk     build the desk app ($(TARGETS)) into $(BIN)/"

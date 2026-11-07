@@ -306,7 +306,7 @@ func (j *Injector) release(h held) bool {
 // send sends one event and logs a failure once per kind and error.
 func (j *Injector) send(kind string, typ, detail uint8, x, y int) bool {
 	if err := j.be.fake(typ, detail, x, y); err != nil {
-		j.logOnce("send:"+kind+":"+err.Error(), "XTEST input failed", "kind", kind, "err", err)
+		j.logOnce("send:"+kind+":"+err.Error(), "input injection failed", "kind", kind, "err", err)
 		return false
 	}
 	return true
