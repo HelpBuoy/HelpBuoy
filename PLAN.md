@@ -650,7 +650,8 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
 - `release.sh [major|minor|build]` bumps the version in both `winres.json` files, runs
   `make vet test dist`, commits, tags `v<version>`, pushes and creates the GitHub release
   with everything in `dist/`: only installers, never a bare binary. That is the client and desk
-  app MSIs, the Debian packages of the Linux client, the desk app and `helpbuoy-server`, and
+  app MSIs, the Debian packages of the Linux client, the desk app and `helpbuoy-server` for
+  amd64 and arm64, and
   the zipped macOS client and desk app (`helpbuoy_<version>_macos.zip` and
   `helpbuoy-desk_<version>_macos.zip`, universal apps that are not signed or notarized; only
   the arm64 slice carries the ad hoc signature zig and the Go linker give it).
@@ -658,8 +659,9 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   for the desk app on Windows, which updates the same way: its title shows the version and an
   "Check for updates" link sits in the top right corner (in the tab bar once connected). With sessions
   open it asks to end them first. The Linux and macOS apps have no update check yet.
-  Linux and Windows are built for amd64 (`OSES` and `ARCHES` in the Makefile); the macOS apps
-  are built for amd64 and arm64 and merged into one universal binary with `tools/lipo`.
+  Linux is built for amd64 and arm64 (`LINUX_ARCHES` in the Makefile), Windows for amd64 only
+  (`WIN_ARCHES`, the MSIs are x64); the macOS apps are built for amd64 and arm64 and merged
+  into one universal binary with `tools/lipo`.
 - The server also ships as a Debian 13 package (`make deb`, `packaging/debian/`): `helpbuoy-server`
   as a hardened systemd service under its own system user with its state in
   `/var/lib/helpbuoy-server`, settings in `/etc/default/helpbuoy-server`, and `helpbuoy-serverctl` to run
@@ -737,8 +739,8 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   or with `helpbuoy-server techie add` by whoever runs the server.
 - **Distribution**: an installer per OS containing only the desk app: a per-user MSI on
   Windows (`installer/helpbuoy-desk.wxs`, into `%LOCALAPPDATA%\Programs\helpbuoy-desk`), a
-  Debian package (`make deb-desk`, needs glibc 2.38 for the embedded raylib, so Debian 13 or
-  Ubuntu 24.04) and a zipped universal `HelpBuoy Desk.app` for macOS 12.3 or later. The server is built in, so `helpbuoy-server`
+  Debian package for amd64 and arm64 (`make deb-desk`, needs glibc 2.38 for the embedded
+  raylib, so Debian 13 or Ubuntu 24.04) and a zipped universal `HelpBuoy Desk.app` for macOS 12.3 or later. The server is built in, so `helpbuoy-server`
   is not packaged with it; it ships separately as the Debian package. All built on Linux with
   `CGO_ENABLED=0`; the macOS `.app` is assembled by a script (Info.plist, `.icns` written in
   Go from the PNG icon). No Docker image.
@@ -872,6 +874,8 @@ macOS 14 VM any display stream, also the one behind CGDisplayCreateImage, crashe
 in WSSelectiveSharingUpdateDisplayStreamSurface), CGEvent and
 an AppKit host for the shared drawn window from `client-linux/ui`, cross compiled with zig.
 The desk app ships as a universal `.app` as well. Both macOS apps are unsigned.
+The Linux client, the desk app and `helpbuoy-server` also ship as arm64 Debian packages
+(ARM laptops, servers and a 64-bit Raspberry Pi), built the same way with `GOARCH=arm64`.
 
 **Later**: tray icon and optional "Start with Windows" (HKCU Run entry, no admin), so the
 computer can stay online in the background; an update check in the Linux and macOS

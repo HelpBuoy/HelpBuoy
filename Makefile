@@ -18,19 +18,18 @@ SHELL := /bin/bash
 BIN  := bin
 DIST := dist
 
-# Only Linux and Windows on amd64 for now; add arm64 here to build it again
-# (the MSI stays x64). macOS has its own universal targets: client-macos and
-# desk-macos.
-OSES    := linux windows
-ARCHES  := amd64
-TARGETS := $(foreach os,$(OSES),$(addprefix $(os)/,$(ARCHES)))
+# Linux on amd64 and arm64, Windows on amd64 only (the MSI is x64). macOS has
+# its own universal targets: client-macos and desk-macos.
+LINUX_ARCHES := amd64 arm64
+WIN_ARCHES   := amd64
+TARGETS := $(addprefix linux/,$(LINUX_ARCHES)) $(addprefix windows/,$(WIN_ARCHES))
 WINRES  := go run github.com/tc-hib/go-winres@v0.3.3
 comma   := ,
 space   := $(subst ,, )
-WINRES_ARCH := $(subst $(space),$(comma),$(ARCHES))
+WINRES_ARCH := $(subst $(space),$(comma),$(WIN_ARCHES))
 
-DESK_SYSO := $(foreach a,$(ARCHES),desk/rsrc_windows_$(a).syso)
-CLIENT_SYSO := $(foreach a,$(ARCHES),client-windows/rsrc_windows_$(a).syso)
+DESK_SYSO := $(foreach a,$(WIN_ARCHES),desk/rsrc_windows_$(a).syso)
+CLIENT_SYSO := $(foreach a,$(WIN_ARCHES),client-windows/rsrc_windows_$(a).syso)
 CLIENT_ICONS := $(addprefix client-windows/resources/,icon.png icon48.png icon32.png icon16.png)
 # Four part versions of the Windows exes, which the MSIs need for the upgrade.
 FILE_VERSION = $(shell jq -r '.RT_VERSION[]["0000"].fixed.file_version' client-windows/resources/winres.json)
@@ -45,8 +44,8 @@ help:
 	@echo "make vet      go vet all modules (client for windows too)"
 	@echo "make fuzz     short fuzz run of the fuzz targets"
 	@echo "make server   build helpbuoy-server ($(TARGETS)) into $(BIN)/"
-	@echo "make client   build the Windows client ($(ARCHES)) into $(BIN)/"
-	@echo "make client-linux  build the static Linux client (X11 and Wayland) ($(ARCHES)) into $(BIN)/"
+	@echo "make client   build the Windows client ($(WIN_ARCHES)) into $(BIN)/"
+	@echo "make client-linux  build the static Linux client (X11 and Wayland) ($(LINUX_ARCHES)) into $(BIN)/"
 	@echo "make client-macos  build the universal macOS client into $(BIN)/ (needs zig and a macOS SDK)"
 	@echo "make zip-macos     zipped HelpBuoy.app and HelpBuoy Desk.app in $(DIST)/"
 	@echo "make desk     build the desk app ($(TARGETS)) into $(BIN)/"
@@ -94,7 +93,7 @@ $(CLIENT_SYSO): client-windows/resources/winres.json $(CLIENT_ICONS)
 	cd client-windows && $(WINRES) make --in resources/winres.json --arch $(WINRES_ARCH)
 
 client: $(CLIENT_SYSO)
-	@for arch in $(ARCHES); do \
+	@for arch in $(WIN_ARCHES); do \
 		echo "helpbuoy.exe windows/$$arch"; \
 		GOOS=windows GOARCH=$$arch go build $(GOFLAGS) -ldflags "$(LDFLAGS) -H=windowsgui" \
 			-o $(BIN)/windows-$$arch/helpbuoy.exe ./client-windows || exit 1; \
@@ -103,7 +102,7 @@ client: $(CLIENT_SYSO)
 # The Linux client: one static binary that speaks X11 itself (jezek/xgb),
 # so it runs on any Linux desktop without installing anything.
 client-linux:
-	@for arch in $(ARCHES); do \
+	@for arch in $(LINUX_ARCHES); do \
 		echo "helpbuoy linux/$$arch"; \
 		GOOS=linux GOARCH=$$arch go build $(GOFLAGS) -ldflags "$(LDFLAGS)" \
 			-o $(BIN)/linux-$$arch/helpbuoy ./client-linux || exit 1; \
