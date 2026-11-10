@@ -37,14 +37,44 @@ type fakeUI struct {
 	lock    bool
 	locks   int
 	company string
+	// lockGate, if set, holds ConfirmLock until it is closed; techies
+	// counts the techie questions.
+	lockGate chan struct{}
+	techies  int
+	// open counts the questions open at once, and maxOpen its highest value.
+	open, maxOpen int
+}
+
+// enter and leave track how many questions are open at once.
+func (u *fakeUI) enter() {
+	u.mu.Lock()
+	u.open++
+	u.maxOpen = max(u.maxOpen, u.open)
+	u.mu.Unlock()
+}
+
+func (u *fakeUI) leave() {
+	u.mu.Lock()
+	u.open--
+	u.mu.Unlock()
 }
 
 func (u *fakeUI) ConfirmLock(ctx context.Context, company string) bool {
+	u.enter()
+	defer u.leave()
 	u.mu.Lock()
-	defer u.mu.Unlock()
 	u.locks++
 	u.company = company
-	return u.lock
+	gate, lock := u.lockGate, u.lock
+	u.mu.Unlock()
+	if gate != nil {
+		select {
+		case <-gate:
+		case <-ctx.Done():
+			return false
+		}
+	}
+	return lock
 }
 
 // lockQuestions returns the number of lock questions so far.
@@ -68,7 +98,10 @@ func (u *fakeUI) Render(v View) {
 	u.views <- v
 }
 func (u *fakeUI) ConfirmTechie(ctx context.Context, _ session.Techie, _ string) bool {
+	u.enter()
+	defer u.leave()
 	u.mu.Lock()
+	u.techies++
 	refuse, gate := u.refuse, u.gate
 	u.mu.Unlock()
 	if gate != nil {
@@ -629,5 +662,38 @@ func recvMsg[T any](t *testing.T, r *fakeserver.Server) T {
 			t.Fatalf("timed out waiting for %T", zero)
 			return zero
 		}
+	}
+}
+
+// TestOneQuestionAtATime: a techie who connects while the lock question is
+// open is asked about only once it is answered.
+func TestOneQuestionAtATime(t *testing.T) {
+	e := newEnv(t)
+	registered(t, e)
+	c, ui := e.controller()
+	gate := make(chan struct{})
+	ui.lockGate = gate
+	c.Start()
+	ui.wait(t, "main", readyMain)
+	waitFor(t, func() bool { return ui.lockQuestions() == 1 })
+	connectTechie(t, e.server, e.fp())
+	ui.wait(t, "asking", func(v View) bool { return v.Asking })
+	time.Sleep(100 * time.Millisecond)
+	ui.mu.Lock()
+	asked := ui.techies
+	ui.mu.Unlock()
+	if asked != 0 {
+		t.Fatal("asked about the techie while the lock question was open")
+	}
+	close(gate)
+	waitFor(t, func() bool {
+		ui.mu.Lock()
+		defer ui.mu.Unlock()
+		return ui.techies == 1
+	})
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
+	if ui.maxOpen != 1 {
+		t.Fatalf("%d questions open at once", ui.maxOpen)
 	}
 }

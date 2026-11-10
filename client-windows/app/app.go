@@ -169,14 +169,20 @@ type Controller struct {
 	probing   bool
 	stopProbe context.CancelFunc
 	// lockAsked is set once the lock question was asked on the running
-	// computer's connection; stopLock ends the question.
+	// computer's connection; stopLock ends the question. lockOpen is closed
+	// once it is answered, nil while it is not open.
 	lockAsked bool
 	stopLock  context.CancelFunc
-	lastErr   error // why the last computer stopped, shown on the address screen
-	inputErr  string
-	warnFrom  time.Time // when the first connection warning was first shown; zero if not shown
-	closed    bool
-	closing   <-chan struct{}
+	lockOpen  chan struct{}
+	// techieAsking is set while the user is asked about a techie. The lock
+	// question and the techie question are never open at the same time:
+	// whichever comes second waits for the first.
+	techieAsking bool
+	lastErr      error // why the last computer stopped, shown on the address screen
+	inputErr     string
+	warnFrom     time.Time // when the first connection warning was first shown; zero if not shown
+	closed       bool
+	closing      <-chan struct{}
 
 	saveMu sync.Mutex
 
@@ -854,17 +860,23 @@ func (h handler) ListingRefused(s control.ApprovedServer) {
 // of an unlocked PC, as soon as the server accepted this PC as registered
 // and said who runs it.
 func (c *Controller) askLockLocked() {
-	if c.cfg.Lock != nil || c.lockAsked || c.computer == nil || c.listing != nil ||
+	if c.cfg.Lock != nil || c.lockAsked || c.computer == nil || c.listing != nil || c.techieAsking ||
 		c.st.Phase != session.PhaseReady || c.info == nil || c.info.Company == "" {
 		return
 	}
 	c.lockAsked = true
 	ctx, cancel := context.WithCancel(context.Background())
 	c.stopLock = cancel
+	open := make(chan struct{})
+	c.lockOpen = open
 	gen, company := c.gen, c.info.Company
 	go func() {
 		ok := c.d.UI.ConfirmLock(ctx, company)
 		c.mu.Lock()
+		close(open)
+		if c.lockOpen == open {
+			c.lockOpen = nil
+		}
 		if !ok || ctx.Err() != nil || c.gen != gen || c.computer == nil || !c.known ||
 			c.cfg.Lock != nil || c.st.ServerHostKey == "" {
 			c.mu.Unlock()
@@ -883,9 +895,34 @@ func (c *Controller) askLockLocked() {
 	}()
 }
 
+// ConfirmTechie asks the user about a techie, once the lock question, if it
+// is open, is answered. Afterwards the lock question can be asked again if
+// it is still due.
 func (h handler) ConfirmTechie(ctx context.Context, techie session.Techie, oldFP string) bool {
+	c := h.c
+	c.mu.Lock()
+	for c.lockOpen != nil {
+		open := c.lockOpen
+		c.mu.Unlock()
+		select {
+		case <-open:
+		case <-ctx.Done():
+			return false
+		}
+		c.mu.Lock()
+	}
+	c.techieAsking = true
+	c.mu.Unlock()
+	defer func() {
+		c.mu.Lock()
+		c.techieAsking = false
+		if c.gen == h.gen {
+			c.askLockLocked()
+		}
+		c.mu.Unlock()
+	}()
 	techie.Name = servertext.Clean(techie.Name)
-	return h.c.d.UI.ConfirmTechie(ctx, techie, oldFP)
+	return c.d.UI.ConfirmTechie(ctx, techie, oldFP)
 }
 
 // save writes the current configuration. Saves are serialized and each
