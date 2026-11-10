@@ -9,9 +9,8 @@
 # on every upgrade while the sources file is there, so a new key can be
 # rolled out with a package before the repository switches to it.
 #
-# For helpbuoy and helpbuoy-desk unattended-upgrades installs the updates
-# too. Not for helpbuoy-server, whose upgrade restarts the service and ends
-# the running sessions: it stays with the admin's apt upgrade.
+# unattended-upgrades installs the updates too, for all packages. For
+# helpbuoy-server that restarts the service, which ends running sessions.
 if [ "$1" = configure ]; then
 	sources=/etc/apt/sources.list.d/helpbuoy.sources
 	unattended=/etc/apt/apt.conf.d/52helpbuoy-unattended-upgrades
@@ -26,13 +25,12 @@ Suites: ./
 Signed-By: /etc/apt/keyrings/helpbuoy.asc
 EOF
 		fi
-		if [ "$DPKG_MAINTSCRIPT_PACKAGE" != helpbuoy-server ] && [ ! -e $unattended ]; then
+		if [ ! -e $unattended ]; then
 			cat >$unattended <<'EOF'
-// Lets unattended-upgrades install the HelpBuoy app updates, added by the
-// HelpBuoy packages. helpbuoy-server is left to apt upgrade, because an
-// upgrade restarts the server and ends its running sessions.
+// Lets unattended-upgrades install the HelpBuoy updates, added by the
+// HelpBuoy packages. Upgrading helpbuoy-server restarts it, which ends its
+// running sessions.
 Unattended-Upgrade::Origins-Pattern:: "origin=HelpBuoy";
-Unattended-Upgrade::Package-Blacklist:: "helpbuoy-server";
 EOF
 		fi
 	fi

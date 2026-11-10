@@ -70,9 +70,10 @@ journal (journalctl -u helpbuoy-server) and in /var/lib/helpbuoy-server/server.l
 
 Updates come from the HelpBuoy APT repository, which the package adds on
 installation in /etc/apt/sources.list.d/helpbuoy.sources, so "apt upgrade"
-installs new versions. An upgrade restarts the server, which ends running
-sessions, so unattended-upgrades leaves helpbuoy-server alone; the HelpBuoy
-client and desk app do update unattended. Remove the sources file to stop
+installs new versions, and so does unattended-upgrades when it is
+installed. An upgrade restarts the server, which ends running sessions; to
+upgrade only by hand, remove /etc/apt/apt.conf.d/52helpbuoy-unattended-upgrades
+(an upgrade does not add it again). Remove the sources file to stop
 updates from the repository; an upgrade does not add it again.
 
 "apt purge helpbuoy-server" deletes /var/lib/helpbuoy-server, including the host key:
