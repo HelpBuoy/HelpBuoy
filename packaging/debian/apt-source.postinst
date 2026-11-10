@@ -1,0 +1,46 @@
+# The HelpBuoy APT repository (https://helpbuoy.com/apt/), so that apt
+# upgrade installs new versions, like the Chrome and VS Code packages do.
+# The Makefile puts this in the postinst of every package, with the public
+# key of packaging/debian/helpbuoy.asc in place of the APT_KEY line.
+#
+# The sources file is added on a new installation and on an upgrade from a
+# version before the repository existed (0.4.29), and only when it is not
+# there yet: an admin who removes it keeps it removed. The key is refreshed
+# on every upgrade while the sources file is there, so a new key can be
+# rolled out with a package before the repository switches to it.
+#
+# For helpbuoy and helpbuoy-desk unattended-upgrades installs the updates
+# too. Not for helpbuoy-server, whose upgrade restarts the service and ends
+# the running sessions: it stays with the admin's apt upgrade.
+if [ "$1" = configure ]; then
+	sources=/etc/apt/sources.list.d/helpbuoy.sources
+	unattended=/etc/apt/apt.conf.d/52helpbuoy-unattended-upgrades
+	if [ -z "$2" ] || dpkg --compare-versions "$2" lt 0.4.29; then
+		if [ ! -e $sources ]; then
+			cat >$sources <<'EOF'
+# The HelpBuoy APT repository, added by the HelpBuoy packages. Removed when
+# the last of them is purged; once removed, an upgrade does not add it again.
+Types: deb
+URIs: https://helpbuoy.com/apt/
+Suites: ./
+Signed-By: /etc/apt/keyrings/helpbuoy.asc
+EOF
+		fi
+		if [ "$DPKG_MAINTSCRIPT_PACKAGE" != helpbuoy-server ] && [ ! -e $unattended ]; then
+			cat >$unattended <<'EOF'
+// Lets unattended-upgrades install the HelpBuoy app updates, added by the
+// HelpBuoy packages. helpbuoy-server is left to apt upgrade, because an
+// upgrade restarts the server and ends its running sessions.
+Unattended-Upgrade::Origins-Pattern:: "origin=HelpBuoy";
+Unattended-Upgrade::Package-Blacklist:: "helpbuoy-server";
+EOF
+		fi
+	fi
+	if [ -e $sources ]; then
+		install -d -m 0755 /etc/apt/keyrings
+		cat >/etc/apt/keyrings/helpbuoy.asc.dpkg-new <<'EOF'
+#APT_KEY#
+EOF
+		mv -f /etc/apt/keyrings/helpbuoy.asc.dpkg-new /etc/apt/keyrings/helpbuoy.asc
+	fi
+fi

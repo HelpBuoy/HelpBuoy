@@ -199,6 +199,20 @@ msi: client desk
 # systemd service running as the helpbuoy-server system user with its state in
 # /var/lib/helpbuoy-server, and helpbuoy-serverctl for admin commands. One per Linux arch.
 DEB_ARCHES := $(patsubst linux/%,%,$(filter linux/%,$(TARGETS)))
+
+# Every package adds the HelpBuoy APT repository in its postinst and removes
+# it in its postrm on purge (packaging/debian/apt-source.*), with the public
+# key of APT_KEY_FILE, which release.sh signs the repository with.
+APT_KEY_FILE ?= packaging/debian/helpbuoy.asc
+
+# maintscript SCRIPT DEST: install the maintainer script packaging/debian/SCRIPT
+# as DEST, with the APT_SOURCE line replaced by packaging/debian/apt-source.postinst
+# or .postrm and the APT_KEY line by the key.
+define maintscript
+	test -s $(APT_KEY_FILE) || { echo "no APT key in $(APT_KEY_FILE), see README.md" >&2; exit 1; }; \
+	sed -e '/^#APT_SOURCE#$$/{r packaging/debian/apt-source.$(subst app.,,$(1))' -e 'd}' packaging/debian/$(1) | \
+		sed -e '/^#APT_KEY#$$/{r $(APT_KEY_FILE)' -e 'd}' > $(2) && chmod 0755 $(2)
+endef
 DEB_DATE    = $(shell date -R -d @$$(git log -1 --format=%ct 2>/dev/null || date +%s))
 deb: server
 	@mkdir -p $(DIST)
@@ -220,7 +234,9 @@ deb: server
 		chmod 0644 $$root/usr/share/man/man1/helpbuoy-server.1.gz $$root/usr/share/man/man8/helpbuoy-serverctl.8.gz; \
 		install -D -m 0644 packaging/debian/lintian-overrides $$root/usr/share/lintian/overrides/helpbuoy-server; \
 		install -d $$root/DEBIAN; \
-		install -m 0755 packaging/debian/postinst packaging/debian/prerm packaging/debian/postrm $$root/DEBIAN/; \
+		install -m 0755 packaging/debian/prerm $$root/DEBIAN/; \
+		$(call maintscript,postinst,$$root/DEBIAN/postinst) || exit 1; \
+		$(call maintscript,postrm,$$root/DEBIAN/postrm) || exit 1; \
 		echo /etc/default/helpbuoy-server > $$root/DEBIAN/conffiles; \
 		size=$$(du -sk --exclude=DEBIAN $$root | cut -f1); \
 		sed "s/@VERSION@/$(APP_VERSION)/; s/@ARCH@/$$arch/; s/@SIZE@/$$size/" packaging/debian/control.in > $$root/DEBIAN/control; \
@@ -231,8 +247,8 @@ deb: server
 # deb-app NAME DESC: a Debian package of a desktop app: $(BIN)/linux-ARCH/NAME,
 # its menu entry packaging/debian/NAME.desktop, the icon in the hicolor theme
 # and packaging/debian/NAME.control.in. The hicolor-icon-theme and
-# desktop-file-utils triggers refresh the caches, so it needs no maintainer
-# scripts. One per Linux arch.
+# desktop-file-utils triggers refresh the caches, so the maintainer scripts
+# only add and remove the APT repository. One per Linux arch.
 APP_DEB_ICONS := 16 32 48 256
 define deb-app
 	@mkdir -p $(DIST)
@@ -249,6 +265,8 @@ define deb-app
 			"$(APP_VERSION)" "$(VERSION)" "$(DEB_DATE)" | gzip -9n > $$root/usr/share/doc/$(1)/changelog.gz; \
 		chmod 0644 $$root/usr/share/doc/$(1)/changelog.gz; \
 		install -d $$root/DEBIAN; \
+		$(call maintscript,app.postinst,$$root/DEBIAN/postinst) || exit 1; \
+		$(call maintscript,app.postrm,$$root/DEBIAN/postrm) || exit 1; \
 		size=$$(du -sk --exclude=DEBIAN $$root | cut -f1); \
 		sed "s/@VERSION@/$(APP_VERSION)/; s/@ARCH@/$$arch/; s/@SIZE@/$$size/" packaging/debian/$(1).control.in > $$root/DEBIAN/control; \
 		(cd $$root && find usr -type f -exec md5sum {} + | sort -k2) > $$root/DEBIAN/md5sums; \

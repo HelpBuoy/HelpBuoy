@@ -1,0 +1,11 @@
+# Purging the last HelpBuoy package removes the APT repository that
+# apt-source.postinst added. The Makefile puts this in the postrm of every
+# package.
+if [ "$1" = purge ]; then
+	others=$(dpkg-query -W -f='${Package} ${db:Status-Status}\n' helpbuoy helpbuoy-desk helpbuoy-server 2>/dev/null |
+		grep -v "^$DPKG_MAINTSCRIPT_PACKAGE " | grep -v ' not-installed$' || true)
+	if [ -z "$others" ]; then
+		rm -f /etc/apt/sources.list.d/helpbuoy.sources /etc/apt/keyrings/helpbuoy.asc \
+			/etc/apt/apt.conf.d/52helpbuoy-unattended-upgrades
+	fi
+fi

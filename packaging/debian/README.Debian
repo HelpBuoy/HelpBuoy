@@ -68,5 +68,12 @@ service user on the service's state:
 The running server picks up changes within a second. Logs are in the
 journal (journalctl -u helpbuoy-server) and in /var/lib/helpbuoy-server/server.log.
 
+Updates come from the HelpBuoy APT repository, which the package adds on
+installation in /etc/apt/sources.list.d/helpbuoy.sources, so "apt upgrade"
+installs new versions. An upgrade restarts the server, which ends running
+sessions, so unattended-upgrades leaves helpbuoy-server alone; the HelpBuoy
+client and desk app do update unattended. Remove the sources file to stop
+updates from the repository; an upgrade does not add it again.
+
 "apt purge helpbuoy-server" deletes /var/lib/helpbuoy-server, including the host key:
 computers registered with this server would then see a changed server identity.

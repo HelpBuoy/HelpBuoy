@@ -49,7 +49,21 @@ Without a reverse proxy, `helpbuoy-server serve --mode https` serves HTTPS itsel
 
 - `./run.sh`: builds and starts a server, the desk app and the Windows client (in wine) on this machine for testing. All state lives in `.run/`; `./run.sh reset` clears it.
 - `./screenshot.sh [page]`: makes or updates `screenshot.png`, the desk app in demo mode at 800x500, for this README. Uses `xvfb-run` when installed, otherwise a window shows briefly.
-- `./release.sh [major|minor]`: bumps the version (build number by default), builds and tests everything, then tags, pushes and creates the GitHub release with the client and desk app MSIs, the client, desk app and server Debian packages (amd64 and arm64) and the zipped macOS client and desk app.
+- `./release.sh [major|minor]`: bumps the version (build number by default), builds and tests everything, then tags, pushes and creates the GitHub release with the client and desk app MSIs, the client, desk app and server Debian packages (amd64 and arm64) and the zipped macOS client and desk app. Then `./apt-repo.sh` adds the Debian packages to the APT repository.
+- `./apt-repo.sh`: publishes the Debian packages in `dist/` to the flat APT repository at https://helpbuoy.com/apt/, keeping the last three versions of each. Run it again by hand when it failed during a release.
+
+## The APT repository
+
+Every Debian package adds the HelpBuoy APT repository when it is installed (`/etc/apt/sources.list.d/helpbuoy.sources` with the key in `/etc/apt/keyrings/helpbuoy.asc`), so installing a .deb from the release once is enough to get updates with `apt upgrade`. For the client and the desk app it also lets unattended-upgrades install them; helpbuoy-server is left to the admin, because an upgrade restarts it and ends the running sessions. Purging the last HelpBuoy package removes the repository again. See `packaging/debian/apt-source.postinst`.
+
+The repository is signed with a GPG key in the keyring of whoever releases. Its public part is `packaging/debian/helpbuoy.asc`, which the packages install, so `make deb` needs it. Make the key once with:
+
+    gpg --quick-gen-key 'HelpBuoy APT repository' ed25519 sign never
+    gpg --armor --export 'HelpBuoy APT repository' > packaging/debian/helpbuoy.asc
+
+and keep a backup of the secret key (`gpg --armor --export-secret-keys`) somewhere safe: without it no release can be signed for the installed packages. To change keys, ship the new public key in `helpbuoy.asc` together with the old one (both exported into one file) for a few releases, since the packages refresh the installed key on every upgrade, then sign with the new key (`HELPBUOY_APT_KEY`) and drop the old one.
+
+The repository lives in the directory `apt` in the home of the site's production host and is uploaded with rsync. The site's deploy hook rebuilds the site into a fresh directory, so it links that directory in after every build, as `ln -s ../apt ../$SECONDARY/apt`.
 
 ## Building the macOS apps
 
