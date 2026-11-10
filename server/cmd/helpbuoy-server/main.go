@@ -63,6 +63,8 @@ commands:
   info [--company C] [--phone P]         print or set who runs this server, shown to users waiting
        [--address A] [--description D]   for a techie; the company name and phone number are required
                                          before computers can connect
+  limit [--sessions N]                   print or set how many sessions the server allows at the
+                                         same time (0: no limit, the default); techies can't change it
   hostkey [--new]                        print the server host key and fingerprint; --new makes a
                                          new host key, used from the next server start on
   vhost list                             list the virtual hosts in the --vhosts directory
@@ -102,6 +104,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		err = customerCmd(args[1:], stdout, stderr)
 	case "info":
 		err = infoCmd(args[1:], stdout, stderr)
+	case "limit":
+		err = limitCmd(args[1:], stdout, stderr)
 	case "hostkey":
 		err = hostkeyCmd(args[1:], stdout, stderr)
 	case "vhost":

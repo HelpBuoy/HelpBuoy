@@ -40,6 +40,9 @@ const (
 	MaxComputerName = 128
 )
 
+// MaxSessionsLimit is the highest value of State.MaxSessions.
+const MaxSessionsLimit = 10000
+
 // Techie is a techie key added by the server admin.
 type Techie struct {
 	Name      string `json:"name"`
@@ -90,7 +93,12 @@ type State struct {
 	// LimitedTechies is only used to read and write state.json: the limited
 	// techies are in Techies with Limited set (see Techie).
 	LimitedTechies []Techie `json:"limited_techies,omitempty"`
-	Extra          Extra    `json:"-"`
+	// MaxSessions is how many sessions the server allows at the same time,
+	// counted from the moment a techie asks to connect; 0 is no limit. Only
+	// the admin sets it (helpbuoy-server limit), never a techie, so a host can
+	// sell a helpdesk with a fixed number of sessions (PLAN.md 3.4).
+	MaxSessions int   `json:"max_sessions,omitempty"`
+	Extra       Extra `json:"-"`
 }
 
 // Identity is what a fingerprint maps to.
@@ -403,6 +411,16 @@ func writeAtomic(path string, b []byte) error {
 // Info returns who runs the server, as the apps get it.
 func (st *State) Info() control.ServerInfo {
 	return control.ServerInfo{Address: st.Address, Company: st.Company, Phone: st.Phone, Description: st.Description}
+}
+
+// SetMaxSessions sets how many sessions the server allows at the same time,
+// 0 for no limit.
+func (st *State) SetMaxSessions(n int) error {
+	if n < 0 || n > MaxSessionsLimit {
+		return fmt.Errorf("sessions: use 0 (no limit) to %d", MaxSessionsLimit)
+	}
+	st.MaxSessions = n
+	return nil
 }
 
 // SetInfo sets who runs the server. Each field is one line of printable

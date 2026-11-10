@@ -337,6 +337,7 @@ list of their own (13.2, 13.3).
 | `helpbuoy-server customer list` / `add` / `rename` / `remove` | manage the customers on the server (13.2) |
 | `helpbuoy-server computer move SHA256:... 'Acme BV' \| --none` | move a computer to another customer, or out of its customer (13.2); `computer add` and `computer list` take `--customer` |
 | `helpbuoy-server techie limit alice 'Acme BV' ... \| --all` | limit a techie to some customers, or lift the limit (13.3); `techie add` takes `--customer` (repeatable) too |
+| `helpbuoy-server limit [--sessions N]` | print or set how many sessions the server allows at the same time, for all techies together (3.4); 0 is no limit, the default. Techies can't change it |
 | `helpbuoy-server hostkey` | print the host key fingerprint, for techies to compare with what computers show |
 | `helpbuoy-server hostkey --new` | replace the host key, keeping all techies and computers; it takes effect at the next server start, since the running server only watches `state.json`; every computer then shows the changed server identity warning (3.5), and servers that approved this one for their computers (12.3) must approve it again |
 
@@ -416,6 +417,14 @@ hosts are not there yet.
 
 Role caps and timeouts:
 - Per techie: max 20 concurrent sessions. Per computer: exactly one session at a time, enforced by the server and again by the computer.
+- Per server: optionally at most `max_sessions` sessions at the same time, for all techies
+  together (`helpbuoy-server limit --sessions N`, 0 or absent is no limit). A session counts
+  from the moment a techie asks to connect until it ends, so a request waiting for the user
+  holds its place. A Connect beyond it gets an error Reply ("this server allows one session at
+  a time; wait until the other session ends"); running sessions are never ended by it. It is
+  set by the admin only, never through the control channel, so a host can sell a helpdesk
+  (a virtual host on relay.helpbuoy.com) with a fixed number of sessions. A change takes effect
+  at the next Connect.
 - Handshake timeout 10 s, keepalive 15 s, dead connections dropped after 3 missed.
 - Control frames are length-checked before they are read: 16 KiB from computers and pending
   connections, 256 KiB from techies, so an unauthenticated peer can't make the server buffer

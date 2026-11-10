@@ -205,3 +205,22 @@ func TestSetup(t *testing.T) {
 		t.Fatalf("setup when set up: %v", err)
 	}
 }
+
+func TestLimitCmd(t *testing.T) {
+	dir := t.TempDir()
+	if out := runOK(t, "limit", "--state", dir); !strings.Contains(out, "no limit") {
+		t.Errorf("limit:\n%s", out)
+	}
+	if out := runOK(t, "limit", "--sessions", "1", "--state", dir); !strings.Contains(out, "sessions: 1 at the same time") {
+		t.Errorf("limit --sessions 1:\n%s", out)
+	}
+	if out := runOK(t, "limit", "--state", dir); !strings.Contains(out, "sessions: 1 ") {
+		t.Errorf("limit after set:\n%s", out)
+	}
+	runFail(t, "limit", "--sessions", "-2", "--state", dir)
+	runFail(t, "limit", "--sessions", "100000", "--state", dir)
+	runFail(t, "limit", "extra", "--state", dir)
+	if out := runOK(t, "limit", "--sessions", "0", "--state", dir); !strings.Contains(out, "no limit") {
+		t.Errorf("limit --sessions 0:\n%s", out)
+	}
+}

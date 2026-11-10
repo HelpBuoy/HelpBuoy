@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -357,6 +358,38 @@ func TestTechiesessionCap(t *testing.T) {
 	// Another techie can still connect.
 	if msg := connect(t, e.techie("bob"), 1, fps[2], control.NewRequestID()); msg != "" {
 		t.Errorf("other techie: %q", msg)
+	}
+}
+
+// TestMaxSessions: with max_sessions in state.json the server refuses a
+// Connect, from any techie, while that many requests are taken, and accepts
+// one again once a session ended.
+func TestMaxSessions(t *testing.T) {
+	e := newEnv(t, nil)
+	e.update(func(st *store.State) error { return st.SetMaxSessions(1) })
+	h := e.techie("alice")
+	h2 := e.techie("bob")
+	c1, _ := e.computer("anna@PC")
+	c2, _ := e.computer("bert@PC")
+	s := startSession(t, h, c1, 1)
+	for _, tc := range []*fake.Conn{h, h2} {
+		if msg := connect(t, tc, 2, computerFP(c2), control.NewRequestID()); !strings.Contains(msg, "one session at a time") {
+			t.Errorf("second session: %q", msg)
+		}
+	}
+	s.cch.Close()
+	mustWait[control.RequestStateMsg](t, c1, func(m *control.RequestStateMsg) bool { return m.State == control.RequestEnded })
+	if msg := connect(t, h2, 3, computerFP(c2), control.NewRequestID()); msg != "" {
+		t.Errorf("after the first ended: %q", msg)
+	}
+	// A request waiting for the user counts too.
+	if msg := connect(t, h, 4, computerFP(c1), control.NewRequestID()); msg == "" {
+		t.Error("connect while a request waits for its user")
+	}
+	// Lifting the limit takes effect at once.
+	e.update(func(st *store.State) error { return st.SetMaxSessions(0) })
+	if msg := connect(t, h, 5, computerFP(c1), control.NewRequestID()); msg != "" {
+		t.Errorf("no limit: %q", msg)
 	}
 }
 

@@ -616,6 +616,18 @@ func (r *Registry) endRequestLocked(q *request, state control.RequestState, noti
 	r.changedLocked()
 }
 
+// sessionsLocked counts the requests a techie took: the sessions that run
+// and the ones waiting for the computer's user.
+func (r *Registry) sessionsLocked() int {
+	n := 0
+	for _, q := range r.requests {
+		if q.techie != nil {
+			n++
+		}
+	}
+	return n
+}
+
 func (r *Registry) techiesessionsLocked(h *Conn) int {
 	n := 0
 	for _, q := range r.requests {
@@ -649,6 +661,12 @@ func (r *Registry) connect(c *Conn, m *control.Connect) error {
 		return fail("computer is busy")
 	case r.techiesessionsLocked(c) >= r.cfg.MaxSessionsPerTechie:
 		return fail(fmt.Sprintf("too many sessions (max %d)", r.cfg.MaxSessionsPerTechie))
+	case r.idx.State.MaxSessions > 0 && r.sessionsLocked() >= r.idx.State.MaxSessions:
+		r.log.Info("request", "event", "refused", "computer", cl.fp, "techie", c.name, "reason", "max sessions")
+		if r.idx.State.MaxSessions == 1 {
+			return fail("this server allows one session at a time; wait until the other session ends")
+		}
+		return fail(fmt.Sprintf("this server allows %d sessions at the same time; wait until another session ends", r.idx.State.MaxSessions))
 	}
 	now := r.cfg.Now()
 	q := &request{id: m.RequestID, computer: cl, created: now, state: control.RequestTaken, techie: c, takenAt: now}

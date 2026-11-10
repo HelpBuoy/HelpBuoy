@@ -39,6 +39,9 @@ Without a reverse proxy, `helpbuoy-server serve --mode https` serves HTTPS itsel
     helpbuoy-server vhost add acme.relay.example.com --vhosts DIR
     helpbuoy-server info --vhost acme.relay.example.com --vhosts DIR --company "Acme" --phone "+1 234 567 890"
     helpbuoy-server techie add --vhost acme.relay.example.com --vhosts DIR alice 'ssh-ed25519 AAAA...'
+    helpbuoy-server limit --vhost acme.relay.example.com --vhosts DIR --sessions 1
+
+`limit --sessions N` caps how many sessions a helpdesk has open at the same time, for all its techies together (0, the default, is no limit). Only the admin sets it; techies can't change it from the desk app.
 
 `HELPBUOY_SERVER_VHOSTS=DIR` saves typing `--vhosts`. A running server starts a new virtual host within a second, and drops one within a second after its directory is deleted. With `--mode https --acme` it gets a certificate for each virtual host.
 
