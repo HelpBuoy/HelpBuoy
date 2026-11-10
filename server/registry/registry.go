@@ -243,7 +243,7 @@ func (r *Registry) OpenControl(c *Conn) error {
 	if c.role == control.RoleComputer && !r.idx.State.Info().Configured() {
 		r.log.Info("computer refused: no company name and phone number set", "fp", c.fp, "ip", c.ip)
 		r.detachLocked(c)
-		c.peer.Kick(ReasonNotSetUp)
+		c.peer.Kick(control.ReasonNotSetUp)
 		return ErrKicked
 	}
 	h := &control.Hello{
@@ -264,10 +264,6 @@ func (r *Registry) OpenControl(c *Conn) error {
 	}
 	return nil
 }
-
-// ReasonNotSetUp is the Error computers get from a server that has no
-// company name and phone number yet.
-const ReasonNotSetUp = "this server is not set up yet: a techie must first enter the company name and phone number"
 
 // approvedLocked returns the ApprovedServers message for computer fp.
 func (r *Registry) approvedLocked(fp string) *control.ApprovedServers {
@@ -466,7 +462,7 @@ func (r *Registry) SetIndex(idx *store.Index) {
 		case c.role == control.RolePending && id.Role == control.RoleComputer && !idx.State.Info().Configured():
 			r.log.Info("computer refused: no company name and phone number set", "fp", fp, "ip", c.ip)
 			r.detachLocked(c)
-			c.peer.Kick(ReasonNotSetUp)
+			c.peer.Kick(control.ReasonNotSetUp)
 		case c.role == control.RolePending && id.Role == control.RoleComputer:
 			c.role = control.RoleComputer
 			c.name, c.keyLine = id.Name, id.KeyLine

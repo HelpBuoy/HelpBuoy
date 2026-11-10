@@ -12,7 +12,6 @@ import (
 	"github.com/helpbuoy/helpbuoy/proto/transport"
 	"github.com/helpbuoy/helpbuoy/server/fake"
 	"github.com/helpbuoy/helpbuoy/server/hostkey"
-	"github.com/helpbuoy/helpbuoy/server/registry"
 	"github.com/helpbuoy/helpbuoy/server/server"
 	"github.com/helpbuoy/helpbuoy/server/store"
 )
@@ -603,7 +602,7 @@ func TestNotSetUp(t *testing.T) {
 		return nil
 	})
 	ck := e.addComputer("anna@PC")
-	if msg := waitClosed(t, e.dial(ck)); msg != registry.ReasonNotSetUp {
+	if msg := waitClosed(t, e.dial(ck)); msg != control.ReasonNotSetUp {
 		t.Fatalf("closed with %q, want the not set up Error", msg)
 	}
 	e.techie("alice")
@@ -615,7 +614,7 @@ func TestNotSetUp(t *testing.T) {
 		_, _, err := st.AddComputer(fake.KeyLine(pk.PublicKey(), "bob@PC"), "", "admin", e.clock.Now())
 		return err
 	})
-	if msg := waitClosed(t, pc); msg != registry.ReasonNotSetUp {
+	if msg := waitClosed(t, pc); msg != control.ReasonNotSetUp {
 		t.Fatalf("registered pending closed with %q, want the not set up Error", msg)
 	}
 }

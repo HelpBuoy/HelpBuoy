@@ -235,6 +235,7 @@
   "The server on this computer could not start.": "De server op deze computer kon niet starten.",
   "The server on this computer could not start: {0}": "De server op deze computer kon niet starten: {0}",
   "The server refused this PC for now. Try again later.": "De server weigert deze pc op dit moment. Probeer het later opnieuw.",
+  "This helpdesk is not ready for computers yet: it still has to enter its company name and phone number. Try again later, or contact whoever gave you this address.": "Deze helpdesk is nog niet klaar voor computers: de bedrijfsnaam en het telefoonnummer moeten nog worden ingevuld. Probeer het later opnieuw, of neem contact op met wie u dit adres heeft gegeven.",
   "The server's identity changed, so HelpBuoy stopped connecting. Ask a techie before you continue. Restart HelpBuoy to answer the warning again.": "De identiteit van de server is veranderd, daarom is HelpBuoy gestopt met verbinden. Vraag het een techie voordat je verdergaat. Start HelpBuoy opnieuw om de waarschuwing nogmaals te beantwoorden.",
   "The server's key differs from the pinned one. Disconnect and connect again to decide.": "De sleutel van de server verschilt van de vastgelegde sleutel. Verbreek de verbinding en maak opnieuw verbinding om te beslissen.",
   "The techie key can't be used": "De techiesleutel kan niet worden gebruikt",

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/helpbuoy/helpbuoy/proto/control"
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
 	"github.com/helpbuoy/helpbuoy/proto/transport"
 )
@@ -58,6 +59,7 @@ const (
 	KindHostKeyChanged
 	KindTechieKey
 	KindServer
+	KindNotSetUp // the server has no company name and phone number yet
 )
 
 // Classify returns the kind of a connection error.
@@ -75,6 +77,8 @@ func Classify(err error) Kind {
 		return KindTechieKey
 	case errors.Is(err, ErrRefusedKey):
 		return KindRefusedKey
+	case errors.As(err, &serverErr) && serverErr.Message == control.ReasonNotSetUp:
+		return KindNotSetUp
 	case errors.As(err, &serverErr):
 		return KindServer
 	case errors.Is(err, ErrNotServer):
@@ -116,6 +120,9 @@ func Describe(err error) string {
 			"Restart HelpBuoy to answer the warning again.")
 	case KindTechieKey:
 		return i18n.Trans("This key belongs to a techie on this server and can't be used here.")
+	case KindNotSetUp:
+		return i18n.Trans("This helpdesk is not ready for computers yet: it still has to enter its company name and phone number. " +
+			"Try again later, or contact whoever gave you this address.")
 	case KindServer:
 		var re *ServerError
 		errors.As(err, &re)

@@ -494,6 +494,11 @@ type Error struct {
 // must not change.
 const ReasonReplaced = "replaced by a newer connection with the same key"
 
+// ReasonNotSetUp is the Error message for a computer on a server that has no
+// company name and phone number yet. Clients recognize it and explain it in
+// their own words, so it must not change.
+const ReasonNotSetUp = "this server is not set up yet: a techie must first enter the company name and phone number"
+
 // SessionChannelData is the extra data of the computer's ChannelSession open.
 type SessionChannelData struct {
 	RequestID string

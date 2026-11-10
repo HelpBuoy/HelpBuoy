@@ -235,6 +235,7 @@
   "The server on this computer could not start.": "Impossibile avviare il server su questo computer.",
   "The server on this computer could not start: {0}": "Impossibile avviare il server su questo computer: {0}",
   "The server refused this PC for now. Try again later.": "Per ora il server rifiuta questo PC. Riprova più tardi.",
+  "This helpdesk is not ready for computers yet: it still has to enter its company name and phone number. Try again later, or contact whoever gave you this address.": "Questo helpdesk non è ancora pronto per i computer: deve ancora inserire il nome dell'azienda e il numero di telefono. Riprova più tardi o contatta chi ti ha dato questo indirizzo.",
   "The server's identity changed, so HelpBuoy stopped connecting. Ask a techie before you continue. Restart HelpBuoy to answer the warning again.": "L'identità del server è cambiata, quindi HelpBuoy ha smesso di connettersi. Chiedi a un tecnico prima di continuare. Riavvia HelpBuoy per rispondere di nuovo all'avviso.",
   "The server's key differs from the pinned one. Disconnect and connect again to decide.": "La chiave del server è diversa da quella fissata. Disconnettiti e connettiti di nuovo per decidere.",
   "The techie key can't be used": "La chiave del tecnico non può essere usata",

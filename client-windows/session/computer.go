@@ -484,7 +484,8 @@ func (c *Computer) connectOnce() (reached bool, err error) {
 		m, err := ctl.Receive()
 		if err != nil {
 			c.mu.Lock()
-			if c.err != nil && Classify(c.err) == KindServer {
+			var se *ServerError
+			if errors.As(c.err, &se) {
 				err = c.err // the server said why
 			}
 			c.mu.Unlock()

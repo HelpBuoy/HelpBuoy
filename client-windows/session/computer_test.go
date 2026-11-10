@@ -594,6 +594,26 @@ func TestServerErrorMessage(t *testing.T) {
 	}
 }
 
+// TestNotSetUpMessage: the server's not set up Error gets its own kind and
+// description instead of the server's text.
+func TestNotSetUpMessage(t *testing.T) {
+	f := setup(t, nil)
+	f.computer.Start()
+	f.h.waitPhase(t, PhasePending)
+	f.server.Send(f.fp, control.Error{Message: control.ReasonNotSetUp})
+	f.server.Kick(f.fp)
+	s := f.h.waitPhase(t, PhaseConnecting)
+	for s.Err == nil {
+		s = f.h.waitPhase(t, PhaseConnecting)
+	}
+	if Classify(s.Err) != KindNotSetUp {
+		t.Fatalf("err %v", s.Err)
+	}
+	if d := Describe(s.Err); strings.Contains(d, control.ReasonNotSetUp) {
+		t.Fatalf("description shows the server text: %q", d)
+	}
+}
+
 // TestLockMessages: the computer reports who runs the server and the
 // approved list, sends its listing request once registered, and reports a
 // refusal.
