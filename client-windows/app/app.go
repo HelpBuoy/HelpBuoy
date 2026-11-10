@@ -109,10 +109,9 @@ type UI interface {
 	// Render shows v. It is called from any goroutine, one call at a time,
 	// and must not wait for the controller.
 	Render(v View)
-	// ConfirmTechie asks whether techie h may take control. oldFingerprint
-	// is set when that techie showed a different key last time. It may
-	// block; when ctx ends the question is moot and it should return false.
-	ConfirmTechie(ctx context.Context, h session.Techie, oldFingerprint string) bool
+	// ConfirmTechie asks whether techie h may take control. It may block;
+	// when ctx ends the question is moot and it should return false.
+	ConfirmTechie(ctx context.Context, h session.Techie) bool
 	// ConfirmLock asks whether to lock this PC to the server of company
 	// (PLAN.md 12.1), with Lock and Not now. It may block; when ctx ends the
 	// question is moot and it should return false.
@@ -414,9 +413,8 @@ func (c *Controller) startComputerLocked(addr string, listing *control.ApprovedS
 	c.warnFrom = time.Time{}
 	c.st = session.State{Phase: session.PhaseConnecting}
 	var hostKey, fp string
-	var techies map[string]string
 	if addr == c.cfg.ServerAddress {
-		hostKey, techies = c.cfg.ServerHostKey, c.cfg.Clone().KnownTechies
+		hostKey = c.cfg.ServerHostKey
 	}
 	if l := c.cfg.Lock; l != nil {
 		if addr == l.Address {
@@ -425,12 +423,12 @@ func (c *Controller) startComputerLocked(addr string, listing *control.ApprovedS
 			hostKey, fp = "", a.Fingerprint
 		}
 	}
-	c.computer = c.newComputerLocked(addr, hostKey, fp, techies, listing, c.gen)
+	c.computer = c.newComputerLocked(addr, hostKey, fp, listing, c.gen)
 	c.computer.Start()
 }
 
 // newComputerLocked returns a server computer whose events carry gen.
-func (c *Controller) newComputerLocked(addr, hostKey, fp string, techies map[string]string, listing *control.ApprovedServer, gen int) *session.Computer {
+func (c *Controller) newComputerLocked(addr, hostKey, fp string, listing *control.ApprovedServer, gen int) *session.Computer {
 	var runner session.Runner
 	if c.d.NewRunner != nil {
 		runner = c.d.NewRunner(c.key)
@@ -441,7 +439,6 @@ func (c *Controller) newComputerLocked(addr, hostKey, fp string, techies map[str
 		AppVersion:        c.d.AppVersion,
 		UserMachine:       c.d.UserMachine,
 		ServerHostKey:     hostKey,
-		KnownTechies:      techies,
 		ServerFingerprint: fp,
 		Handler:           handler{c, gen},
 		Runner:            runner,
@@ -772,8 +769,7 @@ func (h handler) StateChanged(s session.State) {
 }
 
 // Registered saves the server this PC is registered on. A different server
-// than the stored one replaces it, and the techie pins of the old server are
-// forgotten: techie names are only unique within one server.
+// than the stored one replaces it.
 func (h handler) Registered(serverHostKey string) {
 	c := h.c
 	c.mu.Lock()
@@ -782,9 +778,6 @@ func (h handler) Registered(serverHostKey string) {
 		return
 	}
 	c.known = true
-	if c.cfg.ServerAddress != c.addr {
-		c.cfg.KnownTechies = nil
-	}
 	changed := c.cfg.ServerAddress != c.addr || c.cfg.ServerHostKey != serverHostKey
 	c.cfg.ServerAddress = c.addr
 	c.cfg.ServerHostKey = serverHostKey
@@ -794,21 +787,6 @@ func (h handler) Registered(serverHostKey string) {
 		c.save()
 	}
 	c.update()
-}
-
-func (h handler) TechiePinned(name, line string) {
-	c := h.c
-	c.mu.Lock()
-	if c.gen != h.gen {
-		c.mu.Unlock()
-		return
-	}
-	if c.cfg.KnownTechies == nil {
-		c.cfg.KnownTechies = make(map[string]string)
-	}
-	c.cfg.KnownTechies[name] = line
-	c.mu.Unlock()
-	c.save()
 }
 
 // ServerInfo shows who runs the server. Text from a server can say
@@ -927,7 +905,7 @@ func (c *Controller) askLockLocked() {
 // ConfirmTechie asks the user about a techie, once the lock question, if it
 // is open, is answered. Afterwards the lock question can be asked again if
 // it is still due.
-func (h handler) ConfirmTechie(ctx context.Context, techie session.Techie, oldFP string) bool {
+func (h handler) ConfirmTechie(ctx context.Context, techie session.Techie) bool {
 	c := h.c
 	c.mu.Lock()
 	for c.lockOpen != nil {
@@ -951,7 +929,7 @@ func (h handler) ConfirmTechie(ctx context.Context, techie session.Techie, oldFP
 		c.mu.Unlock()
 	}()
 	techie.Name = servertext.Clean(techie.Name)
-	return c.d.UI.ConfirmTechie(ctx, techie, oldFP)
+	return c.d.UI.ConfirmTechie(ctx, techie)
 }
 
 // save writes the current configuration. Saves are serialized and each

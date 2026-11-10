@@ -9,7 +9,6 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/helpbuoy/helpbuoy/client-windows/config"
 	"github.com/helpbuoy/helpbuoy/client-windows/identity"
 	"github.com/helpbuoy/helpbuoy/client-windows/internal/fakeserver"
 	"github.com/helpbuoy/helpbuoy/proto/update"
@@ -23,15 +22,6 @@ func startServer(t *testing.T) *fakeserver.Server {
 	}
 	t.Cleanup(func() { r.Close() })
 	return r
-}
-
-// registeredWithTechie is registered, with a pinned techie "alice".
-func registeredWithTechie(t *testing.T, e *env) {
-	t.Helper()
-	registered(t, e)
-	cfg := e.config()
-	cfg.KnownTechies = map[string]string{"alice": "ssh-ed25519 AAAA alice"}
-	config.Store{Dir: e.dir}.Save(cfg)
 }
 
 func readyMain(v View) bool {
@@ -67,7 +57,7 @@ func startAndConnect(t *testing.T, c *Controller, ui *fakeUI, want string) {
 // the old server is forgotten until this PC is registered on the new one.
 func TestOtherServer(t *testing.T) {
 	e := newEnv(t)
-	registeredWithTechie(t, e)
+	registered(t, e)
 	server2 := startServer(t)
 	c, ui := e.controller()
 	startAndConnect(t, c, ui, e.server.Addr())
@@ -81,15 +71,14 @@ func TestOtherServer(t *testing.T) {
 	if v.ServerFingerprint != ssh.FingerprintSHA256(server2.HostKey()) || v.KeyLine != e.key.Line {
 		t.Fatalf("key view %+v", v)
 	}
-	if cfg := e.config(); cfg.ServerAddress != e.server.Addr() || cfg.KnownTechies["alice"] == "" || cfg.LastAddress != server2.Addr() {
+	if cfg := e.config(); cfg.ServerAddress != e.server.Addr() || cfg.LastAddress != server2.Addr() {
 		t.Fatalf("config changed before registration %+v", cfg)
 	}
 
 	server2.Register(e.fp())
 	ui.wait(t, "main", readyMain)
 	cfg := e.config()
-	if cfg.ServerAddress != server2.Addr() || cfg.ServerHostKey != identity.KeyLine(server2.HostKey(), "") ||
-		len(cfg.KnownTechies) != 0 {
+	if cfg.ServerAddress != server2.Addr() || cfg.ServerHostKey != identity.KeyLine(server2.HostKey(), "") {
 		t.Fatalf("config %+v", cfg)
 	}
 

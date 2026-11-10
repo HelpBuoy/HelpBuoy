@@ -207,52 +207,31 @@ func (w *Window) Render(v app.View) {
 }
 
 // ConfirmTechie implements app.UI with a modal dialog that asks whether the
-// techie may take control. A changed techie key gets its own dialog with an
-// error icon, a warning headline and Cancel as the default button.
-func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie, oldFP string) bool {
+// techie may take control. The server vouches for the techie, so it shows
+// only the techie's name.
+func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie) bool {
 	if w.wnd.Hwnd() == 0 {
 		return false
 	}
-	cfg := techieDialog(h, oldFP)
+	cfg := techieDialog(h)
 	id, ok := w.askTaskDialog(ctx, &cfg)
 	return ok && ctx.Err() == nil && id == co.ID_OK
 }
 
 // techieDialog builds the approval dialog for techie h.
-func techieDialog(h session.Techie, oldFP string) win.TASKDIALOGCONFIG {
-	cfg := win.TASKDIALOGCONFIG{
-		WindowTitle: Title,
-		Flags:       co.TDF_ALLOW_DIALOG_CANCELLATION | co.TDF_POSITION_RELATIVE_TO_WINDOW,
-		Width:       dialogWidth,
-	}
-	quoted := `"` + h.Name + `"`
-	esc := i18n.Trans("You can take back control at any time by pressing Esc.")
-	fingerprint := i18n.Trans("Key fingerprint:") + "\n" + h.Fingerprint
-	warn := i18n.Trans("Only allow this if you know the person asking personally. " +
-		"Banks, Microsoft and the police never ask for this.")
-	if oldFP != "" {
-		cfg.HMainIcon = win.TdcIconTdi(co.TDICON_ERROR)
-		cfg.MainInstruction = i18n.Trans("Warning: the key of {0} has changed", quoted)
-		cfg.Content = i18n.Trans("Key last time:") + "\n" + oldFP + "\n\n" +
-			i18n.Trans("Key now:") + "\n" + h.Fingerprint + "\n\n" +
-			i18n.Trans("This may be someone pretending to be a techie. Do not continue "+
-				"unless the techie confirmed by phone that they have a new key.")
-		cfg.Buttons = []win.TASKDIALOG_BUTTON{
+func techieDialog(h session.Techie) win.TASKDIALOGCONFIG {
+	return win.TASKDIALOGCONFIG{
+		WindowTitle:     Title,
+		Flags:           co.TDF_ALLOW_DIALOG_CANCELLATION | co.TDF_POSITION_RELATIVE_TO_WINDOW,
+		Width:           dialogWidth,
+		MainInstruction: i18n.Trans("Allow {0} to take control of this computer?", `"`+h.Name+`"`),
+		Content:         i18n.Trans("You can take back control at any time by pressing Esc."),
+		Buttons: []win.TASKDIALOG_BUTTON{
+			{Id: co.ID_OK, Text: i18n.Trans("&Allow")},
 			{Id: co.ID_CANCEL, Text: i18n.Trans("&Cancel")},
-			{Id: co.ID_OK, Text: i18n.Trans("Allow &anyway")},
-		}
-		cfg.DefaultButtonId = uint16(co.ID_CANCEL)
-		return cfg
+		},
+		DefaultButtonId: uint16(co.ID_OK),
 	}
-	cfg.HMainIcon = win.TdcIconTdi(co.TDICON_WARNING)
-	cfg.MainInstruction = i18n.Trans("Allow {0} to take control of this computer?", quoted)
-	cfg.Content = warn + "\n\n" + fingerprint + "\n\n" + esc
-	cfg.Buttons = []win.TASKDIALOG_BUTTON{
-		{Id: co.ID_OK, Text: i18n.Trans("&Allow")},
-		{Id: co.ID_CANCEL, Text: i18n.Trans("&Cancel")},
-	}
-	cfg.DefaultButtonId = uint16(co.ID_OK)
-	return cfg
 }
 
 // ConfirmLock implements app.UI with a modal dialog that asks whether to

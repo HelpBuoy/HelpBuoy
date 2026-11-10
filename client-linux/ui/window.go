@@ -389,19 +389,13 @@ func (w *Window) Render(v app.View) {
 }
 
 // ConfirmTechie implements app.UI with a dialog in the window that asks
-// whether the techie may take control. A changed techie key gets an error
-// icon, a warning headline and Cancel as the default button.
-func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie, oldFP string) bool {
+// whether the techie may take control. The server vouches for the techie, so
+// it shows only the techie's name.
+func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie) bool {
 	d := &dialog{}
-	techieDialog(d, h, oldFP)
-	allow := 0
-	if oldFP != "" {
-		d.setButtons(0, 0, i18n.Trans("Cancel"), i18n.Trans("Allow anyway"))
-		allow = 1
-	} else {
-		d.setButtons(0, 1, i18n.Trans("Allow"), i18n.Trans("Cancel"))
-	}
-	return w.ask(ctx, d) == allow
+	techieDialog(d, h)
+	d.setButtons(0, 1, i18n.Trans("Allow"), i18n.Trans("Cancel"))
+	return w.ask(ctx, d) == 0
 }
 
 // ConfirmLock implements app.UI with a dialog in the window that asks
@@ -447,24 +441,9 @@ func (w *Window) ask(ctx context.Context, d *dialog) int {
 
 // techieDialog sets the texts of the approval dialog for techie h; the
 // buttons stay.
-func techieDialog(d *dialog, h session.Techie, oldFP string) {
-	quoted := `"` + h.Name + `"`
-	esc := i18n.Trans("You can take back control at any time by pressing Esc.")
-	fingerprint := i18n.Trans("Key fingerprint:\n{0}", h.Fingerprint)
-	warn := i18n.Trans("Only allow this if you know the person asking personally. " +
-		"Banks, Microsoft and the police never ask for this.")
-	if oldFP != "" {
-		d.icon = iconError
-		d.heading = i18n.Trans("Warning: the key of {0} has changed", quoted)
-		d.body = i18n.Trans("Key last time:\n{0}\n"+
-			"Key now:\n{1}\n\n"+
-			"This may be someone pretending to be a techie. Do not continue "+
-			"unless the techie confirmed by phone that they have a new key.", oldFP, h.Fingerprint)
-		return
-	}
-	d.icon = iconWarning
-	d.heading = i18n.Trans("Allow {0} to take control of this computer?", quoted)
-	d.body = warn + "\n\n" + fingerprint + "\n\n" + esc
+func techieDialog(d *dialog, h session.Techie) {
+	d.heading = i18n.Trans("Allow {0} to take control of this computer?", `"`+h.Name+`"`)
+	d.body = i18n.Trans("You can take back control at any time by pressing Esc.")
 }
 
 // setButtons creates the dialog's buttons; def is the default one.

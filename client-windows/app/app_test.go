@@ -97,7 +97,7 @@ func (u *fakeUI) Render(v View) {
 	}
 	u.views <- v
 }
-func (u *fakeUI) ConfirmTechie(ctx context.Context, _ session.Techie, _ string) bool {
+func (u *fakeUI) ConfirmTechie(ctx context.Context, _ session.Techie) bool {
 	u.enter()
 	defer u.leave()
 	u.mu.Lock()
@@ -316,23 +316,17 @@ func TestTechieConnects(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 	}
 	ui.wait(t, "ready", readyMain)
-	if len(e.config().KnownTechies) != 0 {
-		t.Fatal("refused techie pinned")
-	}
 
 	// While the user is asked the window says so.
 	gate := make(chan struct{})
 	ui.answer(false, gate)
-	techie := connectTechie(t, e.server, e.fp())
+	connectTechie(t, e.server, e.fp())
 	ui.wait(t, "asking", func(v View) bool { return v.Screen == ScreenMain && v.Asking && v.Notice != "" })
 	close(gate)
 	sess := <-e.server.Sessions()
 	v := ui.wait(t, "in session", func(v View) bool { return v.InSession })
 	if v.Screen != ScreenMain || v.Ready {
 		t.Fatalf("session view %+v", v)
-	}
-	if got := e.config().KnownTechies["alice"]; got != identity.KeyLine(techie.Public, "") {
-		t.Fatalf("pinned %q", got)
 	}
 	sess.Channel.Close() // the techie ends the session
 	ui.wait(t, "back", func(v View) bool { return !v.InSession && readyMain(v) })

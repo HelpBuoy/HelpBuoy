@@ -40,7 +40,7 @@ other, and splices their channels together.
   the address is stored and every later start connects to it by itself; the address can only
   be changed when connecting fails or after **Disconnect** on the waiting screen. Once a techie has registered that key, the computer shows up as online for all
   techies. Techies ask to help: a techie presses **Connect** on an online computer, and the
-  computer asks its user whether that techie (name and key fingerprint) may take
+  computer asks its user whether that techie (by name) may take
   control. Nothing happens without that approval. Talking about the problem happens over
   WhatsApp or the phone, not in the apps.
   A computer is helped by **one techie at a time**; a techie can help many computers at once.
@@ -119,14 +119,13 @@ connection and stored in `config.json` in the client's data directory:
 | server address | `helpme.example.com` (port 443 unless given) | typed by the user; the server this PC got registered on |
 | server host key | `ssh-ed25519 AAAA...` (`SHA256:3q2+7w...`) | first successful connection, pinned from then on |
 | last address | `helpme.example.com` | the last address that reached a server, to prefill the field |
-| known techies | `alice` → `ssh-ed25519 AAAA...` | each techie's keys, one per line, pinned on the first session with that techie from each machine (3.5) |
 | lock (12) | primary server address and host key, approved servers | when the user agrees to lock to a server |
 
 The key is stored next to it, as its own application-specific key pair (6.1). Adding or removing a techie never touches
 the computer: it trusts the techies the server announces. Connecting to another address pins
 that server's key on first use; only once this PC is registered there does it replace the
-stored server, and the techie pins of the old server are forgotten (techie names are only
-unique within one server).
+stored server. The computer remembers nothing about techies: the server vouches for them
+(3.5).
 
 ---
 
@@ -194,7 +193,7 @@ or ending.
    sends the computer `SessionReady`. Other techies see the computer as busy; if two techies
    connect at the same moment, the first one wins.
 3. **The computer asks the user** whether that techie may take control, showing the techie's
-   name and key fingerprint, with a separate warning if the key changed (3.5).
+   name (3.5).
    If the user refuses, the computer cancels the request and the techie sees "Not allowed".
    The server ends a request whose session hasn't started within 1 minute, so the user has
    that long to answer; the computer then closes the question by itself.
@@ -452,13 +451,11 @@ Role caps and timeouts:
   can read no more than the server can, and can't pose as the server without its host key.
 - **Techies are vouched for by the server.** Without certificates the computer has no
   independent way to know the techies, so it accepts the techie key the (pinned) server
-  announces in `SessionReady`. On top of that, each techie's key is pinned per techie name
-  the first time (TOFU again). Before every session the computer asks the user whether the
-  techie may take control, showing its name and key fingerprint; if `alice` later
-  shows up with a key this computer hasn't seen for her, from another machine or a new
-  install, that question also carries a warning. Once allowed, that key is pinned next to the
-  earlier ones (at most 16 per name), so switching between her machines warns only once per
-  machine.
+  announces in `SessionReady`, and only that key in the inner handshake. The computer pins no
+  techie keys: a techie has a key on every machine it uses, and the server already accepted
+  each of them, so a key the computer hasn't seen before is no reason for a warning. Before
+  every session the computer asks the user whether the techie may take control, showing only
+  its name; a fingerprint means nothing to the user.
 - **Computer** is trusted because a techie registered its key after receiving it (or its
   fingerprint) over a trusted channel. The desk app pins registered computer keys in the inner
   handshake, independent of what the server says.
@@ -473,9 +470,8 @@ Role caps and timeouts:
   reaches the servers its primary server approved (12). Nothing depends on helpbuoy.com.
 - **Server compromise**: sees metadata (who, when, how much) and can deny service. Because the
   server vouches for techies, a compromised server *could* present a techie key of its own to a
-  computer that files a request. It can't do so silently for a techie the computer has already
-  met (key change warning), it can't impersonate a computer to a techie (the desk app pins
-  the registered computer key), and it still needs the user to file a request first. A
+  computer under any techie name. It can't impersonate a computer to a techie (the desk app
+  pins the registered computer key), and it still needs the user to allow the session first. A
   passive or curious server operator can't read sessions: the inner SSH is end-to-end.
 - **Computer private key** is an unencrypted, application-specific key protected by a
   user-only file ACL. It is used for nothing else, so stealing it gives no other SSH access;
@@ -500,8 +496,7 @@ use `TCP_NODELAY`. No SSH compression on either layer (the screen stream compres
 The spliced channel carries a complete **inner SSH connection** (`proto/inner`):
 
 - Inner SSH server = client app. Host key = its persistent key. Accepts public key auth only
-  from the techie key announced in `SessionReady` for this session, and checks it against the
-  pinned key for that techie name if there is one.
+  from the techie key announced in `SessionReady` for this session.
 - Inner SSH client = desk app. `HostKeyCallback` accepts only the registered key of the
   computer it asked for.
 - Cipher preference `aes128-gcm@openssh.com` (AES-NI, cheap even with two SSH layers), then
@@ -672,9 +667,9 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
 ### 6.3 Waiting screen
 - The comment of this PC's own key (`anna@ANNA-LAPTOP`) and "Waiting for a techie", with
   who the user is waiting for below it (see below). The techie connects, and the computer
-  asks the question from section 1 (Session, step 3) in a modal dialog, with a warning icon
-  and "Only allow this if you know the person asking personally. Banks, Microsoft and the
-  police never ask for this."
+  asks the question from section 1 (Session, step 3) in a modal dialog: "Allow "alice" to
+  take control of this computer?" with "You can take back control at any time by pressing
+  Esc.", Allow and Cancel.
 - **Disconnect** is always available while connected: it leaves the server and goes back to
   the address screen. During a session the same button reads **End session** and ends only
   the session (like Esc); afterwards it is Disconnect again.
@@ -1007,8 +1002,8 @@ customer. Techies limited to customers were dropped again (13.3).
 
 **Phase 10 - several keys per techie**
 A techie has a key on every machine it uses: `techie add-key` and `remove-key`, Keys and Add
-key on the Techies tab, the last-seen time of every key, and computers that pin every key
-they allowed for a techie name.
+key on the Techies tab and the last-seen time of every key. Computers no longer pin techie
+keys or show their fingerprints: the server vouches for techies (3.5).
 
 **Later**: tray icon and optional "Start with Windows" (HKCU Run entry, no admin), so the
 computer can stay online in the background; an update check in the Linux and macOS
@@ -1037,8 +1032,8 @@ clients.
 - Malicious server test: a patched server that splices a techie to the wrong computer (the techie
   app must refuse the inner handshake), changes its host key (both apps must refuse; the computer warns and only reconnects if the
   user trusts the new key), or
-  announces a different key for a techie the computer already knows (the computer must warn
-  and not connect without the user's consent).
+  announces one techie key and offers another in the inner handshake (the computer must
+  refuse it).
 - Lock (12): a server without a company name and phone number refuses computers but
   lets techies and pending keys in, so a techie not added yet can see their key line; listing requests are stored, deduplicated, shown in
   `Presence` and decided only by techies; allowing sends the new approved list (also after a
@@ -1054,8 +1049,8 @@ clients.
   connected with; `Presence` shows which key is online and when each was last seen, also
   after a restart; removing a key closes its connection; a techie can't remove the key it
   is connected with or the last key of a techie; a `state.json` with one `public_key` per
-  techie loads, and the first key is written there for older versions; a computer that knows
-  several keys of a techie connects with any of them without a warning.
+  techie loads, and the first key is written there for older versions; a computer asks about
+  a techie by name only, whichever key it connects with.
 - Performance: the replay harness from phase 3 in CI (client encoder against techie decoder,
   no GUI), with regression thresholds; `tc netem` runs at 20 ms / 80 ms RTT and 10 / 50 Mbit/s.
 - Session end tests (`faketechie`): End session on the techie closes the session and

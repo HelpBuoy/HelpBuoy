@@ -26,7 +26,6 @@ type testHandler struct {
 
 	mu         sync.Mutex
 	registered []string // server host keys
-	pinned     map[string]string
 	refuse     bool
 	hold       bool // ConfirmTechie waits until its context ends
 	asked      []asked
@@ -38,11 +37,10 @@ type testHandler struct {
 // asked is one ConfirmTechie call.
 type asked struct {
 	techie Techie
-	oldFP  string
 }
 
 func newHandler() *testHandler {
-	return &testHandler{states: make(chan State, 256), pinned: map[string]string{},
+	return &testHandler{states: make(chan State, 256),
 		approved: make(chan []control.ApprovedServer, 16), refused: make(chan control.ApprovedServer, 16)}
 }
 
@@ -52,11 +50,6 @@ func (h *testHandler) Registered(hostKey string) {
 	h.registered = append(h.registered, hostKey)
 	h.mu.Unlock()
 }
-func (h *testHandler) TechiePinned(name, line string) {
-	h.mu.Lock()
-	h.pinned[name] = line
-	h.mu.Unlock()
-}
 func (h *testHandler) ServerInfo(info control.ServerInfo) {
 	h.mu.Lock()
 	h.info = append(h.info, info)
@@ -64,9 +57,9 @@ func (h *testHandler) ServerInfo(info control.ServerInfo) {
 }
 func (h *testHandler) ApprovedServers(s []control.ApprovedServer) { h.approved <- s }
 func (h *testHandler) ListingRefused(s control.ApprovedServer)    { h.refused <- s }
-func (h *testHandler) ConfirmTechie(ctx context.Context, techie Techie, oldFP string) bool {
+func (h *testHandler) ConfirmTechie(ctx context.Context, techie Techie) bool {
 	h.mu.Lock()
-	h.asked = append(h.asked, asked{techie, oldFP})
+	h.asked = append(h.asked, asked{techie})
 	hold, refuse := h.hold, h.refuse
 	h.mu.Unlock()
 	if hold {
@@ -384,12 +377,6 @@ func TestSessionAndEsc(t *testing.T) {
 	if s.Techie.Name != "alice" || s.Techie.Fingerprint != ssh.FingerprintSHA256(techie.PublicKey()) {
 		t.Fatalf("techie %+v", s.Techie)
 	}
-	f.h.mu.Lock()
-	pinned := f.h.pinned["alice"]
-	f.h.mu.Unlock()
-	if pinned != identity.KeyLine(techie.PublicKey(), "") {
-		t.Fatalf("pinned %q", pinned)
-	}
 	// Another connect while the session runs is ignored.
 	f.server.Connect(f.fp, "bob", techieLine)
 	select {
@@ -430,9 +417,6 @@ func TestSessionAndEsc(t *testing.T) {
 		if a.techie.Name != "alice" || a.techie.Fingerprint != fp {
 			t.Fatalf("asked about %+v", a.techie)
 		}
-		if a.oldFP != "" {
-			t.Fatalf("warned about an unchanged techie key: %q", a.oldFP)
-		}
 	}
 }
 
@@ -457,8 +441,8 @@ func TestTechieRefused(t *testing.T) {
 	f.h.waitPhase(t, PhaseReady)
 	f.h.mu.Lock()
 	defer f.h.mu.Unlock()
-	if len(f.h.asked) != 1 || f.h.asked[0].oldFP != "" || f.h.pinned["alice"] != "" {
-		t.Fatalf("asked %+v, pinned %q", f.h.asked, f.h.pinned["alice"])
+	if len(f.h.asked) != 1 {
+		t.Fatalf("asked %+v", f.h.asked)
 	}
 }
 
@@ -499,71 +483,29 @@ func TestConnectionLossEndsSession(t *testing.T) {
 	f.h.waitPhase(t, PhaseReady) // reconnected
 }
 
-func TestTechieKeyChangeRefused(t *testing.T) {
-	_, oldLine := newKey(t, "alice")
-	f := setup(t, func(o *Options) { o.KnownTechies = map[string]string{"alice": oldLine} })
-	f.h.refuse = true
-	_, newLine := newKey(t, "alice")
-	f.server.Register(f.fp)
-	f.computer.Start()
+// TestTechieOtherKey: a techie that connects with another key than last
+// time, from another machine, is asked about like any other time: the
+// server vouches for its keys.
+func TestTechieOtherKey(t *testing.T) {
+	f := setup(t, nil)
+	_, first := newKey(t, "alice")
+	startSession(t, f, first)
+	<-f.runner.started
+	f.h.waitPhase(t, PhaseInSession)
+	(<-f.escFire)()
+	<-f.runner.ended
 	f.h.waitPhase(t, PhaseReady)
-	f.server.Connect(f.fp, "alice", newLine)
-	recv[*control.CancelRequest](t, f.server)
-	select {
-	case <-f.server.Sessions():
-		t.Fatal("session opened despite refusal")
-	case <-f.runner.started:
-		t.Fatal("runner started despite refusal")
-	case <-time.After(100 * time.Millisecond):
+
+	other, otherLine := newKey(t, "alice")
+	f.server.Connect(f.fp, "alice", otherLine)
+	<-f.server.Sessions()
+	if got := <-f.runner.started; !sameKey(got, other.PublicKey()) {
+		t.Fatal("runner got another techie key")
 	}
 	f.h.mu.Lock()
 	defer f.h.mu.Unlock()
-	if len(f.h.asked) != 1 || f.h.asked[0].oldFP == "" || f.h.pinned["alice"] != "" {
-		t.Fatalf("asked %+v, pinned %q", f.h.asked, f.h.pinned["alice"])
-	}
-}
-
-func TestTechieKeyChangeAccepted(t *testing.T) {
-	_, oldLine := newKey(t, "alice")
-	f := setup(t, func(o *Options) { o.KnownTechies = map[string]string{"alice": oldLine} })
-	techie, newLine := newKey(t, "alice")
-	startSession(t, f, newLine)
-	<-f.runner.started
-	f.h.mu.Lock()
-	defer f.h.mu.Unlock()
-	want := ssh.FingerprintSHA256(oldKey(t, oldLine))
-	// The old key stays pinned too: a techie has a key on every computer it
-	// uses.
-	if len(f.h.asked) != 1 || f.h.asked[0].oldFP != want || f.h.pinned["alice"] != oldLine+"\n"+identity.KeyLine(techie.PublicKey(), "") {
-		t.Fatalf("asked %+v, pinned %q", f.h.asked, f.h.pinned["alice"])
-	}
-}
-
-// TestTechieOtherKnownKey: a techie with several pinned keys connects with
-// one of them without a warning and without pinning anything.
-func TestTechieOtherKnownKey(t *testing.T) {
-	techie, line := newKey(t, "alice")
-	_, other := newKey(t, "alice")
-	f := setup(t, func(o *Options) { o.KnownTechies = map[string]string{"alice": line + "\n" + other} })
-	startSession(t, f, identity.KeyLine(techie.PublicKey(), ""))
-	<-f.runner.started
-	f.h.mu.Lock()
-	defer f.h.mu.Unlock()
-	if len(f.h.asked) != 1 || f.h.asked[0].oldFP != "" || f.h.pinned["alice"] != "" {
-		t.Fatalf("asked %+v, pinned %q", f.h.asked, f.h.pinned["alice"])
-	}
-}
-
-func TestAddTechieKeyKeepsMost(t *testing.T) {
-	pins := ""
-	var lines []string
-	for range control.MaxTechieKeys + 2 {
-		_, l := newKey(t, "alice")
-		lines = append(lines, l)
-		pins = addTechieKey(pins, l)
-	}
-	if got := strings.Split(pins, "\n"); len(got) != control.MaxTechieKeys || got[0] != lines[2] || got[len(got)-1] != lines[len(lines)-1] {
-		t.Fatalf("kept %d lines: %q", len(got), got)
+	if len(f.h.asked) != 2 || f.h.asked[1].techie.Name != "alice" {
+		t.Fatalf("asked %+v", f.h.asked)
 	}
 }
 

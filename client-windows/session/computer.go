@@ -14,7 +14,6 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
@@ -73,9 +72,6 @@ type Handler interface {
 	// Registered reports that the server knows this key as a computer, and
 	// the server host key line to pin from now on.
 	Registered(serverHostKey string)
-	// TechiePinned reports the techie key lines to remember for name, one
-	// per line: the ones pinned before and the new one.
-	TechiePinned(name, keyLines string)
 	// ServerInfo reports who runs the server, after connecting and whenever
 	// a techie changes it.
 	ServerInfo(info control.ServerInfo)
@@ -86,13 +82,11 @@ type Handler interface {
 	// ListingRefused reports that a techie refused to approve a server.
 	ListingRefused(s control.ApprovedServer)
 	// ConfirmTechie asks the user whether techie h may take control. It is
-	// called for every session, before the session channel is opened.
-	// oldFingerprint is set when the techie called h.Name showed other keys
-	// before, but never this one: it is the key pinned last ("unreadable" if
-	// no pinned key can be parsed). ctx
-	// ends when the question is moot (the server ended the request, or the
+	// called for every session, before the session channel is opened. The
+	// server vouches for the techie, so only its name is shown. ctx ends
+	// when the question is moot (the server ended the request, or the
 	// connection was lost); the implementation should then stop asking.
-	ConfirmTechie(ctx context.Context, h Techie, oldFingerprint string) bool
+	ConfirmTechie(ctx context.Context, h Techie) bool
 }
 
 // Runner runs one session on the computer's sv-session channel: the inner SSH
@@ -118,9 +112,6 @@ type Options struct {
 	// Listing, if set, is sent to the server after every connection as a
 	// registered computer: a request to approve another server.
 	Listing *control.RequestListing
-	// KnownTechies maps techie names to their pinned key lines, one per
-	// line.
-	KnownTechies map[string]string
 	// Retry keeps retrying when the very first attempt fails. Without it the
 	// computer gives up after a failed first attempt, so the first-run window
 	// can show the error; after one successful connection it always retries.
@@ -162,7 +153,6 @@ type Computer struct {
 	stopped     bool
 	err         error
 	hostKey     ssh.PublicKey
-	techies     map[string]string
 	conn        *serverConn // nil while disconnected
 	pending     bool
 	reqID       string             // request of the SessionReady being handled, "" once it ended
@@ -217,13 +207,9 @@ func New(opts Options) *Computer {
 		log = slog.Default()
 	}
 	c := &Computer{
-		opts:    opts,
-		log:     log.With("server", opts.Addr),
-		done:    make(chan struct{}),
-		techies: make(map[string]string),
-	}
-	for k, v := range opts.KnownTechies {
-		c.techies[k] = v
+		opts: opts,
+		log:  log.With("server", opts.Addr),
+		done: make(chan struct{}),
 	}
 	if opts.ServerHostKey != "" {
 		if k, _, _, _, err := ssh.ParseAuthorizedKey([]byte(opts.ServerHostKey)); err == nil {
@@ -395,44 +381,6 @@ func (c *Computer) hostKeyCallback(_ string, _ net.Addr, key ssh.PublicKey) erro
 		return e
 	}
 	return nil
-}
-
-// knownTechieKey reports whether key is one of the pinned key lines of a
-// techie, one per line: a techie has a key for every computer it uses. If
-// not and the techie has pins, oldFP is the fingerprint of the key pinned
-// last ("unreadable" if no pinned line can be parsed).
-func knownTechieKey(pins string, key ssh.PublicKey) (known bool, oldFP string) {
-	if strings.TrimSpace(pins) == "" {
-		return false, ""
-	}
-	oldFP = "unreadable"
-	for _, l := range strings.Split(pins, "\n") {
-		k, _, _, _, err := ssh.ParseAuthorizedKey([]byte(l))
-		if err != nil {
-			continue
-		}
-		if sameKey(k, key) {
-			return true, ""
-		}
-		oldFP = ssh.FingerprintSHA256(k)
-	}
-	return false, oldFP
-}
-
-// addTechieKey adds a key line to a techie's pinned key lines, keeping the
-// most recent control.MaxTechieKeys.
-func addTechieKey(pins, line string) string {
-	var lines []string
-	for _, l := range strings.Split(pins, "\n") {
-		if _, _, _, _, err := ssh.ParseAuthorizedKey([]byte(l)); err == nil {
-			lines = append(lines, l)
-		}
-	}
-	lines = append(lines, line)
-	if n := len(lines) - control.MaxTechieKeys; n > 0 {
-		lines = lines[n:]
-	}
-	return strings.Join(lines, "\n")
 }
 
 func sameKey(a, b ssh.PublicKey) bool {
@@ -734,18 +682,8 @@ func (c *Computer) runSession(rc *serverConn, sr control.SessionReady, ask conte
 		return
 	}
 	fp := ssh.FingerprintSHA256(key)
-	line := identity.KeyLine(key, "")
-
-	c.mu.Lock()
-	old := c.techies[sr.TechieName]
-	c.mu.Unlock()
-	known, oldFP := knownTechieKey(old, key)
-	pin := !known
-	if pin && oldFP != "" {
-		log.Warn("techie key changed", "old", oldFP, "new", fp)
-	}
 	techie := Techie{Name: sr.TechieName, Fingerprint: fp}
-	if !c.opts.Handler.ConfirmTechie(ask, techie, oldFP) {
+	if !c.opts.Handler.ConfirmTechie(ask, techie) {
 		abort("user refused the techie", nil)
 		return
 	}
@@ -753,14 +691,6 @@ func (c *Computer) runSession(rc *serverConn, sr control.SessionReady, ask conte
 		abort("the request ended while the user was asked", nil)
 		return
 	}
-	if pin {
-		pins := addTechieKey(old, line)
-		c.mu.Lock()
-		c.techies[sr.TechieName] = pins
-		c.mu.Unlock()
-		c.opts.Handler.TechiePinned(sr.TechieName, pins)
-	}
-
 	ctx, cancel := context.WithCancel(rc.ctx)
 	defer cancel()
 	ch, reqs, err := rc.ssh.OpenChannel(control.ChannelSession,

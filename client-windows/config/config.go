@@ -1,8 +1,7 @@
 // Package config stores what the computer learns about its server in
 // config.json in the app's data directory (PLAN.md section 0): the server
-// address, the pinned server host key, the pinned key of every techie met on
-// that server, the lock to a primary server (PLAN.md 12) and the hand-set
-// performance mode. The app key lives next to it but is managed by
+// address, the pinned server host key, the lock to a primary server (PLAN.md
+// 12) and the hand-set performance mode. The app key lives next to it but is managed by
 // proto/appkey.
 package config
 
@@ -27,12 +26,6 @@ type Config struct {
 	ServerAddress string `json:"server_address,omitempty"`
 	// ServerHostKey is the pinned server host key as an authorized_keys line.
 	ServerHostKey string `json:"server_host_key,omitempty"`
-	// KnownTechies maps a techie name to its pinned authorized_keys lines,
-	// one per line: a techie has a key for every computer it uses.
-	// The pins belong to ServerAddress: techies are vouched for by the server
-	// and names are only unique within one server, so changing the server
-	// address clears them.
-	KnownTechies map[string]string `json:"known_techies,omitempty"`
 	// LastAddress is the last address that reached a server, used to
 	// prefill the address field on the next start.
 	LastAddress string `json:"last_address,omitempty"`
@@ -94,12 +87,6 @@ func (c *Config) Clone() *Config {
 		l := *c.Lock
 		l.Approved = append([]control.ApprovedServer(nil), c.Lock.Approved...)
 		n.Lock = &l
-	}
-	if c.KnownTechies != nil {
-		n.KnownTechies = make(map[string]string, len(c.KnownTechies))
-		for k, v := range c.KnownTechies {
-			n.KnownTechies[k] = v
-		}
 	}
 	return &n
 }

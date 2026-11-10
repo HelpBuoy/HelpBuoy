@@ -24,7 +24,6 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	in := &Config{
 		ServerAddress: "server.example.com:5959",
 		ServerHostKey: "ssh-ed25519 AAAA",
-		KnownTechies:  map[string]string{"alice": "ssh-ed25519 BBBB"},
 	}
 	if err := s.Save(in); err != nil {
 		t.Fatal(err)
@@ -109,10 +108,10 @@ func TestRemoveKey(t *testing.T) {
 }
 
 func TestClone(t *testing.T) {
-	c := &Config{KnownTechies: map[string]string{"a": "x"}}
+	c := &Config{WarnedServers: []string{"x"}}
 	n := c.Clone()
-	n.KnownTechies["a"] = "y"
-	if c.KnownTechies["a"] != "x" {
-		t.Fatal("clone shares map")
+	n.WarnedServers[0] = "y"
+	if c.WarnedServers[0] != "x" {
+		t.Fatal("clone shares slice")
 	}
 }
