@@ -238,7 +238,9 @@ func (r *Registry) OpenControl(c *Conn) error {
 		return errors.New("control channel already open")
 	}
 	c.control = true
-	if c.role != control.RoleTechie && !r.idx.State.Info().Configured() {
+	// Pending keys get in: a techie not added yet needs to connect to see
+	// the key line to send, and a pending key only becomes a computer below.
+	if c.role == control.RoleComputer && !r.idx.State.Info().Configured() {
 		r.log.Info("computer refused: no company name and phone number set", "fp", c.fp, "ip", c.ip)
 		r.detachLocked(c)
 		c.peer.Kick(ReasonNotSetUp)
@@ -461,6 +463,10 @@ func (r *Registry) SetIndex(idx *store.Index) {
 					send(c, r.approvedLocked(fp))
 				}
 			}
+		case c.role == control.RolePending && id.Role == control.RoleComputer && !idx.State.Info().Configured():
+			r.log.Info("computer refused: no company name and phone number set", "fp", fp, "ip", c.ip)
+			r.detachLocked(c)
+			c.peer.Kick(ReasonNotSetUp)
 		case c.role == control.RolePending && id.Role == control.RoleComputer:
 			c.role = control.RoleComputer
 			c.name, c.keyLine = id.Name, id.KeyLine

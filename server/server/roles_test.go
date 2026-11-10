@@ -594,7 +594,8 @@ func TestSetServerInfo(t *testing.T) {
 }
 
 // TestNotSetUp: a server without a company name and phone number refuses
-// computers and pending keys with an Error, but lets techies in.
+// computers with an Error, also a pending key once it is registered as a
+// computer, but lets techies and pending keys in.
 func TestNotSetUp(t *testing.T) {
 	e := newEnv(t, nil)
 	e.update(func(st *store.State) error {
@@ -602,13 +603,21 @@ func TestNotSetUp(t *testing.T) {
 		return nil
 	})
 	ck := e.addComputer("anna@PC")
-	for _, k := range []ssh.Signer{ck, fake.NewKey()} {
-		c := e.dial(k)
-		if msg := waitClosed(t, c); msg != registry.ReasonNotSetUp {
-			t.Fatalf("closed with %q, want the not set up Error", msg)
-		}
+	if msg := waitClosed(t, e.dial(ck)); msg != registry.ReasonNotSetUp {
+		t.Fatalf("closed with %q, want the not set up Error", msg)
 	}
 	e.techie("alice")
+
+	pk := fake.NewKey()
+	pc, _ := e.connect(pk, control.RolePending)
+	assertOpen(t, pc)
+	e.update(func(st *store.State) error {
+		_, _, err := st.AddComputer(fake.KeyLine(pk.PublicKey(), "bob@PC"), "", "admin", e.clock.Now())
+		return err
+	})
+	if msg := waitClosed(t, pc); msg != registry.ReasonNotSetUp {
+		t.Fatalf("registered pending closed with %q, want the not set up Error", msg)
+	}
 }
 
 // TestListing: a computer asks to approve another server, techies see the

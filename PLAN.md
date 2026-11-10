@@ -1022,8 +1022,8 @@ clients.
   user trusts the new key), or
   announces a different key for a techie the computer already knows (the computer must warn
   and not connect without the user's consent).
-- Lock (12): a server without a company name and phone number refuses computers and
-  pending keys but lets techies in; listing requests are stored, deduplicated, shown in
+- Lock (12): a server without a company name and phone number refuses computers but
+  lets techies and pending keys in, so a techie not added yet can see their key line; listing requests are stored, deduplicated, shown in
   `Presence` and decided only by techies; allowing sends the new approved list (also after a
   reconnect), refusing sends `ListingRefused`; the client asks the lock question once per
   connection and only once registered, locks to the pinned host key, asks the primary server
@@ -1176,8 +1176,10 @@ knows who to call: the server address, the company name, the phone number and op
 free description (for example opening hours). The company name and phone number are
 mandatory for every server, since every server can become a primary server:
 `helpbuoy-server serve` asks for them in a terminal (3.2), the desk app says so on the
-Computers tab until they are set (7.1), and a server without them refuses computers and
-pending keys with an `Error`. They are separate fields in `ServerInfo` and `SetServerInfo`,
+Computers tab until they are set (7.1), and a server without them refuses computers with
+an `Error`, also a pending key the moment it is registered as a computer. Techies and
+pending keys get in, so the first techie can set them and a techie not added yet can see
+the key line to send. They are separate fields in `ServerInfo` and `SetServerInfo`,
 so the client shows them in its own layout. The address shown is the one the PC is
 connected to; the address field in `ServerInfo` is what techies give out.
 
