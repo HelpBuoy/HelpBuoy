@@ -41,6 +41,7 @@ const (
 type Techie struct {
 	Name      string `json:"name"`
 	PublicKey string `json:"public_key"` // authorized_keys line
+	Extra     Extra  `json:"-"`
 }
 
 // Computer is a registered computer key.
@@ -50,6 +51,7 @@ type Computer struct {
 	RegisteredBy string    `json:"registered_by"`
 	RegisteredAt time.Time `json:"registered_at"`
 	LastSeen     time.Time `json:"last_seen,omitzero"`
+	Extra        Extra     `json:"-"`
 }
 
 // State is the content of state.json.
@@ -58,6 +60,7 @@ type State struct {
 	Instruction string     `json:"instruction,omitempty"` // shown by the apps, see control.ServerInfo
 	Techies     []Techie   `json:"techies"`
 	Computers   []Computer `json:"computers"`
+	Extra       Extra      `json:"-"`
 }
 
 // Identity is what a fingerprint maps to.
@@ -154,8 +157,9 @@ func (x *Index) Computer(fp string) (Computer, bool) {
 
 // Clone returns a deep copy.
 func (st *State) Clone() *State {
+	// Extra maps are shared: they are never changed, only replaced.
 	return &State{Title: st.Title, Instruction: st.Instruction,
-		Techies: slices.Clone(st.Techies), Computers: slices.Clone(st.Computers)}
+		Techies: slices.Clone(st.Techies), Computers: slices.Clone(st.Computers), Extra: st.Extra}
 }
 
 // Store reads and writes state.json in a directory.
@@ -191,9 +195,7 @@ func (s *Store) ReadRaw() ([]byte, error) {
 func Parse(b []byte) (*Index, error) {
 	st := &State{}
 	if len(bytes.TrimSpace(b)) > 0 {
-		dec := json.NewDecoder(bytes.NewReader(b))
-		dec.DisallowUnknownFields()
-		if err := dec.Decode(st); err != nil {
+		if err := json.Unmarshal(b, st); err != nil {
 			return nil, fmt.Errorf("%s: %w", FileName, err)
 		}
 	}

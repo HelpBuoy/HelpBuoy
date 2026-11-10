@@ -127,10 +127,8 @@ func TestParseRejectsBadState(t *testing.T) {
 	for _, s := range []string{
 		`{`,
 		`{"techies":[{"name":"a","public_key":"garbage"}]}`,
-		`{"techies":[{"name":"a","display_name":"A","public_key":"` + line + `"}]}`,
 		`{"techies":[{"name":"a","public_key":"` + line + `"},{"name":"b","public_key":"` + line + `"}]}`,
 		`{"techies":[{"name":"a","public_key":"` + line + `"}],"computers":[{"name":"x","public_key":"` + line + `"}]}`,
-		`{"unknown":1}`,
 	} {
 		if _, err := Parse([]byte(s)); err == nil {
 			t.Errorf("accepted %s", s)
@@ -187,5 +185,49 @@ func TestSetLastSeen(t *testing.T) {
 	st.SetLastSeen(map[string]time.Time{auth.Fingerprint(k): t1.Add(-time.Hour)})
 	if !st.Computers[0].LastSeen.Equal(t1) {
 		t.Errorf("last seen %v", st.Computers[0].LastSeen)
+	}
+}
+
+func TestUnknownFieldsAreKept(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	hk, ck := newKey(t), newKey(t)
+	in := `{"title":"T","msp":{"phone":"+1 234"},"techies":[{"name":"alice","admin":true,"public_key":"` +
+		auth.KeyLine(hk, "") + `"}],"computers":[{"public_key":"` + auth.KeyLine(ck, "anna@PC") +
+		`","name":"anna@PC","registered_by":"alice","registered_at":"2026-01-02T03:04:05Z","approved":["a.example.com"]}]}`
+	if err := os.WriteFile(s.Path(), []byte(in), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, out, err := s.Update(func(st *State) error {
+		if err := st.SetInfo("New", ""); err != nil {
+			return err
+		}
+		_, err := st.RenameComputer(auth.Fingerprint(ck), "anna@LAPTOP")
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	idx, err := Parse(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := idx.State
+	if st.Title != "New" || st.Computers[0].Name != "anna@LAPTOP" {
+		t.Errorf("update lost: %s", out)
+	}
+	if string(st.Extra["msp"]) != `{"phone":"+1 234"}` {
+		t.Errorf("state extra %q in %s", st.Extra, out)
+	}
+	if string(st.Techies[0].Extra["admin"]) != "true" {
+		t.Errorf("techie extra %q", st.Techies[0].Extra)
+	}
+	if string(st.Computers[0].Extra["approved"]) != `["a.example.com"]` {
+		t.Errorf("computer extra %q", st.Computers[0].Extra)
+	}
+	if _, ok := st.Extra["title"]; ok {
+		t.Error("known field kept as extra")
 	}
 }

@@ -279,6 +279,9 @@ State directory in the user's data directory, next to the desk app's own data:
 registered by, registered at, last seen). Computer registrations never expire; they are removed
 only by `UnregisterComputer` or `helpbuoy-server computer remove`. They are added by
 `RegisterComputer` or `helpbuoy-server computer add`. Writes are temp file + `fsync` + `rename`.
+Fields in `state.json` that a version doesn't know, at the top level or in a techie or
+computer entry, are kept and written back on every save, so a newer version can add fields
+without an older one sharing the state directory dropping them.
 
 | Command | What it does |
 |---|---|
@@ -1141,9 +1144,9 @@ message types they don't know (3.3), so a later change can still add a message.
 
 The salt is exactly 32 bytes from `crypto/rand`. It is kept in its own file,
 `verification_salt` in the state directory, created once with mode 0600 and never
-rewritten, exactly like `hostkey_ed25519`. Not in `state.json`: an older desk app or
-`helpbuoy-server` sharing the state directory (7.1) drops fields it doesn't know when it
-saves `state.json`, which would silently replace the salt and break the badge. The salt is
+rewritten, exactly like `hostkey_ed25519`. Not in `state.json`: desk apps and
+`helpbuoy-server` before the version that keeps unknown fields (3.2) refuse a `state.json`
+with fields they don't know, and the salt must never be rewritten anyway. The salt is
 never printed or logged: `helpbuoy-server verification` prints only the host key line and
 the id (12.7). Clients keep it only in memory for the connection, and treat a salt of any
 other length as no salt, so a broken server can never end up with an id a scanner could
