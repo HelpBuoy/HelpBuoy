@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -45,11 +46,11 @@ commands:
     [--trusted-proxy LIST]               http and https: proxies whose X-Forwarded-For is used
                                          (default 127.0.0.1,::1)
     [--vhosts DIR]                       http and https: serve every virtual host in DIR (see vhost)
-  techie list                            list techies
-  techie add NAME 'ssh-ed25519 ...'      add a techie key; with --customer C (repeatable) the
-                                         techie only reaches the computers of those customers
-  techie limit NAME CUSTOMER... | --all  limit a techie to some customers, or lift the limit
-  techie remove NAME                     remove a techie
+  techie list                            list techies with their keys and when each was last seen
+  techie add NAME 'ssh-ed25519 ...'      add a techie with its key
+  techie add-key NAME 'ssh-ed25519 ...'  give a techie another key, for another machine it uses
+  techie remove-key NAME SHA256:...      remove one key of a techie
+  techie remove NAME                     remove a techie with all its keys
   computer list [--customer C]           list registered computers, or those of one customer
   computer add 'ssh-ed25519 ...' [NAME]  register a computer key (NAME defaults to the key comment);
                                          --customer C puts it in a customer
@@ -173,19 +174,11 @@ func openStore(state *stateFlags) (*store.Store, error) {
 
 func techieCmd(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("%w: techie list|add|limit|remove", errUsage)
+		return fmt.Errorf("%w: techie list|add|add-key|remove-key|remove", errUsage)
 	}
 	fs := flag.NewFlagSet("techie "+args[0], flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	state := addStateFlags(fs)
-	var customers stringList
-	all := false
-	switch args[0] {
-	case "add":
-		fs.Var(&customers, "customer", "limit the techie to this customer (repeatable)")
-	case "limit":
-		fs.BoolVar(&all, "all", false, "lift the limit: the techie reaches every computer")
-	}
 	pos, err := parse(fs, args[1:])
 	if err != nil {
 		return err
@@ -204,42 +197,48 @@ func techieCmd(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 		tw := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(tw, "NAME\tFINGERPRINT\tCUSTOMERS")
+		fmt.Fprintln(tw, "NAME\tFINGERPRINT\tLAST SEEN")
 		for i, h := range idx.State.Techies {
-			fmt.Fprintf(tw, "%s\t%s\t%s\n", h.Name, idx.TechieFingerprint(i), limitText(idx.State, h))
+			for j, fp := range idx.TechieFingerprints(i) {
+				seen := "never"
+				if t := h.Keys[j].LastSeen; !t.IsZero() {
+					seen = t.Local().Format(time.DateTime)
+				}
+				fmt.Fprintf(tw, "%s\t%s\t%s\n", h.Name, fp, seen)
+			}
 		}
 		tw.Flush()
-	case "add":
+	case "add", "add-key":
 		if len(pos) != 2 {
-			return fmt.Errorf("%w: techie add NAME 'ssh-ed25519 ...' [--customer C ...]", errUsage)
+			return fmt.Errorf("%w: techie %s NAME 'ssh-ed25519 ...'", errUsage, args[0])
 		}
 		_, _, err := st.Update(func(s *store.State) error {
-			if err := s.AddTechie(pos[0], pos[1]); err != nil {
-				return err
+			if args[0] == "add-key" {
+				return s.AddTechieKey(pos[0], pos[1])
 			}
-			if len(customers) == 0 {
-				return nil
+			err := s.AddTechie(pos[0], pos[1])
+			if err != nil && slices.ContainsFunc(s.Techies, func(h store.Techie) bool { return h.Name == strings.TrimSpace(pos[0]) }) {
+				err = fmt.Errorf("%w; use techie add-key to give it another key", err)
 			}
-			return s.LimitTechie(strings.TrimSpace(pos[0]), true, customers)
+			return err
 		})
 		if err != nil {
 			return err
 		}
 		k, _, _ := auth.ParseKey(pos[1])
-		fmt.Fprintf(stdout, "added techie %s (%s)\n", pos[0], auth.Fingerprint(k))
-	case "limit":
-		if len(pos) == 0 || all == (len(pos) > 1) {
-			return fmt.Errorf("%w: techie limit NAME CUSTOMER... | techie limit NAME --all", errUsage)
+		if args[0] == "add-key" {
+			fmt.Fprintf(stdout, "added key %s to techie %s\n", auth.Fingerprint(k), pos[0])
+		} else {
+			fmt.Fprintf(stdout, "added techie %s (%s)\n", pos[0], auth.Fingerprint(k))
 		}
-		idx, _, err := st.Update(func(s *store.State) error { return s.LimitTechie(pos[0], !all, pos[1:]) })
-		if err != nil {
+	case "remove-key":
+		if len(pos) != 2 {
+			return fmt.Errorf("%w: techie remove-key NAME SHA256:...", errUsage)
+		}
+		if _, _, err := st.Update(func(s *store.State) error { return s.RemoveTechieKey(pos[0], pos[1]) }); err != nil {
 			return err
 		}
-		for _, h := range idx.State.Techies {
-			if h.Name == pos[0] {
-				fmt.Fprintf(stdout, "techie %s reaches %s\n", h.Name, limitText(idx.State, h))
-			}
-		}
+		fmt.Fprintf(stdout, "removed key %s from techie %s\n", pos[1], pos[0])
 	case "remove":
 		if len(pos) != 1 {
 			return fmt.Errorf("%w: techie remove NAME", errUsage)
@@ -249,20 +248,9 @@ func techieCmd(args []string, stdout, stderr io.Writer) error {
 		}
 		fmt.Fprintf(stdout, "removed techie %s\n", pos[0])
 	default:
-		return fmt.Errorf("%w: techie list|add|limit|remove", errUsage)
+		return fmt.Errorf("%w: techie list|add|add-key|remove-key|remove", errUsage)
 	}
 	return nil
-}
-
-// limitText describes which customers a techie reaches.
-func limitText(st *store.State, h store.Techie) string {
-	if !h.Limited {
-		return "all"
-	}
-	if len(h.Customers) == 0 {
-		return "none"
-	}
-	return strings.Join(st.CustomerNames(h.Customers), ", ")
 }
 
 func computerCmd(args []string, stdout, stderr io.Writer) error {

@@ -66,8 +66,9 @@ const (
 // has its own.
 type backend interface {
 	RegisterComputer(line, name, customer string) <-chan error
-	RegisterTechie(line, name string, limit []string) <-chan error
-	LimitTechie(name string, limit []string) <-chan error
+	RegisterTechie(line, name string) <-chan error
+	AddTechieKey(name, line string) <-chan error
+	RemoveTechieKey(name, fingerprint string) <-chan error
 	AddCustomer(name string) <-chan error
 	RenameCustomer(id, name string) <-chan error
 	RemoveCustomer(id string) <-chan error
@@ -158,8 +159,9 @@ type App struct {
 	deciding      map[string]bool      // listing requests with a DecideListing in flight, by listingKey
 	offlineOpen   bool
 	rename        renameState
-	cust          custState  // customers on the Computers tab
-	limitEdit     limitState // changing a techie's customers on the Techies tab
+	cust          custState // customers on the Computers tab
+	keysOpen      string    // techie whose keys show on the Techies tab
+	confirmTKey   string    // techie key fingerprint awaiting Remove confirmation
 
 	tabs       []*tab
 	active     int          // index into tabs
@@ -660,7 +662,7 @@ func (a *App) leaveTab(i int) {
 		a.cust.reset()
 	case tabTechies:
 		a.confirmRemove = ""
-		a.limitEdit = limitState{}
+		a.keysOpen, a.confirmTKey = "", ""
 	}
 }
 
@@ -868,6 +870,9 @@ func (a *App) tabTitle(t *tab) string {
 	case tabRegister:
 		return i18n.Trans("Register computer")
 	case tabRegisterTechie:
+		if a.regTechie.keyFor != "" {
+			return i18n.Trans("Add key")
+		}
 		return i18n.Trans("Register techie")
 	case tabServer:
 		return i18n.Trans("Server")

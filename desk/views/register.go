@@ -9,6 +9,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/helpbuoy/helpbuoy/desk/ui"
+	"github.com/helpbuoy/helpbuoy/proto/control"
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
 	"github.com/helpbuoy/helpbuoy/proto/identity"
 )
@@ -16,6 +17,9 @@ import (
 // registerPage is the state of the Register computer or Register techie page.
 type registerPage struct {
 	techie bool // Register techie; otherwise Register computer
+	// keyFor is the techie another key is added to, from Add key on the
+	// Techies tab; the page then has no name field.
+	keyFor string
 
 	key  ui.Field
 	name ui.Field
@@ -31,9 +35,6 @@ type registerPage struct {
 	// until then it follows the customer last used (PLAN.md 13.4).
 	customer    string
 	customerSet bool
-	// someCustomers limits a new techie to the customers in only.
-	someCustomers bool
-	only          map[string]bool
 
 	busy   bool
 	result string // last outcome, shown under the button
@@ -88,97 +89,66 @@ func (p *registerPage) reset() {
 	p.pubKey, p.comment, p.line, p.parseErr = nil, "", "", nil
 	p.result, p.failed = "", false
 	p.customer, p.customerSet = "", false
-	p.someCustomers, p.only = false, nil
+	p.keyFor = ""
 }
 
 // regCustomer returns the customer a new computer goes to: the one chosen,
-// else the one last used, as long as this techie may still use it. A
-// limited techie always gets one of its own customers.
+// else the one last used, as long as it still exists.
 func (a *App) regCustomer(p *registerPage) string {
-	limited, mine := a.myLimit()
-	ok := func(id string) bool {
-		if limited {
-			return slices.Contains(mine, id)
-		}
-		return id == "" || a.customerName(id) != ""
-	}
+	ok := func(id string) bool { return id == "" || a.customerName(id) != "" }
 	if p.customerSet && ok(p.customer) {
 		return p.customer
 	}
 	if ok(a.cust.lastUsed) {
 		return a.cust.lastUsed
 	}
-	if limited {
-		for _, cu := range a.customerList() {
-			if slices.Contains(mine, cu.ID) {
-				return cu.ID
-			}
+	return ""
+}
+
+// drawRegCustomers draws the customer choice of the Register computer page
+// from y in width w and returns the y below it. It draws nothing without
+// customers.
+func (a *App) drawRegCustomers(p *registerPage, id string, x, y, w float32) float32 {
+	c := a.ui
+	if !a.hasCustomers() || p.techie {
+		return y
+	}
+	c.Text(ui.Regular, ui.SizeSmall, i18n.Trans("CUSTOMER"), x, y, ui.ColMuted)
+	y += 22
+	cur := a.regCustomer(p)
+	chips := a.customerChips(func(id string) bool { return id == cur })
+	if key, ok := a.drawChips(id+"customer", chips, x, y, w, p.busy); ok {
+		p.customer, p.customerSet = chipCustomer(key), true
+	}
+	_, h := a.layoutChips(chips, x, y, w)
+	return y + h + 14
+}
+
+// existingTechie returns the name in the Register techie page's name field
+// when a techie with that name exists: registering then adds the key to it.
+func (a *App) existingTechie(p *registerPage) string {
+	if !p.techie || p.keyFor != "" || !a.keysKnown() {
+		return ""
+	}
+	name := strings.TrimSpace(p.name.Edit.String())
+	for _, h := range a.presence.Techies {
+		if h.Name == name {
+			return name
 		}
 	}
 	return ""
 }
 
-// regLimit returns the limit of a new techie: nil for all customers, else
-// the chosen customer ids that still exist.
-func (a *App) regLimit(p *registerPage) []string {
-	if !p.someCustomers {
-		return nil
+// openAddKey opens the Register techie page to add a key to techie name.
+func (a *App) openAddKey(name string) {
+	if a.regTechie.busy {
+		return
 	}
-	ids := []string{}
-	for _, cu := range a.customerList() {
-		if p.only[cu.ID] {
-			ids = append(ids, cu.ID)
-		}
+	if k, ok := a.registerOpen(); !ok || k != tabRegisterTechie || a.regTechie.keyFor != name {
+		a.regTechie.reset()
 	}
-	return ids
-}
-
-// drawRegCustomers draws the customer choice of a Register page from y in
-// width w and returns the y below it: one customer for a computer, all or
-// some customers for a techie. It draws nothing without customers.
-func (a *App) drawRegCustomers(p *registerPage, id string, x, y, w float32) float32 {
-	c := a.ui
-	if !a.hasCustomers() {
-		return y
-	}
-	limited, mine := a.myLimit()
-	if !p.techie {
-		c.Text(ui.Regular, ui.SizeSmall, i18n.Trans("CUSTOMER"), x, y, ui.ColMuted)
-		y += 22
-		cur := a.regCustomer(p)
-		chips := a.customerChips(func(id string) bool { return id == cur }, !limited)
-		if limited {
-			chips = slices.DeleteFunc(chips, func(ch chip) bool { return !slices.Contains(mine, ch.key) })
-		}
-		if key, ok := a.drawChips(id+"customer", chips, x, y, w, p.busy); ok {
-			p.customer, p.customerSet = chipCustomer(key), true
-		}
-		_, h := a.layoutChips(chips, x, y, w)
-		return y + h + 14
-	}
-	c.Text(ui.Regular, ui.SizeSmall, i18n.Trans("CUSTOMERS this techie can help"), x, y, ui.ColMuted)
-	y += 22
-	all := !p.someCustomers
-	if c.Checkbox(id+"allcustomers", rl.NewRectangle(x, y, min(w, 420), 28), i18n.Trans("All customers, and computers without customer"), &all) {
-		p.someCustomers = !all
-	}
-	y += 34
-	if p.someCustomers {
-		if p.only == nil {
-			p.only = map[string]bool{}
-		}
-		chips := a.customerChips(func(id string) bool { return p.only[id] }, false)
-		if key, ok := a.drawChips(id+"only", chips, x, y, w, p.busy); ok {
-			p.only[key] = !p.only[key]
-		}
-		_, h := a.layoutChips(chips, x, y, w)
-		y += h + 8
-		if len(a.regLimit(p)) == 0 {
-			c.Text(ui.Regular, ui.SizeSmall, i18n.Trans("Choose at least one customer."), x, y, ui.ColWarn)
-			y += 22
-		}
-	}
-	return y + 6
+	a.regTechie.keyFor = name
+	a.openRegister(tabRegisterTechie)
 }
 
 // parse re-parses the pasted text when it changed. A newly found key fills
@@ -198,7 +168,7 @@ func (p *registerPage) parse() {
 		p.pubKey = nil
 		return
 	}
-	if p.line != p.nameFor {
+	if p.line != p.nameFor && p.keyFor == "" {
 		p.nameFor = p.line
 		name := strings.TrimSpace(p.comment)
 		if p.techie {
@@ -212,6 +182,9 @@ func (p *registerPage) parse() {
 
 // nameOK reports whether the name field holds a name the server accepts.
 func (p *registerPage) nameOK() bool {
+	if p.keyFor != "" {
+		return true
+	}
 	if p.techie {
 		return validTechieName(strings.TrimSpace(p.name.Edit.String()))
 	}
@@ -246,6 +219,10 @@ func (a *App) drawRegister(p *registerPage, x, y, w float32) float32 {
 		title, intro = i18n.Trans("Register techie"), i18n.Trans("Paste the key line the other techie sent you. Their app shows it when they connect to this server before being added. They can then help all its computers.")
 		nameLabel, fpLabel = i18n.Trans("NAME (one word, as computers and techies see it)"), i18n.Trans("FINGERPRINT (compare with the techie on the phone)")
 		nameRule = i18n.Trans("1 to {0} characters without spaces.", maxTechieName)
+		if p.keyFor != "" {
+			title = i18n.Trans("Add key for {0}", p.keyFor)
+			intro = i18n.Trans("Paste the key line {0} sent you from another computer they use. The app there shows it when it connects to this server before the key is added.", p.keyFor)
+		}
 	}
 	c.Text(ui.Bold, ui.SizeHeading, title, x, y, ui.ColText)
 	y += 34
@@ -269,19 +246,25 @@ func (a *App) drawRegister(p *registerPage, x, y, w float32) float32 {
 
 	if p.pubKey != nil {
 		fp := ssh.FingerprintSHA256(p.pubKey)
-		c.Text(ui.Regular, ui.SizeSmall, nameLabel, x, y, ui.ColMuted)
-		y += 20
-		if p.name.Edit.String() == "" && strings.TrimSpace(p.comment) == "" {
-			y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("The key has no name. Type one to register it as:"), x, y, w, ui.ColWarn)
-			y += 4
-		}
-		if c.TextField(id+"name", rl.NewRectangle(x, y, min(w, 420), 40), &p.name).Submitted {
-			a.register(p)
-		}
-		y += 48
-		if n := p.name.Edit.String(); n != "" && !p.nameOK() {
-			c.Text(ui.Regular, ui.SizeSmall, nameRule, x, y, ui.ColError)
-			y += 22
+		if p.keyFor == "" {
+			c.Text(ui.Regular, ui.SizeSmall, nameLabel, x, y, ui.ColMuted)
+			y += 20
+			if p.name.Edit.String() == "" && strings.TrimSpace(p.comment) == "" {
+				y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("The key has no name. Type one to register it as:"), x, y, w, ui.ColWarn)
+				y += 4
+			}
+			if c.TextField(id+"name", rl.NewRectangle(x, y, min(w, 420), 40), &p.name).Submitted {
+				a.register(p)
+			}
+			y += 48
+			if n := p.name.Edit.String(); n != "" && !p.nameOK() {
+				c.Text(ui.Regular, ui.SizeSmall, nameRule, x, y, ui.ColError)
+				y += 22
+			}
+			if name := a.existingTechie(p); name != "" {
+				y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("{0} is already a techie. This key is added to {0}, for another computer they use.", name), x, y, w, ui.ColWarn)
+				y += 8
+			}
 		}
 		y = a.drawRegCustomers(p, id, x, y, w)
 		c.Text(ui.Regular, ui.SizeSmall, fpLabel, x, y, ui.ColMuted)
@@ -303,8 +286,11 @@ func (a *App) drawRegister(p *registerPage, x, y, w float32) float32 {
 	}
 
 	y += 8
-	ready := p.pubKey != nil && p.nameOK() && (!p.techie || !p.someCustomers || len(a.regLimit(p)) > 0)
+	ready := p.pubKey != nil && p.nameOK()
 	regL, regingL := i18n.Trans("Register"), i18n.Trans("Registering…")
+	if p.keyFor != "" || a.existingTechie(p) != "" {
+		regL, regingL = i18n.Trans("Add key"), i18n.Trans("Adding…")
+	}
 	label := regL
 	if p.busy {
 		label = regingL
@@ -354,14 +340,15 @@ func (a *App) registeredAs(fp string) string {
 		}
 	}
 	for _, h := range a.presence.Techies {
-		if h.Fingerprint == fp {
+		if h.Fingerprint == fp || slices.ContainsFunc(h.Keys, func(k control.TechieKeyInfo) bool { return k.Fingerprint == fp }) {
 			return i18n.Trans("Already registered as techie {0}.", h.Name)
 		}
 	}
 	return ""
 }
 
-// register sends RegisterComputer or RegisterTechie for the parsed key.
+// register sends RegisterComputer, RegisterTechie or AddTechieKey for the
+// parsed key.
 func (a *App) register(p *registerPage) {
 	if p.pubKey == nil || p.busy || a.backend == nil || !p.nameOK() {
 		return
@@ -369,13 +356,14 @@ func (a *App) register(p *registerPage) {
 	name := strings.TrimSpace(p.name.Edit.String())
 	var res <-chan error
 	customer := ""
-	if p.techie {
-		limit := a.regLimit(p)
-		if limit != nil && len(limit) == 0 {
-			return
-		}
-		res = a.backend.RegisterTechie(p.line, name, limit)
-	} else {
+	switch {
+	case p.keyFor != "":
+		res = a.backend.AddTechieKey(p.keyFor, p.line)
+	case a.existingTechie(p) != "":
+		res = a.backend.AddTechieKey(name, p.line)
+	case p.techie:
+		res = a.backend.RegisterTechie(p.line, name)
+	default:
 		customer = a.regCustomer(p)
 		res = a.backend.RegisterComputer(p.line, name, customer)
 	}

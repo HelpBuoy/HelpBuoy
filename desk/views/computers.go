@@ -25,13 +25,11 @@ func (a *App) drawComputersPage(r rl.Rectangle) {
 	rl.DrawRectangleRec(r, ui.ColPanel)
 	c.Text(ui.Bold, ui.SizeHeading, i18n.Trans("Computers"), r.X+16, r.Y+14, ui.ColText)
 	a.addButton("computers/add", i18n.Trans("Add computer"), tabRegister, r)
-	if !a.limited() {
-		addL := i18n.Trans("Add customer")
-		bw := a.ui.ButtonWidth(addL)
-		x := r.X + r.Width - 16 - a.ui.ButtonWidth(i18n.Trans("Add computer")) - 8 - bw
-		if c.Button("customers/open", rl.NewRectangle(x, r.Y+11, bw, 34), addL, ui.Normal, a.backend == nil || a.presence == nil) {
-			a.openAddCustomer()
-		}
+	addL := i18n.Trans("Add customer")
+	bw := a.ui.ButtonWidth(addL)
+	x := r.X + r.Width - 16 - a.ui.ButtonWidth(i18n.Trans("Add computer")) - 8 - bw
+	if c.Button("customers/open", rl.NewRectangle(x, r.Y+11, bw, 34), addL, ui.Normal, a.backend == nil || a.presence == nil) {
+		a.openAddCustomer()
 	}
 	top := r.Y + 56
 	rl.DrawLineV(rl.NewVector2(r.X, top), rl.NewVector2(r.X+r.Width, top), ui.ColBorder)
@@ -47,6 +45,9 @@ func (a *App) drawComputersPage(r rl.Rectangle) {
 func (a *App) addButton(id, label string, k tabKind, r rl.Rectangle) {
 	bw := a.ui.ButtonWidth(label)
 	if a.ui.Button(id, rl.NewRectangle(r.X+r.Width-16-bw, r.Y+11, bw, 34), label, ui.Normal, a.backend == nil) {
+		if k == tabRegisterTechie && a.regTechie.keyFor != "" {
+			a.regTechie.reset() // Add key for a techie becomes Register techie
+		}
 		a.openRegister(k)
 	}
 }

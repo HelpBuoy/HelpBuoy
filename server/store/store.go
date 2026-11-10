@@ -43,18 +43,26 @@ const (
 // MaxSessionsLimit is the highest value of State.MaxSessions.
 const MaxSessionsLimit = 10000
 
-// Techie is a techie key added by the server admin.
+// MaxTechieKeys is the most keys one techie can have.
+const MaxTechieKeys = control.MaxTechieKeys
+
+// Techie is a techie added by the server admin, with one key per machine
+// the techie uses.
 type Techie struct {
-	Name      string `json:"name"`
-	PublicKey string `json:"public_key"` // authorized_keys line
-	// Limited techies only reach the computers of Customers, a list of
-	// customer ids that may be empty (PLAN.md 13.3). They are stored in
-	// limited_techies instead of techies, so an older server that doesn't
-	// know about limits treats their keys as unknown instead of letting them
-	// see every computer.
-	Limited   bool     `json:"-"`
-	Customers []string `json:"customers,omitempty"`
-	Extra     Extra    `json:"-"`
+	Name string      `json:"name"`
+	Keys []TechieKey `json:"keys"`
+	// JSONPublicKey is only used to read and write state.json: it holds
+	// the first key, the only one an older version knows (see
+	// Techie.MarshalJSON). Use Keys.
+	JSONPublicKey string `json:"public_key"`
+	Extra         Extra  `json:"-"`
+}
+
+// TechieKey is one key of a techie.
+type TechieKey struct {
+	PublicKey string    `json:"public_key"` // authorized_keys line
+	LastSeen  time.Time `json:"last_seen,omitzero"`
+	Extra     Extra     `json:"-"`
 }
 
 // Customer is a group of computers on the server (PLAN.md 13).
@@ -89,9 +97,6 @@ type State struct {
 	Techies     []Techie   `json:"techies"`
 	Computers   []Computer `json:"computers"`
 	Customers   []Customer `json:"customers,omitempty"`
-	// LimitedTechies is only used to read and write state.json: the limited
-	// techies are in Techies with Limited set (see Techie).
-	LimitedTechies []Techie `json:"limited_techies,omitempty"`
 	// MaxSessions is how many sessions the server allows at the same time,
 	// counted from the moment a techie asks to connect; 0 is no limit. Only
 	// the admin sets it (helpbuoy-server limit), never a techie, so a host can
@@ -105,25 +110,22 @@ type Identity struct {
 	Role    control.Role
 	Name    string // techie name or computer name; empty for pending
 	KeyLine string // authorized_keys line; empty for pending
-	// Limited techies only reach the computers of these customer ids.
-	Limited   bool
-	Customers []string
 }
 
 // Index is a read-only lookup view of a State by key fingerprint. It is
 // immutable once built and safe for concurrent use.
 type Index struct {
 	State     *State
-	techies   map[string]int // fingerprint -> index in State.Techies
+	techies   map[string][2]int // fingerprint -> index in State.Techies and in its Keys
 	computers map[string]int
 	fps       []string       // fingerprint of State.Computers[i]
-	hfps      []string       // fingerprint of State.Techies[i]
+	hfps      [][]string     // fingerprints of the keys of State.Techies[i]
 	customers map[string]int // customer id -> index in State.Customers
 }
 
 // NewIndex validates st and builds its index. st must not be changed afterwards.
 func NewIndex(st *State) (*Index, error) {
-	idx := &Index{State: st, techies: map[string]int{}, computers: map[string]int{}, customers: map[string]int{}}
+	idx := &Index{State: st, techies: map[string][2]int{}, computers: map[string]int{}, customers: map[string]int{}}
 	if err := checkInfo(st.Info(), false); err != nil {
 		return nil, err
 	}
@@ -152,25 +154,27 @@ func NewIndex(st *State) (*Index, error) {
 		if names[h.Name] {
 			return nil, fmt.Errorf("techie %q is listed twice", h.Name)
 		}
-		if !h.Limited && len(h.Customers) > 0 {
-			return nil, fmt.Errorf("techie %q has customers but is not limited", h.Name)
-		}
-		for _, id := range h.Customers {
-			if _, ok := idx.customers[id]; !ok {
-				return nil, fmt.Errorf("techie %q: no customer with id %q", h.Name, id)
-			}
-		}
 		names[h.Name] = true
-		k, _, err := auth.ParseKey(h.PublicKey)
-		if err != nil {
-			return nil, fmt.Errorf("techie %q: %w", h.Name, err)
+		if len(h.Keys) == 0 {
+			return nil, fmt.Errorf("techie %q has no key", h.Name)
 		}
-		fp := auth.Fingerprint(k)
-		if _, dup := idx.techies[fp]; dup {
-			return nil, fmt.Errorf("techie %q: key %s is used by another techie", h.Name, fp)
+		if len(h.Keys) > MaxTechieKeys {
+			return nil, fmt.Errorf("techie %q has more than %d keys", h.Name, MaxTechieKeys)
 		}
-		idx.techies[fp] = i
-		idx.hfps = append(idx.hfps, fp)
+		var fps []string
+		for j, hk := range h.Keys {
+			k, _, err := auth.ParseKey(hk.PublicKey)
+			if err != nil {
+				return nil, fmt.Errorf("techie %q: %w", h.Name, err)
+			}
+			fp := auth.Fingerprint(k)
+			if _, dup := idx.techies[fp]; dup {
+				return nil, fmt.Errorf("techie %q: key %s is used twice", h.Name, fp)
+			}
+			idx.techies[fp] = [2]int{i, j}
+			fps = append(fps, fp)
+		}
+		idx.hfps = append(idx.hfps, fps)
 	}
 	for i, c := range st.Computers {
 		k, _, err := auth.ParseKey(c.PublicKey)
@@ -206,9 +210,8 @@ func NewIndex(st *State) (*Index, error) {
 // Lookup returns the identity for a fingerprint. Unknown keys are pending.
 func (x *Index) Lookup(fp string) Identity {
 	if i, ok := x.techies[fp]; ok {
-		h := x.State.Techies[i]
-		return Identity{Role: control.RoleTechie, Name: h.Name, KeyLine: h.PublicKey,
-			Limited: h.Limited, Customers: h.Customers}
+		h := x.State.Techies[i[0]]
+		return Identity{Role: control.RoleTechie, Name: h.Name, KeyLine: h.Keys[i[1]].PublicKey}
 	}
 	if i, ok := x.computers[fp]; ok {
 		c := x.State.Computers[i]
@@ -217,8 +220,9 @@ func (x *Index) Lookup(fp string) Identity {
 	return Identity{Role: control.RolePending}
 }
 
-// TechieFingerprint returns the fingerprint of State.Techies[i].
-func (x *Index) TechieFingerprint(i int) string { return x.hfps[i] }
+// TechieFingerprints returns the fingerprints of the keys of
+// State.Techies[i], in the order of its Keys.
+func (x *Index) TechieFingerprints(i int) []string { return x.hfps[i] }
 
 // ComputerFingerprint returns the fingerprint of State.Computers[i].
 func (x *Index) ComputerFingerprint(i int) string { return x.fps[i] }
@@ -244,10 +248,13 @@ func (x *Index) Customer(id string) (Customer, bool) {
 // Clone returns a deep copy.
 func (st *State) Clone() *State {
 	// Extra maps are shared: they are never changed, only replaced.
-	// The Approved and Listings slices of computers and the Customers slices
-	// of techies are shared too: they are replaced, never changed in place.
+	// The Approved and Listings slices of computers are shared too: they
+	// are replaced, never changed in place.
 	n := *st
 	n.Techies, n.Computers = slices.Clone(st.Techies), slices.Clone(st.Computers)
+	for i := range n.Techies {
+		n.Techies[i].Keys = slices.Clone(n.Techies[i].Keys)
+	}
 	n.Customers = slices.Clone(st.Customers)
 	return &n
 }
@@ -562,7 +569,7 @@ func cleanLine(what, s string, max int) (string, error) {
 	return s, nil
 }
 
-// AddTechie adds a techie. The key line is normalized.
+// AddTechie adds a techie with its first key. The key line is normalized.
 func (st *State) AddTechie(name, keyLine string) error {
 	name, err := auth.CleanName(name, MaxTechieName)
 	if err != nil {
@@ -571,25 +578,79 @@ func (st *State) AddTechie(name, keyLine string) error {
 	if strings.ContainsAny(name, " \t") {
 		return errors.New("techie name must not contain spaces")
 	}
-	k, comment, err := auth.ParseKey(keyLine)
+	if slices.ContainsFunc(st.Techies, func(h Techie) bool { return h.Name == name }) {
+		return fmt.Errorf("techie %q already exists", name)
+	}
+	line, err := st.newKey(keyLine)
 	if err != nil {
 		return err
 	}
+	st.Techies = append(st.Techies, Techie{Name: name, Keys: []TechieKey{{PublicKey: line}}})
+	return nil
+}
+
+// newKey checks that keyLine is not in use yet and returns it normalized.
+func (st *State) newKey(keyLine string) (string, error) {
+	k, comment, err := auth.ParseKey(keyLine)
+	if err != nil {
+		return "", err
+	}
 	fp := auth.Fingerprint(k)
-	for _, h := range st.Techies {
-		if h.Name == name {
-			return fmt.Errorf("techie %q already exists", name)
-		}
-		if sameKey(h.PublicKey, fp) {
-			return fmt.Errorf("key %s is already the key of techie %q", fp, h.Name)
-		}
+	if h, ok := st.techieWithKey(fp); ok {
+		return "", fmt.Errorf("key %s is already a key of techie %q", fp, h.Name)
 	}
 	for _, c := range st.Computers {
 		if sameKey(c.PublicKey, fp) {
-			return fmt.Errorf("key %s is registered as computer %q; a key can't be both", fp, c.Name)
+			return "", fmt.Errorf("key %s is registered as computer %q; a key can't be both", fp, c.Name)
 		}
 	}
-	st.Techies = append(st.Techies, Techie{Name: name, PublicKey: auth.KeyLine(k, comment)})
+	return auth.KeyLine(k, comment), nil
+}
+
+// techieWithKey returns the techie with a key of fingerprint fp.
+func (st *State) techieWithKey(fp string) (Techie, bool) {
+	for _, h := range st.Techies {
+		if slices.ContainsFunc(h.Keys, func(hk TechieKey) bool { return sameKey(hk.PublicKey, fp) }) {
+			return h, true
+		}
+	}
+	return Techie{}, false
+}
+
+// AddTechieKey adds another key to techie name, for another machine the
+// techie uses.
+func (st *State) AddTechieKey(name, keyLine string) error {
+	i := slices.IndexFunc(st.Techies, func(h Techie) bool { return h.Name == name })
+	if i < 0 {
+		return fmt.Errorf("no techie %q", name)
+	}
+	if len(st.Techies[i].Keys) >= MaxTechieKeys {
+		return fmt.Errorf("techie %q already has %d keys, the most allowed", name, MaxTechieKeys)
+	}
+	line, err := st.newKey(keyLine)
+	if err != nil {
+		return err
+	}
+	st.Techies[i].Keys = append(st.Techies[i].Keys, TechieKey{PublicKey: line})
+	return nil
+}
+
+// RemoveTechieKey removes the key with fingerprint fp from techie name. The
+// last key can't be removed: that is removing the techie.
+func (st *State) RemoveTechieKey(name, fp string) error {
+	i := slices.IndexFunc(st.Techies, func(h Techie) bool { return h.Name == name })
+	if i < 0 {
+		return fmt.Errorf("no techie %q", name)
+	}
+	keys := st.Techies[i].Keys
+	j := slices.IndexFunc(keys, func(hk TechieKey) bool { return sameKey(hk.PublicKey, fp) })
+	if j < 0 {
+		return fmt.Errorf("techie %q has no key %s", name, fp)
+	}
+	if len(keys) == 1 {
+		return fmt.Errorf("%s is the only key of techie %q; remove the techie instead", fp, name)
+	}
+	st.Techies[i].Keys = slices.Delete(keys, j, j+1)
 	return nil
 }
 
@@ -620,10 +681,8 @@ func (st *State) AddComputer(keyLine, name, by string, at time.Time) (fp, regNam
 		return "", "", err
 	}
 	fp = auth.Fingerprint(k)
-	for _, h := range st.Techies {
-		if sameKey(h.PublicKey, fp) {
-			return "", "", fmt.Errorf("key %s is the key of techie %q; a key can't be both", fp, h.Name)
-		}
+	if h, ok := st.techieWithKey(fp); ok {
+		return "", "", fmt.Errorf("key %s is a key of techie %q; a key can't be both", fp, h.Name)
 	}
 	for _, c := range st.Computers {
 		if sameKey(c.PublicKey, fp) {
@@ -671,15 +730,24 @@ func (st *State) RemoveComputer(fp string) (string, error) {
 	return name, nil
 }
 
-// SetLastSeen updates last-seen times of computers by fingerprint, keeping the later time.
+// SetLastSeen updates last-seen times of computers and techie keys by
+// fingerprint, keeping the later time.
 func (st *State) SetLastSeen(seen map[string]time.Time) {
-	for i, c := range st.Computers {
-		k, _, err := auth.ParseKey(c.PublicKey)
+	later := func(line string, last *time.Time) {
+		k, _, err := auth.ParseKey(line)
 		if err != nil {
-			continue
+			return
 		}
-		if t, ok := seen[auth.Fingerprint(k)]; ok && t.After(c.LastSeen) {
-			st.Computers[i].LastSeen = t.UTC()
+		if t, ok := seen[auth.Fingerprint(k)]; ok && t.After(*last) {
+			*last = t.UTC()
+		}
+	}
+	for i := range st.Computers {
+		later(st.Computers[i].PublicKey, &st.Computers[i].LastSeen)
+	}
+	for i := range st.Techies {
+		for j := range st.Techies[i].Keys {
+			later(st.Techies[i].Keys[j].PublicKey, &st.Techies[i].Keys[j].LastSeen)
 		}
 	}
 }
@@ -767,7 +835,7 @@ func (st *State) RenameCustomer(ref, name string) (string, error) {
 }
 
 // RemoveCustomer removes the customer with id or name ref and returns its
-// name. Its computers move to no customer, and limited techies lose it.
+// name. Its computers move to no customer.
 func (st *State) RemoveCustomer(ref string) (string, error) {
 	i, err := st.FindCustomer(ref)
 	if err != nil {
@@ -778,11 +846,6 @@ func (st *State) RemoveCustomer(ref string) (string, error) {
 	for j := range st.Computers {
 		if st.Computers[j].Customer == cu.ID {
 			st.Computers[j].Customer = ""
-		}
-	}
-	for j, h := range st.Techies {
-		if slices.Contains(h.Customers, cu.ID) {
-			st.Techies[j].Customers = slices.DeleteFunc(slices.Clone(h.Customers), func(id string) bool { return id == cu.ID })
 		}
 	}
 	return cu.Name, nil
@@ -806,34 +869,6 @@ func (st *State) MoveComputer(fp, ref string) (string, error) {
 	}
 	st.Computers[i].Customer = id
 	return st.Computers[i].Name, nil
-}
-
-// LimitTechie limits the techie name to the customers with ids or names
-// refs, or lifts the limit when limited is false.
-func (st *State) LimitTechie(name string, limited bool, refs []string) error {
-	i := slices.IndexFunc(st.Techies, func(h Techie) bool { return h.Name == name })
-	if i < 0 {
-		return fmt.Errorf("no techie %q", name)
-	}
-	if !limited {
-		if len(refs) > 0 {
-			return errors.New("customers given for a techie that is not limited")
-		}
-		st.Techies[i].Limited, st.Techies[i].Customers = false, nil
-		return nil
-	}
-	ids := []string{}
-	for _, ref := range refs {
-		j, err := st.FindCustomer(ref)
-		if err != nil {
-			return err
-		}
-		if !slices.Contains(ids, st.Customers[j].ID) {
-			ids = append(ids, st.Customers[j].ID)
-		}
-	}
-	st.Techies[i].Limited, st.Techies[i].Customers = true, ids
-	return nil
 }
 
 // CustomerNames returns the names of customer ids, for messages and lists.

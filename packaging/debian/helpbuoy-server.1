@@ -30,6 +30,14 @@ helpbuoy-server \- server for helpbuoy self-hosted remote support
 .I name
 .I key
 .br
+.B helpbuoy-server techie add\-key
+.I name
+.I key
+.br
+.B helpbuoy-server techie remove\-key
+.I name
+.I fingerprint
+.br
 .B helpbuoy-server techie remove
 .I name
 .br
@@ -48,10 +56,6 @@ helpbuoy-server \- server for helpbuoy self-hosted remote support
 .br
 .B helpbuoy-server customer add
 .I name
-.br
-.B helpbuoy-server techie limit
-.I name
-.RI [ customer ...| \-\-all ]
 .br
 .B helpbuoy-server info
 .RB [ \-\-company

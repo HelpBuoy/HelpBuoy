@@ -250,8 +250,10 @@ func (r *Server) ensureTechie(dir string) {
 	_, _, err = st.Update(func(s *store.State) error {
 		taken := map[string]bool{}
 		for _, h := range s.Techies {
-			if hk, _, err := auth.ParseKey(h.PublicKey); err == nil && auth.Fingerprint(hk) == fp {
-				return errKnown
+			for _, tk := range h.Keys {
+				if hk, _, err := auth.ParseKey(tk.PublicKey); err == nil && auth.Fingerprint(hk) == fp {
+					return errKnown
+				}
 			}
 			taken[h.Name] = true
 		}

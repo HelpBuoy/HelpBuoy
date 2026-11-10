@@ -200,19 +200,24 @@ func (c *Conn) Close() {
 	<-c.done
 }
 
-// RegisterTechie adds another techie key under name, limited to the
-// customer ids in limit when it is not nil.
-func (c *Conn) RegisterTechie(line, name string, limit []string) <-chan error {
+// RegisterTechie adds another techie with its key line.
+func (c *Conn) RegisterTechie(line, name string) <-chan error {
 	return c.command(func(seq uint32) any {
-		return &control.RegisterTechie{Seq: seq, PublicKey: line, Name: name, Limited: limit != nil, Customers: limit}
+		return &control.RegisterTechie{Seq: seq, PublicKey: line, Name: name}
 	})
 }
 
-// LimitTechie limits the techie with the given name to the customer ids in
-// limit, or lifts its limit when limit is nil.
-func (c *Conn) LimitTechie(name string, limit []string) <-chan error {
+// AddTechieKey adds a key line to the techie with the given name.
+func (c *Conn) AddTechieKey(name, line string) <-chan error {
 	return c.command(func(seq uint32) any {
-		return &control.LimitTechie{Seq: seq, Name: name, Limited: limit != nil, Customers: limit}
+		return &control.AddTechieKey{Seq: seq, Name: name, PublicKey: line}
+	})
+}
+
+// RemoveTechieKey removes the key with the given fingerprint from a techie.
+func (c *Conn) RemoveTechieKey(name, fingerprint string) <-chan error {
+	return c.command(func(seq uint32) any {
+		return &control.RemoveTechieKey{Seq: seq, Name: name, Fingerprint: fingerprint}
 	})
 }
 

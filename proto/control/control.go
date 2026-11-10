@@ -36,12 +36,12 @@
 // sends ListingRefused.
 //
 // Customers (PLAN.md 13): the computers of a server are grouped per customer.
-// Presence carries the customers and the customer of every computer. A techie
-// limited to some customers only gets those customers, their computers and
-// the techies that share one of them in Presence, and the server refuses its
-// commands for other computers and the commands that affect every customer:
-// RegisterTechie, UnregisterTechie, LimitTechie, SetServerInfo and the
-// customer commands. Computers are never told their customer.
+// Presence carries the customers and the customer of every computer.
+// Computers are never told their customer.
+//
+// A techie has one key per machine it uses. Presence lists them with which is
+// online and when each was last seen; AddTechieKey and RemoveTechieKey change
+// them.
 //
 // Techie commands carry a Seq; the server answers each with Reply{Seq, Error}.
 // Presence is a full snapshot, sent after Hello and after every change.
@@ -138,7 +138,9 @@ const (
 	MsgRenameCustomer   MsgType = 25
 	MsgRemoveCustomer   MsgType = 26
 	MsgMoveComputer     MsgType = 27
-	MsgLimitTechie      MsgType = 28
+	// 28 was LimitTechie
+	MsgAddTechieKey    MsgType = 29
+	MsgRemoveTechieKey MsgType = 30
 	// server -> any
 	MsgServerInfo MsgType = 17
 	// server -> computer
@@ -270,8 +272,7 @@ type ComputerHello struct {
 	UserMachine string `json:"user_machine"` // current %USERNAME%@%COMPUTERNAME%, lower-case user
 }
 
-// Presence is a full snapshot for techies. A techie limited to some
-// customers only gets what it may see (PLAN.md 13.3).
+// Presence is a full snapshot for techies.
 type Presence struct {
 	Computers []ComputerInfo `json:"computers"` // all registered computers, online or not
 	Techies   []TechieInfo   `json:"techies"`   // all techies, online or not
@@ -325,13 +326,22 @@ type RequestInfo struct {
 
 // TechieInfo describes one techie.
 type TechieInfo struct {
-	Name        string `json:"name"`
-	Fingerprint string `json:"fingerprint"`
-	Online      bool   `json:"online"`
-	// Limited techies only reach the computers of Customers (PLAN.md 13.3).
-	Limited   bool     `json:"limited,omitempty"`
-	Customers []string `json:"customers,omitempty"`
+	Name string `json:"name"`
+	// Fingerprint is the key the techie is online with, or else its first key.
+	Fingerprint string          `json:"fingerprint"`
+	Online      bool            `json:"online"`
+	Keys        []TechieKeyInfo `json:"keys,omitempty"`
 }
+
+// TechieKeyInfo is one key of a techie, for one machine it uses.
+type TechieKeyInfo struct {
+	Fingerprint string    `json:"fingerprint"`
+	Online      bool      `json:"online,omitempty"`
+	LastSeen    time.Time `json:"last_seen,omitzero"` // zero when never seen
+}
+
+// MaxTechieKeys is the most keys one techie can have.
+const MaxTechieKeys = 16
 
 // RegisterComputer registers a computer key. PublicKey is the authorized_keys line
 // as pasted (already cleaned by proto/identity); Name overrides the key
@@ -340,20 +350,32 @@ type RegisterComputer struct {
 	Seq       uint32 `json:"seq"`
 	PublicKey string `json:"public_key"`
 	Name      string `json:"name,omitempty"`
-	// Customer is the id of the computer's customer, empty for none. A
-	// limited techie must give one of its own customers.
+	// Customer is the id of the computer's customer, empty for none.
 	Customer string `json:"customer,omitempty"`
 }
 
-// RegisterTechie adds another techie key, like helpbuoy-server techie add. Name
-// is required (1 to 64 characters, no spaces). Limited with Customers adds
-// a techie limited to those customers.
+// RegisterTechie adds another techie, like helpbuoy-server techie add. Name
+// is required (1 to 64 characters, no spaces).
 type RegisterTechie struct {
-	Seq       uint32   `json:"seq"`
-	PublicKey string   `json:"public_key"`
-	Name      string   `json:"name"`
-	Limited   bool     `json:"limited,omitempty"`
-	Customers []string `json:"customers,omitempty"`
+	Seq       uint32 `json:"seq"`
+	PublicKey string `json:"public_key"`
+	Name      string `json:"name"`
+}
+
+// AddTechieKey adds a key to techie Name, for another machine it uses, like
+// helpbuoy-server techie key add.
+type AddTechieKey struct {
+	Seq       uint32 `json:"seq"`
+	Name      string `json:"name"`
+	PublicKey string `json:"public_key"`
+}
+
+// RemoveTechieKey removes a key of techie Name. The last key of a techie and
+// the key the sender is connected with can't be removed.
+type RemoveTechieKey struct {
+	Seq         uint32 `json:"seq"`
+	Name        string `json:"name"`
+	Fingerprint string `json:"fingerprint"`
 }
 
 // AddCustomer adds a customer. The name is unique on the server.
@@ -369,8 +391,7 @@ type RenameCustomer struct {
 	Name string `json:"name"`
 }
 
-// RemoveCustomer removes a customer. Its computers move to no customer, and
-// limited techies lose it.
+// RemoveCustomer removes a customer. Its computers move to no customer.
 type RemoveCustomer struct {
 	Seq uint32 `json:"seq"`
 	ID  string `json:"id"`
@@ -382,15 +403,6 @@ type MoveComputer struct {
 	Seq         uint32 `json:"seq"`
 	Fingerprint string `json:"fingerprint"`
 	Customer    string `json:"customer"`
-}
-
-// LimitTechie limits the techie Name to Customers, or lifts the limit when
-// Limited is false. A techie cannot change its own limit.
-type LimitTechie struct {
-	Seq       uint32   `json:"seq"`
-	Name      string   `json:"name"`
-	Limited   bool     `json:"limited"`
-	Customers []string `json:"customers,omitempty"`
 }
 
 // RenameComputer changes the name techies see for a registered computer (and the
@@ -471,9 +483,9 @@ type RequestStateMsg struct {
 
 // SessionReady tells the computer that a techie wants to connect. The computer
 // asks its user and then opens the session channel, or sends CancelRequest.
-// TechieKey is the techie's authorized_keys line; the computer accepts only this
-// key in the inner SSH handshake (and warns if a known techie name shows a
-// different key).
+// TechieKey is the authorized_keys line of the key the techie is connected
+// with; the computer accepts only this key in the inner SSH handshake (and
+// warns if a known techie name shows a key it hasn't seen for that name).
 type SessionReady struct {
 	RequestID  string `json:"request_id"`
 	TechieName string `json:"techie_name"`
@@ -584,8 +596,10 @@ func typeOf(m any) (MsgType, error) {
 		return MsgRemoveCustomer, nil
 	case *MoveComputer, MoveComputer:
 		return MsgMoveComputer, nil
-	case *LimitTechie, LimitTechie:
-		return MsgLimitTechie, nil
+	case *AddTechieKey, AddTechieKey:
+		return MsgAddTechieKey, nil
+	case *RemoveTechieKey, RemoveTechieKey:
+		return MsgRemoveTechieKey, nil
 	}
 	return 0, fmt.Errorf("control: unknown message type %T", m)
 }
@@ -643,8 +657,10 @@ func newOf(t MsgType) (any, error) {
 		return &RemoveCustomer{}, nil
 	case MsgMoveComputer:
 		return &MoveComputer{}, nil
-	case MsgLimitTechie:
-		return &LimitTechie{}, nil
+	case MsgAddTechieKey:
+		return &AddTechieKey{}, nil
+	case MsgRemoveTechieKey:
+		return &RemoveTechieKey{}, nil
 	}
 	return nil, fmt.Errorf("control: unknown message type byte %d", t)
 }

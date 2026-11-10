@@ -532,8 +532,38 @@ func TestTechieKeyChangeAccepted(t *testing.T) {
 	f.h.mu.Lock()
 	defer f.h.mu.Unlock()
 	want := ssh.FingerprintSHA256(oldKey(t, oldLine))
-	if len(f.h.asked) != 1 || f.h.asked[0].oldFP != want || f.h.pinned["alice"] != identity.KeyLine(techie.PublicKey(), "") {
+	// The old key stays pinned too: a techie has a key on every computer it
+	// uses.
+	if len(f.h.asked) != 1 || f.h.asked[0].oldFP != want || f.h.pinned["alice"] != oldLine+"\n"+identity.KeyLine(techie.PublicKey(), "") {
 		t.Fatalf("asked %+v, pinned %q", f.h.asked, f.h.pinned["alice"])
+	}
+}
+
+// TestTechieOtherKnownKey: a techie with several pinned keys connects with
+// one of them without a warning and without pinning anything.
+func TestTechieOtherKnownKey(t *testing.T) {
+	techie, line := newKey(t, "alice")
+	_, other := newKey(t, "alice")
+	f := setup(t, func(o *Options) { o.KnownTechies = map[string]string{"alice": line + "\n" + other} })
+	startSession(t, f, identity.KeyLine(techie.PublicKey(), ""))
+	<-f.runner.started
+	f.h.mu.Lock()
+	defer f.h.mu.Unlock()
+	if len(f.h.asked) != 1 || f.h.asked[0].oldFP != "" || f.h.pinned["alice"] != "" {
+		t.Fatalf("asked %+v, pinned %q", f.h.asked, f.h.pinned["alice"])
+	}
+}
+
+func TestAddTechieKeyKeepsMost(t *testing.T) {
+	pins := ""
+	var lines []string
+	for range control.MaxTechieKeys + 2 {
+		_, l := newKey(t, "alice")
+		lines = append(lines, l)
+		pins = addTechieKey(pins, l)
+	}
+	if got := strings.Split(pins, "\n"); len(got) != control.MaxTechieKeys || got[0] != lines[2] || got[len(got)-1] != lines[len(lines)-1] {
+		t.Fatalf("kept %d lines: %q", len(got), got)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"slices"
 	"strings"
 	"time"
 
@@ -72,10 +73,20 @@ func newDemo(a *App) *demo {
 			RegisteredBy: "techie", RegisteredAt: now.Add(-30 * 24 * time.Hour), LastSeen: now.Add(-26 * time.Hour),
 		}
 	}
-	bob, _, _ := newKey("bob")
+	keyFP := func(name string) string {
+		k, _, _ := newKey(name)
+		return ssh.FingerprintSHA256(k.PublicKey())
+	}
+	bob, bobHome, carol := keyFP("bob"), keyFP("bob-home"), keyFP("carol")
 	p := &control.Presence{Techies: []control.TechieInfo{
-		{Name: "techie", Online: true, Fingerprint: a.key.Fingerprint},
-		{Name: "bob", Online: true, Fingerprint: ssh.FingerprintSHA256(bob.PublicKey())},
+		{Name: "techie", Online: true, Fingerprint: a.key.Fingerprint,
+			Keys: []control.TechieKeyInfo{{Fingerprint: a.key.Fingerprint, Online: true, LastSeen: now}}},
+		{Name: "bob", Online: true, Fingerprint: bob, Keys: []control.TechieKeyInfo{
+			{Fingerprint: bob, Online: true, LastSeen: now},
+			{Fingerprint: bobHome, LastSeen: now.Add(-20 * time.Hour)},
+		}},
+		{Name: "carol", Fingerprint: carol,
+			Keys: []control.TechieKeyInfo{{Fingerprint: carol, LastSeen: now.Add(-3 * 24 * time.Hour)}}},
 	}}
 	anna := computer("anna@ANNA-LAPTOP", true)
 	jan := computer("jan@KANTOOR-PC", true)
@@ -181,21 +192,6 @@ func (d *demo) MoveComputer(fp, customer string) <-chan error {
 	return done(fmt.Errorf("no computer with fingerprint %s", fp))
 }
 
-// LimitTechie changes a demo techie's customers locally.
-func (d *demo) LimitTechie(name string, limit []string) <-chan error {
-	if name == d.a.me {
-		return done(fmt.Errorf("you cannot change your own limit"))
-	}
-	p := d.a.presence
-	for i := range p.Techies {
-		if p.Techies[i].Name == name {
-			p.Techies[i].Limited, p.Techies[i].Customers = limit != nil, limit
-			return done(nil)
-		}
-	}
-	return done(fmt.Errorf("no techie named %q", name))
-}
-
 // SetServerInfo changes who runs the demo server locally, with the server's
 // rules.
 func (d *demo) SetServerInfo(info control.ServerInfo) <-chan error {
@@ -229,23 +225,80 @@ func (d *demo) DecideListing(fp string, req control.ListingRequest, allow bool) 
 }
 
 // RegisterTechie adds a demo techie locally.
-func (d *demo) RegisterTechie(line, name string, limit []string) <-chan error {
-	key, _, err := identity.ParseLine(line)
+func (d *demo) RegisterTechie(line, name string) <-chan error {
+	fp, err := d.newTechieKey(line)
 	if err != nil {
 		return done(err)
 	}
 	p := d.a.presence
-	fp := ssh.FingerprintSHA256(key)
 	for _, h := range p.Techies {
 		if h.Name == name {
 			return done(fmt.Errorf("techie %q already exists", name))
 		}
-		if h.Fingerprint == fp {
-			return done(fmt.Errorf("key %s is already the key of techie %q", fp, h.Name))
+	}
+	p.Techies = append(p.Techies, control.TechieInfo{Name: name, Fingerprint: fp, Keys: []control.TechieKeyInfo{{Fingerprint: fp}}})
+	return done(nil)
+}
+
+// newTechieKey parses a key line for a demo techie and checks that no
+// techie has it yet.
+func (d *demo) newTechieKey(line string) (string, error) {
+	key, _, err := identity.ParseLine(line)
+	if err != nil {
+		return "", err
+	}
+	fp := ssh.FingerprintSHA256(key)
+	for _, h := range d.a.presence.Techies {
+		for _, k := range h.Keys {
+			if k.Fingerprint == fp {
+				return "", fmt.Errorf("key %s is already a key of techie %q", fp, h.Name)
+			}
 		}
 	}
-	p.Techies = append(p.Techies, control.TechieInfo{Name: name, Fingerprint: fp, Limited: limit != nil, Customers: limit})
-	return done(nil)
+	return fp, nil
+}
+
+// AddTechieKey adds a key to a demo techie locally.
+func (d *demo) AddTechieKey(name, line string) <-chan error {
+	fp, err := d.newTechieKey(line)
+	if err != nil {
+		return done(err)
+	}
+	p := d.a.presence
+	for i := range p.Techies {
+		if p.Techies[i].Name == name {
+			p.Techies[i].Keys = append(p.Techies[i].Keys, control.TechieKeyInfo{Fingerprint: fp})
+			return done(nil)
+		}
+	}
+	return done(fmt.Errorf("no techie named %q", name))
+}
+
+// RemoveTechieKey removes a key of a demo techie locally, with the server's
+// rules.
+func (d *demo) RemoveTechieKey(name, fp string) <-chan error {
+	p := d.a.presence
+	for i := range p.Techies {
+		h := &p.Techies[i]
+		if h.Name != name {
+			continue
+		}
+		j := slices.IndexFunc(h.Keys, func(k control.TechieKeyInfo) bool { return k.Fingerprint == fp })
+		switch {
+		case j < 0:
+			return done(fmt.Errorf("techie %q has no key %s", name, fp))
+		case h.Keys[j].Online && name == d.a.me:
+			return done(fmt.Errorf("you cannot remove the key you are connected with"))
+		case len(h.Keys) == 1:
+			return done(fmt.Errorf("%s is the only key of techie %q; remove the techie instead", fp, name))
+		}
+		h.Keys = slices.Delete(slices.Clone(h.Keys), j, j+1)
+		if h.Fingerprint == fp {
+			h.Fingerprint = h.Keys[0].Fingerprint
+		}
+		return done(nil)
+	}
+	return done(fmt.Errorf("no techie named %q", name))
 }
 
 // UnregisterTechie removes a demo techie locally, with the server's rules.

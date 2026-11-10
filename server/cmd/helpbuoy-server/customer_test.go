@@ -27,26 +27,14 @@ func TestCustomerCommands(t *testing.T) {
 		t.Errorf("after move:\n%s", out)
 	}
 
-	tl, _ := keyLine(t, "")
-	runOK(t, "techie", "add", "carol", tl, "--customer", "Acme BV", "--customer", "Other", "--state", dir)
-	if out := runOK(t, "techie", "list", "--state", dir); !strings.Contains(out, "Acme BV, Other") {
-		t.Errorf("techie list:\n%s", out)
-	}
 	runOK(t, "customer", "rename", "acme bv", "Acme Holding", "--state", dir)
 	runOK(t, "customer", "remove", "Other", "--state", dir)
-	if out := runOK(t, "techie", "limit", "carol", "--all", "--state", dir); !strings.Contains(out, "reaches all") {
-		t.Errorf("techie limit --all: %s", out)
-	}
-	if out := runOK(t, "techie", "limit", "carol", "Acme Holding", "--state", dir); !strings.Contains(out, "reaches Acme Holding") {
-		t.Errorf("techie limit: %s", out)
-	}
 
 	for _, args := range [][]string{
 		{"customer", "add", "acme holding"},
 		{"customer", "remove", "Nobody"},
 		{"computer", "move", fp, "Nobody"},
-		{"techie", "limit", "carol"},
-		{"techie", "limit", "carol", "x", "--all"},
+		{"techie", "limit", "carol", "--all"},
 		{"computer", "move", fp},
 	} {
 		var out, errOut bytes.Buffer

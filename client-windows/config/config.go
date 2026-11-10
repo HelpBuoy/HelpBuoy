@@ -27,7 +27,8 @@ type Config struct {
 	ServerAddress string `json:"server_address,omitempty"`
 	// ServerHostKey is the pinned server host key as an authorized_keys line.
 	ServerHostKey string `json:"server_host_key,omitempty"`
-	// KnownTechies maps a techie name to its pinned authorized_keys line.
+	// KnownTechies maps a techie name to its pinned authorized_keys lines,
+	// one per line: a techie has a key for every computer it uses.
 	// The pins belong to ServerAddress: techies are vouched for by the server
 	// and names are only unique within one server, so changing the server
 	// address clears them.

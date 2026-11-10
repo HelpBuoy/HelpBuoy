@@ -67,9 +67,6 @@ type Conn struct {
 	keyLine     string
 	userMachine string
 	connectedAt time.Time
-	// limited techies only reach the computers of customers (PLAN.md 13.3).
-	limited   bool
-	customers []string
 
 	control  bool // Hello has been queued; messages may be sent
 	detached bool
@@ -113,7 +110,7 @@ type Registry struct {
 
 	gen      uint64
 	cacheGen uint64
-	cache    map[string][]byte // encoded Presence per view, see viewKey
+	cache    []byte // encoded Presence of generation cacheGen
 }
 
 // New returns a registry over the stored state idx.
@@ -161,7 +158,7 @@ func (r *Registry) Attach(p Peer, fp, ip string, admit func() (func(), error)) (
 	defer r.mu.Unlock()
 	id := r.idx.Lookup(fp)
 	c := &Conn{peer: p, fp: fp, ip: ip, role: id.Role, name: id.Name,
-		keyLine: id.KeyLine, connectedAt: r.cfg.Now(), limited: id.Limited, customers: id.Customers}
+		keyLine: id.KeyLine, connectedAt: r.cfg.Now()}
 	if id.Role == control.RolePending {
 		rel, err := admit()
 		if err != nil {
@@ -175,7 +172,7 @@ func (r *Registry) Attach(p Peer, fp, ip string, admit func() (func(), error)) (
 		r.log.Info("conn replaced", "fp", fp, "role", string(old.role), "old_ip", old.ip, "ip", ip)
 	}
 	r.conns[fp] = c
-	if c.role == control.RoleComputer {
+	if c.role != control.RolePending {
 		r.lastSeen[fp] = c.connectedAt
 	}
 	r.changedLocked()
@@ -217,6 +214,7 @@ func (r *Registry) detachLocked(c *Conn) {
 			r.endRequestLocked(c.req, control.RequestCancelled, false)
 		}
 	case control.RoleTechie:
+		r.lastSeen[c.fp] = now
 		for _, req := range r.requests {
 			if req.techie == c {
 				r.endRequestLocked(req, control.RequestEnded, true)
@@ -296,82 +294,36 @@ func (r *Registry) changedLocked() {
 	}
 }
 
-// view is what one techie may see: everything, or only some customers.
-type view struct {
-	limited   bool
-	customers []string
-}
-
-// key identifies the view in the Presence cache.
-func (v view) key() string {
-	if !v.limited {
-		return ""
-	}
-	ids := slices.Clone(v.customers)
-	slices.Sort(ids)
-	return "limited:" + strings.Join(ids, ",")
-}
-
-// has reports whether the view includes the customer with id cu ("" for
-// computers without a customer).
-func (v view) has(cu string) bool {
-	return !v.limited || cu != "" && slices.Contains(v.customers, cu)
-}
-
-// shares reports whether the view includes a techie limited to customers,
-// or not limited: one that shares a customer with it.
-func (v view) shares(limited bool, customers []string) bool {
-	if !v.limited || !limited {
-		return true
-	}
-	return slices.ContainsFunc(customers, func(id string) bool { return slices.Contains(v.customers, id) })
-}
-
-func viewOf(c *Conn) view { return view{limited: c.limited, customers: c.customers} }
-
 // Presence returns the encoded current Presence snapshot for techie c and
 // its generation. Callers that already sent this generation can skip it.
 func (r *Registry) Presence(c *Conn) ([]byte, uint64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.cache == nil || r.cacheGen != r.gen {
-		r.cache, r.cacheGen = map[string][]byte{}, r.gen
-	}
-	v := viewOf(c)
-	k := v.key()
-	b, ok := r.cache[k]
-	if !ok {
-		var err error
-		b, err = json.Marshal(r.presenceLocked(v))
+		b, err := json.Marshal(r.presenceLocked())
 		if err != nil {
 			panic(err) // only plain data, can't fail
 		}
-		r.cache[k] = b
+		r.cache, r.cacheGen = b, r.gen
 	}
-	return b, r.cacheGen
+	return r.cache, r.cacheGen
 }
 
-// PresenceSnapshot returns the current Presence, with everything in it, as a
-// value.
+// PresenceSnapshot returns the current Presence as a value.
 func (r *Registry) PresenceSnapshot() control.Presence {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.presenceLocked(view{})
+	return r.presenceLocked()
 }
 
-func (r *Registry) presenceLocked(v view) control.Presence {
+func (r *Registry) presenceLocked() control.Presence {
 	now := r.cfg.Now().UTC()
 	st := r.idx.State
 	p := control.Presence{Computers: []control.ComputerInfo{}, Techies: []control.TechieInfo{}}
 	for _, cu := range st.Customers {
-		if !v.limited || slices.Contains(v.customers, cu.ID) {
-			p.Customers = append(p.Customers, control.CustomerInfo{ID: cu.ID, Name: cu.Name})
-		}
+		p.Customers = append(p.Customers, control.CustomerInfo{ID: cu.ID, Name: cu.Name})
 	}
 	for i, sc := range st.Computers {
-		if !v.has(sc.Customer) {
-			continue
-		}
 		fp := r.idx.ComputerFingerprint(i)
 		ci := control.ComputerInfo{
 			Fingerprint:  fp,
@@ -404,23 +356,20 @@ func (r *Registry) presenceLocked(v view) control.Presence {
 		p.Computers = append(p.Computers, ci)
 	}
 	for i, h := range st.Techies {
-		if !v.shares(h.Limited, h.Customers) {
-			continue
-		}
-		fp := r.idx.TechieFingerprint(i)
-		c := r.conns[fp]
-		ti := control.TechieInfo{
-			Name: h.Name, Fingerprint: fp,
-			Online:  c != nil && c.role == control.RoleTechie,
-			Limited: h.Limited,
-		}
-		if h.Limited {
-			// A limited viewer only learns the customers it shares.
-			for _, id := range h.Customers {
-				if !v.limited || slices.Contains(v.customers, id) {
-					ti.Customers = append(ti.Customers, id)
+		fps := r.idx.TechieFingerprints(i)
+		ti := control.TechieInfo{Name: h.Name, Fingerprint: fps[0]}
+		for j, fp := range fps {
+			ki := control.TechieKeyInfo{Fingerprint: fp, LastSeen: h.Keys[j].LastSeen}
+			if t, ok := r.lastSeen[fp]; ok && t.After(ki.LastSeen) {
+				ki.LastSeen = t.UTC()
+			}
+			if c := r.conns[fp]; c != nil && c.role == control.RoleTechie {
+				ki.Online, ki.LastSeen = true, now
+				if !ti.Online {
+					ti.Online, ti.Fingerprint = true, fp
 				}
 			}
+			ti.Keys = append(ti.Keys, ki)
 		}
 		p.Techies = append(p.Techies, ti)
 	}
@@ -451,7 +400,6 @@ func (r *Registry) SetIndex(idx *store.Index) {
 		switch {
 		case id.Role == c.role:
 			c.name, c.keyLine = id.Name, id.KeyLine
-			c.limited, c.customers = id.Limited, id.Customers
 			if c.role == control.RoleComputer {
 				was, _ := oldIdx.Computer(fp)
 				now, _ := idx.Computer(fp)
@@ -484,34 +432,8 @@ func (r *Registry) SetIndex(idx *store.Index) {
 			c.peer.Kick(reason)
 		}
 	}
-	// A techie whose limit changed, or a computer that moved to another
-	// customer, ends the sessions the techie may no longer have.
-	for _, q := range r.requests {
-		if q.techie != nil && !r.allowedLocked(q.techie, q.computer.fp) {
-			r.log.Info("request", "event", "not allowed anymore", "id", q.id, "computer", q.computer.fp, "techie", q.techie.name)
-			r.endRequestLocked(q, control.RequestEnded, true)
-		}
-	}
 	r.changedLocked()
 }
-
-// allowedLocked reports whether techie c may reach the computer with
-// fingerprint fp: always when it isn't limited, otherwise only when the
-// computer belongs to one of its customers.
-func (r *Registry) allowedLocked(c *Conn, fp string) bool {
-	if !c.limited {
-		return true
-	}
-	sc, ok := r.idx.Computer(fp)
-	return ok && viewOf(c).has(sc.Customer)
-}
-
-// errLimited is the Reply error for a command a limited techie may not use.
-var errLimited = errors.New("not allowed for a techie limited to some customers")
-
-// errNoComputer is the Reply error for a computer a limited techie may not
-// reach, the same as for one that doesn't exist.
-func errNoComputer(fp string) error { return fmt.Errorf("no computer with fingerprint %s", fp) }
 
 // Handle processes one control message from c. A returned error is a
 // protocol violation; the caller sends it as Error and closes the connection.
@@ -547,8 +469,10 @@ func (r *Registry) Handle(c *Conn, m any) error {
 		return r.removeCustomer(c, m)
 	case *control.MoveComputer:
 		return r.moveComputer(c, m)
-	case *control.LimitTechie:
-		return r.limitTechie(c, m)
+	case *control.AddTechieKey:
+		return r.addTechieKey(c, m)
+	case *control.RemoveTechieKey:
+		return r.removeTechieKey(c, m)
 	}
 	return fmt.Errorf("%w: %T", ErrNotAllowed, m)
 }
@@ -657,7 +581,7 @@ func (r *Registry) connect(c *Conn, m *control.Connect) error {
 	}
 	cl := r.conns[m.Fingerprint]
 	switch {
-	case cl == nil || cl.role != control.RoleComputer || cl.detached || !r.allowedLocked(c, m.Fingerprint):
+	case cl == nil || cl.role != control.RoleComputer || cl.detached:
 		return fail("computer is not online")
 	case cl.req != nil:
 		return fail("computer is busy")
@@ -695,28 +619,6 @@ func (r *Registry) techieName(c *Conn, what string) (string, error) {
 	return c.name, nil
 }
 
-// denied returns the Reply error for a command of techie c about the
-// computer with fingerprint fp that c may not reach, or nil.
-func (r *Registry) denied(c *Conn, fp string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if !r.allowedLocked(c, fp) {
-		return errNoComputer(fp)
-	}
-	return nil
-}
-
-// deniedLimited returns the Reply error for a command that affects every
-// customer when techie c is limited, or nil.
-func (r *Registry) deniedLimited(c *Conn) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if c.limited {
-		return errLimited
-	}
-	return nil
-}
-
 func (r *Registry) reply(c *Conn, seq uint32, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -740,20 +642,9 @@ func (r *Registry) registerTechie(c *Conn, m *control.RegisterTechie) error {
 	if err != nil {
 		return err
 	}
-	err = r.deniedLimited(c)
+	err = r.mutate(func(st *store.State) error { return st.AddTechie(m.Name, m.PublicKey) })
 	if err == nil {
-		err = r.mutate(func(st *store.State) error {
-			if err := st.AddTechie(m.Name, m.PublicKey); err != nil {
-				return err
-			}
-			if !m.Limited && len(m.Customers) == 0 {
-				return nil
-			}
-			return st.LimitTechie(strings.TrimSpace(m.Name), m.Limited, m.Customers)
-		})
-	}
-	if err == nil {
-		r.log.Info("techie added", "name", strings.TrimSpace(m.Name), "limited", m.Limited, "customers", m.Customers, "by", by)
+		r.log.Info("techie added", "name", strings.TrimSpace(m.Name), "by", by)
 	}
 	r.reply(c, m.Seq, err)
 	return nil
@@ -766,8 +657,7 @@ func (r *Registry) unregisterTechie(c *Conn, m *control.UnregisterTechie) error 
 	if err != nil {
 		return err
 	}
-	err = r.deniedLimited(c)
-	if err == nil && m.Name == by {
+	if m.Name == by {
 		err = errors.New("you cannot remove yourself")
 	}
 	if err == nil {
@@ -785,24 +675,15 @@ func (r *Registry) registerComputer(c *Conn, m *control.RegisterComputer) error 
 	if err != nil {
 		return err
 	}
-	r.mu.Lock()
-	v := viewOf(c)
-	r.mu.Unlock()
 	var fp, name string
 	err = r.mutate(func(st *store.State) error {
 		var err error
 		fp, name, err = st.AddComputer(m.PublicKey, m.Name, by, r.cfg.Now())
-		if err != nil {
+		if err != nil || m.Customer == "" {
 			return err
 		}
-		if m.Customer == "" && !v.limited {
-			return nil
-		}
-		if !v.has(m.Customer) {
-			if m.Customer == "" {
-				return errors.New("choose one of your customers for the computer")
-			}
-			return fmt.Errorf("no customer %q", m.Customer)
+		if _, err := customerByID(st, m.Customer); err != nil {
+			return err
 		}
 		_, err = st.MoveComputer(fp, m.Customer)
 		return err
@@ -819,15 +700,12 @@ func (r *Registry) renameComputer(c *Conn, m *control.RenameComputer) error {
 	if err != nil {
 		return err
 	}
-	err = r.denied(c, m.Fingerprint)
 	var old string
-	if err == nil {
-		err = r.mutateFor(c, m.Fingerprint, func(st *store.State) error {
-			var err error
-			old, err = st.RenameComputer(m.Fingerprint, m.Name)
-			return err
-		})
-	}
+	err = r.mutate(func(st *store.State) error {
+		var err error
+		old, err = st.RenameComputer(m.Fingerprint, m.Name)
+		return err
+	})
 	if err == nil {
 		r.log.Info("computer renamed", "fp", m.Fingerprint, "from", old, "to", strings.TrimSpace(m.Name), "by", by)
 	}
@@ -840,11 +718,8 @@ func (r *Registry) setServerInfo(c *Conn, m *control.SetServerInfo) error {
 	if err != nil {
 		return err
 	}
-	err = r.deniedLimited(c)
 	info := control.ServerInfo{Company: m.Company, Phone: m.Phone, Description: m.Description}
-	if err == nil {
-		err = r.mutate(func(st *store.State) error { return st.SetInfo(info) })
-	}
+	err = r.mutate(func(st *store.State) error { return st.SetInfo(info) })
 	if err == nil {
 		r.log.Info("server info set", "company", strings.TrimSpace(m.Company), "phone", strings.TrimSpace(m.Phone), "description", strings.TrimSpace(m.Description), "by", by)
 	}
@@ -888,15 +763,12 @@ func (r *Registry) decideListing(c *Conn, m *control.DecideListing) error {
 	if err != nil {
 		return err
 	}
-	err = r.denied(c, m.Computer)
 	var name string
-	if err == nil {
-		err = r.mutateFor(c, m.Computer, func(st *store.State) error {
-			var err error
-			name, err = st.DecideListing(m.Computer, m.Address, m.Fingerprint, m.Allow)
-			return err
-		})
-	}
+	err = r.mutate(func(st *store.State) error {
+		var err error
+		name, err = st.DecideListing(m.Computer, m.Address, m.Fingerprint, m.Allow)
+		return err
+	})
 	if err == nil {
 		r.log.Info("listing decided", "fp", m.Computer, "name", name, "address", m.Address, "server", m.Fingerprint,
 			"allow", m.Allow, "by", by)
@@ -917,15 +789,12 @@ func (r *Registry) unregisterComputer(c *Conn, m *control.UnregisterComputer) er
 	if err != nil {
 		return err
 	}
-	err = r.denied(c, m.Fingerprint)
 	var name string
-	if err == nil {
-		err = r.mutateFor(c, m.Fingerprint, func(st *store.State) error {
-			var err error
-			name, err = st.RemoveComputer(m.Fingerprint)
-			return err
-		})
-	}
+	err = r.mutate(func(st *store.State) error {
+		var err error
+		name, err = st.RemoveComputer(m.Fingerprint)
+		return err
+	})
 	if err == nil {
 		r.log.Info("computer unregistered", "fp", m.Fingerprint, "name", name, "by", by)
 	}
@@ -933,41 +802,17 @@ func (r *Registry) unregisterComputer(c *Conn, m *control.UnregisterComputer) er
 	return nil
 }
 
-// mutateFor runs a change for techie c about the computer with fingerprint
-// fp, checking again inside the change that a limited c may reach the
-// computer, since the state may have changed since denied.
-func (r *Registry) mutateFor(c *Conn, fp string, fn func(*store.State) error) error {
-	r.mu.Lock()
-	v := viewOf(c)
-	r.mu.Unlock()
-	return r.mutate(func(st *store.State) error {
-		if v.limited {
-			i := slices.IndexFunc(st.Computers, func(sc store.Computer) bool {
-				k, _, err := auth.ParseKey(sc.PublicKey)
-				return err == nil && auth.Fingerprint(k) == fp
-			})
-			if i < 0 || !v.has(st.Computers[i].Customer) {
-				return errNoComputer(fp)
-			}
-		}
-		return fn(st)
-	})
-}
-
 func (r *Registry) addCustomer(c *Conn, m *control.AddCustomer) error {
 	by, err := r.techieName(c, "AddCustomer")
 	if err != nil {
 		return err
 	}
-	err = r.deniedLimited(c)
 	var id string
-	if err == nil {
-		err = r.mutate(func(st *store.State) error {
-			var err error
-			id, err = st.AddCustomer(m.Name)
-			return err
-		})
-	}
+	err = r.mutate(func(st *store.State) error {
+		var err error
+		id, err = st.AddCustomer(m.Name)
+		return err
+	})
 	if err == nil {
 		r.log.Info("customer added", "id", id, "name", strings.TrimSpace(m.Name), "by", by)
 	}
@@ -980,18 +825,15 @@ func (r *Registry) renameCustomer(c *Conn, m *control.RenameCustomer) error {
 	if err != nil {
 		return err
 	}
-	err = r.deniedLimited(c)
 	var old string
-	if err == nil {
-		err = r.mutate(func(st *store.State) error {
-			if _, err := customerByID(st, m.ID); err != nil {
-				return err
-			}
-			var err error
-			old, err = st.RenameCustomer(m.ID, m.Name)
+	err = r.mutate(func(st *store.State) error {
+		if _, err := customerByID(st, m.ID); err != nil {
 			return err
-		})
-	}
+		}
+		var err error
+		old, err = st.RenameCustomer(m.ID, m.Name)
+		return err
+	})
 	if err == nil {
 		r.log.Info("customer renamed", "id", m.ID, "from", old, "to", strings.TrimSpace(m.Name), "by", by)
 	}
@@ -1004,18 +846,15 @@ func (r *Registry) removeCustomer(c *Conn, m *control.RemoveCustomer) error {
 	if err != nil {
 		return err
 	}
-	err = r.deniedLimited(c)
 	var name string
-	if err == nil {
-		err = r.mutate(func(st *store.State) error {
-			if _, err := customerByID(st, m.ID); err != nil {
-				return err
-			}
-			var err error
-			name, err = st.RemoveCustomer(m.ID)
+	err = r.mutate(func(st *store.State) error {
+		if _, err := customerByID(st, m.ID); err != nil {
 			return err
-		})
-	}
+		}
+		var err error
+		name, err = st.RemoveCustomer(m.ID)
+		return err
+	})
 	if err == nil {
 		r.log.Info("customer removed", "id", m.ID, "name", name, "by", by)
 	}
@@ -1023,36 +862,23 @@ func (r *Registry) removeCustomer(c *Conn, m *control.RemoveCustomer) error {
 	return nil
 }
 
-// moveComputer moves a computer to another customer. A limited techie may
-// only move computers of its customers, and only to its customers.
+// moveComputer moves a computer to another customer.
 func (r *Registry) moveComputer(c *Conn, m *control.MoveComputer) error {
 	by, err := r.techieName(c, "MoveComputer")
 	if err != nil {
 		return err
 	}
-	err = r.denied(c, m.Fingerprint)
-	r.mu.Lock()
-	v := viewOf(c)
-	r.mu.Unlock()
 	var name string
-	if err == nil {
-		err = r.mutateFor(c, m.Fingerprint, func(st *store.State) error {
-			if m.Customer != "" {
-				if _, err := customerByID(st, m.Customer); err != nil {
-					return err
-				}
+	err = r.mutate(func(st *store.State) error {
+		if m.Customer != "" {
+			if _, err := customerByID(st, m.Customer); err != nil {
+				return err
 			}
-			if !v.has(m.Customer) {
-				if m.Customer == "" {
-					return errLimited
-				}
-				return fmt.Errorf("no customer %q", m.Customer)
-			}
-			var err error
-			name, err = st.MoveComputer(m.Fingerprint, m.Customer)
-			return err
-		})
-	}
+		}
+		var err error
+		name, err = st.MoveComputer(m.Fingerprint, m.Customer)
+		return err
+	})
 	if err == nil {
 		r.log.Info("computer moved", "fp", m.Fingerprint, "name", name, "customer", m.Customer, "by", by)
 	}
@@ -1060,28 +886,36 @@ func (r *Registry) moveComputer(c *Conn, m *control.MoveComputer) error {
 	return nil
 }
 
-// limitTechie limits another techie to some customers or lifts its limit.
-func (r *Registry) limitTechie(c *Conn, m *control.LimitTechie) error {
-	by, err := r.techieName(c, "LimitTechie")
+// addTechieKey adds a key to a techie, for another machine it uses.
+func (r *Registry) addTechieKey(c *Conn, m *control.AddTechieKey) error {
+	by, err := r.techieName(c, "AddTechieKey")
 	if err != nil {
 		return err
 	}
-	err = r.deniedLimited(c)
-	if err == nil && m.Name == by {
-		err = errors.New("you cannot change your own limit")
+	err = r.mutate(func(st *store.State) error { return st.AddTechieKey(m.Name, m.PublicKey) })
+	if err == nil {
+		r.log.Info("techie key added", "name", m.Name, "by", by)
+	}
+	r.reply(c, m.Seq, err)
+	return nil
+}
+
+// removeTechieKey removes a key of a techie; a connection with that key is
+// closed when the new state is installed. The key c is connected with can't
+// be removed, as c can't remove itself.
+func (r *Registry) removeTechieKey(c *Conn, m *control.RemoveTechieKey) error {
+	by, err := r.techieName(c, "RemoveTechieKey")
+	if err != nil {
+		return err
+	}
+	if m.Fingerprint == c.fp {
+		err = errors.New("you cannot remove the key you are connected with")
 	}
 	if err == nil {
-		err = r.mutate(func(st *store.State) error {
-			for _, id := range m.Customers {
-				if _, err := customerByID(st, id); err != nil {
-					return err
-				}
-			}
-			return st.LimitTechie(m.Name, m.Limited, m.Customers)
-		})
+		err = r.mutate(func(st *store.State) error { return st.RemoveTechieKey(m.Name, m.Fingerprint) })
 	}
 	if err == nil {
-		r.log.Info("techie limit set", "name", m.Name, "limited", m.Limited, "customers", m.Customers, "by", by)
+		r.log.Info("techie key removed", "name", m.Name, "fp", m.Fingerprint, "by", by)
 	}
 	r.reply(c, m.Seq, err)
 	return nil
@@ -1187,7 +1021,8 @@ func (r *Registry) Sweep() {
 	}
 }
 
-// LastSeen returns the last-seen times of computers that connected since start.
+// LastSeen returns the last-seen times of the computer and techie keys that
+// connected since start.
 func (r *Registry) LastSeen() map[string]time.Time {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -1197,7 +1032,7 @@ func (r *Registry) LastSeen() map[string]time.Time {
 		m[fp] = t
 	}
 	for fp, c := range r.conns {
-		if c.role == control.RoleComputer {
+		if c.role != control.RolePending {
 			m[fp] = now
 		}
 	}

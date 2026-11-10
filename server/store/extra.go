@@ -16,44 +16,20 @@ import (
 type Extra map[string]json.RawMessage
 
 type (
-	plainState    State
-	plainTechie   Techie
-	plainComputer Computer
-	plainCustomer Customer
+	plainState     State
+	plainTechie    Techie
+	plainTechieKey TechieKey
+	plainComputer  Computer
+	plainCustomer  Customer
 )
 
-// UnmarshalJSON reads state.json. The limited techies are read from
-// limited_techies into Techies, with Limited set.
 func (st *State) UnmarshalJSON(b []byte) error {
 	var err error
 	st.Extra, err = unmarshalWithExtra(b, (*plainState)(st))
-	if err != nil {
-		return err
-	}
-	for _, h := range st.LimitedTechies {
-		h.Limited = true
-		if h.Customers == nil {
-			h.Customers = []string{}
-		}
-		st.Techies = append(st.Techies, h)
-	}
-	st.LimitedTechies = nil
-	return nil
+	return err
 }
 
-// MarshalJSON writes state.json, with the limited techies in
-// limited_techies.
 func (st State) MarshalJSON() ([]byte, error) {
-	var limited []Techie
-	for _, h := range st.Techies {
-		if h.Limited {
-			limited = append(limited, h)
-		}
-	}
-	if limited != nil {
-		st.Techies = slices.DeleteFunc(slices.Clone(st.Techies), func(h Techie) bool { return h.Limited })
-	}
-	st.LimitedTechies = limited
 	return marshalWithExtra(plainState(st), st.Extra)
 }
 
@@ -67,14 +43,39 @@ func (cu Customer) MarshalJSON() ([]byte, error) {
 	return marshalWithExtra(plainCustomer(cu), cu.Extra)
 }
 
+// UnmarshalJSON reads a techie. One written by a version with one key per
+// techie only has public_key, which becomes its only key.
 func (h *Techie) UnmarshalJSON(b []byte) error {
 	var err error
 	h.Extra, err = unmarshalWithExtra(b, (*plainTechie)(h))
+	if err != nil {
+		return err
+	}
+	if len(h.Keys) == 0 && h.JSONPublicKey != "" {
+		h.Keys = []TechieKey{{PublicKey: h.JSONPublicKey}}
+	}
+	h.JSONPublicKey = ""
+	return nil
+}
+
+// MarshalJSON writes a techie, with its first key also in public_key, so an
+// older version that knows one key per techie still lets it in with that key.
+func (h Techie) MarshalJSON() ([]byte, error) {
+	h.JSONPublicKey = ""
+	if len(h.Keys) > 0 {
+		h.JSONPublicKey = h.Keys[0].PublicKey
+	}
+	return marshalWithExtra(plainTechie(h), h.Extra)
+}
+
+func (hk *TechieKey) UnmarshalJSON(b []byte) error {
+	var err error
+	hk.Extra, err = unmarshalWithExtra(b, (*plainTechieKey)(hk))
 	return err
 }
 
-func (h Techie) MarshalJSON() ([]byte, error) {
-	return marshalWithExtra(plainTechie(h), h.Extra)
+func (hk TechieKey) MarshalJSON() ([]byte, error) {
+	return marshalWithExtra(plainTechieKey(hk), hk.Extra)
 }
 
 func (c *Computer) UnmarshalJSON(b []byte) error {

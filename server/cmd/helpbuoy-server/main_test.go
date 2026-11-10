@@ -96,9 +96,27 @@ func TestAdmin(t *testing.T) {
 	runFail(t, "techie", "add", "alice", hl, "--state", dir)
 	runFail(t, "techie", "add", "bob", "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQC7", "--state", dir)
 	out := runOK(t, "techie", "list", "--state", dir)
-	if !strings.Contains(out, "alice") || !strings.Contains(out, hfp) {
+	if !strings.Contains(out, "alice") || !strings.Contains(out, hfp) || !strings.Contains(out, "never") {
 		t.Errorf("techie list:\n%s", out)
 	}
+
+	// A techie gets a key for every computer it uses.
+	hl2, hfp2 := keyLine(t, "alice-desktop")
+	if out := runFail(t, "techie", "add", "alice", hl2, "--state", dir); !strings.Contains(out, "add-key") {
+		t.Errorf("techie add for an existing techie: %s", out)
+	}
+	runOK(t, "techie", "add-key", "alice", hl2, "--state", dir)
+	runFail(t, "techie", "add-key", "alice", hl2, "--state", dir)
+	runFail(t, "techie", "add-key", "nobody", hl2, "--state", dir)
+	if out := runOK(t, "techie", "list", "--state", dir); !strings.Contains(out, hfp) || !strings.Contains(out, hfp2) {
+		t.Errorf("techie list with two keys:\n%s", out)
+	}
+	runOK(t, "techie", "remove-key", "alice", hfp, "--state", dir)
+	runFail(t, "techie", "remove-key", "alice", hfp2, "--state", dir) // the last key
+	if out := runOK(t, "techie", "list", "--state", dir); strings.Contains(out, hfp) || !strings.Contains(out, hfp2) {
+		t.Errorf("techie list after remove-key:\n%s", out)
+	}
+	runOK(t, "techie", "add-key", "alice", hl, "--state", dir)
 
 	// Computers are registered by techies through the server; simulate that.
 	cl, cfp := keyLine(t, "anna@PC")

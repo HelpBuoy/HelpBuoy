@@ -98,9 +98,11 @@ Performance target: **as fast as RDP** for normal desktop work (section 5).
   server runs as long as its process runs; when the machine or the process stops, computers and
   other techies simply see the server as unreachable until it is started again.
 - **Identity = key**. The server maps each public key to exactly one of: techie, registered
-  computer, or unknown. User names in the SSH handshake are ignored (computers send `sv`).
+  computer, or unknown. A techie has one key on every machine it uses its desk app on, so a
+  techie can have several keys; a computer has one. User names in the SSH handshake are
+  ignored (computers send `sv`).
 - **One helpdesk per server**: every techie on a server sees every registered computer and
-  can ask to connect to it, unless the techie is limited to some customers (13). The
+  can ask to connect to it. The
   computers are grouped per customer, so one helpdesk serves many customers from one server.
   Separate helpdesks use separate servers or virtual hosts.
 
@@ -117,7 +119,7 @@ connection and stored in `config.json` in the client's data directory:
 | server address | `helpme.example.com` (port 443 unless given) | typed by the user; the server this PC got registered on |
 | server host key | `ssh-ed25519 AAAA...` (`SHA256:3q2+7w...`) | first successful connection, pinned from then on |
 | last address | `helpme.example.com` | the last address that reached a server, to prefill the field |
-| known techies | `alice` → `ssh-ed25519 AAAA...` | each techie's key, pinned on the first session with that techie (3.5) |
+| known techies | `alice` → `ssh-ed25519 AAAA...` | each techie's keys, one per line, pinned on the first session with that techie from each machine (3.5) |
 | lock (12) | primary server address and host key, approved servers | when the user agrees to lock to a server |
 
 The key is stored next to it, as its own application-specific key pair (6.1). Adding or removing a techie never touches
@@ -298,17 +300,15 @@ Not implemented at all: `session`, `shell`, `exec`, `subsystem`, `pty`, `direct-
 `tcpip-forward`, `streamlocal`, techie and X11 forwarding. The attack surface is the SSH
 transport in `x/crypto/ssh`, the auth callback, the control parser and the splice.
 
-A key can't be both techie and computer.
-
-A techie limited to some customers (13.3) only sees and reaches the computers of those
-customers, and can't manage techies, customers or the server info.
+A key can't be both techie and computer, and belongs to at most one techie.
 
 ### 3.2 State and admin
 
 State directory in the user's data directory, next to the desk app's own data:
 `~/.local/share/helpbuoy-server` on Linux, `~/Library/Application Support/helpbuoy-server` on macOS,
 `%LOCALAPPDATA%\helpbuoy-server` on Windows (override with `--state`). It holds `hostkey_ed25519` (0600) and `state.json` with who runs the server (address,
-company name, phone number, description; 12.4), techies (name, public key) and registered
+company name, phone number, description; 12.4), techies (name, and per key the public key
+and when it was last seen) and registered
 computers (key, `user@machine` name, registered by, registered at, last seen, approved
 servers and open listing requests, 12.3). Computer registrations never expire; they are removed
 only by `UnregisterComputer` or `helpbuoy-server computer remove`. They are added by
@@ -316,8 +316,9 @@ only by `UnregisterComputer` or `helpbuoy-server computer remove`. They are adde
 Fields in `state.json` that a version doesn't know, at the top level or in a techie or
 computer entry, are kept and written back on every save, so a newer version can add fields
 without an older one sharing the state directory dropping them.
-It also holds the customers, the customer of every computer, and the limited techies in a
-list of their own (13.2, 13.3).
+It also holds the customers and the customer of every computer (13.2). A techie's first
+key is also written as its `public_key`, the only key a version before multiple keys knows,
+so such a version still lets the techie in with that key.
 
 | Command | What it does |
 |---|---|
@@ -326,9 +327,11 @@ list of their own (13.2, 13.3).
 | `helpbuoy-server serve --mode https [--listen :443] [--cert F --key F \| --acme --acme-host H]` | run the server with its built-in HTTPS server |
 | `helpbuoy-server serve --mode http --vhosts DIR` | serve every virtual host in `DIR` (http or https mode) |
 | `helpbuoy-server vhost list` / `vhost add NAME` | list or add virtual hosts; the other commands take `--vhost NAME` |
-| `helpbuoy-server techie list` | list techies with their fingerprints |
+| `helpbuoy-server techie list` | list techies with the fingerprint of every key and when it was last seen |
 | `helpbuoy-server techie add alice 'ssh-ed25519 ...'` | add a techie with the public key copied from their desk app |
-| `helpbuoy-server techie remove alice` | remove a techie; takes effect immediately, open sessions are closed |
+| `helpbuoy-server techie add-key alice 'ssh-ed25519 ...'` | give a techie another key, from the desk app on another machine it uses |
+| `helpbuoy-server techie remove-key alice SHA256:...` | remove one key of a techie; a connection with that key is closed. The last key can't be removed: that is removing the techie |
+| `helpbuoy-server techie remove alice` | remove a techie with all its keys; takes effect immediately, open sessions are closed |
 | `helpbuoy-server computer list` | list registered computers: name, fingerprint, registered by and at, last seen |
 | `helpbuoy-server computer add 'ssh-ed25519 ...' ['Anna laptop']` | register a computer key, like Register computer in the desk app; the name defaults to the key comment, and "registered by" is `admin` |
 | `helpbuoy-server computer rename SHA256:... 'Anna laptop'` | rename a registered computer; the same as Rename in the desk app, every techie sees the new name |
@@ -336,14 +339,15 @@ list of their own (13.2, 13.3).
 | `helpbuoy-server info [--company C] [--phone P] [--description D]` | print or set who runs the server (12.4); only the flags given change, and the company name and phone number can't be cleared. The same values techies edit on the desk app's Server tab. `serve` asks for the company name and phone number when they are missing and it runs in a terminal; until they are set the server refuses computers |
 | `helpbuoy-server customer list` / `add` / `rename` / `remove` | manage the customers on the server (13.2) |
 | `helpbuoy-server computer move SHA256:... 'Acme BV' \| --none` | move a computer to another customer, or out of its customer (13.2); `computer add` and `computer list` take `--customer` |
-| `helpbuoy-server techie limit alice 'Acme BV' ... \| --all` | limit a techie to some customers, or lift the limit (13.3); `techie add` takes `--customer` (repeatable) too |
 | `helpbuoy-server limit [--sessions N]` | print or set how many sessions the server allows at the same time, for all techies together (3.4); 0 is no limit, the default. Techies can't change it |
 | `helpbuoy-server hostkey` | print the host key fingerprint, for techies to compare with what computers show |
 | `helpbuoy-server hostkey --new` | replace the host key, keeping all techies and computers; it takes effect at the next server start, since the running server only watches `state.json`; every computer then shows the changed server identity warning (3.5), and servers that approved this one for their computers (12.3) must approve it again |
 
 **Techies are plain keys**: there are no certificates. A new techie sends
-their public key line to the server admin, who adds it with `helpbuoy-server techie add`. Removing it
-with `helpbuoy-server techie remove` (or Remove on the desk app's Techies tab) is the whole revocation story. The server watches `state.json` and
+their public key line to the server admin, who adds it with `helpbuoy-server techie add`, and
+the key line of every other machine they use later with `techie add-key`. Removing a key
+with `techie remove-key`, or the techie with `helpbuoy-server techie remove` (or Remove on the
+desk app's Techies tab) is the whole revocation story. The server watches `state.json` and
 reloads it when the CLI changes it (no signals, so it works the same on Windows).
 
 ### 3.3 Control channel
@@ -362,10 +366,11 @@ Techie commands carry a sequence number and the server answers each with a `Repl
 | `ListingRefused` | server → computer | a techie refused that request |
 | `DecideListing` | techie → server | computer fingerprint, address, fingerprint and allow or refuse |
 | `ComputerHello` | computer → server | app version, current `user@machine` (the registered name comes from the key comment) |
-| `Presence` | server → techies | full snapshot after every change: registered computers (`user@machine`, fingerprint, online, open or taken request with id and time, in session with whom, approved servers and open listing requests) and techies |
+| `Presence` | server → techies | full snapshot after every change: registered computers (`user@machine`, fingerprint, online, open or taken request with id and time, in session with whom, approved servers and open listing requests) and techies (name, the fingerprint of the key it is online with or else its first key, and every key with whether it is online and when it was last seen) |
 | `RegisterComputer` / `UnregisterComputer` | techie → server | public key line or fingerprint (name taken from the key comment, or given when the comment is empty) |
 | `RegisterTechie` | techie → server | public key line and name: adds another techie, like `helpbuoy-server techie add` |
 | `UnregisterTechie` | techie → server | name: removes another techie, like `helpbuoy-server techie remove`; an online techie is disconnected, and a techie cannot remove itself |
+| `AddTechieKey` / `RemoveTechieKey` | techie → server | techie name and public key line or fingerprint: gives a techie, also yourself, another key or removes one, like `techie add-key` and `techie remove-key`; a connection with a removed key is closed, and a techie cannot remove the key it is connected with |
 | `SetServerInfo` | techie → server | new company name (up to 64 characters), phone number (up to 32) and description (optional, up to 160), one line each; stored in `state.json` |
 | `Reply` | server → techie | answer to a techie command: sequence number and error text if it failed |
 | `Registered` | server → computer | the key is now registered (no name: that is only for techies) |
@@ -373,12 +378,12 @@ Techie commands carry a sequence number and the server answers each with a `Repl
 | `CancelRequest` | computer → server | request id |
 | `RequestStateMsg` | server → computer | request id and state (open / taken / cancelled / expired / ended) |
 | `OpenRequest` | techie → server | request id; the server lets only the first techie win |
-| `SessionReady` | server → computer | request id, techie name and public key: a techie wants to connect |
+| `SessionReady` | server → computer | request id, techie name and the public key it is connected with: a techie wants to connect |
 | `Error` | server → any | reason, sent just before the server closes a connection on purpose |
 
 Customers (13.5): `Presence` carries the customers and the customer of every computer,
-filtered for limited techies, and techies have `AddCustomer`, `RenameCustomer`,
-`RemoveCustomer`, `MoveComputer` and `LimitTechie`. Nothing changes for computers.
+and techies have `AddCustomer`, `RenameCustomer`, `RemoveCustomer` and `MoveComputer`.
+Nothing changes for computers.
 
 The apps skip a message of a type they don't know, and ignore JSON fields they don't
 know, so a newer server can add both without breaking older apps. The server stays strict:
@@ -450,7 +455,10 @@ Role caps and timeouts:
   announces in `SessionReady`. On top of that, each techie's key is pinned per techie name
   the first time (TOFU again). Before every session the computer asks the user whether the
   techie may take control, showing its name and key fingerprint; if `alice` later
-  shows up with a different key, that question also carries a warning.
+  shows up with a key this computer hasn't seen for her, from another machine or a new
+  install, that question also carries a warning. Once allowed, that key is pinned next to the
+  earlier ones (at most 16 per name), so switching between her machines warns only once per
+  machine.
 - **Computer** is trusted because a techie registered its key after receiving it (or its
   fingerprint) over a trusted channel. The desk app pins registered computer keys in the inner
   handshake, independent of what the server says.
@@ -458,9 +466,6 @@ Role caps and timeouts:
   approval at the PC for that techie, and Esc or exiting the client application always ends the
   session locally, even if the server misbehaves.
 - **Pending keys** are never shown to anyone.
-- **Limited techies** (13.3) are limited by the server, not by the desk app hiding
-  rows: they never get the computers of other customers in `Presence`, and the server refuses
-  their commands for those computers.
 - **A locked computer** (12) only connects to its primary server and the servers
   that server approved for it, and only removing its local files undoes the lock.
 - **Unknown servers**: anyone can run a server and give it any company name. The client
@@ -854,7 +859,15 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   (`user@machine`). Registered computers that are offline are in a collapsed "Offline" section
   below.
 - The **Techies** tab lists every techie on the server, online first, with an online dot,
-  "(you)" for this techie, and whom they are helping (otherwise the key fingerprint).
+  "(you)" for this techie, and whom they are helping; otherwise the fingerprint of the key
+  it is online with, or "Offline · last seen 3 days ago" (today, yesterday, or a number of
+  days, from the key used last) or "Offline · never connected".
+- **Techie keys**: hovering a techie row shows **Keys**, which lists the techie's keys below
+  the row, one per machine it uses, each with its fingerprint and "Online now", "Last seen
+  yesterday" or "Never connected", and Remove (confirmed, like removing a techie) on all but
+  the last key and the key of this desk app. **Add key** opens the Register techie tab as
+  "Add key for alice", with only the key field, and sends `AddTechieKey`. Register techie
+  with the name of an existing techie also adds the key to that techie, and says so.
 - **Connect**: every online computer that nobody is helping has a **Connect** button. It
   sends `Connect` with a fresh request id; the row then says "Waiting for the user to allow
   the session…" until the session channel arrives (a tab opens) or the request goes away,
@@ -989,8 +1002,13 @@ The lock question, the approved list and listing requests, mandatory company nam
 number on every server, and the waiting screen showing who the user waits for.
 
 **Phase 9 - customers (13)** (done, issue #20)
-Customers on the server, the customer of every computer, techies limited to customers, and
-the Computers tab grouped per customer.
+Customers on the server, the customer of every computer, and the Computers tab grouped per
+customer. Techies limited to customers were dropped again (13.3).
+
+**Phase 10 - several keys per techie**
+A techie has a key on every machine it uses: `techie add-key` and `remove-key`, Keys and Add
+key on the Techies tab, the last-seen time of every key, and computers that pin every key
+they allowed for a techie name.
 
 **Later**: tray icon and optional "Start with Windows" (HKCU Run entry, no admin), so the
 computer can stay online in the background; an update check in the Linux and macOS
@@ -1030,12 +1048,14 @@ clients.
   approved, pins approved servers by the approved fingerprint, starts on the primary server
   when its last address is no longer allowed, and keeps the lock through Remove key.
 - Customers (13): a state without customers loads with every computer in "No
-  customer"; removing a customer keeps its computers; a limited techie never gets other
-  customers' computers or techies in `Presence`, and the server refuses its `OpenRequest`,
-  `RegisterComputer`, renames, moves and `DecideListing` for them and every command that
-  manages techies, customers or the server info; changing a limit takes effect at once,
-  closing sessions it no longer allows; an older server on the same state refuses limited
-  techies.
+  customer"; removing a customer keeps its computers; the techies an older version limited
+  to customers are refused, and their list is kept in `state.json`.
+- Techie keys: a techie connects with any of its keys and the computer gets the key it is
+  connected with; `Presence` shows which key is online and when each was last seen, also
+  after a restart; removing a key closes its connection; a techie can't remove the key it
+  is connected with or the last key of a techie; a `state.json` with one `public_key` per
+  techie loads, and the first key is written there for older versions; a computer that knows
+  several keys of a techie connects with any of them without a warning.
 - Performance: the replay harness from phase 3 in CI (client encoder against techie decoder,
   no GUI), with regression thresholds; `tc netem` runs at 20 ms / 80 ms RTT and 10 / 50 Mbit/s.
 - Session end tests (`faketechie`): End session on the techie closes the session and
@@ -1208,8 +1228,7 @@ server per customer, each with its own address, host key, techies and lock (12).
 Every customer is a group of computers on the server, and every registered computer belongs
 to one customer. The server, its host key, its company name and phone number and its
 techies stay shared, so a customer's PCs still lock to the helpdesk's server and the
-helpdesk is still who the user calls. Customers only organize the computers and,
-optionally, limit which techies can reach them.
+helpdesk is still who the user calls. Customers only organize the computers.
 
 This is different from virtual hosts (0). A virtual host is a separate helpdesk with its own
 techies, host key and state, sharing only the process. A customer is a group of computers
@@ -1248,38 +1267,14 @@ removed on purpose.
 | `helpbuoy-server computer add --customer 'Acme BV' ...` | register a computer for a customer |
 | `helpbuoy-server computer list [--customer 'Acme BV']` | also shows the customer, and lists one customer when given |
 
-### 13.3 Techies limited to customers
+### 13.3 Techies limited to customers (dropped)
 
-By default a techie sees every customer, as every techie sees every computer today. A
-techie can also be limited to one or more customers, for example a customer's own IT person
-who helps their colleagues but must not see other customers, or a contractor who only covers
-some customers. A limited techie:
-
-- only gets the computers of their customers in `Presence`, and the server refuses
-  `OpenRequest`, `RegisterComputer`, renames, moves, `UnregisterComputer` and
-  `DecideListing` (12.3) for any other computer
-- registers new computers only into their own customers, and the desk app offers only those
-- can't manage techies, customers or the server info (`RegisterTechie`, `UnregisterTechie`,
-  the customer commands, `SetServerInfo`), since those affect every customer
-- only sees the techies that share a customer with them, and techies that aren't limited
-
-The server enforces the limit, not the desk app, so an older desk app connected as a limited
-techie still only sees what it may see (3.5). Changing a limit takes effect at once: a
-session with a computer the techie may no longer reach is closed, as when a techie is
-removed. A limited techie whose last customer is removed stays limited and sees no
-computers until given another.
-
-Limited techies are stored in a list of their own in `state.json`, next to the techies
-(with name, public key and customer ids), not as a field on a techie entry. An older server
-sharing the state directory keeps that list (3.2) but doesn't know it, so it treats those
-keys as unknown and refuses them, instead of letting them see every computer.
-
-| Command | What it does |
-|---|---|
-| `helpbuoy-server techie add alice 'ssh-ed25519 ...' [--customer 'Acme BV' ...]` | add a techie, limited when customers are given |
-| `helpbuoy-server techie limit alice 'Acme BV' ...` | limit a techie to these customers, replacing the old limit |
-| `helpbuoy-server techie limit alice --all` | lift the limit |
-| `helpbuoy-server techie list` | also shows the customers of limited techies |
+Techies could be limited to some customers for a while, stored in a `limited_techies` list
+in `state.json`. That was dropped: every techie sees every customer again. A state that
+still has the list keeps it (3.2), but its techies are unknown keys to the server and are
+refused, as an older server already did; the admin adds them again with `techie add` if
+they should get in. The desk app and the CLI no longer offer a limit, and message type 28
+(`LimitTechie`) is not reused.
 
 ### 13.4 The desk app
 
@@ -1295,29 +1290,18 @@ keys as unknown and refuses them, instead of letting them see every computer.
   from open below the row as buttons, with Cancel. Dragging rows between sections is not
   planned.
 - **Register computer** gets a customer choice, prefilled with the customer last used in
-  this app, and "No customer" for a techie who isn't limited. A limited techie only gets its
-  own customers and always has one chosen.
-- **Register techie** gets "All customers, and computers without customer", checked by
-  default; unchecked, at least one customer must be chosen. The **Techies** tab shows "Only
-  for" the customers of a limited techie in place of its fingerprint, and a hover action
-  **Customers** changes the limit with the same choice, Save and Cancel.
-- A limited techie doesn't see Add customer, Add techie, the section actions, Remove and
-  Customers on the Techies tab, or the edit fields on the Server tab, which shows who runs
-  the server read-only.
+  this app, and "No customer".
 - A session tab shows the customer name before the computer name, so a techie with several
   sessions open sees which customer each belongs to.
 
 ### 13.5 Protocol
 
-- `Presence` (3.3) gets the list of customers (id and name) and a customer id per computer,
-  and for every techie whether it is limited and to which customers, all filtered per
-  techie as in 13.3. Older desk apps ignore the new fields (3.3) and show the flat list.
+- `Presence` (3.3) gets the list of customers (id and name) and a customer id per computer.
+  Older desk apps ignore the new fields (3.3) and show the flat list.
 - New techie commands, answered with `Reply`: `AddCustomer` (name), `RenameCustomer` (id and
-  name), `RemoveCustomer` (id), `MoveComputer` (computer fingerprint and customer id, empty
-  for "No customer") and `LimitTechie` (name, a `Limited` flag and customer ids; a techie
-  can't change its own limit). The protocol names customers by id only.
-- `RegisterComputer` gets an optional customer id, and `RegisterTechie` the same `Limited`
-  flag and customer ids as `LimitTechie`.
+  name), `RemoveCustomer` (id) and `MoveComputer` (computer fingerprint and customer id, empty
+  for "No customer"). The protocol names customers by id only.
+- `RegisterComputer` gets an optional customer id.
 - Nothing is sent to computers.
 
 ### 13.6 Open points
@@ -1327,5 +1311,3 @@ keys as unknown and refuses them, instead of letting them see every computer.
   learn something from their customer, through a `ServerInfo` per computer.
 - Whether a server can be approved (12.3) for a whole customer at once, for example a
   software vendor that every PC of one customer may use, next to the approval per computer.
-- Whether a limited techie may add other techies limited to their own customers, so a
-  customer's IT department can manage its own people.

@@ -13,8 +13,8 @@ import (
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
 )
 
-// Customers (PLAN.md 13): the computers of a server are grouped per customer,
-// and a techie can be limited to some customers. The Computers tab shows a
+// Customers (PLAN.md 13): the computers of a server are grouped per customer.
+// The Computers tab shows a
 // section per customer once the server has any; without customers it looks
 // as it always did.
 
@@ -64,28 +64,7 @@ const (
 	filterID         = "computers/filter"
 )
 
-// myLimit returns whether this techie is limited to some customers, and to
-// which, from its own entry in Presence.
-func (a *App) myLimit() (limited bool, customers []string) {
-	if a.presence == nil {
-		return false, nil
-	}
-	for _, h := range a.presence.Techies {
-		if h.Name == a.me {
-			return h.Limited, h.Customers
-		}
-	}
-	return false, nil
-}
-
-// limited reports whether this techie is limited to some customers. It may
-// then not manage techies, customers or the server info.
-func (a *App) limited() bool {
-	l, _ := a.myLimit()
-	return l
-}
-
-// hasCustomers reports whether the server has customers this techie sees.
+// hasCustomers reports whether the server has customers.
 func (a *App) hasCustomers() bool { return a.presence != nil && len(a.presence.Customers) > 0 }
 
 // customerList returns the customers sorted by name.
@@ -175,14 +154,10 @@ func (a *App) drawChips(id string, chips []chip, x, y, w float32, disabled bool)
 // noCustomerKey is the chip key for "No customer"; real customer ids are never empty.
 const noCustomerKey = "-"
 
-// customerChips returns a chip per customer this techie may use, after "No
-// customer" for a techie that isn't limited. on reports whether a customer
-// id ("" for no customer) is chosen.
-func (a *App) customerChips(on func(id string) bool, withNone bool) []chip {
-	var chips []chip
-	if withNone {
-		chips = append(chips, chip{key: noCustomerKey, label: i18n.Trans("No customer"), on: on("")})
-	}
+// customerChips returns a chip per customer, after "No customer". on
+// reports whether a customer id ("" for no customer) is chosen.
+func (a *App) customerChips(on func(id string) bool) []chip {
+	chips := []chip{{key: noCustomerKey, label: i18n.Trans("No customer"), on: on("")}}
 	for _, cu := range a.customerList() {
 		chips = append(chips, chip{key: cu.ID, label: cu.Name, on: on(cu.ID)})
 	}
@@ -378,7 +353,7 @@ func (a *App) drawListItem(it listItem, r rl.Rectangle) {
 
 // drawSection draws a customer's header: an arrow, the name and how many of
 // its computers are online. Clicking it opens or closes the section; Rename
-// and Remove show on hover for techies that aren't limited.
+// and Remove show on hover.
 func (a *App) drawSection(it listItem, r rl.Rectangle) {
 	c := a.ui
 	s := &a.cust
@@ -402,7 +377,7 @@ func (a *App) drawSection(it listItem, r rl.Rectangle) {
 	renameL, removeL, cancelL := i18n.Trans("Rename"), i18n.Trans("Remove"), i18n.Trans("Cancel")
 	wRename, wRemove := a.btnW(renameL, 66), a.btnW(removeL, 66)
 	wConfirm, wCancel := a.btnW(removeL, 74), a.btnW(cancelL, 68)
-	manage := it.cu != "" && !a.limited() && !s.busy[it.cu]
+	manage := it.cu != "" && !s.busy[it.cu]
 	actionW := float32(0)
 	switch {
 	case confirming:
@@ -608,13 +583,9 @@ func (a *App) removeCustomer(id string) {
 }
 
 // moveChips are the customers a computer can move to: all of them and No
-// customer, or for a limited techie only its own customers.
+// customer.
 func (a *App) moveChips(ci control.ComputerInfo) []chip {
-	limited, mine := a.myLimit()
-	chips := a.customerChips(func(id string) bool { return id == ci.Customer }, !limited)
-	if limited {
-		chips = slices.DeleteFunc(chips, func(ch chip) bool { return !slices.Contains(mine, ch.key) })
-	}
+	chips := a.customerChips(func(id string) bool { return id == ci.Customer })
 	return append(chips, chip{key: "cancel", label: i18n.Trans("Cancel")})
 }
 
