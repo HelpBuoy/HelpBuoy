@@ -15,6 +15,7 @@ import (
 
 	"github.com/helpbuoy/helpbuoy/desk/config"
 	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/transport"
 )
 
 func newSigner(t *testing.T) ssh.Signer {
@@ -48,7 +49,7 @@ type fakeServer struct {
 }
 
 func newFakeServer(t *testing.T, techie ssh.PublicKey) *fakeServer {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := transport.Listen("127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}

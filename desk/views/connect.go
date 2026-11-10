@@ -47,7 +47,7 @@ func (a *App) startConnect() {
 	if text == "" {
 		text = "localhost"
 	}
-	ad, err := serveraddr.Parse(text)
+	ad, err := config.ParseAddr(text)
 	if err != nil {
 		s.err = capitalize(err.Error()) + "."
 		return
@@ -255,7 +255,7 @@ func (a *App) drawNotTechie(x, y, w float32) float32 {
 // fieldText is how an address shows in the field: empty for the local
 // server on the default port.
 func fieldText(ad serveraddr.Addr) string {
-	if config.IsLocal(ad) && ad.Port == serveraddr.DefaultPort {
+	if config.IsLocal(ad) && ad.Port == config.LocalPort {
 		return ""
 	}
 	return ad.String()

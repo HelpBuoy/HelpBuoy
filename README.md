@@ -2,7 +2,7 @@
 
 Self-hosted remote support for Windows, Linux and macOS, a small alternative to TeamViewer QuickSupport.
 
-- `server/`: `helpbuoy-server`, a single Go binary that speaks SSH on one port (default 5959). It authenticates keys and connects techies to computers. No shell, no file transfer, no forwarding.
+- `server/`: `helpbuoy-server`, a single Go binary that speaks SSH over a WebSocket over HTTPS, so it gets through networks that only allow web traffic. It authenticates keys and connects techies to computers. No shell, no file transfer, no forwarding. One server can host many helpdesks, each on its own host name.
 - `desk/`: the cross-platform app the support techie uses. On Macs without Metal, such as virtual machines, it draws with Apple's software OpenGL renderer.
 - `client-windows/`: the Windows app the person receiving help runs. It shows its public key to send to the techie, and asks for approval before anyone takes control.
 - `client-linux/`: the same app for Linux. It is a single static binary for amd64 and arm64 that speaks the X11 protocol itself (with jezek/xgb), so it needs no libraries and runs on any X11 desktop. On a Wayland desktop (GNOME, KDE Plasma) it shares through the remote desktop portal, which asks the user which monitor to share, and reads the screen with GStreamer's `pipewiresrc` (packages `gstreamer1.0-pipewire` and `gstreamer1.0-tools`); without those it explains what to install. A local Esc ends the session but still reaches the focused application.
@@ -13,6 +13,34 @@ A session only carries the screen (computer to techie) and mouse and keyboard in
 ![The desk app listing computers](screenshot.png)
 
 ![How HelpBuoy connects: register the computer, ask for help, get help](docs/helpbuoy.connection.diagram.svg)
+
+## Running the server
+
+The apps connect to `wss://host/helpbuoy` and run SSH inside the WebSocket. An address typed without a port means 443. The pinned SSH host key identifies the server, not the TLS certificate, so the apps accept any certificate, including a self-signed one or that of a proxy that inspects TLS.
+
+The server runs in one of three modes, chosen with `--mode`:
+
+- `http` (the default): plain HTTP on `127.0.0.1:5959`, behind a reverse proxy that serves HTTPS.
+- `https`: the built-in HTTPS server, on `:443`.
+- `ssh`: plain SSH without the WebSocket and TLS (direct connect), on `:5959`.
+
+`--listen` picks another address. The apps always try HTTPS first and fall back to plain SSH when that fails and the port answers with an SSH banner, so users type the same kind of address for every mode: `help.example.com`, or `help.example.com:5959` for a server in ssh mode.
+
+In http mode the server runs behind a reverse proxy (nginx, Apache or HAProxy) that serves HTTPS and passes the path `/helpbuoy` on as a WebSocket, keeping the `Host` header and adding `X-Forwarded-For`. [docs/proxy.md](docs/proxy.md) has tested configurations for all three, for several servers behind one proxy and one certificate, either as one process with virtual hosts or as separate processes.
+
+Without a reverse proxy, `helpbuoy-server serve --mode https` serves HTTPS itself on `:443`, or on the port given with `--listen`. It takes a certificate with `--cert` and `--key` (loaded again when the files change), gets one from Let's Encrypt with `--acme --acme-host help.example.com` (port 443 must be reachable from the internet), or makes a self-signed one. A server on another port is given out as `host:port`. The desk app's own server always works this way, on port 5959.
+
+`helpbuoy-server serve --mode ssh` skips HTTP and TLS altogether: the apps speak SSH straight to the port. That is a little lighter and just as safe, since the pinned host key protects the connection in every mode, but it needs the port open in firewalls and doesn't pass HTTP proxies. Virtual hosts need http or https mode, since plain SSH can't name the host.
+
+### Virtual hosts
+
+`helpbuoy-server serve --vhosts DIR` serves one helpdesk per host name, for example `acme.relay.example.com` and `beta.relay.example.com`, all on the same address and port. Every subdirectory of `DIR` named after a host name is a normal state directory, with its own host key, techies, computers, company details and log. Techies of one virtual host never see the computers of another, and a request for an unknown host name is refused. With a wildcard DNS record and a wildcard certificate on the proxy (see [docs/proxy.md](docs/proxy.md)), adding a helpdesk needs no DNS, certificate or proxy change:
+
+    helpbuoy-server vhost add acme.relay.example.com --vhosts DIR
+    helpbuoy-server info --vhost acme.relay.example.com --vhosts DIR --company "Acme" --phone "+1 234 567 890"
+    helpbuoy-server techie add --vhost acme.relay.example.com --vhosts DIR alice 'ssh-ed25519 AAAA...'
+
+`HELPBUOY_SERVER_VHOSTS=DIR` saves typing `--vhosts`. A running server starts a new virtual host within a second, and drops one within a second after its directory is deleted. With `--mode https --acme` it gets a certificate for each virtual host.
 
 ## Scripts
 

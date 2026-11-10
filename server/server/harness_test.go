@@ -15,6 +15,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/transport"
 	"github.com/helpbuoy/helpbuoy/server/auth"
 	"github.com/helpbuoy/helpbuoy/server/fake"
 	"github.com/helpbuoy/helpbuoy/server/limits"
@@ -110,7 +111,7 @@ func (e *env) start() {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := transport.Listen("127.0.0.1:0")
 	if err != nil {
 		e.t.Fatal(err)
 	}

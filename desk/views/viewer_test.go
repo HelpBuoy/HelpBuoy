@@ -5,11 +5,11 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
+	"github.com/helpbuoy/helpbuoy/desk/config"
 	"github.com/helpbuoy/helpbuoy/proto/control"
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
 	"github.com/helpbuoy/helpbuoy/proto/input"
 	"github.com/helpbuoy/helpbuoy/proto/screen"
-	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 )
 
 func TestWheel(t *testing.T) {
@@ -88,8 +88,8 @@ func TestTechieNames(t *testing.T) {
 }
 
 func TestFieldText(t *testing.T) {
-	for in, want := range map[string]string{"localhost": "", "localhost:2300": "localhost:2300", "helpme.example.com": "helpme.example.com:5959"} {
-		ad, err := serveraddr.Parse(in)
+	for in, want := range map[string]string{"localhost": "", "localhost:2300": "localhost:2300", "helpme.example.com": "helpme.example.com:443"} {
+		ad, err := config.ParseAddr(in)
 		if err != nil {
 			t.Fatal(err)
 		}

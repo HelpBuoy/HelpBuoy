@@ -1,6 +1,7 @@
 package localserver
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"net"
@@ -10,6 +11,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
+	"github.com/helpbuoy/helpbuoy/proto/transport"
 	"github.com/helpbuoy/helpbuoy/server/store"
 )
 
@@ -64,8 +66,10 @@ func TestRunsInProcess(t *testing.T) {
 		t.Fatalf("status %+v", st)
 	}
 
-	// A real SSH handshake with the server's host key.
-	nc, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", itoa(port)), 2*time.Second)
+	// A real SSH handshake with the server's host key, over HTTPS.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	nc, err := transport.Dial(ctx, net.JoinHostPort("127.0.0.1", itoa(port)), transport.DialOptions{})
+	cancel()
 	if err != nil {
 		t.Fatal(err)
 	}

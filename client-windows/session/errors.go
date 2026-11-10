@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/proto/transport"
 )
 
 // ErrHostKeyChanged is returned when the server presents a host key other than
@@ -30,7 +31,7 @@ func (e *HostKeyChangedError) Error() string {
 func (e *HostKeyChangedError) Unwrap() error { return ErrHostKeyChanged }
 
 // ErrNotServer is returned when the other end is not a helpbuoy server.
-var ErrNotServer = errors.New("not a HelpBuoy server")
+var ErrNotServer = transport.ErrNotServer
 
 // ErrRefusedKey is returned when the server refuses the app key.
 var ErrRefusedKey = errors.New("the server refused this key")

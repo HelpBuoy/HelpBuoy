@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/helpbuoy/helpbuoy/proto/datadir"
+	"github.com/helpbuoy/helpbuoy/proto/transport"
 	"github.com/helpbuoy/helpbuoy/server/auth"
 	"github.com/helpbuoy/helpbuoy/server/logfile"
 	"github.com/helpbuoy/helpbuoy/server/server"
@@ -177,7 +178,10 @@ func (r *Server) run() {
 		r.fail(err)
 		return
 	}
-	ln, err := net.Listen("tcp", ":"+strconv.Itoa(r.opts.Port))
+	// The built-in HTTPS server with a self-signed certificate: a techie's
+	// own PC has no reverse proxy, and computers don't check the certificate
+	// (they pin the SSH host key).
+	ln, err := transport.Listen(":" + strconv.Itoa(r.opts.Port))
 	if err != nil {
 		r.fail(err)
 		return
@@ -203,7 +207,7 @@ func (r *Server) run() {
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ln) }()
 	r.set(StateRunning, nil)
-	r.logLine(fmt.Sprintf("server listening on :%d, state in %s", r.opts.Port, dir))
+	r.logLine(fmt.Sprintf("server listening on :%d (HTTPS), state in %s", r.opts.Port, dir))
 
 	select {
 	case err := <-served:

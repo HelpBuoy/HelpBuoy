@@ -53,7 +53,7 @@ func newDemo(a *App) *demo {
 	a.key = &appkey.Key{Signer: s, Public: s.PublicKey(), Comment: "techie@demo", Line: line, Fingerprint: ssh.FingerprintSHA256(s.PublicKey())}
 	hk, _, _ := newKey("")
 	a.hostKey = hk.PublicKey()
-	a.cfg.ServerAddr = "helpme.example.com:5959"
+	a.cfg.ServerAddr = "helpme.example.com:443"
 	a.status = serverconn.StatusEvent{Status: serverconn.StatusOnline, HostKey: a.hostKey}
 	a.me = "techie"
 	a.backend = d
@@ -70,7 +70,7 @@ func newDemo(a *App) *demo {
 	anna := computer("anna@ANNA-LAPTOP", true)
 	jan := computer("jan@KANTOOR-PC", true)
 	other, _, _ := newKey("")
-	jan.Listings = []control.ListingRequest{{Address: "help.other-example.com:5959", Fingerprint: ssh.FingerprintSHA256(other.PublicKey()), RequestedAt: now.Add(-5 * time.Minute)}}
+	jan.Listings = []control.ListingRequest{{Address: "help.other-example.com:443", Fingerprint: ssh.FingerprintSHA256(other.PublicKey()), RequestedAt: now.Add(-5 * time.Minute)}}
 	oma := computer("oma@WOONKAMER", true)
 	oma.Request = &control.RequestInfo{ID: "demo-3", Created: now.Add(-10 * time.Minute), State: control.RequestTaken, TakenBy: "bob"}
 	oma.InSessionWith = "bob"
@@ -80,7 +80,7 @@ func newDemo(a *App) *demo {
 	kees.LastSeen = now.Add(-2 * time.Hour)
 	p.Computers = []control.ComputerInfo{piet, oma, anna, lisa, jan, kees}
 	a.setPresence(p)
-	a.setServerInfo(&control.ServerInfo{Address: "helpme.example.com:5959", Company: "Example Inc", Phone: "+1 234 567 890", Description: "Monday to Friday 9:00 to 17:00"})
+	a.setServerInfo(&control.ServerInfo{Address: "helpme.example.com:443", Company: "Example Inc", Phone: "+1 234 567 890", Description: "Monday to Friday 9:00 to 17:00"})
 	return d
 }
 

@@ -15,6 +15,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/transport"
 )
 
 // Received is a control message from a computer.
@@ -82,7 +83,7 @@ func Start(addr string, opts Options) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	ln, err := net.Listen("tcp", addr)
+	ln, err := transport.Listen(addr)
 	if err != nil {
 		return nil, err
 	}

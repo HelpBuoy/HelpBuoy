@@ -3,10 +3,28 @@
 helpbuoy-server \- server for helpbuoy self-hosted remote support
 .SH SYNOPSIS
 .B helpbuoy-server serve
+.RB [ \-\-mode
+.BR http | https | ssh ]
 .RB [ \-\-listen
 .IR addr ]
 .RB [ \-\-state
+.IR dir " | " \-\-vhosts
 .IR dir ]
+.RB [ \-\-trusted\-proxy
+.IR list ]
+.RB [ \-\-cert
+.I file
+.B \-\-key
+.IR file " | " \-\-acme
+.RB [ \-\-acme\-host
+.IR names ]
+.RB [ \-\-acme\-email
+.IR addr ]]
+.br
+.B helpbuoy-server vhost list
+.br
+.B helpbuoy-server vhost add
+.I name
 .br
 .B helpbuoy-server techie add
 .I name
@@ -39,13 +57,25 @@ helpbuoy-server \- server for helpbuoy self-hosted remote support
 .SH DESCRIPTION
 .B helpbuoy-server
 is the SSH server of helpbuoy. Techies and the people they help connect to
-it on one port; it authenticates their Ed25519 keys and splices their
-sessions. The screen and input run end to end over an inner SSH connection
+it over a WebSocket over HTTPS and run SSH inside it; it authenticates their
+Ed25519 keys and splices their sessions. The screen and input run end to end over an inner SSH connection
 that the server cannot read.
 .PP
 .B serve
-runs the server, by default on
-.BR :5959 .
+runs the server. By default it listens on plain HTTP on
+.BR 127.0.0.1:5959 ,
+behind a reverse proxy (Apache, nginx, HAProxy) that serves HTTPS on port 443
+and passes the path
+.B /helpbuoy
+on as a WebSocket, keeping the Host header (mode http). With
+.B \-\-mode https
+it serves HTTPS itself, by default on
+.BR :443 .
+With
+.B \-\-mode ssh
+it serves plain SSH without WebSocket and TLS, by default on
+.BR :5959 ;
+the apps try HTTPS first and fall back to plain SSH. Exactly one mode is on.
 The other commands change or show the state directory; a running server picks
 up changes within a second.
 .PP
@@ -59,10 +89,53 @@ runs in a terminal, it asks for them first.
 .B hostkey \-\-new
 makes a new host key, used from the next server start on; every registered
 computer then warns that the server identity changed.
+.PP
+.B vhost add
+adds a virtual host to the
+.B \-\-vhosts
+directory;
+.B vhost list
+lists them. To remove one, delete its directory. A running server picks up
+both within a second.
 .SH OPTIONS
 .TP
 .BI \-\-listen " addr"
 Address to listen on, as host:port or :port.
+.TP
+.BI \-\-trusted\-proxy " list"
+Comma-separated proxy addresses or CIDR prefixes whose X-Forwarded-For header
+gives the client address. Default: 127.0.0.1,::1.
+.TP
+.BI \-\-mode " mode"
+.B http
+(default): plain HTTP behind a reverse proxy.
+.BR https :
+the built-in HTTPS server. Without
+.B \-\-cert
+or
+.B \-\-acme
+it uses a self-signed certificate; the apps identify the server by its SSH
+host key, not by the certificate.
+.BR ssh :
+plain SSH (direct connect). Default: $HELPBUOY_SERVER_MODE, else http.
+.TP
+.BI \-\-cert " file" " \-\-key" " file"
+Certificate chain and private key in PEM format, loaded again when they change.
+.TP
+.B \-\-acme
+Get certificates from Let's Encrypt with the TLS-ALPN challenge, which needs
+port 443 reachable from the internet. Without
+.BR \-\-vhosts ,
+.BI \-\-acme\-host " names"
+lists the host names.
+.TP
+.BI \-\-vhosts " dir"
+Serve one virtual host per subdirectory of
+.IR dir ,
+named after its host name. Each is a state directory of its own. The admin
+commands take
+.BI \-\-vhost " name"
+to work on one of them.
 .TP
 .BI \-\-state " dir"
 State directory with the host key, techies and registered computers. Default:
@@ -73,5 +146,8 @@ if set, else the per-user data directory.
 .B HELPBUOY_SERVER_STATE
 Default state directory. The Debian service sets it to
 .IR /var/lib/helpbuoy-server .
+.TP
+.B HELPBUOY_SERVER_VHOSTS
+Default virtual hosts directory.
 .SH SEE ALSO
 .BR helpbuoy-serverctl (8)

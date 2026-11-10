@@ -62,9 +62,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-$server serve --listen "127.0.0.1:$port" --state "$run/server" >"$run/server.log" 2>&1 &
+$server serve --mode https --listen "127.0.0.1:$port" --state "$run/server" >"$run/server.log" 2>&1 &
 server_pid=$!
-echo "server on 127.0.0.1:$port, log in $run/server.log"
+echo "server on https://127.0.0.1:$port (self-signed), log in $run/server.log"
 
 wine bin/windows-amd64/helpbuoy.exe >"$run/client.log" 2>&1 &
 echo "client starting in wine (the first start creates the wine prefix and takes a while)"

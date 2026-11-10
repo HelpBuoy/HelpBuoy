@@ -54,8 +54,8 @@ func TestParseServeDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.listen != ":5959" {
-		t.Errorf("listen = %q, want :5959", cfg.listen)
+	if cfg.listen != "127.0.0.1:5959" || cfg.mode != modeHTTP {
+		t.Errorf("listen = %q, mode %q; want http on 127.0.0.1:5959", cfg.listen, cfg.mode)
 	}
 	if !strings.HasSuffix(cfg.state, "helpbuoy-server") {
 		t.Errorf("state = %q, want a path ending in helpbuoy-server", cfg.state)
@@ -169,7 +169,7 @@ func TestInfo(t *testing.T) {
 	runFail(t, "info", "--company", "Example Inc", "--state", dir) // no phone yet
 	runOK(t, "info", "--company", "  Example Inc ", "--phone", "+1 234 567 890", "--state", dir)
 	runOK(t, "info", "--address", "Help.Example.com", "--description", "Mon-Fri 9-17", "--state", dir)
-	want := "company:     Example Inc\nphone:       +1 234 567 890\naddress:     help.example.com:5959\ndescription: Mon-Fri 9-17\n"
+	want := "company:     Example Inc\nphone:       +1 234 567 890\naddress:     help.example.com:443\ndescription: Mon-Fri 9-17\n"
 	if out := runOK(t, "info", "--state", dir); out != want {
 		t.Fatalf("info: %q", out)
 	}

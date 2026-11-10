@@ -4,12 +4,15 @@
 package fake
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,6 +22,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/transport"
 )
 
 // KeyFile is the private key file name inside a key directory.
@@ -92,10 +96,16 @@ type Options struct {
 	// LocalAddr is the local address to dial from (tests use it to simulate
 	// several source IPs on loopback).
 	LocalAddr net.Addr
+	// Via is the "host:port" to connect to instead of addr, which then only
+	// names the host (as SNI and Host header), like a DNS name pointing at
+	// a shared relay.
+	Via string
 	// NoControl skips opening the control channel.
 	NoControl bool
 	Timeout   time.Duration
 }
+
+func noProxy(*http.Request) (*url.URL, error) { return nil, nil }
 
 // Conn is an app connection to the server.
 type Conn struct {
@@ -130,7 +140,15 @@ func Dial(addr string, signer ssh.Signer, o Options) (*Conn, error) {
 		Timeout:           o.Timeout,
 	}
 	d := net.Dialer{Timeout: o.Timeout, LocalAddr: o.LocalAddr}
-	nc, err := d.Dial("tcp", addr)
+	ctx, cancel := context.WithTimeout(context.Background(), o.Timeout)
+	dial := d.DialContext
+	if o.Via != "" {
+		dial = func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return d.DialContext(ctx, network, o.Via)
+		}
+	}
+	nc, err := transport.Dial(ctx, addr, transport.DialOptions{Dial: dial, Proxy: noProxy})
+	cancel()
 	if err != nil {
 		return nil, err
 	}

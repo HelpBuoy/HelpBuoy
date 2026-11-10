@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"io"
-	"net"
 	"strings"
 	"sync"
 	"testing"
@@ -12,6 +11,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/transport"
 	"github.com/helpbuoy/helpbuoy/server/fake"
 	"github.com/helpbuoy/helpbuoy/server/server"
 	"github.com/helpbuoy/helpbuoy/server/store"
@@ -44,7 +44,7 @@ func TestFakeTechieEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer srv.Close()
-	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	ln, _ := transport.Listen("127.0.0.1:0")
 	go srv.Serve(ln)
 
 	ck := fake.NewKey()

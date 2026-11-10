@@ -3,13 +3,50 @@ helpbuoy-server for Debian
 
 The server runs as the systemd service helpbuoy-server, as the system user
 helpbuoy-server, with its host key, techies and registered computers in
-/var/lib/helpbuoy-server. It listens on :5959 by default; change that in
-/etc/default/helpbuoy-server and run "systemctl restart helpbuoy-server".
+/var/lib/helpbuoy-server.
 
-Every techie and computer connects to that one port, so open it in the
-firewall (and forward it on the router if the server is behind NAT). The
-apps use port 5959 when no port is given, so with the default users only
-type the host name, e.g. server.example.com.
+The server runs in one of three modes, set with HELPBUOY_SERVER_MODE in
+/etc/default/helpbuoy-server: http (the default), https or ssh.
+
+The apps reach the server over HTTPS on port 443. In http mode the server
+listens on plain HTTP on 127.0.0.1:5959, behind a reverse proxy (Apache,
+nginx or HAProxy) that serves HTTPS and passes the path /helpbuoy on as a
+WebSocket. The proxy must keep the Host header, add X-Forwarded-For and allow
+long idle connections. With Apache 2.4.47 or later:
+
+  ProxyPreserveHost On
+  ProxyPass /helpbuoy http://127.0.0.1:5959/helpbuoy upgrade=websocket timeout=3600
+
+and with nginx:
+
+  location /helpbuoy {
+      proxy_pass http://127.0.0.1:5959;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_read_timeout 1h;
+      proxy_send_timeout 1h;
+  }
+
+HAProxy works in HTTP mode with "option forwardfor" and "timeout tunnel 1h".
+Users then only type the host name, e.g. help.example.com.
+
+Without a reverse proxy, the server can serve HTTPS itself: set
+HELPBUOY_SERVER_MODE=https and HELPBUOY_SERVER_OPTS="--acme --acme-host
+help.example.com" in /etc/default/helpbuoy-server (see the comments there),
+give the service the capability to bind port 443 as described in the unit
+file, and run "systemctl restart helpbuoy-server".
+
+HELPBUOY_SERVER_MODE=ssh serves plain SSH without WebSocket and TLS (direct
+connect) on :5959; open that port in the firewall. Users then type
+help.example.com:5959; the apps try HTTPS first and then plain SSH.
+
+To host many helpdesks, one per host name, set HELPBUOY_SERVER_VHOSTS in
+/etc/default/helpbuoy-server and add them with
+"sudo helpbuoy-serverctl vhost add acme.relay.example.com". The admin
+commands below then take --vhost acme.relay.example.com.
 
 The server refuses computers until it knows who runs it: set the company
 name and phone number, which users waiting for a techie see, with the info

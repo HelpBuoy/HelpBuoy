@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/transport"
 	"github.com/helpbuoy/helpbuoy/server/fake"
 	"github.com/helpbuoy/helpbuoy/server/hostkey"
 	"github.com/helpbuoy/helpbuoy/server/registry"
@@ -504,7 +506,12 @@ func TestPasswordAuthRefused(t *testing.T) {
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         wait,
 	}
-	if c, err := ssh.Dial("tcp", e.addr, cfg); err == nil {
+	nc, err := transport.Dial(context.Background(), e.addr, transport.DialOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nc.Close()
+	if c, _, _, err := ssh.NewClientConn(nc, e.addr, cfg); err == nil {
 		c.Close()
 		t.Fatal("password login accepted")
 	}
@@ -559,7 +566,7 @@ func TestSetServerInfo(t *testing.T) {
 	if rep := mustWait[control.Reply](t, h, func(r *control.Reply) bool { return r.Seq == 2 }); rep.Error != "" {
 		t.Fatalf("set: %s", rep.Error)
 	}
-	wantInfo := control.ServerInfo{Address: "help.example.com:5959", Company: "Other Inc", Phone: "+31 20 123 4567", Description: "Mon-Fri 9-17"}
+	wantInfo := control.ServerInfo{Address: "help.example.com:443", Company: "Other Inc", Phone: "+31 20 123 4567", Description: "Mon-Fri 9-17"}
 	want := func(m *control.ServerInfo) bool { return *m == wantInfo }
 	mustWait[control.ServerInfo](t, cl, want)
 	idx, _, err := e.st.Load()
@@ -616,7 +623,7 @@ func TestListing(t *testing.T) {
 	cl.Send(&control.RequestListing{Address: "Vendor.example.com", Fingerprint: other})
 	p := presenceWhere(t, h, func(p *control.Presence) bool { return len(p.Computers) == 1 && len(p.Computers[0].Listings) == 1 })
 	l := p.Computers[0].Listings[0]
-	if l.Address != "vendor.example.com:5959" || l.Fingerprint != other || l.RequestedAt.IsZero() {
+	if l.Address != "vendor.example.com:443" || l.Fingerprint != other || l.RequestedAt.IsZero() {
 		t.Fatalf("listing %+v", l)
 	}
 	// Asking again changes nothing.
@@ -626,7 +633,7 @@ func TestListing(t *testing.T) {
 	if rep := mustWait[control.Reply](t, h, func(r *control.Reply) bool { return r.Seq == 1 }); rep.Error != "" {
 		t.Fatalf("allow: %s", rep.Error)
 	}
-	approved := control.ApprovedServer{Address: "vendor.example.com:5959", Fingerprint: other}
+	approved := control.ApprovedServer{Address: "vendor.example.com:443", Fingerprint: other}
 	mustWait[control.ApprovedServers](t, cl, func(m *control.ApprovedServers) bool {
 		return len(m.Servers) == 1 && m.Servers[0] == approved
 	})
@@ -649,7 +656,7 @@ func TestListing(t *testing.T) {
 	third := fp(fake.NewKey())
 	cl2.Send(&control.RequestListing{Address: "scam.example.com", Fingerprint: third})
 	presenceWhere(t, h, func(p *control.Presence) bool { return len(p.Computers[0].Listings) == 1 })
-	h.Send(&control.DecideListing{Seq: 3, Computer: fp(ck), Address: "scam.example.com:5959", Fingerprint: third})
+	h.Send(&control.DecideListing{Seq: 3, Computer: fp(ck), Address: "scam.example.com:443", Fingerprint: third})
 	if rep := mustWait[control.Reply](t, h, func(r *control.Reply) bool { return r.Seq == 3 }); rep.Error != "" {
 		t.Fatalf("refuse: %s", rep.Error)
 	}

@@ -1,8 +1,8 @@
 # HelpBuoy: self-hosted remote support over a custom Go SSH server
 
 A self-hosted alternative to TeamViewer QuickSupport. The server is **a single Go binary
-(`helpbuoy-server`) that speaks SSH on a single port** (default 5959). Everybody, techies and computers,
-connects to that same `hostname:port`. **The public key a connection authenticates with is its identity**; the SSH
+(`helpbuoy-server`) that speaks SSH over a WebSocket over HTTPS** (section 0). Everybody, techies and computers,
+connects to that same `hostname` (port 443 unless given). **The public key a connection authenticates with is its identity**; the SSH
 user name is ignored. Keys are long-lived: they are generated once on first start and reused
 for every session.
 
@@ -11,8 +11,9 @@ forwarding to real hosts. It only authenticates keys, tells techies and computer
 other, and splices their channels together.
 
 - **server/**: `helpbuoy-server`, a plain executable (also built into the desk app) that runs
-  locally on the techie's machine as a normal user process, on one port (default `:5959`). It
-  keeps techies and registered computers in a small state directory. No service, no container.
+  locally on the techie's machine as a normal user process, or on a server behind a reverse
+  proxy. It keeps techies and registered computers in a small state directory, one per virtual
+  host. No container.
 - **desk/**: the cross-platform raylib app the *support techie* runs (`raylib-go`, no cgo). Many techies can be online at
   once, and each techie can run sessions with many computers at once.
 - **client-windows/** and **client-linux/**: the app the person *receiving* help runs,
@@ -56,17 +57,37 @@ Performance target: **as fast as RDP** for normal desktop work (section 5).
 
 ## 0. Deployment model and constraints
 
-- **Server**: the `helpbuoy-server` executable (`helpbuoy-server.exe` on Windows) in the same folder as the
-  desk app, on the techie's own Linux, macOS or Windows machine. It is started from a
-  terminal, or runs inside the desk app (7.1), as the logged-in user. Computers reach it on that
-  machine's address, which usually means one port forward on the router (TCP 5959) and
-  allowing the OS firewall prompt on first start. An existing OpenSSH on port 22 is unrelated
-  and untouched.
-- **One port for everyone**: the operator picks it once (`helpbuoy-server serve --listen :5959`, the
-  default). Techies and computers all use the same `hostname:port`, and an address typed
-  without a port means 5959, so with the default users only type the host name. There are
-  no per-techie or per-session ports. The default is above 1024, so the server needs no root
-  and no capabilities.
+- **Transport**: the apps open `wss://host:port/helpbuoy` (`proto/transport`) and run SSH
+  inside the WebSocket, one binary message per write, with the subprotocol `helpbuoy-ssh`.
+  This gets through office, hotel and school networks that only let web traffic out, and
+  through HTTP proxies (`HTTPS_PROXY`). The TLS certificate is not checked: the pinned SSH
+  host key identifies the server (3.5), so self-signed certificates and TLS-inspecting
+  proxies work and can't pose as the server.
+- **Server**: the `helpbuoy-server` executable (`helpbuoy-server.exe` on Windows). By default
+  it listens on plain HTTP on `127.0.0.1:5959` behind a reverse proxy (Apache, nginx, HAProxy)
+  that serves HTTPS on 443 and passes `/helpbuoy` on, keeping the `Host` header and adding
+  `X-Forwarded-For` (read only from `--trusted-proxy`, default `127.0.0.1,::1`). The README has
+  a working example for each proxy. This is `--mode http`, one of three modes; exactly one is
+  on per server. With `--mode https` it serves HTTPS itself on `:443` (or the `--listen`
+  port), with certificate files, Let's Encrypt (`--acme`, TLS-ALPN) or a self-signed
+  certificate. It also runs inside the desk app (7.1), on the techie's own
+  Linux, macOS or Windows machine, with the built-in HTTPS server on port 5959, which
+  usually means one port forward on the router and allowing the OS firewall prompt on first
+  start.
+- **Direct connect**: `--mode ssh` serves plain SSH without the WebSocket and TLS, on `:5959`.
+  The apps always try HTTPS first; when that fails without an HTTP server answering, they
+  connect again with plain SSH and keep that connection only if the port sends an SSH
+  banner. Not with virtual hosts, since plain SSH can't name the host.
+- **One address for everyone**: techies and computers all use the same `hostname` or
+  `hostname:port`, and an address typed without a port means 443, so behind a proxy users only
+  type the host name. There are no per-techie or per-session ports.
+- **Virtual hosts**: `serve --vhosts DIR` serves one helpdesk per host name from one process
+  and one port, for managed hosting (relay.helpbuoy.com). Every subdirectory of `DIR` named
+  after a host name is a state directory of its own (host key, `state.json`, `server.log`); the
+  `Host` header picks it, and an unknown name is refused. `helpbuoy-server vhost add NAME`
+  makes one, deleting its directory removes it, and a running server notices both within a
+  second. The admin commands take `--vhost NAME`. Techies of one virtual host never see
+  the computers of another.
 - **Runs unprivileged**: no root, no admin, no Docker image. Started by hand or inside the
   desk app it needs no service registration; on a Debian server it can also run as a
   hardened systemd service under its own system user (6.5). The
@@ -76,6 +97,9 @@ Performance target: **as fast as RDP** for normal desktop work (section 5).
   computer, or unknown. User names in the SSH handshake are ignored (computers send `sv`).
 - **One group per server**: every techie on a server sees every registered computer and can ask
   to connect to it. Separate groups of techies use separate servers.
+  Planned (13): the computers on a server are grouped per customer, so one helpdesk can
+  serve many customers from one server, and a techie can be limited to some customers.
+  Separate helpdesks still use separate servers or virtual hosts.
 
 ### Stored computer configuration
 
@@ -87,7 +111,7 @@ connection and stored in `config.json` in the client's data directory:
 
 | Field | Example | Learned |
 |---|---|---|
-| server address | `helpme.example.com` (port 5959 unless given) | typed by the user; the server this PC got registered on |
+| server address | `helpme.example.com` (port 443 unless given) | typed by the user; the server this PC got registered on |
 | server host key | `ssh-ed25519 AAAA...` (`SHA256:3q2+7w...`) | first successful connection, pinned from then on |
 | last address | `helpme.example.com` | the last address that reached a server, to prefill the field |
 | known techies | `alice` → `ssh-ed25519 AAAA...` | each techie's key, pinned on the first session with that techie (3.5) |
@@ -128,7 +152,7 @@ unique within one server).
 
 1. The client starts for the first time and asks for the server's `hostname:port` (the techie
    tells the user what to type, e.g. `helpme.example.com`, with `:port` only when the server
-   doesn't use the default 5959). On this first start
+   doesn't use the default 443). On this first start
    it generates its own Ed25519 key pair in
    `%LOCALAPPDATA%\helpbuoy\` (section 6.1), with the comment `user@machine`, e.g.
    `anna@ANNA-LAPTOP`, so the public key line reads `ssh-ed25519 AAAAC3Nz... anna@ANNA-LAPTOP`.
@@ -201,7 +225,8 @@ helpbuoy/
 ├── PLAN.md
 ├── proto/                       # shared, pure Go, no GUI deps
 │   ├── go.mod
-│   ├── serveraddr/               # parse and normalize hostname:port (default port 5959)
+│   ├── serveraddr/               # parse and normalize hostname:port (default port 443)
+│   ├── transport/               # SSH over WebSocket over HTTPS: Dial, Upgrade, Listener
 │   ├── identity/                # Ed25519 key gen, OpenSSH format, fingerprints,
 │   │                            # parsing of pasted keys
 │   ├── appkey/                  # create-once, load-only app key in OpenSSH format
@@ -212,7 +237,8 @@ helpbuoy/
 │   └── wire/                    # length-prefixed framing
 ├── server/                       # helpbuoy-server
 │   ├── go.mod
-│   ├── cmd/helpbuoy-server/             # "serve" plus admin subcommands (3.2)
+│   ├── cmd/helpbuoy-server/             # "serve" plus admin subcommands (3.2), virtual hosts
+│   ├── front/                   # HTTP side: Host -> virtual host, X-Forwarded-For
 │   ├── hostkey/
 │   ├── store/                   # state.json: techies, computers; atomic writes
 │   ├── auth/                    # key -> role lookup
@@ -271,6 +297,9 @@ transport in `x/crypto/ssh`, the auth callback, the control parser and the splic
 
 A key can't be both techie and computer.
 
+Planned (13.3): a techie limited to some customers only sees and reaches the computers of
+those customers, and can't manage techies, customers or the server info.
+
 ### 3.2 State and admin
 
 State directory in the user's data directory, next to the desk app's own data:
@@ -284,10 +313,16 @@ only by `UnregisterComputer` or `helpbuoy-server computer remove`. They are adde
 Fields in `state.json` that a version doesn't know, at the top level or in a techie or
 computer entry, are kept and written back on every save, so a newer version can add fields
 without an older one sharing the state directory dropping them.
+Planned (13.2): a list of customers, the customer of every computer, and limited techies in
+a list of their own.
 
 | Command | What it does |
 |---|---|
-| `helpbuoy-server serve [--listen :5959]` | run the server on its single port |
+| `helpbuoy-server serve [--listen 127.0.0.1:5959]` | run the server on plain HTTP behind a reverse proxy (0) |
+| `helpbuoy-server serve --mode https [--listen :443] [--cert F --key F \| --acme --acme-host H]` | run the server with its built-in HTTPS server |
+| `helpbuoy-server serve --mode ssh [--listen :5959]` | run the server on plain SSH (direct connect) |
+| `helpbuoy-server serve --vhosts DIR` | serve every virtual host in `DIR` (0) |
+| `helpbuoy-server vhost list` / `vhost add NAME` | list or add virtual hosts; the other commands take `--vhost NAME` |
 | `helpbuoy-server techie list` | list techies with their fingerprints |
 | `helpbuoy-server techie add alice 'ssh-ed25519 ...'` | add a techie with the public key copied from their desk app |
 | `helpbuoy-server techie remove alice` | remove a techie; takes effect immediately, open sessions are closed |
@@ -296,6 +331,9 @@ without an older one sharing the state directory dropping them.
 | `helpbuoy-server computer rename SHA256:... 'Anna laptop'` | rename a registered computer; the same as Rename in the desk app, every techie sees the new name |
 | `helpbuoy-server computer remove SHA256:...` | remove a registered computer; an online computer is disconnected |
 | `helpbuoy-server info [--company C] [--phone P] [--address A] [--description D]` | print or set who runs the server (12.4); only the flags given change, and the company name and phone number can't be cleared. The same values techies edit on the desk app's Server tab. `serve` asks for the company name and phone number when they are missing and it runs in a terminal; until they are set the server refuses computers |
+| `helpbuoy-server customer list` / `add` / `rename` / `remove` | planned (13.2): manage the customers on the server |
+| `helpbuoy-server computer move SHA256:... 'Acme BV'` | planned (13.2): move a computer to another customer; `computer add` and `computer list` take `--customer` |
+| `helpbuoy-server techie limit alice 'Acme BV' ... \| --all` | planned (13.3): limit a techie to some customers, or lift the limit; `techie add` takes `--customer` too |
 | `helpbuoy-server hostkey` | print the host key fingerprint, for techies to compare with what computers show |
 | `helpbuoy-server hostkey --new` | replace the host key, keeping all techies and computers; it takes effect at the next server start, since the running server only watches `state.json`; every computer then shows the changed server identity warning (3.5), and servers that approved this one for their computers (12.3) must approve it again |
 
@@ -334,6 +372,10 @@ Techie commands carry a sequence number and the server answers each with a `Repl
 | `SessionReady` | server → computer | request id, techie name and public key: a techie wants to connect |
 | `Error` | server → any | reason, sent just before the server closes a connection on purpose |
 
+Planned (13.5): `Presence` gets the customers and the customer of every computer, filtered
+for limited techies, and techies get `AddCustomer`, `RenameCustomer`, `RemoveCustomer`,
+`MoveComputer` and `LimitTechie`. Nothing changes for computers.
+
 The apps skip a message of a type they don't know, and ignore JSON fields they don't
 know, so a newer server can add both without breaking older apps. The server stays strict:
 an unknown message from a peer closes its connection ("bad control message").
@@ -363,6 +405,12 @@ out. A key counts as proven only after its signature has been verified in the SS
    server at the same time, so someone generating fresh keys from one place can't take every
    pending slot. Closing a pending connection, or registering its key, frees its slot at once.
 
+The HTTP layer comes first: request headers within 10 s and at most 16 KiB, only the
+WebSocket upgrade on `/helpbuoy` with the `helpbuoy-ssh` subprotocol. The source IP for these
+limits is the peer of the HTTP connection, or the client in `X-Forwarded-For` when that peer
+is a trusted proxy. The limits apply per virtual host; process-wide limits across virtual
+hosts are not there yet.
+
 Role caps and timeouts:
 - Per techie: max 20 concurrent sessions. Per computer: exactly one session at a time, enforced by the server and again by the computer.
 - Handshake timeout 10 s, keepalive 15 s, dead connections dropped after 3 missed.
@@ -382,6 +430,9 @@ Role caps and timeouts:
   computer ("server identity changed") and shows a warning with the old and new fingerprints,
   with Cancel as the default. Only if the user explicitly trusts the new key (after checking
   it with the techie by phone) is it pinned; never a silent update.
+- **TLS is transport only.** The apps don't check the certificate of the HTTPS connection the
+  SSH runs in; the pinned host key is what identifies the server. A proxy that re-signs TLS
+  can read no more than the server can, and can't pose as the server without its host key.
 - **Techies are vouched for by the server.** Without certificates the computer has no
   independent way to know the techies, so it accepts the techie key the (pinned) server
   announces in `SessionReady`. On top of that, each techie's key is pinned per techie name
@@ -395,6 +446,9 @@ Role caps and timeouts:
   approval at the PC for that techie, and Esc or exiting the client application always ends the
   session locally, even if the server misbehaves.
 - **Pending keys** are never shown to anyone.
+- **Limited techies** (planned, 13.3) are limited by the server, not by the desk app hiding
+  rows: they never get the computers of other customers in `Presence`, and the server refuses
+  their commands for those computers.
 - **A locked computer** (12) only connects to its primary server and the servers
   that server approved for it, and only removing its local files undoes the lock.
 - **Unknown servers**: anyone can run a server and give it any company name. The client
@@ -581,7 +635,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
 - The registered name is the key's comment, `user@machine`.
 
 ### 6.2 Address and key screens
-- "Server address" field (`hostname:port`, port defaults to 5959 if left out) and
+- "Server address" field (`hostname:port`, port defaults to 443 if left out) and
   **Connect**. With a stored address the computer connects to it at start by itself, with
   the field locked while it does; the field can only be edited when that fails or after
   **Disconnect**. Errors are shown inline: name not found, connection refused, timeout, not a
@@ -749,12 +803,13 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   this techie's sessions run as channels over that one connection.
 - **Local server**: the server is compiled into the desk app (`server/server`, the same code
   as `helpbuoy-server`). Connecting with an empty address (or `localhost`, or `localhost:<port>`)
-  serves the server in-process on that port until Disconnect or exit (unless something already listens on the
-  port). There is no separate executable
+  serves the server in-process on that port (5959 when left out, since a normal user can't
+  listen on 443) with the built-in HTTPS server and a self-signed certificate, until
+  Disconnect or exit (unless something already listens on the port). There is no separate executable
   to find, so `go run .` works too. It uses the same state directory as `helpbuoy-server serve`, so
   the standalone server and its admin commands share the techies, computers and host key. The
   app connects to `localhost:<port>` itself, while computers and other techies use the
-  machine's public `hostname:port`.
+  machine's public `hostname:port`, with the port, since it is not 443.
 - **This techie on the local server**: if this techie's key is not a techie there yet, the app
   adds it to the server state directly (with a number after the name if that name is taken),
   so nobody has to copy keys around. Other techies are added with **Add techie** on the Techies tab
@@ -807,6 +862,9 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
 - **Remove** a computer (unregister) from the list.
 - **Server requests** (12.3): a locked computer that asks for another server shows the
   requested address and fingerprint below its row, with **Allow** and **Refuse**.
+- **Customers** (planned, 13.4): the computers show per customer in collapsible sections,
+  with a filter field, **Move** next to Rename and Remove, and **Add customer** next to Add
+  computer.
 - Each opened session becomes a tab after the fixed ones; any number at once. When a
   session ends its tab goes away and the Computers tab is shown. Closing the window ends all
   open sessions.
@@ -903,6 +961,10 @@ The Linux client, the desk app and `helpbuoy-server` also ship as arm64 Debian p
 The lock question, the approved list and listing requests, mandatory company name and phone
 number on every server, and the waiting screen showing who the user waits for.
 
+**Phase 9 - customers (13)** (planned, issue #20)
+Customers on the server, the customer of every computer, techies limited to customers, and
+the Computers tab grouped per customer.
+
 **Later**: tray icon and optional "Start with Windows" (HKCU Run entry, no admin), so the
 computer can stay online in the background; an update check in the Linux and macOS
 clients.
@@ -940,6 +1002,13 @@ clients.
   about a server that is not approved after seeing only its host key, connects there once
   approved, pins approved servers by the approved fingerprint, starts on the primary server
   when its last address is no longer allowed, and keeps the lock through Remove key.
+- Customers (13, planned): a state without customers loads with every computer in "No
+  customer"; removing a customer keeps its computers; a limited techie never gets other
+  customers' computers or techies in `Presence`, and the server refuses its `OpenRequest`,
+  `RegisterComputer`, renames, moves and `DecideListing` for them and every command that
+  manages techies, customers or the server info; changing a limit takes effect at once,
+  closing sessions it no longer allows; an older server on the same state refuses limited
+  techies.
 - Performance: the replay harness from phase 3 in CI (client encoder against techie decoder,
   no GUI), with regression thresholds; `tc netem` runs at 20 ms / 80 ms RTT and 10 / 50 Mbit/s.
 - Session end tests (`faketechie`): End session on the techie closes the session and
@@ -955,9 +1024,8 @@ clients.
 
 ## 10. Open questions
 
-- Default port: 5959, clear of TeamViewer's 5938, so it doesn't clash with a TeamViewer
-  installed on the same machine. Above 1024, so no privileges are needed; 443 would pass
-  more corporate firewalls but needs privileges on Linux and may still meet TLS inspection.
+- The apps only read `HTTPS_PROXY`; the system proxy settings of Windows and macOS (and PAC
+  files) are not used yet.
 - Does a server on the techie's own machine behind a home or office router need a dynamic DNS
   name in the docs, since computers store `hostname:port` once and never change it?
 - Is TOFU for the server plus server-vouched techies enough, or should the computer also be able
@@ -1099,3 +1167,131 @@ connected to; the address field in `ServerInfo` is what techies give out.
 
 There is no check with helpbuoy.com: the user's own helpdesk decides which other servers may
 reach the PC, so nothing in a session depends on helpbuoy.com being reachable.
+
+## 13. Customers on one server
+
+Planned, issue #20. A server is one flat group today (0): every techie sees every
+registered computer in one list. That fits a single helpdesk, but an MSP helps many
+customers from one team. With a few hundred computers from twenty companies in one list,
+the techie can't tell whose PC is whose, and the only way to keep customers apart is a
+server per customer, each with its own address, host key, techies and lock (12).
+
+Every customer is a group of computers on the server, and every registered computer belongs
+to one customer. The server, its host key, its company name and phone number and its
+techies stay shared, so a customer's PCs still lock to the helpdesk's server and the
+helpdesk is still who the user calls. Customers only organize the computers and,
+optionally, limit which techies can reach them.
+
+This is different from virtual hosts (0). A virtual host is a separate helpdesk with its own
+techies, host key and state, sharing only the process. A customer is a group of computers
+within one helpdesk. The two combine: every virtual host has its own customers.
+
+### 13.1 What stays the same
+
+- Computers don't learn their customer. The lock (12), the waiting screen (12.4),
+  `ServerInfo` and the approved servers stay per server and per computer, so the clients
+  don't change.
+- A server that never adds a customer looks and behaves as it does today.
+- Computers are registered by techies only (3.1), and pending keys are still never shown,
+  so there is no step where a computer picks its own customer.
+
+### 13.2 Customers on the server
+
+`state.json` (3.2) gets a list of customers, each with an id and a name ("Acme BV"), and
+every computer entry gets the id of its customer. A computer without a customer is in
+"No customer", which is where every computer of an existing server starts. Customer names
+are unique on the server, one line of at most 64 characters, with the same cleanup as
+computer names.
+
+A computer is added to a customer when it is registered: Register computer in the desk app
+gets a customer field (13.4) and `helpbuoy-server computer add` gets `--customer`. A techie
+can move a registered computer to another customer later. Removing a customer moves its
+computers to "No customer" instead of removing them, since a registration is only ever
+removed on purpose.
+
+| Command | What it does |
+|---|---|
+| `helpbuoy-server customer list` | list the customers with the number of computers in each |
+| `helpbuoy-server customer add 'Acme BV'` | add a customer |
+| `helpbuoy-server customer rename 'Acme BV' 'Acme Holding'` | rename a customer; every techie sees the new name |
+| `helpbuoy-server customer remove 'Acme BV'` | remove a customer; its computers move to "No customer" |
+| `helpbuoy-server computer move SHA256:... 'Acme BV'` | move a computer to another customer, or to "No customer" with `--none` |
+| `helpbuoy-server computer add --customer 'Acme BV' ...` | register a computer for a customer |
+| `helpbuoy-server computer list [--customer 'Acme BV']` | also shows the customer, and lists one customer when given |
+
+### 13.3 Techies limited to customers
+
+By default a techie sees every customer, as every techie sees every computer today. A
+techie can also be limited to one or more customers, for example a customer's own IT person
+who helps their colleagues but must not see other customers, or a contractor who only covers
+some customers. A limited techie:
+
+- only gets the computers of their customers in `Presence`, and the server refuses
+  `OpenRequest`, `RegisterComputer`, renames, moves, `UnregisterComputer` and
+  `DecideListing` (12.3) for any other computer
+- registers new computers only into their own customers, and the desk app offers only those
+- can't manage techies, customers or the server info (`RegisterTechie`, `UnregisterTechie`,
+  the customer commands, `SetServerInfo`), since those affect every customer
+- only sees the techies that share a customer with them, and techies that aren't limited
+
+The server enforces the limit, not the desk app, so an older desk app connected as a limited
+techie still only sees what it may see (3.5). Changing a limit takes effect at once: a
+session with a computer the techie may no longer reach is closed, as when a techie is
+removed. A limited techie whose last customer is removed stays limited and sees no
+computers until given another.
+
+Limited techies are stored in a list of their own in `state.json`, next to the techies
+(with name, public key and customer ids), not as a field on a techie entry. An older server
+sharing the state directory keeps that list (3.2) but doesn't know it, so it treats those
+keys as unknown and refuses them, instead of letting them see every computer.
+
+| Command | What it does |
+|---|---|
+| `helpbuoy-server techie add alice 'ssh-ed25519 ...' [--customer 'Acme BV' ...]` | add a techie, limited when customers are given |
+| `helpbuoy-server techie limit alice 'Acme BV' ...` | limit a techie to these customers, replacing the old limit |
+| `helpbuoy-server techie limit alice --all` | lift the limit |
+| `helpbuoy-server techie list` | also shows the customers of limited techies |
+
+### 13.4 The desk app
+
+- The **Computers** tab (7.2) shows the computers per customer, in collapsible sections
+  sorted by name with "No customer" last, each with the customer name and the number online.
+  The collapsed "Offline" part moves inside each customer. A filter field at the top matches
+  computer and customer names. With only "No customer" in use, the tab looks as it does
+  today, without section headers.
+- **Add customer** sits next to Add computer and adds a section with an inline name field.
+  Hovering a section header shows **Rename** and **Remove**; Remove asks "Remove this
+  customer? Its computers move to No customer." with Remove and Cancel.
+- Hovering a computer row shows **Move** next to Rename and Remove: a list of the customers
+  to pick from. Dragging rows between sections is not planned.
+- **Register computer** gets a customer choice, prefilled with the customer last used in
+  this app (or the section the techie opened it from), and "No customer" for a techie who
+  isn't limited.
+- **Register techie** gets an optional choice of customers, empty meaning all. The
+  **Techies** tab shows the customers of a limited techie in place of "all customers", and a
+  hover action **Customers** changes the limit.
+- A limited techie doesn't see Add customer, Add techie, the section actions or the edit
+  fields on the Server tab.
+- A session tab shows the customer name before the computer name, so a techie with several
+  sessions open sees which customer each belongs to.
+
+### 13.5 Protocol
+
+- `Presence` (3.3) gets the list of customers (id and name) and a customer id per computer,
+  and for every techie whether it is limited and to which customers, all filtered per
+  techie as in 13.3. Older desk apps ignore the new fields (3.3) and show the flat list.
+- New techie commands, answered with `Reply`: `AddCustomer` (name), `RenameCustomer` (id and
+  name), `RemoveCustomer` (id), `MoveComputer` (computer fingerprint and customer id, empty
+  for "No customer") and `LimitTechie` (name and customer ids, empty for all).
+- `RegisterComputer` gets an optional customer id and `RegisterTechie` optional customer ids.
+- Nothing is sent to computers.
+
+### 13.6 Open points
+
+- Whether a customer can have its own phone number or description on the waiting screen
+  (12.4), for customers with their own support line or opening hours. Computers would then
+  learn something from their customer, through a `ServerInfo` per computer.
+- Whether a server can be approved (12.3) for a whole customer at once, for example a
+  software vendor that every PC of one customer may use, next to the approval per computer.
+- Whether a limited techie may add other techies limited to their own customers, so a
+  customer's IT department can manage its own people.

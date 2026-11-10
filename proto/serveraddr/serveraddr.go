@@ -1,5 +1,6 @@
 // Package serveraddr parses and normalizes the server address that users type
-// on first start, in the form hostname:port.
+// on first start, in the form hostname:port. Apps reach the server over
+// HTTPS (proto/transport), so the port defaults to 443.
 package serveraddr
 
 import (
@@ -10,8 +11,8 @@ import (
 	"strings"
 )
 
-// DefaultPort is used when the user leaves the port out.
-const DefaultPort = 5959
+// DefaultPort is used when the user leaves the port out: HTTPS.
+const DefaultPort = 443
 
 // ErrEmpty is returned for an empty address.
 var ErrEmpty = errors.New("server address is empty")
@@ -29,7 +30,10 @@ func (a Addr) String() string {
 
 // Parse accepts "host", "host:port", "[v6]", "[v6]:port" and a bare IPv6
 // literal. Surrounding whitespace is ignored. The port defaults to DefaultPort.
-func Parse(s string) (Addr, error) {
+func Parse(s string) (Addr, error) { return ParseDefault(s, DefaultPort) }
+
+// ParseDefault is Parse with another port for an address typed without one.
+func ParseDefault(s string, defaultPort int) (Addr, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return Addr{}, ErrEmpty
@@ -63,7 +67,7 @@ func Parse(s string) (Addr, error) {
 	case strings.Count(s, ":") > 1:
 		// Bare IPv6 literal without port.
 		if net.ParseIP(s) == nil {
-			return Addr{}, fmt.Errorf("server address %q: put IPv6 addresses in brackets, like [2001:db8::1]:%d", s, DefaultPort)
+			return Addr{}, fmt.Errorf("server address %q: put IPv6 addresses in brackets, like [2001:db8::1]:%d", s, defaultPort)
 		}
 	case strings.Contains(s, ":"):
 		i := strings.LastIndex(s, ":")
@@ -77,7 +81,7 @@ func Parse(s string) (Addr, error) {
 		return Addr{}, fmt.Errorf("server address %q: %q is not a valid host name", s, host)
 	}
 
-	port := DefaultPort
+	port := defaultPort
 	if portStr != "" {
 		p, err := strconv.Atoi(portStr)
 		if err != nil || p < 1 || p > 65535 {

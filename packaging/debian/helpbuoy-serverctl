@@ -7,6 +7,8 @@
 #   sudo helpbuoy-serverctl techie list
 #   sudo helpbuoy-serverctl computer list
 #   sudo helpbuoy-serverctl hostkey
+#   sudo helpbuoy-serverctl vhost add acme.relay.example.com
+#   sudo helpbuoy-serverctl techie list --vhost acme.relay.example.com
 #
 # A running server picks up changes within a second.
 set -e
@@ -14,5 +16,12 @@ if [ "$(id -u)" -ne 0 ]; then
 	echo "helpbuoy-serverctl: run it as root, e.g. sudo helpbuoy-serverctl $*" >&2
 	exit 1
 fi
+# With virtual hosts (HELPBUOY_SERVER_VHOSTS in /etc/default/helpbuoy-server),
+# commands take --vhost NAME.
+HELPBUOY_SERVER_VHOSTS=
+if [ -r /etc/default/helpbuoy-server ]; then
+	. /etc/default/helpbuoy-server
+fi
 cd /
-exec runuser -u helpbuoy-server -- env HELPBUOY_SERVER_STATE=/var/lib/helpbuoy-server /usr/bin/helpbuoy-server "$@"
+exec runuser -u helpbuoy-server -- env HELPBUOY_SERVER_STATE=/var/lib/helpbuoy-server \
+	HELPBUOY_SERVER_VHOSTS="$HELPBUOY_SERVER_VHOSTS" /usr/bin/helpbuoy-server "$@"

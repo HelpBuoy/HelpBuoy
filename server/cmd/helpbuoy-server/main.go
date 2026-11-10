@@ -11,23 +11,15 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log/slog"
-	"net"
 	"os"
-	"os/signal"
-	"path/filepath"
 	"strings"
-	"syscall"
 	"text/tabwriter"
 	"time"
 
 	"github.com/helpbuoy/helpbuoy/proto/control"
 	"github.com/helpbuoy/helpbuoy/proto/datadir"
-	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 	"github.com/helpbuoy/helpbuoy/server/auth"
 	"github.com/helpbuoy/helpbuoy/server/hostkey"
-	"github.com/helpbuoy/helpbuoy/server/logfile"
-	"github.com/helpbuoy/helpbuoy/server/server"
 	"github.com/helpbuoy/helpbuoy/server/store"
 )
 
@@ -37,7 +29,22 @@ var version = "dev"
 const usage = `usage: helpbuoy-server <command> [flags]
 
 commands:
-  serve [--listen :5959] [--state DIR]   run the server
+  serve [--mode MODE]                    run the server in one of three modes (default http):
+                                           http   plain HTTP on 127.0.0.1:5959, behind a reverse
+                                                  proxy (Apache, nginx, HAProxy) that handles HTTPS
+                                           https  the built-in HTTPS server, on :443
+                                           ssh    plain SSH without WebSocket and TLS (direct
+                                                  connect), on :5959; the apps fall back to it
+                                                  when HTTPS fails
+    [--listen ADDR]                      address to listen on instead of the mode's default
+    [--cert FILE --key FILE]             https: certificate files (reloaded when they change)
+    [--acme --acme-host NAME]            https: get certificates from Let's Encrypt; needs port
+    [--acme-email ADDR]                  443 reachable from the internet; without --vhosts, list
+                                         the host names with --acme-host
+                                         https without a certificate: a self-signed one
+    [--trusted-proxy LIST]               http and https: proxies whose X-Forwarded-For is used
+                                         (default 127.0.0.1,::1)
+    [--vhosts DIR]                       http and https: serve every virtual host in DIR (see vhost)
   techie list                            list techies
   techie add NAME 'ssh-ed25519 ...'      add a techie key
   techie remove NAME                     remove a techie
@@ -50,10 +57,17 @@ commands:
                                          before computers can connect
   hostkey [--new]                        print the server host key and fingerprint; --new makes a
                                          new host key, used from the next server start on
+  vhost list                             list the virtual hosts in the --vhosts directory
+  vhost add NAME                         add a virtual host, e.g. acme.relay.example.com; a running
+                                         server picks it up within a second
   version                                print the version
 
 Every command except version takes --state DIR (default: $HELPBUOY_SERVER_STATE,
-else the per-user data directory).
+else the per-user data directory). serve takes its mode and listen address from
+$HELPBUOY_SERVER_MODE and $HELPBUOY_SERVER_LISTEN when the flags are left out. With virtual hosts, the commands take
+--vhosts DIR (default: $HELPBUOY_SERVER_VHOSTS) and --vhost NAME instead, to work
+on one virtual host. To remove a virtual host, delete its directory; a running
+server drops it within a second.
 `
 
 // errUsage marks errors in the command line.
@@ -80,6 +94,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		err = infoCmd(args[1:], stdout, stderr)
 	case "hostkey":
 		err = hostkeyCmd(args[1:], stdout, stderr)
+	case "vhost":
+		err = vhostCmd(args[1:], stdout, stderr)
 	case "version", "--version", "-v":
 		fmt.Fprintf(stdout, "helpbuoy-server %s\n", version)
 		return 0
@@ -133,72 +149,8 @@ func stateDir(s string) (string, error) {
 	return datadir.Dir("helpbuoy-server")
 }
 
-type serveConfig struct {
-	listen string
-	state  string
-}
-
-func parseServe(args []string, stderr io.Writer) (serveConfig, error) {
-	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	listen := fs.String("listen", fmt.Sprintf(":%d", serveraddr.DefaultPort), "address to listen on, host:port or :port")
-	state := fs.String("state", "", "state directory (default: $HELPBUOY_SERVER_STATE, else the per-user data directory)")
-	if err := fs.Parse(args); err != nil {
-		return serveConfig{}, err
-	}
-	if fs.NArg() > 0 {
-		return serveConfig{}, fmt.Errorf("serve: unexpected argument %q", fs.Arg(0))
-	}
-	dir, err := stateDir(*state)
-	if err != nil {
-		return serveConfig{}, err
-	}
-	return serveConfig{listen: *listen, state: dir}, nil
-}
-
-func serve(args []string, stdout, stderr io.Writer) error {
-	cfg, err := parseServe(args, stderr)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(cfg.state, 0o700); err != nil {
-		return err
-	}
-	if err := setup(cfg.state, stdout); err != nil {
-		return err
-	}
-	lf, err := logfile.Open(filepath.Join(cfg.state, "server.log"), logfile.DefaultMaxSize)
-	if err != nil {
-		return err
-	}
-	defer lf.Close()
-	log := slog.New(slog.NewJSONHandler(io.MultiWriter(stdout, lf), nil))
-	srv, err := server.New(server.Config{StateDir: cfg.state, Version: version, Log: log})
-	if err != nil {
-		return err
-	}
-	ln, err := net.Listen("tcp", cfg.listen)
-	if err != nil {
-		srv.Close()
-		return err
-	}
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		s := <-sig
-		log.Info("signal, shutting down", "signal", s.String())
-		srv.Close()
-	}()
-	err = srv.Serve(ln)
-	srv.Close()
-	if errors.Is(err, server.ErrServerClosed) {
-		return nil
-	}
-	return err
-}
-
-func openStore(state string) (*store.Store, error) {
-	dir, err := stateDir(state)
+func openStore(state *stateFlags) (*store.Store, error) {
+	dir, err := state.dir()
 	if err != nil {
 		return nil, err
 	}
@@ -211,12 +163,12 @@ func techieCmd(args []string, stdout, stderr io.Writer) error {
 	}
 	fs := flag.NewFlagSet("techie "+args[0], flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	state := fs.String("state", "", "state directory")
+	state := addStateFlags(fs)
 	pos, err := parse(fs, args[1:])
 	if err != nil {
 		return err
 	}
-	st, err := openStore(*state)
+	st, err := openStore(state)
 	if err != nil {
 		return err
 	}
@@ -265,12 +217,12 @@ func computerCmd(args []string, stdout, stderr io.Writer) error {
 	}
 	fs := flag.NewFlagSet("computer "+args[0], flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	state := fs.String("state", "", "state directory")
+	state := addStateFlags(fs)
 	pos, err := parse(fs, args[1:])
 	if err != nil {
 		return err
 	}
-	st, err := openStore(*state)
+	st, err := openStore(state)
 	if err != nil {
 		return err
 	}
@@ -351,7 +303,7 @@ func computerCmd(args []string, stdout, stderr io.Writer) error {
 func infoCmd(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("info", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	state := fs.String("state", "", "state directory")
+	state := addStateFlags(fs)
 	address := fs.String("address", "", "the address computers use, e.g. helpme.example.com (\"\" to clear)")
 	company := fs.String("company", "", "company name")
 	phone := fs.String("phone", "", "phone number users call for help")
@@ -365,7 +317,7 @@ func infoCmd(args []string, stdout, stderr io.Writer) error {
 	}
 	set := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
-	st, err := openStore(*state)
+	st, err := openStore(state)
 	if err != nil {
 		return err
 	}
@@ -488,7 +440,7 @@ func setup(dir string, stdout io.Writer) error {
 func hostkeyCmd(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("hostkey", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	state := fs.String("state", "", "state directory")
+	state := addStateFlags(fs)
 	newKey := fs.Bool("new", false, "make a new host key, used from the next server start on")
 	pos, err := parse(fs, args)
 	if err != nil {
@@ -497,7 +449,7 @@ func hostkeyCmd(args []string, stdout, stderr io.Writer) error {
 	if len(pos) != 0 {
 		return fmt.Errorf("%w: hostkey", errUsage)
 	}
-	dir, err := stateDir(*state)
+	dir, err := state.dir()
 	if err != nil {
 		return err
 	}

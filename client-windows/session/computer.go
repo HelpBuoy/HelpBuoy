@@ -22,6 +22,7 @@ import (
 	"github.com/helpbuoy/helpbuoy/client-windows/identity"
 	"github.com/helpbuoy/helpbuoy/proto/control"
 	pid "github.com/helpbuoy/helpbuoy/proto/identity"
+	"github.com/helpbuoy/helpbuoy/proto/transport"
 )
 
 // Phase is what the computer is doing, as far as the window cares.
@@ -131,7 +132,11 @@ type Options struct {
 	// ParseKey parses a techie key line; default proto/identity.ParseLine.
 	ParseKey func(line string) (ssh.PublicKey, error)
 
-	DialTimeout time.Duration // TCP connect, SSH handshake and Hello; default 10 s
+	// Transport tunes the WebSocket connection to the server; the zero value
+	// is what the app uses.
+	Transport transport.DialOptions
+
+	DialTimeout time.Duration // connect, TLS, WebSocket, SSH handshake and Hello; default 10 s
 	KeepAlive   time.Duration // default 15 s; the connection is dropped after 3 missed
 	MinBackoff  time.Duration // default 1 s
 	MaxBackoff  time.Duration // default 30 s
@@ -408,8 +413,7 @@ func hostKeyAlgorithms(k ssh.PublicKey) []string {
 // whether the server answered with Hello.
 func (c *Computer) connectOnce() (reached bool, err error) {
 	dctx, dcancel := context.WithTimeout(c.ctx, c.opts.DialTimeout)
-	var d net.Dialer
-	tcp, err := d.DialContext(dctx, "tcp", c.opts.Addr)
+	tcp, err := transport.Dial(dctx, c.opts.Addr, c.opts.Transport)
 	dcancel()
 	if err != nil {
 		return false, err
@@ -417,9 +421,6 @@ func (c *Computer) connectOnce() (reached bool, err error) {
 	defer tcp.Close()
 	stop := context.AfterFunc(c.ctx, func() { tcp.Close() })
 	defer stop()
-	if tc, ok := tcp.(*net.TCPConn); ok {
-		tc.SetNoDelay(true)
-	}
 	tcp.SetDeadline(time.Now().Add(c.opts.DialTimeout))
 
 	c.mu.Lock()
@@ -784,8 +785,7 @@ func ProbeHostKey(ctx context.Context, addr string, timeout time.Duration) (ssh.
 	}
 	dctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	var d net.Dialer
-	tcp, err := d.DialContext(dctx, "tcp", addr)
+	tcp, err := transport.Dial(dctx, addr, transport.DialOptions{})
 	if err != nil {
 		return nil, err
 	}

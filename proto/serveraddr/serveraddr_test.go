@@ -7,17 +7,17 @@ func TestParseValid(t *testing.T) {
 		in   string
 		want string
 	}{
-		{"server.example.com", "server.example.com:5959"},
+		{"server.example.com", "server.example.com:443"},
 		{"server.example.com:5959", "server.example.com:5959"},
 		{"  Server.Example.COM:443 ", "server.example.com:443"},
 		{"server.example.com.:22", "server.example.com.:22"},
-		{"localhost", "localhost:5959"},
-		{"192.0.2.10", "192.0.2.10:5959"},
+		{"localhost", "localhost:443"},
+		{"192.0.2.10", "192.0.2.10:443"},
 		{"192.0.2.10:2200", "192.0.2.10:2200"},
-		{"[2001:db8::1]", "[2001:db8::1]:5959"},
+		{"[2001:db8::1]", "[2001:db8::1]:443"},
 		{"[2001:db8::1]:443", "[2001:db8::1]:443"},
-		{"2001:db8::1", "[2001:db8::1]:5959"},
-		{"::1", "[::1]:5959"},
+		{"2001:db8::1", "[2001:db8::1]:443"},
+		{"::1", "[::1]:443"},
 		{"my-server:65535", "my-server:65535"},
 	}
 	for _, tt := range tests {

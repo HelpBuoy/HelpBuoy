@@ -128,7 +128,7 @@ func TestSetServerAddrForgetsPin(t *testing.T) {
 	if !c.SetServerAddr(a) {
 		t.Fatal("no change reported")
 	}
-	if c.ServerAddr != "server.example.com:5959" {
+	if c.ServerAddr != "server.example.com:443" {
 		t.Errorf("addr = %q", c.ServerAddr)
 	}
 	c.Pin(newKey(t))
@@ -154,5 +154,24 @@ func TestLoadDropsInvalidAddr(t *testing.T) {
 	}
 	if c.ServerAddr != "" {
 		t.Errorf("invalid address kept: %q", c.ServerAddr)
+	}
+}
+
+func TestParseAddr(t *testing.T) {
+	for in, want := range map[string]string{
+		"localhost":          "localhost:5959",
+		"LocalHost":          "localhost:5959",
+		"localhost:443":      "localhost:443",
+		"helpme.example.com": "helpme.example.com:443",
+		"192.0.2.1":          "192.0.2.1:443",
+		"192.0.2.1:5959":     "192.0.2.1:5959",
+	} {
+		a, err := ParseAddr(in)
+		if err != nil || a.String() != want {
+			t.Errorf("ParseAddr(%q) = %v, %v; want %s", in, a, err, want)
+		}
+	}
+	if _, err := ParseAddr("not an address"); err == nil {
+		t.Error("bad address accepted")
 	}
 }

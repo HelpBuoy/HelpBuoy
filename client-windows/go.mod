@@ -7,7 +7,10 @@ require (
 	github.com/rodrigocfd/windigo v0.2.7
 )
 
-require github.com/klauspost/compress v1.20.3 // indirect
+require (
+	github.com/coder/websocket v1.8.15 // indirect
+	github.com/klauspost/compress v1.20.3 // indirect
+)
 
 require (
 	golang.org/x/crypto v0.58.0

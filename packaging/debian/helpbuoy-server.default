@@ -1,7 +1,25 @@
 # Settings for the helpbuoy-server service. After a change:
 #   systemctl restart helpbuoy-server
 #
-# Address to listen on, host:port or :port. Every techie and computer connects
-# to this one port. Ports below 1024 need an extra capability, see
-# /usr/lib/systemd/system/helpbuoy-server.service.
-HELPBUOY_SERVER_LISTEN=:5959
+# The server runs in one of three modes:
+#   http   plain HTTP on 127.0.0.1:5959, behind a reverse proxy (Apache, nginx,
+#          HAProxy) that serves HTTPS on port 443 and passes the WebSocket on;
+#          see /usr/share/doc/helpbuoy-server/README.Debian
+#   https  the built-in HTTPS server on :443; add a certificate to
+#          HELPBUOY_SERVER_OPTS, e.g. "--acme --acme-host help.example.com" or
+#          "--cert FILE --key FILE" (without one it makes a self-signed one).
+#          Port 443 needs an extra capability, see
+#          /usr/lib/systemd/system/helpbuoy-server.service.
+#   ssh    plain SSH without WebSocket and TLS (direct connect) on :5959
+HELPBUOY_SERVER_MODE=http
+#
+# Address to listen on, host:port or :port, instead of the mode's default.
+#HELPBUOY_SERVER_LISTEN=
+#
+# Extra options for "helpbuoy-server serve".
+HELPBUOY_SERVER_OPTS=
+#
+# Virtual hosts (http and https mode): serve many helpdesks, one per host
+# name, each with its own state directory in this directory. Leave empty for
+# a single server with its state in /var/lib/helpbuoy-server.
+#HELPBUOY_SERVER_VHOSTS=/var/lib/helpbuoy-server/vhosts

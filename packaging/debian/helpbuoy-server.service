@@ -9,9 +9,10 @@ Type=exec
 User=helpbuoy-server
 Group=helpbuoy-server
 Environment=HELPBUOY_SERVER_STATE=/var/lib/helpbuoy-server
-Environment=HELPBUOY_SERVER_LISTEN=:5959
+Environment=HELPBUOY_SERVER_MODE=http
+Environment=HELPBUOY_SERVER_OPTS=
 EnvironmentFile=-/etc/default/helpbuoy-server
-ExecStart=/usr/bin/helpbuoy-server serve --listen ${HELPBUOY_SERVER_LISTEN}
+ExecStart=/usr/bin/helpbuoy-server serve $HELPBUOY_SERVER_OPTS
 Restart=on-failure
 RestartSec=5
 
@@ -20,7 +21,7 @@ StateDirectoryMode=0700
 UMask=0077
 
 # The server only needs its state directory and the network. A port below
-# 1024 (e.g. 443) needs: systemctl edit helpbuoy-server, then under [Service]
+# 1024 (e.g. 443 in https mode) needs: systemctl edit helpbuoy-server, then under [Service]
 # AmbientCapabilities=CAP_NET_BIND_SERVICE and
 # CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=

@@ -40,6 +40,20 @@ type Config struct {
 	ServerHostKey string `json:"server_host_key,omitempty"`
 }
 
+// LocalPort is the port of the server inside this app when the address
+// leaves it out. It is not 443 (the default for other servers), since a
+// normal user can't listen on ports below 1024 on Linux and macOS.
+const LocalPort = 5959
+
+// ParseAddr parses a server address as typed in the desk app: like
+// serveraddr.Parse, except that "localhost" without a port means LocalPort.
+func ParseAddr(s string) (serveraddr.Addr, error) {
+	if a, err := serveraddr.ParseDefault(s, LocalPort); err != nil || IsLocal(a) {
+		return a, err
+	}
+	return serveraddr.Parse(s)
+}
+
 // IsLocal reports whether a names the server that runs inside this app.
 func IsLocal(a serveraddr.Addr) bool { return a.Host == "localhost" }
 

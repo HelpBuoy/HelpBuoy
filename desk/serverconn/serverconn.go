@@ -22,6 +22,7 @@ import (
 	"github.com/helpbuoy/helpbuoy/desk/config"
 	"github.com/helpbuoy/helpbuoy/proto/control"
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/proto/transport"
 )
 
 // Status is the state of the server connection as shown in the UI.
@@ -79,7 +80,7 @@ type Options struct {
 	MinBackoff       time.Duration // default 1 s
 	MaxBackoff       time.Duration // default 60 s
 
-	// Dial overrides the TCP dialer, for tests.
+	// Dial overrides the TCP dialer under the WebSocket transport, for tests.
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
 }
 
@@ -376,13 +377,10 @@ func classify(online bool, err error) Status {
 // as far as a techie Hello.
 func (c *Conn) connect() (online bool, err error) {
 	ctx, cancel := context.WithTimeout(c.ctx, c.opts.HandshakeTimeout)
-	nc, err := c.opts.Dial(ctx, "tcp", c.opts.Addr)
+	nc, err := transport.Dial(ctx, c.opts.Addr, transport.DialOptions{Dial: c.opts.Dial})
 	cancel()
 	if err != nil {
 		return false, err
-	}
-	if tc, ok := nc.(*net.TCPConn); ok {
-		tc.SetNoDelay(true)
 	}
 
 	var seen ssh.PublicKey

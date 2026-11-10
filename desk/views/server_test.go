@@ -37,7 +37,7 @@ func TestCheckInfo(t *testing.T) {
 func TestNormAddress(t *testing.T) {
 	for in, want := range map[string]string{
 		"":                        "",
-		"helpme.example.com":      "helpme.example.com:5959",
+		"helpme.example.com":      "helpme.example.com:443",
 		"HelpMe.example.com:7000": "helpme.example.com:7000",
 		"not an address":          "not an address",
 	} {
