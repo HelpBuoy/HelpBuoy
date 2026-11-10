@@ -96,3 +96,4 @@ Open source TeamViewer alternatives on GitHub, ranked by stars (November 2026). 
 ---
 
 [www.helpbuoy.com](https://www.helpbuoy.com)
+
