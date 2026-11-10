@@ -24,9 +24,12 @@ func (a *App) drawComputersPage(r rl.Rectangle) {
 	rl.DrawRectangleRec(r, ui.ColPanel)
 	c.Text(ui.Bold, ui.SizeHeading, i18n.Trans("Computers"), r.X+16, r.Y+14, ui.ColText)
 	a.addButton("computers/add", i18n.Trans("Add computer"), tabRegister, r)
-	list := rl.NewRectangle(r.X, r.Y+56, r.Width, r.Height-56)
-	rl.DrawLineV(rl.NewVector2(r.X, list.Y), rl.NewVector2(r.X+r.Width, list.Y), ui.ColBorder)
-	a.drawComputerList(list)
+	top := r.Y + 56
+	rl.DrawLineV(rl.NewVector2(r.X, top), rl.NewVector2(r.X+r.Width, top), ui.ColBorder)
+	if a.notSetUp() {
+		top = a.drawNotSetUp(r.X+16, top+12, r.Width-32) + 12
+	}
+	a.drawComputerList(rl.NewRectangle(r.X, top, r.Width, r.Y+r.Height-top))
 }
 
 // addButton draws the Add computer or Add techie button at the top right of
@@ -99,6 +102,14 @@ func sortedComputers(p *control.Presence) (online, offline []control.ComputerInf
 
 const rowH = 52
 
+// listingH is the height of one open listing request below a computer row.
+const listingH = 46
+
+// computerRowH is the height of a computer row with its listing requests.
+func computerRowH(ci control.ComputerInfo) float32 {
+	return rowH + float32(len(ci.Listings))*listingH
+}
+
 func (a *App) drawComputerList(r rl.Rectangle) {
 	c := a.ui
 	online, offline := sortedComputers(a.presence)
@@ -109,9 +120,14 @@ func (a *App) drawComputerList(r rl.Rectangle) {
 	if a.presence == nil {
 		return
 	}
-	contentH := float32(len(online))*rowH + 40
+	contentH := float32(40)
+	for _, ci := range online {
+		contentH += computerRowH(ci)
+	}
 	if a.offlineOpen {
-		contentH += float32(len(offline)) * rowH
+		for _, ci := range offline {
+			contentH += computerRowH(ci)
+		}
 	}
 	off := c.BeginScroll("computers", r, contentH)
 	y := r.Y + off
@@ -121,8 +137,9 @@ func (a *App) drawComputerList(r rl.Rectangle) {
 		contentH += 44
 	}
 	for _, ci := range online {
-		a.drawComputerRow(ci, rl.NewRectangle(0, y, r.Width, rowH))
-		y += rowH
+		h := computerRowH(ci)
+		a.drawComputerRow(ci, rl.NewRectangle(0, y, r.Width, h))
+		y += h
 	}
 	if len(offline) > 0 {
 		hr := rl.NewRectangle(0, y, r.Width, 40)
@@ -142,8 +159,9 @@ func (a *App) drawComputerList(r rl.Rectangle) {
 		y += 40
 		if a.offlineOpen {
 			for _, ci := range offline {
-				a.drawComputerRow(ci, rl.NewRectangle(0, y, r.Width, rowH))
-				y += rowH
+				h := computerRowH(ci)
+				a.drawComputerRow(ci, rl.NewRectangle(0, y, r.Width, h))
+				y += h
 			}
 		}
 	}
@@ -151,7 +169,8 @@ func (a *App) drawComputerList(r rl.Rectangle) {
 }
 
 // drawComputerRow draws one computer: name, a status line, a Connect button for
-// online computers nobody is helping, and Rename and Remove on hover.
+// online computers nobody is helping, and Rename and Remove on hover. Its open
+// listing requests follow below, each with Allow and Refuse.
 func (a *App) drawComputerRow(ci control.ComputerInfo, r rl.Rectangle) {
 	c := a.ui
 	id := "computer/" + ci.Fingerprint
@@ -174,6 +193,7 @@ func (a *App) drawComputerRow(ci control.ComputerInfo, r rl.Rectangle) {
 		rl.DrawCircleLines(int32(x+4), int32(r.Y+17), 4, ui.ColBorder)
 	}
 	x += 16
+	listingClicked := a.drawListings(ci, x, r.Y+rowH-6, r.X+r.Width-x-8)
 
 	// Right side action area. Buttons grow with longer (translated) labels.
 	removeL, cancelL, renameL := i18n.Trans("Remove"), i18n.Trans("Cancel"), i18n.Trans("Rename")
@@ -223,8 +243,8 @@ func (a *App) drawComputerRow(ci control.ComputerInfo, r rl.Rectangle) {
 	c.Text(ui.Regular, ui.SizeSmall, c.Ellipsize(ui.Regular, ui.SizeSmall, sub, nameW), x, r.Y+30, subCol)
 
 	ax := r.X + r.Width - actionW - 8
-	ay := r.Y + (r.Height-30)/2
-	actionClicked := false
+	ay := r.Y + (rowH-30)/2
+	actionClicked := listingClicked
 	switch {
 	case confirming:
 		if c.Button(id+"/confirm", rl.NewRectangle(ax, ay, wConfirm, 30), removeL, ui.Danger, false) {
@@ -269,14 +289,15 @@ func (a *App) drawComputerRow(ci control.ComputerInfo, r rl.Rectangle) {
 			}
 		}
 	}
-	if hover && !actionClicked {
+	onMain := c.Hover(rl.NewRectangle(r.X, r.Y, r.Width, rowH)) // not on the listing requests
+	if hover && !actionClicked && onMain {
 		tip := ci.Fingerprint
 		if ci.UserMachine != "" {
 			tip = ci.UserMachine + "  ·  " + tip
 		}
 		c.Tooltip(tip)
 	}
-	if clicked && !actionClicked {
+	if clicked && !actionClicked && onMain {
 		// A double click on the row renames, like a file manager.
 		if a.rename.lastClick == ci.Fingerprint && c.Now.Sub(a.rename.lastAt) < 400*time.Millisecond && canRename {
 			a.startRename(ci)
@@ -499,5 +520,64 @@ func (a *App) unregister(ci control.ComputerInfo) {
 		if err != nil {
 			a.notes[fp] = note{text: i18n.Trans("Could not remove: {0}", err), until: time.Now().Add(6 * time.Second)}
 		}
+	})
+}
+
+// listingKey identifies one listing request of a computer, for a.deciding.
+func listingKey(fp string, l control.ListingRequest) string {
+	return fp + " " + l.Address + " " + l.Fingerprint
+}
+
+// drawListings draws the open listing requests of a computer, from y down,
+// in width w: the other server it asks to use, with Allow and Refuse. It
+// reports whether a button was clicked.
+func (a *App) drawListings(ci control.ComputerInfo, x, y, w float32) bool {
+	c := a.ui
+	allowL, refuseL := i18n.Trans("Allow"), i18n.Trans("Refuse")
+	wAllow, wRefuse := a.btnW(allowL, 70), a.btnW(refuseL, 70)
+	clicked := false
+	for i, l := range ci.Listings {
+		ly := y + float32(i)*listingH
+		key := listingKey(ci.Fingerprint, l)
+		busy := a.deciding[key]
+		tw := w - wAllow - 6 - wRefuse - 12
+		text := i18n.Trans("Asks to also use the server {0}", l.Address)
+		c.Text(ui.Regular, ui.SizeSmall, c.Ellipsize(ui.Regular, ui.SizeSmall, text, tw), x, ly+4, ui.ColWarn)
+		c.Text(ui.Mono, ui.SizeSmall, c.Ellipsize(ui.Mono, ui.SizeSmall, l.Fingerprint, tw), x, ly+23, ui.ColMuted)
+		bx, by := x+w-wAllow-6-wRefuse, ly+(listingH-30)/2
+		id := "listing/" + key
+		if c.Button(id+"/allow", rl.NewRectangle(bx, by, wAllow, 30), allowL, ui.Primary, busy || !a.online()) {
+			a.decideListing(ci.Fingerprint, l, true)
+			clicked = true
+		}
+		if c.Button(id+"/refuse", rl.NewRectangle(bx+wAllow+6, by, wRefuse, 30), refuseL, ui.Normal, busy || !a.online()) {
+			a.decideListing(ci.Fingerprint, l, false)
+			clicked = true
+		}
+	}
+	return clicked
+}
+
+// decideListing allows or refuses a computer's listing request.
+func (a *App) decideListing(fp string, l control.ListingRequest, allow bool) {
+	if a.backend == nil {
+		return
+	}
+	key := listingKey(fp, l)
+	if a.deciding == nil {
+		a.deciding = map[string]bool{}
+	}
+	a.deciding[key] = true
+	delete(a.notes, fp)
+	a.run(a.backend.DecideListing(fp, l, allow), func(err error) {
+		delete(a.deciding, key)
+		if err == nil {
+			return
+		}
+		text := i18n.Trans("Could not allow: {0}", err)
+		if !allow {
+			text = i18n.Trans("Could not refuse: {0}", err)
+		}
+		a.notes[fp] = note{text: text, until: time.Now().Add(6 * time.Second)}
 	})
 }

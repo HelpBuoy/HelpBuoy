@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"io"
 	"net"
@@ -18,7 +17,6 @@ import (
 	"github.com/helpbuoy/helpbuoy/client-windows/identity"
 	"github.com/helpbuoy/helpbuoy/client-windows/internal/fakeserver"
 	"github.com/helpbuoy/helpbuoy/proto/control"
-	"github.com/helpbuoy/helpbuoy/proto/verify"
 )
 
 // testHandler records what the computer reports.
@@ -31,17 +29,20 @@ type testHandler struct {
 	refuse     bool
 	hold       bool // ConfirmTechie waits until its context ends
 	asked      []asked
+	info       []control.ServerInfo
+	approved   chan []control.ApprovedServer
+	refused    chan control.ApprovedServer
 }
 
 // asked is one ConfirmTechie call.
 type asked struct {
 	techie Techie
 	oldFP  string
-	v      *Verification
 }
 
 func newHandler() *testHandler {
-	return &testHandler{states: make(chan State, 256), pinned: map[string]string{}}
+	return &testHandler{states: make(chan State, 256), pinned: map[string]string{},
+		approved: make(chan []control.ApprovedServer, 16), refused: make(chan control.ApprovedServer, 16)}
 }
 
 func (h *testHandler) StateChanged(s State) { h.states <- s }
@@ -55,10 +56,16 @@ func (h *testHandler) TechiePinned(name, line string) {
 	h.pinned[name] = line
 	h.mu.Unlock()
 }
-func (h *testHandler) ServerInfo(title, instruction string) {}
-func (h *testHandler) ConfirmTechie(ctx context.Context, techie Techie, oldFP string, v *Verification) bool {
+func (h *testHandler) ServerInfo(info control.ServerInfo) {
 	h.mu.Lock()
-	h.asked = append(h.asked, asked{techie, oldFP, v})
+	h.info = append(h.info, info)
+	h.mu.Unlock()
+}
+func (h *testHandler) ApprovedServers(s []control.ApprovedServer) { h.approved <- s }
+func (h *testHandler) ListingRefused(s control.ApprovedServer)    { h.refused <- s }
+func (h *testHandler) ConfirmTechie(ctx context.Context, techie Techie, oldFP string) bool {
+	h.mu.Lock()
+	h.asked = append(h.asked, asked{techie, oldFP})
 	hold, refuse := h.hold, h.refuse
 	h.mu.Unlock()
 	if hold {
@@ -586,54 +593,74 @@ func TestServerErrorMessage(t *testing.T) {
 	}
 }
 
-// verifyCall is one call of Options.Verify.
-type verifyCall struct {
-	hostKey ssh.PublicKey
-	salt    []byte
-	addr    string
-}
-
-func TestVerification(t *testing.T) {
-	calls := make(chan verifyCall, 4)
+// TestLockMessages: the computer reports who runs the server and the
+// approved list, sends its listing request once registered, and reports a
+// refusal.
+func TestLockMessages(t *testing.T) {
+	other := control.ApprovedServer{Address: "vendor.example.com:5959", Fingerprint: "SHA256:" + strings.Repeat("A", 43)}
 	f := setup(t, func(o *Options) {
-		o.Verify = func(ctx context.Context, hk ssh.PublicKey, salt []byte, addr string) verify.Result {
-			calls <- verifyCall{hk, salt, addr}
-			return verify.Result{State: verify.Verified, Company: "Example Inc"}
-		}
+		o.Listing = &control.RequestListing{Address: other.Address, Fingerprint: other.Fingerprint}
 	})
-	salt := strings.Repeat("ab", verify.SaltSize)
-	f.server.SetSalt(salt)
-	_, techieLine := newKey(t, "alice")
-	startSession(t, f, techieLine)
-	call := <-calls
-	if !sameKey(call.hostKey, f.server.HostKey()) || hex.EncodeToString(call.salt) != salt || call.addr != f.server.Addr() {
-		t.Fatalf("Verify got %+v", call)
+	f.computer.Start()
+	f.h.waitPhase(t, PhasePending)
+	f.server.Register(f.fp)
+	if l := recv[*control.RequestListing](t, f.server); l.Address != other.Address || l.Fingerprint != other.Fingerprint {
+		t.Fatalf("listing %+v", l)
+	}
+	if got := <-f.h.approved; len(got) != 0 {
+		t.Fatalf("approved %+v", got)
+	}
+	f.server.SetApproved(f.fp, []control.ApprovedServer{other})
+	if got := <-f.h.approved; len(got) != 1 || got[0] != other {
+		t.Fatalf("approved %+v", got)
+	}
+	f.server.Send(f.fp, control.ListingRefused{Address: other.Address, Fingerprint: other.Fingerprint})
+	if got := <-f.h.refused; got != other {
+		t.Fatalf("refused %+v", got)
 	}
 	f.h.mu.Lock()
-	v := f.h.asked[0].v
+	n := len(f.h.info)
 	f.h.mu.Unlock()
-	<-v.Done()
-	if r := v.Result(); r.State != verify.Verified || r.Company != "Example Inc" {
-		t.Fatalf("result %+v", r)
+	if n == 0 {
+		t.Fatal("no ServerInfo")
 	}
 }
 
-func TestVerificationWithoutSalt(t *testing.T) {
-	called := false
-	f := setup(t, func(o *Options) {
-		o.Verify = func(context.Context, ssh.PublicKey, []byte, string) verify.Result {
-			called = true
-			return verify.Result{State: verify.Verified}
-		}
-	})
-	f.server.SetSalt("abcd") // not 32 bytes: no salt
-	_, techieLine := newKey(t, "alice")
-	startSession(t, f, techieLine)
-	f.h.mu.Lock()
-	v := f.h.asked[0].v
-	f.h.mu.Unlock()
-	<-v.Done()
-	if r := v.Result(); r.State != verify.NotVerified || called {
-		t.Fatalf("result %+v, Verify called %v", r, called)
+// TestServerFingerprint: an approved server is pinned by the fingerprint
+// the primary server approved.
+func TestServerFingerprint(t *testing.T) {
+	f := setup(t, nil)
+	f.computer.opts.ServerFingerprint = ssh.FingerprintSHA256(f.server.HostKey())
+	f.server.Register(f.fp)
+	f.computer.Start()
+	if s := f.h.waitPhase(t, PhaseReady); s.ServerFingerprint != f.computer.opts.ServerFingerprint {
+		t.Fatalf("state %+v", s)
+	}
+
+	g := setup(t, func(o *Options) { o.ServerFingerprint = "SHA256:" + strings.Repeat("A", 43) })
+	g.computer.Start()
+	s := g.h.waitPhase(t, PhaseStopped)
+	if Classify(s.Err) != KindHostKeyChanged {
+		t.Fatalf("err %v", s.Err)
+	}
+}
+
+func TestProbeHostKey(t *testing.T) {
+	f := setup(t, nil)
+	k, err := ProbeHostKey(context.Background(), f.server.Addr(), time.Second)
+	if err != nil || !sameKey(k, f.server.HostKey()) {
+		t.Fatalf("probe: %v, %v", k, err)
+	}
+	if f.server.Online(f.fp) {
+		t.Fatal("the probe got further than the host key")
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	ln.Close()
+	if _, err := ProbeHostKey(context.Background(), addr, time.Second); err == nil {
+		t.Fatal("probe of a closed port succeeded")
 	}
 }

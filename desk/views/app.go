@@ -30,7 +30,6 @@ import (
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
 	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 	"github.com/helpbuoy/helpbuoy/proto/update"
-	"github.com/helpbuoy/helpbuoy/proto/verify"
 )
 
 // Options configure the app.
@@ -47,9 +46,6 @@ type Options struct {
 	// none. It only runs when the user clicks Check for updates in the top right
 	// corner; nil hides that link.
 	CheckUpdate func(ctx context.Context) (*update.Release, error)
-	// Verify checks whether the connected server is verified, for the Server
-	// tab (PLAN.md 12.5); nil shows nothing about it.
-	Verify func(ctx context.Context, hostKey ssh.PublicKey, salt []byte) verify.Result
 }
 
 // Layout sizes in logical pixels.
@@ -76,7 +72,8 @@ type backend interface {
 	UnregisterComputer(fingerprint string) <-chan error
 	Connect(fingerprint, requestID string) <-chan error
 	CancelRequest(requestID string)
-	SetServerInfo(title, instruction string) <-chan error
+	SetServerInfo(info control.ServerInfo) <-chan error
+	DecideListing(computer string, req control.ListingRequest, allow bool) <-chan error
 }
 
 type tabKind int
@@ -134,8 +131,7 @@ type App struct {
 	hostKey  ssh.PublicKey
 	presence *control.Presence
 	me       string              // our techie name from Hello
-	info     *control.ServerInfo // the server's title and instruction line, nil until received
-	verif    verification        // the verified server check of the current connection
+	info     *control.ServerInfo // who runs the server, nil until received
 
 	local      *localserver.Server
 	localAdded int
@@ -153,6 +149,7 @@ type App struct {
 	waiting       map[string]*waitInfo // by computer fingerprint: accepted Connects, until the session starts
 	notes         map[string]note      // by computer or techie fingerprint
 	confirmRemove string               // computer or techie fingerprint awaiting Remove confirmation
+	deciding      map[string]bool      // listing requests with a DecideListing in flight, by listingKey
 	offlineOpen   bool
 	rename        renameState
 
@@ -160,7 +157,7 @@ type App struct {
 	active     int          // index into tabs
 	reg        registerPage // Register computer
 	regTechie  registerPage // Register techie
-	infoForm   infoForm     // title and instruction on the Server tab
+	infoForm   infoForm     // who runs the server, on the Server tab
 	confirmKey bool         // the Remove key confirmation on the damaged key screen
 	pageHeight map[tabKind]float32
 
@@ -438,7 +435,6 @@ func (a *App) handleEvent(ev serverconn.Event) {
 		if ev.Hello != nil {
 			a.me = ev.Hello.Name
 		}
-		a.startVerification(ev)
 		if ev.Status == serverconn.StatusReplaced {
 			a.openPage(tabServer) // says why, with Reconnect
 		}

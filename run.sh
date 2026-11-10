@@ -14,8 +14,8 @@
 # desk app stops the server and the client.
 #
 # In the client type 127.0.0.1:5959 (or the HELPBUOY_PORT you set) and
-# Connect, then register it in the desk app with Add computer. The server's
-# title and instruction line are on the desk app's Server tab.
+# Connect, then register it in the desk app with Add computer. Who runs the
+# server (company name, phone number) is on the desk app's Server tab.
 set -e
 cd "$(dirname "$0")"
 
@@ -46,6 +46,10 @@ if [ ! -f "$run/desk/id_ed25519" ]; then
 fi
 if ! $server techie list --state "$run/server" | grep -q "$(ssh-keygen -lf "$run/desk/id_ed25519.pub" | cut -d' ' -f2)"; then
 	$server techie add "$(whoami)" "$(cat "$run/desk/id_ed25519.pub")" --state "$run/server"
+fi
+# Who runs the server; without it the server refuses computers.
+if $server info --state "$run/server" | grep -q "can't connect"; then
+	$server info --company "Example Inc" --phone "+1 234 567 890" --state "$run/server" >/dev/null
 fi
 if [ ! -f "$run/desk/techie.json" ]; then
 	echo "{\"server_addr\": \"127.0.0.1:$port\"}" >"$run/desk/techie.json"

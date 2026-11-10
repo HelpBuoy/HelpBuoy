@@ -1,7 +1,7 @@
 // Package app is the computer's logic between the window and the server
 // connection: which screen to show (the server address with Connect, the key
 // to send, waiting for a techie with Disconnect), the stored configuration,
-// Remove key and the update check. It has
+// the lock to a primary server (PLAN.md 12), Remove key and the update check. It has
 // no GUI dependencies; the window renders the View it is given and forwards
 // button presses.
 package app
@@ -19,10 +19,11 @@ import (
 	"github.com/helpbuoy/helpbuoy/client-windows/config"
 	"github.com/helpbuoy/helpbuoy/client-windows/session"
 	"github.com/helpbuoy/helpbuoy/proto/appkey"
+	"github.com/helpbuoy/helpbuoy/proto/control"
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
 	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
+	"github.com/helpbuoy/helpbuoy/proto/servertext"
 	"github.com/helpbuoy/helpbuoy/proto/update"
-	"github.com/helpbuoy/helpbuoy/proto/verify"
 )
 
 // Screen is one of the window's layouts.
@@ -35,7 +36,7 @@ const (
 	ScreenMain                   // registered: waiting for a techie to connect, Disconnect
 	ScreenKeyError               // the app key exists but can't be used
 	// ScreenWarning is the warning before the key screen of a server this PC
-	// never warned about (PLAN.md 12.6); Continue goes on to ScreenKey.
+	// never warned about (PLAN.md 6.2); Continue goes on to ScreenKey.
 	ScreenWarning
 )
 
@@ -56,6 +57,10 @@ type View struct {
 	Connecting bool   // a Connect attempt is running
 	// Error is an inline error (ScreenAddress, ScreenKeyError).
 	Error string
+	// LockedTo is the company (or address) of the primary server this PC is
+	// locked to, "" while unlocked. The address screen says that other
+	// servers need its approval.
+	LockedTo string
 
 	// ScreenKey
 	ServerFingerprint string
@@ -82,10 +87,15 @@ type View struct {
 	// works; 0 means it works now.
 	WarnWait int
 
-	// Title and Instruction are the server's title and instruction line
-	// (e.g. "Example Inc", "Call +1 234 567 890 for support"), or the
-	// generic defaults when the server has none or is not known.
-	Title       string
+	// Who the user is waiting for (ScreenMain, PLAN.md 12.4): the address
+	// this PC is connected to, and the company name, phone number and
+	// description the server gave, cleaned for display. Company, Phone and
+	// Description are empty until the server sent them.
+	ServerAddress string
+	Company       string
+	Phone         string
+	Description   string
+	// Instruction is the line below them (ScreenMain).
 	Instruction string
 }
 
@@ -95,12 +105,13 @@ type UI interface {
 	// and must not wait for the controller.
 	Render(v View)
 	// ConfirmTechie asks whether techie h may take control. oldFingerprint
-	// is set when that techie showed a different key last time. b is what to
-	// show about the server: its Done is closed once the verified server
-	// check finished, after which Badge gives the final text (PLAN.md 12.6).
-	// It may block; when ctx ends the question is moot and it should return
-	// false.
-	ConfirmTechie(ctx context.Context, h session.Techie, oldFingerprint string, b *Badges) bool
+	// is set when that techie showed a different key last time. It may
+	// block; when ctx ends the question is moot and it should return false.
+	ConfirmTechie(ctx context.Context, h session.Techie, oldFingerprint string) bool
+	// ConfirmLock asks whether to lock this PC to the server of company
+	// (PLAN.md 12.1), with Lock and Not now. It may block; when ctx ends the
+	// question is moot and it should return false.
+	ConfirmLock(ctx context.Context, company string) bool
 }
 
 // Deps are the controller's collaborators.
@@ -121,9 +132,9 @@ type Deps struct {
 	// none; nil never finds one. It only runs when the user clicks the
 	// update link on the waiting screen (LatestRelease).
 	CheckUpdate func(ctx context.Context) (*update.Release, error)
-	// Verify checks whether the server is verified; nil treats every server
-	// as not verified.
-	Verify session.Verifier
+	// Probe looks up the host key of a server; nil uses
+	// session.ProbeHostKey. Tests replace it.
+	Probe func(ctx context.Context, addr string) (ssh.PublicKey, error)
 	// Tune adjusts the session options, for tests.
 	Tune   func(*session.Options)
 	Logger *slog.Logger
@@ -144,14 +155,28 @@ type Controller struct {
 	computer *session.Computer
 	gen      int // identifies the running computer; events of older ones are dropped
 	st       session.State
-	reached  bool       // the running computer got through to the server at least once
-	known    bool       // the running computer is registered on its server
-	info     *[2]string // title and instruction the running computer's server sent
-	lastErr  error      // why the last computer stopped, shown on the address screen
-	inputErr string
-	warnFrom time.Time // when the first connection warning was first shown; zero if not shown
-	closed   bool
-	closing  <-chan struct{}
+	reached  bool                // the running computer got through to the server at least once
+	known    bool                // the running computer is registered on its server
+	info     *control.ServerInfo // who runs the running computer's server, cleaned; nil until sent
+	// approved is the approved list the running computer's server sent
+	// (PLAN.md 12), kept for when the user locks to it.
+	approved []control.ApprovedServer
+	// listing is the server the running computer, connected to the primary
+	// server, asks it to approve; nil if none.
+	listing *control.ApprovedServer
+	// probing is set while a locked PC looks up the host key of a server
+	// that is not approved; stopProbe cancels it.
+	probing   bool
+	stopProbe context.CancelFunc
+	// lockAsked is set once the lock question was asked on the running
+	// computer's connection; stopLock ends the question.
+	lockAsked bool
+	stopLock  context.CancelFunc
+	lastErr   error // why the last computer stopped, shown on the address screen
+	inputErr  string
+	warnFrom  time.Time // when the first connection warning was first shown; zero if not shown
+	closed    bool
+	closing   <-chan struct{}
 
 	saveMu sync.Mutex
 
@@ -209,22 +234,20 @@ func (c *Controller) View() View {
 func (c *Controller) viewLocked() View {
 	v := c.screenLocked()
 	if v.Screen == ScreenMain {
-		v.Title, v.Instruction = c.serverInfoLocked()
-		if v.Instruction == "" {
-			v.Instruction = i18n.Trans("A techie can now ask to connect. You will be asked first, " +
-				"and pressing Esc always takes back control.")
+		v.ServerAddress = c.addr
+		if c.info != nil {
+			v.Company, v.Phone, v.Description = c.info.Company, c.info.Phone, c.info.Description
+		}
+		v.Instruction = i18n.Trans("A techie can now ask to connect. You will be asked first, " +
+			"and pressing Esc always takes back control.")
+	}
+	if l := c.cfg.Lock; l != nil {
+		v.LockedTo = l.Company
+		if v.LockedTo == "" {
+			v.LockedTo = l.Address
 		}
 	}
 	return v
-}
-
-// serverInfoLocked returns the title and instruction the server sent on this
-// connection; they are never stored.
-func (c *Controller) serverInfoLocked() (string, string) {
-	if c.info != nil {
-		return c.info[0], c.info[1]
-	}
-	return "", ""
 }
 
 // screenLocked computes the View without the update offer.
@@ -246,16 +269,18 @@ func (c *Controller) screenLocked() View {
 	case c.computer == nil:
 		v.Screen = ScreenAddress
 		v.Address = c.addr
+		v.Connecting = c.probing
 		if v.Address == "" {
 			v.Address = c.storedAddrLocked()
 		}
 		switch {
+		case c.probing:
 		case c.inputErr != "":
 			v.Error = c.inputErr
 		case c.lastErr != nil:
 			v.Error = session.Describe(c.lastErr)
 			var hk *session.HostKeyChangedError
-			if errors.As(c.lastErr, &hk) {
+			if errors.As(c.lastErr, &hk) && c.mayTrustLocked() {
 				v.ServerKeyChange = hk
 			}
 		}
@@ -271,6 +296,9 @@ func (c *Controller) screenLocked() View {
 		}
 	case p == session.PhasePending:
 		v.Screen = ScreenKey
+	case p == session.PhaseReady && c.listing != nil:
+		v.Screen, v.Ready = ScreenMain, true
+		v.Notice = i18n.Trans("Waiting until {0} allows {1}.", c.companyLocked(), c.listing.Address)
 	case p == session.PhaseReady:
 		v.Screen, v.Ready = ScreenMain, true
 	case p == session.PhaseAsking:
@@ -305,19 +333,45 @@ func (c *Controller) Start() {
 	c.mu.Lock()
 	c.loadLocked()
 	if addr := c.storedAddrLocked(); addr != "" && c.key != nil && c.keyErr == nil {
-		c.startComputerLocked(addr)
+		c.startComputerLocked(addr, nil)
 	}
 	c.mu.Unlock()
 	c.update()
 }
 
 // storedAddrLocked is the address to connect to or prefill: the last one
-// that reached a server, else the server this PC is registered on.
+// that reached a server, else the server this PC is registered on. A locked
+// PC only goes back to an address it may still use, else to its primary
+// server.
 func (c *Controller) storedAddrLocked() string {
-	if c.cfg.LastAddress != "" {
-		return c.cfg.LastAddress
+	addr := c.cfg.LastAddress
+	if addr == "" {
+		addr = c.cfg.ServerAddress
 	}
-	return c.cfg.ServerAddress
+	if l := c.cfg.Lock; l != nil && !c.allowedLocked(addr) {
+		return l.Address
+	}
+	return addr
+}
+
+// allowedLocked reports whether this PC may connect to addr: always while
+// unlocked, else only to the primary server and the approved servers.
+func (c *Controller) allowedLocked(addr string) bool {
+	l := c.cfg.Lock
+	if l == nil || addr == l.Address {
+		return true
+	}
+	_, ok := l.ApprovedAt(addr)
+	return ok
+}
+
+// companyLocked names the server of the running computer: its company
+// name, else its address.
+func (c *Controller) companyLocked() string {
+	if c.info != nil && c.info.Company != "" {
+		return c.info.Company
+	}
+	return c.addr
 }
 
 func (c *Controller) loadLocked() {
@@ -333,44 +387,57 @@ func (c *Controller) loadLocked() {
 	c.cfg = cfg
 }
 
-// startComputerLocked replaces the running computer. The server's host key and
-// the techie pins are the stored ones when addr is the stored server;
-// otherwise the host key is pinned on first use.
-func (c *Controller) startComputerLocked(addr string) {
+// startComputerLocked replaces the running computer. The server's host key
+// and the techie pins are the stored ones when addr is the stored server;
+// otherwise the host key is pinned on first use. A locked PC pins its
+// primary server's host key, and an approved server's by the fingerprint
+// the primary server approved. listing, if set, is the server to ask the
+// primary server (addr) to approve.
+func (c *Controller) startComputerLocked(addr string, listing *control.ApprovedServer) {
 	c.stopComputerLocked()
 	c.gen++
 	c.addr = addr
 	c.reached, c.known, c.lastErr = false, false, nil
-	c.info = nil
+	c.info, c.approved, c.listing, c.lockAsked = nil, nil, listing, false
 	c.warnFrom = time.Time{}
 	c.st = session.State{Phase: session.PhaseConnecting}
-	var hostKey string
+	var hostKey, fp string
 	var techies map[string]string
 	if addr == c.cfg.ServerAddress {
 		hostKey, techies = c.cfg.ServerHostKey, c.cfg.Clone().KnownTechies
 	}
-	c.computer = c.newComputerLocked(addr, hostKey, techies, c.gen)
+	if l := c.cfg.Lock; l != nil {
+		if addr == l.Address {
+			hostKey = l.HostKey
+		} else if a, ok := l.ApprovedAt(addr); ok {
+			hostKey, fp = "", a.Fingerprint
+		}
+	}
+	c.computer = c.newComputerLocked(addr, hostKey, fp, techies, listing, c.gen)
 	c.computer.Start()
 }
 
 // newComputerLocked returns a server computer whose events carry gen.
-func (c *Controller) newComputerLocked(addr, hostKey string, techies map[string]string, gen int) *session.Computer {
+func (c *Controller) newComputerLocked(addr, hostKey, fp string, techies map[string]string, listing *control.ApprovedServer, gen int) *session.Computer {
 	var runner session.Runner
 	if c.d.NewRunner != nil {
 		runner = c.d.NewRunner(c.key)
 	}
 	opts := session.Options{
-		Addr:          addr,
-		Signer:        c.key.Signer,
-		AppVersion:    c.d.AppVersion,
-		UserMachine:   c.d.UserMachine,
-		ServerHostKey: hostKey,
-		KnownTechies:  techies,
-		Handler:       handler{c, gen},
-		Runner:        runner,
-		EscHook:       c.d.EscHook,
-		Verify:        c.d.Verify,
-		Logger:        c.log,
+		Addr:              addr,
+		Signer:            c.key.Signer,
+		AppVersion:        c.d.AppVersion,
+		UserMachine:       c.d.UserMachine,
+		ServerHostKey:     hostKey,
+		KnownTechies:      techies,
+		ServerFingerprint: fp,
+		Handler:           handler{c, gen},
+		Runner:            runner,
+		EscHook:           c.d.EscHook,
+		Logger:            c.log,
+	}
+	if listing != nil {
+		opts.Listing = &control.RequestListing{Address: listing.Address, Fingerprint: listing.Fingerprint}
 	}
 	if c.d.Tune != nil {
 		c.d.Tune(&opts)
@@ -378,33 +445,92 @@ func (c *Controller) newComputerLocked(addr, hostKey string, techies map[string]
 	return session.New(opts)
 }
 
-// stopComputerLocked stops the running computer.
+// stopComputerLocked stops the running computer, or the host key lookup
+// before it.
 func (c *Controller) stopComputerLocked() {
 	if c.computer != nil {
 		c.computer.Close()
 		c.computer = nil
 	}
+	if c.stopProbe != nil {
+		c.stopProbe()
+		c.stopProbe = nil
+	}
+	if c.stopLock != nil {
+		c.stopLock()
+		c.stopLock = nil
+	}
+	c.probing = false
+	c.listing = nil
 	c.st = session.State{}
 }
 
 // Connect is the Connect button on the address screen.
 func (c *Controller) Connect(text string) {
 	c.mu.Lock()
-	if c.closed || c.key == nil || c.computer != nil {
+	if c.closed || c.key == nil || c.computer != nil || c.probing {
 		c.mu.Unlock()
 		return
 	}
 	a, err := serveraddr.Parse(text)
-	if err != nil {
+	switch {
+	case err != nil:
 		c.addr = text
 		c.lastErr = nil
 		c.inputErr = capitalize(err.Error()) + "."
-	} else {
+	case c.allowedLocked(a.String()):
 		c.inputErr = ""
-		c.startComputerLocked(a.String())
+		c.startComputerLocked(a.String(), nil)
+	default:
+		c.inputErr = ""
+		c.probeLocked(a.String())
 	}
 	c.mu.Unlock()
 	c.update()
+}
+
+// probeLocked is Connect on a locked PC to a server that is not approved
+// (PLAN.md 12.3): it only looks up that server's host key, then connects
+// to the primary server and asks it to approve that server with that key.
+// Once it does, the PC connects to the server; until then the user sees
+// the primary server's waiting screen.
+func (c *Controller) probeLocked(addr string) {
+	c.stopComputerLocked()
+	c.gen++
+	gen := c.gen
+	c.addr, c.lastErr, c.probing = addr, nil, true
+	ctx, cancel := context.WithCancel(context.Background())
+	c.stopProbe = cancel
+	probe := c.d.Probe
+	if probe == nil {
+		probe = func(ctx context.Context, addr string) (ssh.PublicKey, error) {
+			return session.ProbeHostKey(ctx, addr, 0)
+		}
+	}
+	c.log.Info("looking up the host key of a server that is not approved", "server", addr)
+	go func() {
+		key, err := probe(ctx, addr)
+		c.mu.Lock()
+		if c.gen != gen || !c.probing {
+			c.mu.Unlock()
+			return
+		}
+		c.probing, c.stopProbe = false, nil
+		cancel()
+		switch {
+		case err != nil:
+			c.lastErr = err
+		default:
+			s := control.ApprovedServer{Address: addr, Fingerprint: ssh.FingerprintSHA256(key)}
+			if slices.Contains(c.cfg.Lock.Approved, s) {
+				c.startComputerLocked(addr, nil)
+			} else {
+				c.startComputerLocked(c.cfg.Lock.Address, &s)
+			}
+		}
+		c.mu.Unlock()
+		c.update()
+	}()
 }
 
 // Disconnect is the Disconnect button (and the "use a different server
@@ -439,16 +565,32 @@ func (c *Controller) EndSession() {
 func (c *Controller) TrustServerKey(newFingerprint string) {
 	c.mu.Lock()
 	var hk *session.HostKeyChangedError
-	if c.computer != nil || !errors.As(c.lastErr, &hk) || hk.NewFingerprint != newFingerprint || c.addr != c.cfg.ServerAddress {
+	if c.computer != nil || !errors.As(c.lastErr, &hk) || hk.NewFingerprint != newFingerprint || !c.mayTrustLocked() {
 		c.mu.Unlock()
 		return
 	}
 	c.log.Warn("server host key change accepted by the user", "old", hk.OldFingerprint, "new", hk.NewFingerprint)
-	c.cfg.ServerHostKey = hk.NewKeyLine
-	c.startComputerLocked(c.addr)
+	if c.addr == c.cfg.ServerAddress {
+		c.cfg.ServerHostKey = hk.NewKeyLine
+	}
+	if l := c.cfg.Lock; l != nil {
+		l.HostKey = hk.NewKeyLine
+	}
+	c.startComputerLocked(c.addr, nil)
 	c.mu.Unlock()
 	c.save()
 	c.update()
+}
+
+// mayTrustLocked reports whether the user may accept a changed host key of
+// the server at c.addr: the server this PC is registered on, or for a locked
+// PC only its primary server. The key of an approved server is the one the
+// primary server approved; only the primary server can approve another.
+func (c *Controller) mayTrustLocked() bool {
+	if l := c.cfg.Lock; l != nil {
+		return c.addr == l.Address
+	}
+	return c.addr == c.cfg.ServerAddress
 }
 
 // warnedLocked reports whether the first connection warning was accepted for
@@ -486,15 +628,22 @@ func (c *Controller) ContinueWarning() {
 
 // RemoveKey deletes the key and the configuration, then creates a new key
 // and goes back to the address screen. Call only after the user confirmed.
+// A lock stays: this PC then starts over as a new computer of its primary
+// server (PLAN.md 12.2).
 func (c *Controller) RemoveKey() error {
 	c.mu.Lock()
 	c.stopComputerLocked()
+	lock := c.cfg.Clone().Lock
 	err := c.d.RemoveKey()
 	if err == nil {
 		c.addr, c.inputErr, c.lastErr = "", "", nil
 		c.loadLocked()
+		c.cfg.Lock = lock
 	}
 	c.mu.Unlock()
+	if err == nil && lock != nil {
+		c.save()
+	}
 	c.update()
 	return err
 }
@@ -578,6 +727,7 @@ func (h handler) StateChanged(s session.State) {
 			}
 		}
 	}
+	c.askLockLocked()
 	c.mu.Unlock()
 	if save {
 		c.save()
@@ -625,28 +775,117 @@ func (h handler) TechiePinned(name, line string) {
 	c.save()
 }
 
-// ServerInfo shows the server's title and instruction.
-func (h handler) ServerInfo(title, instruction string) {
+// ServerInfo shows who runs the server. Text from a server can say
+// anything, so it is shown on one line without control characters.
+func (h handler) ServerInfo(info control.ServerInfo) {
 	c := h.c
 	c.mu.Lock()
 	if c.gen != h.gen || c.computer == nil {
 		c.mu.Unlock()
 		return
 	}
-	// Text from the server can say anything, so it can't imitate the
-	// verified badge (PLAN.md 12.6).
-	c.info = &[2]string{verify.Clean(title), verify.Clean(instruction)}
+	c.info = &control.ServerInfo{
+		Address:     servertext.Clean(info.Address),
+		Company:     servertext.Clean(info.Company),
+		Phone:       servertext.Clean(info.Phone),
+		Description: servertext.Clean(info.Description),
+	}
+	save := false
+	if l := c.cfg.Lock; l != nil && c.addr == l.Address && c.info.Company != "" && l.Company != c.info.Company {
+		l.Company = c.info.Company
+		save = true
+	}
+	c.askLockLocked()
+	c.mu.Unlock()
+	if save {
+		c.save()
+	}
+	c.update()
+}
+
+// ApprovedServers keeps the approved list the server sent. From the primary
+// server of a locked PC it replaces the stored list, and when it now has
+// the server this PC asked for, the PC connects there.
+func (h handler) ApprovedServers(servers []control.ApprovedServer) {
+	c := h.c
+	c.mu.Lock()
+	if c.gen != h.gen || c.computer == nil {
+		c.mu.Unlock()
+		return
+	}
+	c.approved = slices.Clone(servers)
+	l := c.cfg.Lock
+	if l == nil || c.addr != l.Address {
+		c.mu.Unlock()
+		return
+	}
+	save := !slices.Equal(l.Approved, servers)
+	l.Approved = slices.Clone(servers)
+	if q := c.listing; q != nil && slices.Contains(servers, *q) {
+		c.log.Info("the primary server approved the server", "server", q.Address, "fingerprint", q.Fingerprint)
+		c.startComputerLocked(q.Address, nil)
+	}
+	c.mu.Unlock()
+	if save {
+		c.save()
+	}
+	c.update()
+}
+
+// ListingRefused goes back to the address screen when a techie of the
+// primary server refused the server this PC asked for.
+func (h handler) ListingRefused(s control.ApprovedServer) {
+	c := h.c
+	c.mu.Lock()
+	if c.gen != h.gen || c.listing == nil || *c.listing != s {
+		c.mu.Unlock()
+		return
+	}
+	company := c.companyLocked()
+	c.log.Info("the primary server refused the server", "server", s.Address, "fingerprint", s.Fingerprint)
+	c.stopComputerLocked()
+	c.addr, c.lastErr = s.Address, nil
+	c.inputErr = i18n.Trans("{0} did not allow this PC to connect to {1}.", company, s.Address)
 	c.mu.Unlock()
 	c.update()
 }
 
-func (h handler) ConfirmTechie(ctx context.Context, techie session.Techie, oldFP string, v *session.Verification) bool {
-	c := h.c
-	c.mu.Lock()
-	addr := c.addr
-	c.mu.Unlock()
-	techie.Name = verify.Clean(techie.Name)
-	return c.d.UI.ConfirmTechie(ctx, techie, oldFP, &Badges{v: v, addr: addr})
+// askLockLocked asks the lock question (PLAN.md 12.1) once per connection
+// of an unlocked PC, as soon as the server accepted this PC as registered
+// and said who runs it.
+func (c *Controller) askLockLocked() {
+	if c.cfg.Lock != nil || c.lockAsked || c.computer == nil || c.listing != nil ||
+		c.st.Phase != session.PhaseReady || c.info == nil || c.info.Company == "" {
+		return
+	}
+	c.lockAsked = true
+	ctx, cancel := context.WithCancel(context.Background())
+	c.stopLock = cancel
+	gen, company := c.gen, c.info.Company
+	go func() {
+		ok := c.d.UI.ConfirmLock(ctx, company)
+		c.mu.Lock()
+		if !ok || ctx.Err() != nil || c.gen != gen || c.computer == nil || !c.known ||
+			c.cfg.Lock != nil || c.st.ServerHostKey == "" {
+			c.mu.Unlock()
+			return
+		}
+		c.cfg.Lock = &config.Lock{
+			Address:  c.addr,
+			HostKey:  c.st.ServerHostKey,
+			Company:  company,
+			Approved: slices.Clone(c.approved),
+		}
+		c.log.Info("locked to the primary server", "server", c.addr, "fingerprint", c.st.ServerFingerprint)
+		c.mu.Unlock()
+		c.save()
+		c.update()
+	}()
+}
+
+func (h handler) ConfirmTechie(ctx context.Context, techie session.Techie, oldFP string) bool {
+	techie.Name = servertext.Clean(techie.Name)
+	return h.c.d.UI.ConfirmTechie(ctx, techie, oldFP)
 }
 
 // save writes the current configuration. Saves are serialized and each

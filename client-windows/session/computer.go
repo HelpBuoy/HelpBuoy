@@ -22,7 +22,6 @@ import (
 	"github.com/helpbuoy/helpbuoy/client-windows/identity"
 	"github.com/helpbuoy/helpbuoy/proto/control"
 	pid "github.com/helpbuoy/helpbuoy/proto/identity"
-	"github.com/helpbuoy/helpbuoy/proto/verify"
 )
 
 // Phase is what the computer is doing, as far as the window cares.
@@ -64,8 +63,8 @@ type State struct {
 }
 
 // Handler receives events from the computer. Its methods are called from the
-// computer's goroutines; StateChanged, Registered and TechiePinned must return
-// quickly. ConfirmTechie may block while the user decides.
+// computer's goroutines and must return quickly, except ConfirmTechie, which
+// may block while the user decides.
 type Handler interface {
 	// StateChanged reports a new snapshot. Snapshots arrive in order.
 	StateChanged(State)
@@ -74,50 +73,22 @@ type Handler interface {
 	Registered(serverHostKey string)
 	// TechiePinned reports a techie key to remember for name.
 	TechiePinned(name, keyLine string)
-	// ServerInfo reports the server's title and instruction line, after
-	// connecting and whenever a techie changes them.
-	ServerInfo(title, instruction string)
+	// ServerInfo reports who runs the server, after connecting and whenever
+	// a techie changes it.
+	ServerInfo(info control.ServerInfo)
+	// ApprovedServers reports the servers this server approved for this
+	// computer (PLAN.md 12), after connecting as a registered computer and
+	// whenever the list changes.
+	ApprovedServers(servers []control.ApprovedServer)
+	// ListingRefused reports that a techie refused to approve a server.
+	ListingRefused(s control.ApprovedServer)
 	// ConfirmTechie asks the user whether techie h may take control. It is
 	// called for every session, before the session channel is opened.
 	// oldFingerprint is set when the techie called h.Name showed a different
-	// key last time ("unreadable" if the pinned key can't be parsed). v is
-	// the verified server check for this request, which may still be
-	// running. ctx ends when the question is moot (the server ended the
-	// request, or the connection was lost); the implementation should then
-	// stop asking.
-	ConfirmTechie(ctx context.Context, h Techie, oldFingerprint string, v *Verification) bool
-}
-
-// Verifier checks with helpbuoy.com whether the server is verified (PLAN.md
-// 12.5); see verify.Checker.Check.
-type Verifier func(ctx context.Context, hostKey ssh.PublicKey, salt []byte, addr string) verify.Result
-
-// Verification is the verified server check for one request. Done is closed
-// once Result is final.
-type Verification struct {
-	done chan struct{}
-	res  verify.Result
-}
-
-// Done is closed when the check finished.
-func (v *Verification) Done() <-chan struct{} { return v.done }
-
-// Result returns the outcome; before Done it is verify.Unknown.
-func (v *Verification) Result() verify.Result {
-	select {
-	case <-v.done:
-		return v.res
-	default:
-		return verify.Result{State: verify.Unknown}
-	}
-}
-
-// Finished returns a Verification that is already done with r, for tests and
-// for servers that can't be checked.
-func Finished(r verify.Result) *Verification {
-	v := &Verification{done: make(chan struct{}), res: r}
-	close(v.done)
-	return v
+	// key last time ("unreadable" if the pinned key can't be parsed). ctx
+	// ends when the question is moot (the server ended the request, or the
+	// connection was lost); the implementation should then stop asking.
+	ConfirmTechie(ctx context.Context, h Techie, oldFingerprint string) bool
 }
 
 // Runner runs one session on the computer's sv-session channel: the inner SSH
@@ -134,9 +105,15 @@ type Options struct {
 	AppVersion  string
 	UserMachine string // current user@machine for ComputerHello
 
-	// ServerHostKey is the pinned server host key line; empty means trust on
-	// first use (the first-run window).
-	ServerHostKey string
+	// ServerHostKey is the pinned server host key line. Without it,
+	// ServerFingerprint pins the host key by its fingerprint (a server
+	// approved by the primary server, PLAN.md 12); without either the host
+	// key is trusted on first use.
+	ServerHostKey     string
+	ServerFingerprint string
+	// Listing, if set, is sent to the server after every connection as a
+	// registered computer: a request to approve another server.
+	Listing *control.RequestListing
 	// KnownTechies maps techie names to pinned key lines.
 	KnownTechies map[string]string
 	// Retry keeps retrying when the very first attempt fails. Without it the
@@ -153,9 +130,6 @@ type Options struct {
 	EscHook func(onEsc func()) (stop func())
 	// ParseKey parses a techie key line; default proto/identity.ParseLine.
 	ParseKey func(line string) (ssh.PublicKey, error)
-	// Verify checks whether the server is verified; nil treats every server
-	// as not verified.
-	Verify Verifier
 
 	DialTimeout time.Duration // TCP connect, SSH handshake and Hello; default 10 s
 	KeepAlive   time.Duration // default 15 s; the connection is dropped after 3 missed
@@ -179,7 +153,6 @@ type Computer struct {
 	stopped     bool
 	err         error
 	hostKey     ssh.PublicKey
-	salt        []byte // verification salt of this connection, nil without one
 	techies     map[string]string
 	conn        *serverConn // nil while disconnected
 	pending     bool
@@ -391,6 +364,15 @@ func (c *Computer) hostKeyCallback(_ string, _ net.Addr, key ssh.PublicKey) erro
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.hostKey == nil {
+		if fp := c.opts.ServerFingerprint; fp != "" && ssh.FingerprintSHA256(key) != fp {
+			e := &HostKeyChangedError{
+				OldFingerprint: fp,
+				NewFingerprint: ssh.FingerprintSHA256(key),
+				NewKeyLine:     identity.KeyLine(key, ""),
+			}
+			c.log.Error("server host key is not the approved one", "approved", fp, "got", e.NewFingerprint)
+			return e
+		}
 		c.hostKey = key
 		return nil
 	}
@@ -592,11 +574,11 @@ func (c *Computer) connected(rc *serverConn, h *control.Hello) error {
 	}
 	c.conn = rc
 	c.err = nil
-	c.salt, _ = verify.ParseSalt(h.Salt)
 	hostKey := identity.KeyLine(c.hostKey, "")
 	c.mu.Unlock()
 	if registered {
 		c.opts.Handler.Registered(hostKey)
+		c.sendListing(rc)
 	}
 	c.notify()
 	return nil
@@ -605,7 +587,6 @@ func (c *Computer) connected(rc *serverConn, h *control.Hello) error {
 func (c *Computer) disconnected() {
 	c.mu.Lock()
 	c.conn = nil
-	c.salt = nil
 	c.endRequestLocked()
 	end := c.endSession
 	c.mu.Unlock()
@@ -620,11 +601,11 @@ func (c *Computer) dispatch(rc *serverConn, m any) {
 	case *control.Registered:
 		c.mu.Lock()
 		c.pending = false
-		c.salt, _ = verify.ParseSalt(m.Salt)
 		hostKey := identity.KeyLine(c.hostKey, "")
 		c.mu.Unlock()
 		c.log.Info("registered")
 		c.opts.Handler.Registered(hostKey)
+		c.sendListing(rc)
 
 	case *control.RequestStateMsg:
 		c.mu.Lock()
@@ -635,7 +616,16 @@ func (c *Computer) dispatch(rc *serverConn, m any) {
 		c.mu.Unlock()
 
 	case *control.ServerInfo:
-		c.opts.Handler.ServerInfo(m.Title, m.Instruction)
+		c.opts.Handler.ServerInfo(*m)
+		return
+
+	case *control.ApprovedServers:
+		c.opts.Handler.ApprovedServers(m.Servers)
+		return
+
+	case *control.ListingRefused:
+		c.log.Info("listing refused", "address", m.Address, "fingerprint", m.Fingerprint)
+		c.opts.Handler.ListingRefused(control.ApprovedServer{Address: m.Address, Fingerprint: m.Fingerprint})
 		return
 
 	case *control.SessionReady:
@@ -719,7 +709,7 @@ func (c *Computer) runSession(rc *serverConn, sr control.SessionReady, ask conte
 		}
 	}
 	techie := Techie{Name: sr.TechieName, Fingerprint: fp}
-	if !c.opts.Handler.ConfirmTechie(ask, techie, oldFP, c.verify(ask, log)) {
+	if !c.opts.Handler.ConfirmTechie(ask, techie, oldFP) {
 		abort("user refused the techie", nil)
 		return
 	}
@@ -773,26 +763,55 @@ func (c *Computer) runSession(rc *serverConn, sr control.SessionReady, ask conte
 	c.notify()
 }
 
-// verify starts the verified server check for one request (PLAN.md 12.5).
-// It uses the host key of this connection, which is the pinned one, and the
-// address this computer connects to. The check ends with ask, so a late
-// answer never reaches a later request.
-func (c *Computer) verify(ask context.Context, log *slog.Logger) *Verification {
-	c.mu.Lock()
-	hostKey, salt := c.hostKey, c.salt
-	c.mu.Unlock()
-	if c.opts.Verify == nil || salt == nil {
-		return Finished(verify.Result{State: verify.NotVerified})
+// sendListing sends the listing request of Options.Listing, if any.
+func (c *Computer) sendListing(rc *serverConn) {
+	if l := c.opts.Listing; l != nil {
+		c.log.Info("asking the server to approve another server", "address", l.Address, "fingerprint", l.Fingerprint)
+		rc.send(*l)
 	}
-	v := &Verification{done: make(chan struct{})}
-	go func() {
-		v.res = c.opts.Verify(ask, hostKey, salt, c.opts.Addr)
-		if v.res.Err != nil {
-			log.Info("verified server check", "state", v.res.State, "err", v.res.Err)
-		} else {
-			log.Info("verified server check", "state", v.res.State, "company", v.res.Company)
-		}
-		close(v.done)
-	}()
-	return v
+}
+
+// ErrProbed ends the handshake of ProbeHostKey once the host key is known.
+var errProbed = errors.New("host key seen")
+
+// ProbeHostKey connects to the server at addr only far enough to see its
+// host key (PLAN.md 12.3): it ends the SSH handshake right after the server
+// showed its key, before authenticating, so nothing else happens with that
+// server.
+func ProbeHostKey(ctx context.Context, addr string, timeout time.Duration) (ssh.PublicKey, error) {
+	if timeout == 0 {
+		timeout = 10 * time.Second
+	}
+	dctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	var d net.Dialer
+	tcp, err := d.DialContext(dctx, "tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	defer tcp.Close()
+	stop := context.AfterFunc(dctx, func() { tcp.Close() })
+	defer stop()
+	tcp.SetDeadline(time.Now().Add(timeout))
+	var key ssh.PublicKey
+	cfg := &ssh.ClientConfig{
+		User: control.SSHUser,
+		HostKeyCallback: func(_ string, _ net.Addr, k ssh.PublicKey) error {
+			key = k
+			return errProbed
+		},
+		ClientVersion: "SSH-2.0-helpbuoy-client",
+		Timeout:       timeout,
+	}
+	_, _, _, err = ssh.NewClientConn(tcp, addr, cfg)
+	if key != nil {
+		return key, nil
+	}
+	if dctx.Err() != nil && ctx.Err() == nil {
+		return nil, context.DeadlineExceeded
+	}
+	if err == nil {
+		err = ErrNotServer
+	}
+	return nil, handshakeError(err)
 }

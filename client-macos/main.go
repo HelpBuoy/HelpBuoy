@@ -191,7 +191,6 @@ func run(demo bool, source string, log *slog.Logger) error {
 			return stop
 		},
 		CheckUpdate: nil,
-		Verify:      app.NewVerifier(version),
 		AppVersion:  version,
 		UserMachine: userMachine,
 		Logger:      log,

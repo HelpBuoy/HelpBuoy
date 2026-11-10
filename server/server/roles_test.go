@@ -10,6 +10,7 @@ import (
 	"github.com/helpbuoy/helpbuoy/proto/control"
 	"github.com/helpbuoy/helpbuoy/server/fake"
 	"github.com/helpbuoy/helpbuoy/server/hostkey"
+	"github.com/helpbuoy/helpbuoy/server/registry"
 	"github.com/helpbuoy/helpbuoy/server/server"
 	"github.com/helpbuoy/helpbuoy/server/store"
 )
@@ -141,7 +142,9 @@ func TestMessagesPerRole(t *testing.T) {
 		{"RenameComputer", &control.RenameComputer{Seq: 1, Fingerprint: "SHA256:x", Name: "x"}, map[control.Role]bool{control.RoleTechie: true}},
 		{"RegisterTechie", &control.RegisterTechie{Seq: 1, PublicKey: "bad", Name: "x"}, map[control.Role]bool{control.RoleTechie: true}},
 		{"UnregisterTechie", &control.UnregisterTechie{Seq: 1, Name: "nobody"}, map[control.Role]bool{control.RoleTechie: true}},
-		{"SetServerInfo", &control.SetServerInfo{Seq: 1, Title: "bad\x00title"}, map[control.Role]bool{control.RoleTechie: true}},
+		{"SetServerInfo", &control.SetServerInfo{Seq: 1, Company: "bad\x00title"}, map[control.Role]bool{control.RoleTechie: true}},
+		{"DecideListing", &control.DecideListing{Seq: 1, Computer: "SHA256:x"}, map[control.Role]bool{control.RoleTechie: true}},
+		{"RequestListing", &control.RequestListing{Address: "bad address"}, map[control.Role]bool{control.RoleComputer: true}},
 		// Server->app messages are never accepted from apps.
 		{"Hello", &control.Hello{Role: control.RoleTechie}, nil},
 		{"Presence", &control.Presence{}, nil},
@@ -151,6 +154,8 @@ func TestMessagesPerRole(t *testing.T) {
 		{"SessionReady", &control.SessionReady{}, nil},
 		{"Error", &control.Error{}, nil},
 		{"ServerInfo", &control.ServerInfo{}, nil},
+		{"ApprovedServers", &control.ApprovedServers{}, nil},
+		{"ListingRefused", &control.ListingRefused{}, nil},
 	}
 	for _, rc := range roles() {
 		t.Run(string(rc.role), func(t *testing.T) {
@@ -541,42 +546,130 @@ func TestRenameComputer(t *testing.T) {
 	}
 }
 
-// TestSetServerInfo: a techie sets the title and instruction line; every
-// connection gets the new ServerInfo, it is stored, and new connections get
-// it after Hello. Bad values are refused.
+// TestSetServerInfo: a techie sets who runs the server; every connection
+// gets the new ServerInfo, it is stored, and new connections get it after
+// Hello. Bad values are refused.
 func TestSetServerInfo(t *testing.T) {
 	e := newEnv(t, nil)
 	h := e.techie("alice")
 	cl, _ := e.computer("anna@PC")
-	mustWait[control.ServerInfo](t, cl, func(m *control.ServerInfo) bool { return m.Title == "" && m.Instruction == "" })
+	mustWait[control.ServerInfo](t, cl, func(m *control.ServerInfo) bool { return *m == testInfo })
 
-	h.Send(&control.SetServerInfo{Seq: 2, Title: " Example Inc ", Instruction: "Call +1 234 567 890 for support"})
+	h.Send(&control.SetServerInfo{Seq: 2, Address: "Help.Example.com", Company: " Other Inc ", Phone: "+31 20 123 4567", Description: "Mon-Fri 9-17"})
 	if rep := mustWait[control.Reply](t, h, func(r *control.Reply) bool { return r.Seq == 2 }); rep.Error != "" {
 		t.Fatalf("set: %s", rep.Error)
 	}
-	want := func(m *control.ServerInfo) bool {
-		return m.Title == "Example Inc" && m.Instruction == "Call +1 234 567 890 for support"
-	}
+	wantInfo := control.ServerInfo{Address: "help.example.com:5959", Company: "Other Inc", Phone: "+31 20 123 4567", Description: "Mon-Fri 9-17"}
+	want := func(m *control.ServerInfo) bool { return *m == wantInfo }
 	mustWait[control.ServerInfo](t, cl, want)
 	idx, _, err := e.st.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if idx.State.Title != "Example Inc" {
-		t.Fatalf("stored title %q", idx.State.Title)
+	if idx.State.Info() != wantInfo {
+		t.Fatalf("stored %+v", idx.State.Info())
 	}
 	h2 := e.techie("bob")
 	mustWait[control.ServerInfo](t, h2, want)
 
 	for i, m := range []*control.SetServerInfo{
-		{Seq: 3, Title: strings.Repeat("x", 65)},
-		{Seq: 4, Instruction: "two\nlines"},
+		{Seq: 3, Company: strings.Repeat("x", 65), Phone: "1"},
+		{Seq: 4, Company: "A", Phone: "two\nlines"},
+		{Seq: 5, Company: "", Phone: "1"},
+		{Seq: 6, Company: "A", Phone: ""},
+		{Seq: 7, Company: "A", Phone: "1", Address: "not an address!"},
 	} {
 		h.Send(m)
 		if rep := mustWait[control.Reply](t, h, func(r *control.Reply) bool { return r.Seq == m.Seq }); rep.Error == "" {
 			t.Errorf("case %d: no error", i)
 		}
 	}
+}
+
+// TestNotSetUp: a server without a company name and phone number refuses
+// computers and pending keys with an Error, but lets techies in.
+func TestNotSetUp(t *testing.T) {
+	e := newEnv(t, nil)
+	e.update(func(st *store.State) error {
+		st.Company, st.Phone = "", ""
+		return nil
+	})
+	ck := e.addComputer("anna@PC")
+	for _, k := range []ssh.Signer{ck, fake.NewKey()} {
+		c := e.dial(k)
+		if msg := waitClosed(t, c); msg != registry.ReasonNotSetUp {
+			t.Fatalf("closed with %q, want the not set up Error", msg)
+		}
+	}
+	e.techie("alice")
+}
+
+// TestListing: a computer asks to approve another server, techies see the
+// request in Presence, and allowing it sends the computer its new approved
+// list, also after reconnecting. Refusing sends ListingRefused.
+func TestListing(t *testing.T) {
+	e := newEnv(t, nil)
+	h := e.techie("alice")
+	cl, ck := e.computer("anna@PC")
+	mustWait[control.ApprovedServers](t, cl, func(m *control.ApprovedServers) bool { return len(m.Servers) == 0 })
+	other := fp(fake.NewKey())
+	cl.Send(&control.RequestListing{Address: "Vendor.example.com", Fingerprint: other})
+	p := presenceWhere(t, h, func(p *control.Presence) bool { return len(p.Computers) == 1 && len(p.Computers[0].Listings) == 1 })
+	l := p.Computers[0].Listings[0]
+	if l.Address != "vendor.example.com:5959" || l.Fingerprint != other || l.RequestedAt.IsZero() {
+		t.Fatalf("listing %+v", l)
+	}
+	// Asking again changes nothing.
+	cl.Send(&control.RequestListing{Address: "vendor.example.com", Fingerprint: other})
+
+	h.Send(&control.DecideListing{Seq: 1, Computer: fp(ck), Address: l.Address, Fingerprint: other, Allow: true})
+	if rep := mustWait[control.Reply](t, h, func(r *control.Reply) bool { return r.Seq == 1 }); rep.Error != "" {
+		t.Fatalf("allow: %s", rep.Error)
+	}
+	approved := control.ApprovedServer{Address: "vendor.example.com:5959", Fingerprint: other}
+	mustWait[control.ApprovedServers](t, cl, func(m *control.ApprovedServers) bool {
+		return len(m.Servers) == 1 && m.Servers[0] == approved
+	})
+	p = presenceWhere(t, h, func(p *control.Presence) bool { return len(p.Computers[0].Listings) == 0 })
+	if len(p.Computers[0].Approved) != 1 || p.Computers[0].Approved[0] != approved {
+		t.Fatalf("approved %+v", p.Computers[0].Approved)
+	}
+	// Deciding a request that is not open fails.
+	h.Send(&control.DecideListing{Seq: 2, Computer: fp(ck), Address: l.Address, Fingerprint: other, Allow: true})
+	if rep := mustWait[control.Reply](t, h, func(r *control.Reply) bool { return r.Seq == 2 }); rep.Error == "" {
+		t.Fatal("deciding twice succeeded")
+	}
+
+	// A reconnect gets the list after Hello.
+	cl.Close()
+	cl2, _ := e.connect(ck, control.RoleComputer)
+	mustWait[control.ApprovedServers](t, cl2, func(m *control.ApprovedServers) bool { return len(m.Servers) == 1 })
+
+	// Refusing.
+	third := fp(fake.NewKey())
+	cl2.Send(&control.RequestListing{Address: "scam.example.com", Fingerprint: third})
+	presenceWhere(t, h, func(p *control.Presence) bool { return len(p.Computers[0].Listings) == 1 })
+	h.Send(&control.DecideListing{Seq: 3, Computer: fp(ck), Address: "scam.example.com:5959", Fingerprint: third})
+	if rep := mustWait[control.Reply](t, h, func(r *control.Reply) bool { return r.Seq == 3 }); rep.Error != "" {
+		t.Fatalf("refuse: %s", rep.Error)
+	}
+	mustWait[control.ListingRefused](t, cl2, func(m *control.ListingRefused) bool { return m.Fingerprint == third })
+	p = presenceWhere(t, h, func(p *control.Presence) bool { return len(p.Computers[0].Listings) == 0 })
+	if len(p.Computers[0].Approved) != 1 {
+		t.Fatalf("refusing changed the approved list: %+v", p.Computers[0].Approved)
+	}
+}
+
+// TestListingPromoted: a pending key that gets registered receives its
+// (empty) approved list after Registered.
+func TestListingPromoted(t *testing.T) {
+	e := newEnv(t, nil)
+	h := e.techie("alice")
+	k := fake.NewKey()
+	pc, _ := e.connect(k, control.RolePending)
+	h.Send(&control.RegisterComputer{Seq: 1, PublicKey: keyLine(k, "anna@PC")})
+	mustWait[control.Registered](t, pc, func(*control.Registered) bool { return true })
+	mustWait[control.ApprovedServers](t, pc, func(*control.ApprovedServers) bool { return true })
 }
 
 // TestRegisterTechie: a techie adds another techie, who can then log in as

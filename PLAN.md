@@ -91,7 +91,7 @@ connection and stored in `config.json` in the client's data directory:
 | server host key | `ssh-ed25519 AAAA...` (`SHA256:3q2+7w...`) | first successful connection, pinned from then on |
 | last address | `helpme.example.com` | the last address that reached a server, to prefill the field |
 | known techies | `alice` → `ssh-ed25519 AAAA...` | each techie's key, pinned on the first session with that techie (3.5) |
-| lock (planned, 13) | primary server address and host key, approved servers | when the user agrees to lock to a server |
+| lock (12) | primary server address and host key, approved servers | when the user agrees to lock to a server |
 
 The key is stored next to it, as its own application-specific key pair (6.1). Adding or removing a techie never touches
 the computer: it trusts the techies the server announces. Connecting to another address pins
@@ -275,9 +275,10 @@ A key can't be both techie and computer.
 
 State directory in the user's data directory, next to the desk app's own data:
 `~/.local/share/helpbuoy-server` on Linux, `~/Library/Application Support/helpbuoy-server` on macOS,
-`%LOCALAPPDATA%\helpbuoy-server` on Windows (override with `--state`). It holds `hostkey_ed25519` (0600), `verification_salt` (0600, 12.4) and `state.json` with techies
-(name, public key) and registered computers (key, `user@machine` name,
-registered by, registered at, last seen). Computer registrations never expire; they are removed
+`%LOCALAPPDATA%\helpbuoy-server` on Windows (override with `--state`). It holds `hostkey_ed25519` (0600) and `state.json` with who runs the server (address,
+company name, phone number, description; 12.4), techies (name, public key) and registered
+computers (key, `user@machine` name, registered by, registered at, last seen, approved
+servers and open listing requests, 12.3). Computer registrations never expire; they are removed
 only by `UnregisterComputer` or `helpbuoy-server computer remove`. They are added by
 `RegisterComputer` or `helpbuoy-server computer add`. Writes are temp file + `fsync` + `rename`.
 Fields in `state.json` that a version doesn't know, at the top level or in a techie or
@@ -294,10 +295,9 @@ without an older one sharing the state directory dropping them.
 | `helpbuoy-server computer add 'ssh-ed25519 ...' ['Anna laptop']` | register a computer key, like Register computer in the desk app; the name defaults to the key comment, and "registered by" is `admin` |
 | `helpbuoy-server computer rename SHA256:... 'Anna laptop'` | rename a registered computer; the same as Rename in the desk app, every techie sees the new name |
 | `helpbuoy-server computer remove SHA256:...` | remove a registered computer; an online computer is disconnected |
-| `helpbuoy-server title ['Example Inc']` / `instruction ['Call +1 234 567 890 for support']` | print or set the title and instruction line the apps show (`''` clears); the same values techies edit on the desk app's Server tab |
+| `helpbuoy-server info [--company C] [--phone P] [--address A] [--description D]` | print or set who runs the server (12.4); only the flags given change, and the company name and phone number can't be cleared. The same values techies edit on the desk app's Server tab. `serve` asks for the company name and phone number when they are missing and it runs in a terminal; until they are set the server refuses computers |
 | `helpbuoy-server hostkey` | print the host key fingerprint, for techies to compare with what computers show |
-| `helpbuoy-server hostkey --new` | (12.3) replace the host key, keeping all techies and computers; like `verification --new` it takes effect at the next server start, since the running server only watches `state.json`; every computer then shows the changed server identity warning (3.5) |
-| `helpbuoy-server verification [--new]` | (12.7) print the host key line and the id to enter in the HelpBuoy portal; `--new` makes a new salt, used from the next server start on, and prints its id |
+| `helpbuoy-server hostkey --new` | replace the host key, keeping all techies and computers; it takes effect at the next server start, since the running server only watches `state.json`; every computer then shows the changed server identity warning (3.5), and servers that approved this one for their computers (12.3) must approve it again |
 
 **Techies are plain keys**: there are no certificates. A new techie sends
 their public key line to the server admin, who adds it with `helpbuoy-server techie add`. Removing it
@@ -313,16 +313,20 @@ Techie commands carry a sequence number and the server answers each with a `Repl
 
 | Message | Direction | Content |
 |---|---|---|
-| `Hello` | server → any | role, server time, limits; the server's salt for the verified server check (hex), only for registered computers and techies, never for pending keys (12.4) |
-| `ServerInfo` | server → any | title and instruction line (e.g. "Example Inc", "Call +1 234 567 890 for support"), right after `Hello` and again whenever they change |
+| `Hello` | server → any | role, server time, limits |
+| `ServerInfo` | server → any | who runs the server: address, company name, phone number and description (12.4), right after `Hello` and again whenever they change |
+| `ApprovedServers` | server → computer | the servers this server approved for the computer, each an address and host key fingerprint (12.3), after `Hello` or `Registered` and again whenever the list changes |
+| `RequestListing` | computer → server | address and host key fingerprint of a server the locked computer wants to use (12.3) |
+| `ListingRefused` | server → computer | a techie refused that request |
+| `DecideListing` | techie → server | computer fingerprint, address, fingerprint and allow or refuse |
 | `ComputerHello` | computer → server | app version, current `user@machine` (the registered name comes from the key comment) |
-| `Presence` | server → techies | full snapshot after every change: registered computers (`user@machine`, fingerprint, online, open or taken request with id and time, in session with whom) and techies |
+| `Presence` | server → techies | full snapshot after every change: registered computers (`user@machine`, fingerprint, online, open or taken request with id and time, in session with whom, approved servers and open listing requests) and techies |
 | `RegisterComputer` / `UnregisterComputer` | techie → server | public key line or fingerprint (name taken from the key comment, or given when the comment is empty) |
 | `RegisterTechie` | techie → server | public key line and name: adds another techie, like `helpbuoy-server techie add` |
 | `UnregisterTechie` | techie → server | name: removes another techie, like `helpbuoy-server techie remove`; an online techie is disconnected, and a techie cannot remove itself |
-| `SetServerInfo` | techie → server | new title (up to 64 characters) and instruction line (up to 160), one line each, empty to clear; stored in `state.json` |
+| `SetServerInfo` | techie → server | new address (optional, a valid server address), company name (up to 64 characters), phone number (up to 32) and description (optional, up to 160), one line each; stored in `state.json` |
 | `Reply` | server → techie | answer to a techie command: sequence number and error text if it failed |
-| `Registered` | server → computer | the key is now registered (no name: that is only for techies); the salt, like `Hello` (12.4) |
+| `Registered` | server → computer | the key is now registered (no name: that is only for techies) |
 | `RequestHelp` | computer → server | (no content) |
 | `CancelRequest` | computer → server | request id |
 | `RequestStateMsg` | server → computer | request id and state (open / taken / cancelled / expired / ended) |
@@ -391,11 +395,11 @@ Role caps and timeouts:
   approval at the PC for that techie, and Esc or exiting the client application always ends the
   session locally, even if the server misbehaves.
 - **Pending keys** are never shown to anyone.
-- **A locked computer** (planned, 13) only connects to its primary server and the servers
+- **A locked computer** (12) only connects to its primary server and the servers
   that server approved for it, and only removing its local files undoes the lock.
-- **Unknown servers**: anyone can run a server and give it any title. The clients will check
-  with helpbuoy.com, without a public list, whether the server a techie asks to connect
-  through belongs to a company HelpBuoy checked, and show which company if so (12).
+- **Unknown servers**: anyone can run a server and give it any company name. The client
+  warns in full on the first connection to a new server (6.2), and a locked client only
+  reaches the servers its primary server approved (12). Nothing depends on helpbuoy.com.
 - **Server compromise**: sees metadata (who, when, how much) and can deny service. Because the
   server vouches for techies, a compromised server *could* present a techie key of its own to a
   computer that files a request. It can't do so silently for a techie the computer has already
@@ -582,15 +586,24 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   the field locked while it does; the field can only be edited when that fails or after
   **Disconnect**. Errors are shown inline: name not found, connection refused, timeout, not a
   helpbuoy server. A changed server key brings the user back here with the warning (3.5).
+  On a locked PC (12) the hint above the field says which company the PC gets help
+  through and that other servers need its approval.
+- Right after the first successful connection to a new server, before the key screen, the
+  client shows a full warning: "Only continue if someone you know personally gave you this
+  address. If someone called you unexpectedly, hang up: banks, Microsoft and the police never
+  ask you to install this." Continue only works after 5 seconds. It is shown once per server
+  key, so people who run their own server see it once per computer.
 - If the server doesn't know this PC's key yet: server fingerprint, the public key line in a
   read-only box, the key fingerprint, a big **Copy key** button, and "Paste this key into a
   chat with a techie (for example WhatsApp)." A link goes back to the address field.
 - Waits for `Registered`, then saves the configuration and moves to the waiting screen.
 
 ### 6.3 Waiting screen
-- The comment of this PC's own key (`anna@ANNA-LAPTOP`) and "Waiting for a techie", with the
-  server's title and instruction line below it (see below). The techie connects,
-  and the computer asks the question from section 1 (Session, step 3) in a modal dialog.
+- The comment of this PC's own key (`anna@ANNA-LAPTOP`) and "Waiting for a techie", with
+  who the user is waiting for below it (see below). The techie connects, and the computer
+  asks the question from section 1 (Session, step 3) in a modal dialog, with a warning icon
+  and "Only allow this if you know the person asking personally. Banks, Microsoft and the
+  police never ask for this."
 - **Disconnect** is always available while connected: it leaves the server and goes back to
   the address screen. During a session the same button reads **End session** and ends only
   the session (like Esc); afterwards it is Disconnect again.
@@ -598,18 +611,15 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   not send it to the computer (neither `Hello` nor `Registered` carry it). That name is only
   for techies.
 - There is no settings window.
-- **Server title and instruction**: below "Waiting for a techie" the waiting screen shows
-  the server's title and, under it in place of the old status text, its instruction line
-  (both set by a techie on the desk app's Server tab or with `helpbuoy-server title` /
-  `instruction`). The title also goes in the window caption ("Example Inc - HelpBuoy").
-  They always come from the server on the current connection; the computer does not store
-  them. Without a title nothing is shown there; without an instruction line the computer
-  shows the default "A techie can now ask to connect. You will be asked first, and
-  pressing Esc always takes back control." Errors and notices take that place while they
-  apply.
-  Planned (13.4): the title and instruction line become the server address, company name,
-  phone number and an optional description, with the company name and phone number
-  mandatory.
+- **Who the user is waiting for** (12.4): below "Waiting for a techie" the waiting screen
+  shows the company name of the server, and under it the phone number ("Phone: ..."), the
+  description if there is one, and the address this PC is connected to ("Server: ...").
+  The company name also goes in the window caption ("Example Inc - HelpBuoy"). They come from
+  the server on the current connection (set by a techie on the desk app's Server tab or with
+  `helpbuoy-server info`) and are shown on one line each, without control characters or bidi
+  overrides; the same goes for techie names. Below them the computer shows "A techie can now
+  ask to connect. You will be asked first, and pressing Esc always takes back control."
+  Errors and notices take that place while they apply.
 - **During a session** the window is minimized (`SW_MINIMIZE`), nothing else is shown.
 - **When the session ends** (the techie ended it, or Esc), the window is restored and brought
   to the front, waiting for the next techie.
@@ -728,9 +738,12 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   techie, the box shows the public key with **Copy public key** to send to a techie on it
   (**Add techie** on the Techies tab) or its admin (`helpbuoy-server techie add`) and keeps retrying, so it moves on by itself once the key is added.
 - Once online the tabs appear. The **Server** tab shows the connection status, the address,
-  the server fingerprint to read out to users, the server's **title** and **instruction line**
-  with **Save** (any techie can change them; every computer and techie gets the new values
-  right away), and **Disconnect** (not while sessions are open; back to the connect screen,
+  the server fingerprint to read out to users, and who runs the server (12.4): **Company
+  name** and **Phone number** (required) and the optional **Address computers use** and
+  **Description**, with **Save** (any techie can change them; every computer and techie gets
+  the new values right away). While the company name or phone number is missing, the
+  Computers tab and Add computer say that computers can't connect yet, with a button to the
+  Server tab, and **Disconnect** (not while sessions are open; back to the connect screen,
   stopping the local server). There is no settings tab: nothing else is configurable.
 - One server connection with the control channel, keepalive, reconnect with backoff. All of
   this techie's sessions run as channels over that one connection.
@@ -792,8 +805,8 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   server stores the name for everyone, so every techie's list shows it. When the
   `user@machine` the computer reports differs from the name, it shows as a muted second line.
 - **Remove** a computer (unregister) from the list.
-- **Server requests** (planned, 13.3): a locked computer that asks for another server shows
-  the requested address and fingerprint on its row, with Allow and Refuse.
+- **Server requests** (12.3): a locked computer that asks for another server shows the
+  requested address and fingerprint below its row, with **Allow** and **Refuse**.
 - Each opened session becomes a tab after the fixed ones; any number at once. When a
   session ends its tab goes away and the Computers tab is shown. Closing the window ends all
   open sessions.
@@ -870,12 +883,10 @@ side by side with an RDP session on the same machine and network.
 Multi-monitor, performance mode, restart as administrator, code signing,
 server metrics endpoint (localhost only).
 
-**Phase 6 - verified servers (12)** (apps and server done; the site and the portal are
-still to do)
-The salt in `Hello` and `Registered`, `helpbuoy-server verification` and `hostkey --new`,
-the check and dialog in both clients, the Server tab check in the desk app, the cleanup of
-server text (all in `proto/verify`, `server/salt` and the apps), and the files, cache
-headers and privacy text on the site.
+**Phase 6 - verified servers** (removed)
+A check with helpbuoy.com whether a server belonged to a company HelpBuoy checked was built,
+and then replaced by the lock to a primary server (phase 8) before any site or portal
+existed.
 
 **Phase 7 - Wayland and macOS** (done; the client and the desk app are tested on a real
 Wayland desktop and a real Mac)
@@ -888,7 +899,7 @@ The desk app ships as a universal `.app` as well. Both macOS apps are unsigned.
 The Linux client, the desk app and `helpbuoy-server` also ship as arm64 Debian packages
 (ARM laptops, servers and a 64-bit Raspberry Pi), built the same way with `GOARCH=arm64`.
 
-**Phase 8 - locking to a primary server (13)** (planned, issue #18)
+**Phase 8 - locking to a primary server (12)** (done, issue #18)
 The lock question, the approved list and listing requests, mandatory company name and phone
 number on every server, and the waiting screen showing who the user waits for.
 
@@ -921,17 +932,14 @@ clients.
   user trusts the new key), or
   announces a different key for a techie the computer already knows (the computer must warn
   and not connect without the user's consent).
-- Verified servers (12): old apps keep working against a server that sends the salt; a
-  pending key never gets the salt; an older binary saving `state.json` leaves the salt
-  unchanged; `hostkey --new` keeps every techie and computer; the id matches fixed test
-  values; a salt of the wrong length or a non-Ed25519 host key means not verified; host
-  names match without port, case or trailing dot, and an IP address never matches; a file
-  with another `hostkey` or without the host name is not verified; a malicious server that
-  sends a verified server's salt is not verified; a 500, a timeout, a redirect or a file
-  over 4 KB is "could not be checked"; a file whose `verified` date is more than 13 months
-  ago is not verified; a flood of requests starts at most one check every 5 seconds; a
-  late answer never reaches a later request; server text with check marks, "verified",
-  control characters or bidi overrides is cleaned everywhere it is shown.
+- Lock (12): a server without a company name and phone number refuses computers and
+  pending keys but lets techies in; listing requests are stored, deduplicated, shown in
+  `Presence` and decided only by techies; allowing sends the new approved list (also after a
+  reconnect), refusing sends `ListingRefused`; the client asks the lock question once per
+  connection and only once registered, locks to the pinned host key, asks the primary server
+  about a server that is not approved after seeing only its host key, connects there once
+  approved, pins approved servers by the approved fingerprint, starts on the primary server
+  when its last address is no longer allowed, and keeps the lock through Remove key.
 - Performance: the replay harness from phase 3 in CI (client encoder against techie decoder,
   no GUI), with regression thresholds; `tc netem` runs at 20 ms / 80 ms RTT and 10 / 50 Mbit/s.
 - Session end tests (`faketechie`): End session on the techie closes the session and
@@ -987,387 +995,22 @@ approach is deliberately minimal, with no dependency:
 - **Desk app fonts**: the codepoint set in `desk/ui/ui.go` adds the characters used by the
   embedded catalogs. Scripts the Go fonts lack (CJK, Arabic, Hebrew) are out of scope.
 
-Dutch, German, French, Spanish and Italian are done (about 210 strings each). Rejected:
+Dutch, German, French, Spanish and Italian are done (about 250 strings each). Rejected:
 go-i18n, `x/text` with `gotext`, and gettext `.po`, all more machinery than this needs.
 
-## 12. Verified servers
+## 12. Locking to a primary server
 
-To be removed: the lock to a primary server replaces all of this (13.6).
-
-The server and the apps are built (`proto/verify`, `server/salt`); the site and the portal
-are not yet. When a techie asks to connect, the client checks with helpbuoy.com whether
-the server it is connected to belongs to a company HelpBuoy checked, and the approval
-dialog says so: "Verified: Example Inc, Netherlands". Both clients (Windows and Linux)
-make the check and show the same dialog. There is no public list: who our customers are
-must never be readable or enumerable from what we publish. Scam reports go to the email
-address on the site, with the server address the scammer used.
-
-### 12.1 The problem
-
-Remote support tools are popular with scammers. They call someone, pretend to be the
-bank, Microsoft or the police, and talk the victim through installing the tool and
-letting them in. HelpBuoy already makes this harder than most: the user allows every
-session, Esc always takes back control, and there is no unattended access. But anyone
-can run `helpbuoy-server`, give it a title like "Microsoft Support", tell the victim its
-address and ask them to click Allow.
-
-### 12.2 Requirements
-
-1. At the moment someone asks to take control, the user sees whether a company HelpBuoy
-   checked is behind the server.
-2. Nobody can list or enumerate our customers: not from anything we publish, and not by
-   scanning the internet for servers and checking each one.
-3. A scammer can't look verified: not with a server title, a lookalike address, or values
-   or files copied from a verified company.
-4. Checked on every connection request, without a cache in the client or on the way, so a
-   removal works at once.
-5. The check during a connection request uses only static files on helpbuoy.com over
-   HTTPS, at URLs that can't be guessed. The portal where companies ask for verification
-   (12.7) is never contacted by the apps.
-6. No signed statements, and nothing for server admins to manage: the server makes its
-   own salt and keeps it.
-7. Unverified servers keep working: families, IT shops and the local server of the desk
-   app are warned about, never blocked.
-8. When helpbuoy.com can't be reached, the client says so and never shows "Verified".
-9. Adding or removing a verification is adding or deleting a file and releasing the site.
-10. helpbuoy.com learns as little as possible, and the privacy text on the site says what.
-
-### 12.3 One file per server
-
-A scanner can get any server's host key, so the host key alone can't name the file. The
-server therefore adds a value that a scanner never gets: a random 256-bit salt, made once
-when there is none (on the first start, or the first start after an upgrade) and kept in
-its own file next to the host key (3.2, 12.4). The server sends it only to registered
-computers and techies, never to pending or unknown keys (12.4).
-
-```
-https://www.helpbuoy.com/verified/<id>.json
-id = hex(SHA-256("helpbuoy verified server v1\n" + host key in wire format + salt))
-```
-
-```json
-{
-  "hostkey": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA...",
-  "addresses": ["helpme.example.com"],
-  "company": "Example Inc",
-  "country": "NL",
-  "verified": "2026-11-06"
-}
-```
-
-- **Not enumerable:** to compute an id you need the salt, and to get it you must be a
-  registered computer or a techie on that server. Scanning servers only yields host
-  keys. The id is 256 bits, there is no index, list or directory listing, and an unknown
-  id gives the same 404 as any missing page. A company's own users can at most learn
-  about their own company, which they already know they are talking to.
-- **Not spoofable:** a scammer who gets the salt and the file of a verified company (by
-  registering a computer there, for example) can make their own server send that salt,
-  so the client finds the file. But the client only shows the badge if the file's
-  `hostkey` is the host key it pinned for the server it is connected to, and presenting
-  that host key in the SSH handshake takes the server's private key. All of this is
-  checked before the dialog says anything.
-- **Why the file holds the host key:** the id already depends on the host key, so a
-  scammer's own key never finds the file. But we can't check the id a company gives us
-  without its salt (12.7). A dishonest company could show us its real server at its
-  domain and give us the id of a second server, run elsewhere for scams. The `hostkey`
-  field, which we did check, is what stops that: the client must always compare it, and
-  it must never be dropped as redundant.
-- **Not cloneable without the company's DNS:** the host private key and the salt are in
-  the state directory, so whoever has a copy of it (a backup, a departing admin, malware
-  running as that user, or a techie laptop running the desk app's local server, which
-  uses the same directory (7.1)) can run the same server anywhere. That is why the file
-  also lists the server's `addresses`, the host names we checked on the company's domain
-  (12.7). The client only shows the badge if the host name of the address of this
-  connection is one of them (12.5), and shows that address in the badge. A clone then also
-  needs to take over the company's DNS. A host name is compared without port, in lower
-  case and without a trailing dot; an IP address never matches.
-- **A leaked salt** only tells someone that one server is verified, nothing more. It can
-  be rotated (12.7).
-- **`company`** and **`country`** come from our check of the company (12.7). The client
-  shows them in its own text and style; the server's title can say anything and never
-  makes anything look verified.
-- **The files live in `static/verified/` of the site repository**, which must stay
-  private (it is now). If the site repository is ever made public, the files move to a
-  separate private repository that is copied in when the site is built. The site keeps
-  directory listing off for `/verified/`, and no page or sitemap links to the files. The
-  same goes for the built site: it must never be pushed to a public repository (such as
-  one serving GitHub Pages), where every file could be listed.
-- **Trust:** the files are trusted because they come from helpbuoy.com over HTTPS; there
-  is no signature. So a file is as safe as whatever can change what helpbuoy.com serves:
-  the domain, the TLS certificate, the web host and push access to the site's production
-  remote. The clients use the operating system's normal certificate checks and ship no
-  root certificates of their own: pinning roots would tie every CA change to a client
-  release, a mistake there would make every check fail at once, and a company network
-  that inspects TLS would never see the badge. helpbuoy.com gets CAA records and DNSSEC
-  (12.10), which cost the apps nothing.
-
-What this design gives up: there is no techie name in the file, only the company. Every
-techie the company adds to its server is vouched for by the company, and the badge can
-only be taken away from the whole server, not from one techie. A new host key (a
-reinstall without keeping the state directory) needs a new file, but registered
-computers already refuse a changed host key (3.5), so that is a new setup anyway. A new
-or changed host name needs a changed file. Computers that reach the server by a name we
-can't check from the internet (an internal name like `helpdesk.corp.local`) or by an IP
-address never get the badge, so a verified company should have all its computers use the
-public host name.
-
-The state directory of a verified server must be guarded like a private key. When a
-company thinks a copy has leaked, it tells us, and together we decide what it takes. A
-copy alone is not enough to look verified, because a clone also needs the company's DNS
-(above), so often closing the leak is enough and the badge stays. A new salt (12.7) does
-not help against a clone: whoever has the copy has the host key too, and can learn the
-new salt like anyone else, by getting a computer registered on the real server. It only
-keeps the fact that the server is verified from spreading further.
-Only when the DNS may be at risk too, or the leak can't be closed, do we delete the file
-(12.8) and does the company make a new host key with `helpbuoy-server hostkey --new`,
-which keeps all techies and computers. Every registered computer then shows the changed
-server identity warning (3.5). That is a risk of its own: "your helpdesk changed its key,
-click Trust" is exactly what a scammer would say, so a new host key is the last resort,
-and the company tells its users by its own channels, not through the server's title or
-instruction line.
-
-Risks we accept:
-
-- **Whoever controls a verified server's process can vouch for anyone.** The server
-  announces the techie key in `SessionReady` (3.5), so a hacked server, or its admin,
-  can present any techie under the badge. Only the company's own security protects this.
-- **A rogue techie on a verified server is vouched for**, and so is someone using a
-  hacked desk app of a techie there. Any techie can also add more techies with
-  `RegisterTechie`, without us or the company's contact person seeing it. Only the
-  company can stop this, by removing the key (12.8), and if it doesn't, the whole server
-  loses its badge.
-- **A leaked id or file reveals the host key**, and internet scanners such as Shodan
-  index SSH host keys, so the host key leads to the server's IP address. Someone with a
-  leaked file can find that company's server, but still learns nothing about any other
-  customer.
-- **Whoever can make a computer trust a forged helpbuoy.com certificate can show any
-  file**, with their own `hostkey` in it: a TLS-inspecting proxy, or a root certificate
-  the user was talked into installing. A company proxy is trusted by its own computers
-  anyway, and a scammer who can get a root certificate installed could get far worse
-  installed too, so this doesn't justify shipping our own roots (see Trust above).
-- **The web host sees which IP addresses ask for which id**, and with access to the
-  files it can link computers to companies. We keep that to the web host we choose, and
-  the privacy text says so (12.10).
-
-### 12.4 Protocol change
-
-No new message: the salt is a `salt` field (hex) in `Hello`, only when the role is computer
-or techie, and in `Registered` (3.3). A pending key never gets it. Older apps ignore the
-field, so they keep working against a newer server. Since v0.4.22 the apps also skip
-message types they don't know (3.3), so a later change can still add a message.
-
-The salt is exactly 32 bytes from `crypto/rand`. It is kept in its own file,
-`verification_salt` in the state directory, created once with mode 0600 and never
-rewritten, exactly like `hostkey_ed25519`. Not in `state.json`: desk apps and
-`helpbuoy-server` before the version that keeps unknown fields (3.2) refuse a `state.json`
-with fields they don't know, and the salt must never be rewritten anyway. The salt is
-never printed or logged: `helpbuoy-server verification` prints only the host key line and
-the id (12.7). Clients keep it only in memory for the connection, and treat a salt of any
-other length as no salt, so a broken server can never end up with an id a scanner could
-compute.
-
-During a rotation (12.7) the next salt is in `verification_salt.next`, made the same way,
-and the next server start renames it over `verification_salt`. It is not sent to anyone
-until then: that start drops every connection, and each app gets the new salt in its next
-`Hello`. A new host key from
-`hostkey --new` waits the same way, in `hostkey_ed25519.new`.
-
-### 12.5 When the client checks
-
-On every `SessionReady`, without a cache:
-
-- The client computes the id from the host key the server presented in this connection's
-  handshake, which is the one it pinned for the address of this connection: a connection
-  with a host key that is not pinned (3.5) never gets this far. Only Ed25519 host keys
-  count. Without a valid salt (an older server), the server is "not verified", and there
-  is no fallback to an id without salt.
-- The check starts as soon as the request arrives. The approval dialog opens with the
-  result, or after 3 seconds with "Checking who runs this server..." and the same warning
-  as not verified (12.6), and updates when the answer arrives. Each check belongs to one
-  request id, so a late answer is dropped once that request is answered, cancelled or
-  expired, and can never show up in a later dialog.
-- Only `https://www.helpbuoy.com/verified/<id>.json`: no redirects, no plain HTTP, no other
-  host and no address from configuration. At most 4 KB and 10 seconds.
-- At most one check in flight, and at most one started every 5 seconds; the check for a
-  request that comes sooner starts when the 5 seconds are up, so the dialog shows
-  "Checking who runs this server..." until then. So a hostile server can't use its
-  computers to flood helpbuoy.com.
-- A 404 means not verified. A file whose `hostkey` is not the pinned host key, or whose
-  `addresses` don't hold the host name of the address of this connection, also means not
-  verified. At first contact that is the address the user just typed, even before it
-  replaces the stored server (section 0). A file whose `verified` date is more than 13
-  months ago also means not verified, so a company that drops out of the yearly check
-  (12.7) loses the badge even if we forget to delete its file. Any other status, a timeout
-  or a file that does not parse means "could not be checked". Neither is ever shown as
-  verified.
-- The request sends `Cache-Control: no-cache`, so a proxy on the way can't answer it
-  from its cache.
-- The request carries nothing but the id, with `helpbuoy/<version>` as User-Agent.
-  helpbuoy.com does see the computer's IP address and which server id it asked for, so
-  the privacy text on the site must say so, and the access logs should be kept short or
-  without the path (12.10).
-
-Before registration there is no salt, so the first connection to any new server gets
-the same general warning (12.6). That is fine: the scam needs the Allow click, and that
-is where the check happens.
-
-The desk app makes the same check for its own server on the Server tab ("Verified:
-Example Inc, for helpme.example.com" with the file's host names, or "Not verified"), so
-the company can see its file works. It compares the host key only, not the address: on its
-local server (7.1) it connects to `localhost`, which is never in `addresses`, and its user
-is the techie, who sees which host names the badge is for. It shows no approval dialog.
-
-### 12.6 What the user sees
-
-When a techie asks to connect:
-
-- **Verified:** "Verified: Example Inc, Netherlands", with the server address on the line
-  below ("Server: helpme.example.com"), above the usual question with the techie's name
-  and key fingerprint, and below it a small line: "HelpBuoy checked this company. It
-  vouches for its support staff." The country comes from the file, the address is the
-  one of this connection, matched against the file (12.5), and the techie's name is the
-  one the company's server gives.
-- **Not verified:** "HelpBuoy has not verified who runs this server. Only allow this if
-  you know the person asking personally. Banks, Microsoft and the police never ask for
-  this."
-- **Could not be checked:** "HelpBuoy could not check who runs this server. Only allow this
-  if you know the person asking personally. Banks, Microsoft and the police never ask for
-  this." The same warning as not verified, never a softer one, so "it says could not be
-  checked, that's normal" doesn't help a scammer.
-
-Right after the first successful connection to a new server, before the key screen
-(6.2), the client shows a full warning:
-"Only continue if someone you know personally gave you this address. If someone called
-you unexpectedly, hang up: banks, Microsoft and the police never ask you to install
-this." Continue only works after 5 seconds. It is shown once per server key, so people
-who run their own server see it once per computer.
-
-Nothing is ever blocked: a techie on an unverified server can still be allowed. Blocking
-unverified servers can come later as an option for managed installs. A client locked to its
-helpdesk's server (13) only reaches the servers that server approved.
-
-The server title, the instruction line and the techie name are text from the server, so
-they could try to imitate the badge. Everywhere the client shows them (the approval
-dialog, the waiting screen and the window caption, 6.3), it shows each on one line,
-removes control characters and bidi overrides (such as U+202E), and replaces a check mark
-(✓, ✔, ☑ and the like) or the word "verified", in any language the apps are translated to,
-with nothing. The badge has its own area of the dialog, with its own icon and color, where
-server text is never shown.
-
-### 12.7 Getting verified
-
-Verification is for paying customers only, as part of a support plan; which plans
-include it is still to decide. A company asks in our portal and we check it once:
-
-1. The company is registered (for example in the Dutch KvK), under the name it gives.
-   Later this can be eHerkenning, the Dutch eIDAS means for acting on behalf of a company.
-2. The company does real support work: it says what it does and for whom, and that
-   matches its registration and its website. A paying customer is not automatically an
-   honest one, and tech support scams are often run by registered companies. We refuse
-   a company whose name or domain resembles a bank, a large tech company, a government
-   body, the police or HelpBuoy itself, and one that finds its customers by calling
-   people unasked. When in doubt, we refuse.
-3. Its server addresses are host names on a domain of that company.
-4. A contact person at the company, signed in to the portal with an email address on
-   that domain, asks for the verification and agrees to the rules in 12.8. The contact
-   person is kept in our own records, never in the file.
-5. The company's admin runs `helpbuoy-server verification` on the server, which prints
-   the host key line and the id, and the contact person enters both in our portal, with
-   the server's host names.
-6. We connect to each host name ourselves and check that it presents that host key.
-   This proves the key belongs to a server on the company's domain. We can't check the
-   id without the salt, which is why the client also checks the file's `hostkey` and
-   `addresses` (12.3). An id that is simply wrong only means the company's own file is
-   never found.
-7. We write the file under that id and release the site; publishing stays a manual step,
-   so nothing writes to the site by itself.
-
-To rotate the salt, `helpbuoy-server verification --new` makes the next salt (12.4) and
-prints its id; the server uses it from its next start on. The company enters the id in
-our portal and we add the new file next to the old one. The company should restart the
-server only once the portal says the new file is live. A restart before that, planned or
-not (a reboot, or a Debian package upgrade restarting the service), makes computers see
-the server as not verified until the file is live: the full warning shows, never a wrong
-badge, so that is acceptable for something as rare as a rotation. We delete the old file
-when the company tells us in the portal it restarted, or 30 days after the new file went
-live, whichever comes first.
-A new host key goes the same way, as a new file next to the old one. A new or removed
-host name only changes the file, after we checked the new name as in step 6.
-
-We check the company again every year and then set `verified` in its files to that date;
-the clients stop trusting a file 13 months after its `verified` date (12.5).
-
-The portal holds every verified company with its ids, host names and contact persons,
-so it is the most sensitive part: whoever gets into it can list our customers. It never
-tells anyone whether a host key, id or host name is already verified, also not as an
-error when one is entered twice. Contact persons sign in with a second factor. A
-removal or rotation asked for in the portal is confirmed by email to every contact
-person of that company before we act on it, so one taken-over account can't quietly
-change the company's verification.
-
-### 12.8 Removing a server
-
-We delete the server's file and release the site when:
-
-- the company asks, or a copy of its state directory leaked and we decided the badge
-  can't stay (12.3);
-- its server's host key or salt changed: then we delete the old file as 12.7 describes,
-  once the new one is live;
-- the server or company is used for scams;
-- the company no longer exists, stops paying for its plan or does not answer the yearly
-  check (then all its files).
-
-Because the clients check on every request and the site serves these files uncached
-(12.10), the next request already shows the server as not verified. Removing is never
-wrong: the company can ask again.
-
-The company is responsible for every techie key on its server, and must remove a techie
-who leaves the same day. A rogue techie at a verified company can only be stopped by the
-company removing their key; if it doesn't, the whole server loses its badge.
-
-### 12.9 Rules that stay
-
-These keep HelpBuoy a poor tool for scammers, verified or not:
-
-- The user allows every session. No unattended access, and the techie can't turn the
-  question off.
-- Esc always takes back control. The techie can never block the user's own keyboard or
-  mouse.
-- The user's screen is never blanked or hidden. Scammers use that to hide what they do
-  in the victim's bank.
-
-### 12.10 To do on the site
-
-- A warning at the top of the download page, like RustDesk's: only install HelpBuoy if
-  someone you know personally asked you to.
-- The support plans (`data/plans.yaml`) must offer verified servers, once it is decided
-  which plan includes it.
-- The web host's access logs contain the server ids of every verification request, so
-  they should be kept short or without the path.
-- The web host and any CDN must serve `/verified/`, 404s included, with
-  `Cache-Control: no-store`, so a deleted file is gone at once. A release purges any
-  cache for `/verified/`, and after removing a server we check that its URL answers 404.
-- No analytics or "top pages" dashboard may cover `/verified/`, from the web host or
-  anyone else: such a list of paths is a list of our customers' ids.
-- No rate limit on `/verified/` that a large office behind one IP address could hit; the
-  clients already limit themselves (12.5).
-- CAA records for helpbuoy.com that allow only the CA that issues its certificate, and
-  DNSSEC for the domain (12.3).
-
-## 13. Locking to a primary server
-
-Planned, not built yet (issue #18). Every server is treated as an MSP: the support company
-or person behind it can be the mandatory first point of contact for the PCs it helps. Today
-the client knows one server at a time, and after **Disconnect** on the waiting screen anyone
-at the keyboard can type another address (0, 6.2). The client warns about unverified
-servers (12.6) but never stops the user from connecting to one, which is exactly what the
-helpdesk scam relies on.
+Issue #18. Every server is treated as an MSP: the support company or person behind it can
+be the mandatory first point of contact for the PCs it helps. Without a lock, anyone at the
+keyboard can press **Disconnect** on the waiting screen and type another address (0, 6.2).
+The client warns on the first connection to a new server but never stops the user, which
+is exactly what the helpdesk scam relies on.
 
 A client registered on a server is asked to **lock** to it. A locked client only connects to
 that server, its **primary server**, and to the servers the primary server approved for it.
 There is no setting for this on the server: every server asks.
 
-### 13.1 The lock question
+### 12.1 The lock question
 
 When an unlocked client connects to a server, it asks the user:
 
@@ -1375,7 +1018,7 @@ When an unlocked client connects to a server, it asks the user:
 Example Inc? Other helpdesks can then only reach this PC after Example Inc allowed them."
 
 with **Lock to Example Inc** and **Not now**. The company name is the one the server gives
-(13.4), shown with the same cleanup as all server text (12.6). The question is asked on any
+(12.4), shown with the same cleanup as all server text (6.3). The question is asked on any
 server, not only the first one the client used, so PCs that already used HelpBuoy can be
 locked too. **Not now** only skips it for this connection: the question comes back on every
 new connection while the client is unlocked.
@@ -1389,7 +1032,7 @@ server and to the servers on its approved list, each with its address and host k
 approval is for one specific server and not just a name. With an empty list the client is
 tied to the primary server only.
 
-### 13.2 Unlocking
+### 12.2 Unlocking
 
 A lock is only undone by removing the client's local files (`config.json` and the key in the
 data directory, 6.1); the client then starts over as a new computer with a new key. There is
@@ -1404,67 +1047,55 @@ the user through deleting files instead of just typing an address. It is a soft 
 at the keyboard can still delete the files, and a machine-wide policy set by an administrator
 (issue #16) remains the option for those who need more, and always wins over a lock.
 
-### 13.3 Connecting to another server
+### 12.3 Connecting to another server
 
 The client's screens stay the same. A locked user who needs help from someone else (a
 software vendor, a second helpdesk) types the address as they do today. If that server is not
 on the approved list, the connection becomes a request to the primary server to list it: the
 client connects only far enough to see the host key, does nothing else with that server, and
-sends the address and host key fingerprint to the primary server over a short connection of
-its own.
+then connects to the primary server, as a computer of its own, and sends it the address and
+host key fingerprint (`RequestListing`). It keeps that connection while it waits, and sends
+the request again after a reconnect.
 
 In the desk app the request shows in the computer list, on the row of that computer, with the
 requested address and fingerprint and **Allow** and **Refuse** (7.2). A techie approves it,
-and the approval is permanent: the server stays on that computer's approved list, and the
-client continues its normal flow with it. Until a techie decides, the client shows its
-waiting for a techie screen (6.3) for the primary server. A scam caller then has to get a
-techie at the primary server to approve their server.
+and the approval is permanent: the server stays on that computer's approved list (one entry
+per address, so approving a new key for an address replaces the old one), and the client
+continues its normal flow with it, pinning that server's host key by the approved
+fingerprint. Until a techie decides, the client shows its waiting for a techie screen (6.3)
+for the primary server, with "Waiting until Example Inc allows server:port." Refusing sends
+the client back to the address screen with "Example Inc did not allow this PC to connect to
+server:port." A scam caller then has to get a techie at the primary server to approve their
+server.
 
-### 13.4 Who the user is waiting for
+Only the primary server's changed host key can be trusted by the user (3.5); an approved
+server whose key changed needs a new approval. Remove key, shown only when the key is
+damaged (6.1), keeps the lock: the PC then starts over as a new computer of its primary
+server.
+
+### 12.4 Who the user is waiting for
 
 The waiting for a techie screen (6.3) always shows who the user is waiting for, so the user
 knows who to call: the server address, the company name, the phone number and optionally a
 free description (for example opening hours). The company name and phone number are
 mandatory for every server, since every server can become a primary server:
-`helpbuoy-server` and the desk app's local server ask for them at setup, and a server without
-them doesn't accept computers. They replace the free title and instruction line
-(`ServerInfo`, `SetServerInfo`) as separate fields, so the client shows them in its own
-layout.
+`helpbuoy-server serve` asks for them in a terminal (3.2), the desk app says so on the
+Computers tab until they are set (7.1), and a server without them refuses computers and
+pending keys with an `Error`. They are separate fields in `ServerInfo` and `SetServerInfo`,
+so the client shows them in its own layout. The address shown is the one the PC is
+connected to; the address field in `ServerInfo` is what techies give out.
 
-### 13.5 Changes
+### 12.5 Where it lives
 
-- The client stores the lock in `config.json` (0): the primary server's address and host key
-  and the approved list, apart from the server it is connected to now. Today switching
-  servers replaces the stored server; once locked, the primary stays when the user connects
-  to an approved server.
-- A new server → computer message carries the approved list, after `Registered` and again
-  when it changes. A computer → server message carries a listing request, `Presence` shows
-  open requests to the techies, and a techie → server message allows or refuses one.
-  `ServerInfo` and `SetServerInfo` get the address, company name, phone number and
-  description as separate fields. Older clients skip unknown messages (3.3), so they keep
-  working but never lock; nothing gets less safe than it is today.
-- The server stores the company name, phone number and description, and per computer its
-  approved servers and open requests, in `state.json` (3.2). No extra file.
+- The client stores the lock in `config.json` (0): the primary server's address, host key,
+  last known company name and the approved list, apart from the server it is connected to
+  now (`client-windows/config`, `client-windows/app`). Once locked, the primary stays when
+  the user connects to an approved server. Older clients skip the new messages (3.3), so
+  they keep working but never lock.
+- The server stores the company name, phone number, address and description, and per
+  computer its approved servers and open requests, in `state.json` (3.2). No extra file.
+- A machine-wide policy set by an administrator (issue #16) is not built yet; when it is,
+  it always wins over a lock the user agreed to.
 
-### 13.6 Removing verified servers
-
-The lock replaces the verified server check (12). With the lock, the user's own helpdesk
-decides which other servers may reach the PC, so helpbuoy.com no longer has to vouch for
-companies: no portal, no files under `/verified/`, no list of customers to keep secret, and
-nothing in a session that depends on helpbuoy.com being reachable. All of it goes:
-
-- the `proto/verify` package, the salt (`server/salt`, `verification_salt` in the state
-  directory, the `salt` field in `Hello` and `Registered`) and `helpbuoy-server verification`
-- the check on every `SessionReady` in the Windows, Linux and macOS clients, and the
-  Verified, not verified and could not be checked states in the approval dialog, with their
-  colored shields and badge area
-- the verification check on the desk app's Server tab
-- the translated strings for all of this, and the work still planned on the site (12.10) and
-  the portal (12.7)
-- section 12 of this plan
-
-What stays is the cleanup of server text: titles, descriptions and techie names are still
-shown on one line without control characters or bidi overrides. Removing check marks and the
-word "verified" was only there to stop server text imitating the badge, so that part goes
-too. The full warning on the first connection to a new server (12.6) is not about
-verification and stays.
+There is no check with helpbuoy.com: the user's own helpdesk decides which other servers may
+reach the PC, so nothing in a session depends on helpbuoy.com being reachable.

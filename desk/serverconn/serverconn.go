@@ -122,7 +122,7 @@ type PresenceEvent struct {
 	Presence *control.Presence
 }
 
-// ServerInfoEvent carries the server's title and instruction line.
+// ServerInfoEvent carries who runs the server.
 type ServerInfoEvent struct {
 	Info *control.ServerInfo
 }
@@ -231,10 +231,19 @@ func (c *Conn) UnregisterComputer(fingerprint string) <-chan error {
 	})
 }
 
-// SetServerInfo replaces the server's title and instruction line.
-func (c *Conn) SetServerInfo(title, instruction string) <-chan error {
+// SetServerInfo replaces who runs the server: its address, company name,
+// phone number and description.
+func (c *Conn) SetServerInfo(info control.ServerInfo) <-chan error {
 	return c.command(func(seq uint32) any {
-		return &control.SetServerInfo{Seq: seq, Title: title, Instruction: instruction}
+		return &control.SetServerInfo{Seq: seq, Address: info.Address, Company: info.Company, Phone: info.Phone, Description: info.Description}
+	})
+}
+
+// DecideListing allows or refuses the open listing request req of the
+// computer with the given fingerprint (PLAN.md 12.3).
+func (c *Conn) DecideListing(computer string, req control.ListingRequest, allow bool) <-chan error {
+	return c.command(func(seq uint32) any {
+		return &control.DecideListing{Seq: seq, Computer: computer, Address: req.Address, Fingerprint: req.Fingerprint, Allow: allow}
 	})
 }
 

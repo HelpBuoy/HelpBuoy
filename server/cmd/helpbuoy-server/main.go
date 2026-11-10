@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -23,11 +24,9 @@ import (
 	"github.com/helpbuoy/helpbuoy/proto/control"
 	"github.com/helpbuoy/helpbuoy/proto/datadir"
 	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
-	"github.com/helpbuoy/helpbuoy/proto/verify"
 	"github.com/helpbuoy/helpbuoy/server/auth"
 	"github.com/helpbuoy/helpbuoy/server/hostkey"
 	"github.com/helpbuoy/helpbuoy/server/logfile"
-	"github.com/helpbuoy/helpbuoy/server/salt"
 	"github.com/helpbuoy/helpbuoy/server/server"
 	"github.com/helpbuoy/helpbuoy/server/store"
 )
@@ -46,13 +45,11 @@ commands:
   computer add 'ssh-ed25519 ...' [NAME]  register a computer key (NAME defaults to the key comment)
   computer rename SHA256:... NAME        rename a registered computer
   computer remove SHA256:...             remove a registered computer
-  title [TEXT]                           print or set the title the apps show ("" for none)
-  instruction [TEXT]                     print or set the instruction line the apps show ("" for the default)
+  info [--company C] [--phone P]         print or set who runs this server, shown to users waiting
+       [--address A] [--description D]   for a techie; the company name and phone number are required
+                                         before computers can connect
   hostkey [--new]                        print the server host key and fingerprint; --new makes a
                                          new host key, used from the next server start on
-  verification [--new]                   print the host key and the id to enter in the HelpBuoy
-                                         portal; --new makes a new salt, used from the next
-                                         server start on, and prints its id
   version                                print the version
 
 Every command except version takes --state DIR (default: $HELPBUOY_SERVER_STATE,
@@ -79,12 +76,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		err = techieCmd(args[1:], stdout, stderr)
 	case "computer":
 		err = computerCmd(args[1:], stdout, stderr)
-	case "title", "instruction":
-		err = infoCmd(args[0], args[1:], stdout, stderr)
+	case "info":
+		err = infoCmd(args[1:], stdout, stderr)
 	case "hostkey":
 		err = hostkeyCmd(args[1:], stdout, stderr)
-	case "verification":
-		err = verificationCmd(args[1:], stdout, stderr)
 	case "version", "--version", "-v":
 		fmt.Fprintf(stdout, "helpbuoy-server %s\n", version)
 		return 0
@@ -167,6 +162,9 @@ func serve(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if err := os.MkdirAll(cfg.state, 0o700); err != nil {
+		return err
+	}
+	if err := setup(cfg.state, stdout); err != nil {
 		return err
 	}
 	lf, err := logfile.Open(filepath.Join(cfg.state, "server.log"), logfile.DefaultMaxSize)
@@ -348,61 +346,143 @@ func computerCmd(args []string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-// infoCmd prints or sets the title or the instruction line (what). A
-// running server picks up the change and sends it to every app.
-func infoCmd(what string, args []string, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet(what, flag.ContinueOnError)
+// infoCmd prints or sets who runs the server. Only the flags given change;
+// a running server picks up the change and sends it to every app.
+func infoCmd(args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("info", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	state := fs.String("state", "", "state directory")
+	address := fs.String("address", "", "the address computers use, e.g. helpme.example.com (\"\" to clear)")
+	company := fs.String("company", "", "company name")
+	phone := fs.String("phone", "", "phone number users call for help")
+	description := fs.String("description", "", "optional line, for example opening hours (\"\" to clear)")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
 	}
-	if len(pos) > 1 {
-		return fmt.Errorf("%w: %s [TEXT]", errUsage, what)
+	if len(pos) != 0 {
+		return fmt.Errorf("%w: info [--company C] [--phone P] [--address A] [--description D]", errUsage)
 	}
+	set := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
 	st, err := openStore(*state)
 	if err != nil {
 		return err
 	}
-	if len(pos) == 0 {
-		idx, _, err := st.Load()
+	var idx *store.Index
+	if len(set) == 0 || len(set) == 1 && set["state"] {
+		if idx, _, err = st.Load(); err != nil {
+			return err
+		}
+	} else {
+		idx, _, err = st.Update(func(s *store.State) error {
+			info := s.Info()
+			if set["address"] {
+				info.Address = *address
+			}
+			if set["company"] {
+				info.Company = *company
+			}
+			if set["phone"] {
+				info.Phone = *phone
+			}
+			if set["description"] {
+				info.Description = *description
+			}
+			return s.SetInfo(info)
+		})
 		if err != nil {
 			return err
 		}
-		v := idx.State.Title
-		if what == "instruction" {
-			v = idx.State.Instruction
-			if v == "" {
-				v = control.DefaultInstruction + " (default)"
-			}
-		}
-		fmt.Fprintln(stdout, v)
-		return nil
 	}
-	idx, _, err := st.Update(func(s *store.State) error {
-		if what == "title" {
-			return s.SetInfo(pos[0], s.Instruction)
-		}
-		return s.SetInfo(s.Title, pos[0])
-	})
+	printInfo(stdout, idx.State.Info())
+	return nil
+}
+
+func printInfo(w io.Writer, info control.ServerInfo) {
+	fmt.Fprintf(w, "company:     %s\n", info.Company)
+	fmt.Fprintf(w, "phone:       %s\n", info.Phone)
+	fmt.Fprintf(w, "address:     %s\n", info.Address)
+	fmt.Fprintf(w, "description: %s\n", info.Description)
+	if !info.Configured() {
+		fmt.Fprintln(w, "Computers can't connect until the company name and phone number are set.")
+	}
+}
+
+// stdin and interactive are the terminal serve asks on at setup; tests
+// replace them.
+var (
+	stdin       io.Reader = os.Stdin
+	interactive           = func() bool {
+		fi, err := os.Stdin.Stat()
+		return err == nil && fi.Mode()&os.ModeCharDevice != 0
+	}
+)
+
+// setup asks for the company name and phone number when the server has
+// none and serve runs in a terminal (PLAN.md 12.4). Without a terminal it
+// only says how to set them; until then the server refuses computers.
+func setup(dir string, stdout io.Writer) error {
+	st, err := store.Open(dir)
 	if err != nil {
 		return err
 	}
-	v := idx.State.Title
-	if what == "instruction" {
-		v = idx.State.Instruction
+	idx, _, err := st.Load()
+	if err != nil {
+		return err
 	}
-	if v == "" {
-		if what == "instruction" {
-			fmt.Fprintln(stdout, "cleared the instruction; computers show the default")
-		} else {
-			fmt.Fprintln(stdout, "cleared the title")
+	info := idx.State.Info()
+	if info.Configured() {
+		return nil
+	}
+	if !interactive() {
+		fmt.Fprintln(stdout, "This server has no company name and phone number yet, so it refuses computers.\n"+
+			"Set them with: helpbuoy-server info --company \"Example Inc\" --phone \"+1 234 567 890\"")
+		return nil
+	}
+	fmt.Fprintln(stdout, "Users waiting for a techie see who runs this server and who to call.")
+	in := bufio.NewScanner(stdin)
+	ask := func(prompt, old string, required bool) (string, error) {
+		for {
+			if old != "" {
+				fmt.Fprintf(stdout, "%s [%s]: ", prompt, old)
+			} else {
+				fmt.Fprintf(stdout, "%s: ", prompt)
+			}
+			if !in.Scan() {
+				if err := in.Err(); err != nil {
+					return "", err
+				}
+				return "", errors.New("setup: no answer")
+			}
+			v := strings.TrimSpace(in.Text())
+			if v == "" {
+				v = old
+			}
+			if v != "" || !required {
+				return v, nil
+			}
 		}
-	} else {
-		fmt.Fprintf(stdout, "set the %s to %q\n", what, v)
 	}
-	return nil
+	for {
+		if info.Company, err = ask("Company name", info.Company, true); err != nil {
+			return err
+		}
+		if info.Phone, err = ask("Phone number", info.Phone, true); err != nil {
+			return err
+		}
+		if info.Address, err = ask("Address computers use (optional)", info.Address, false); err != nil {
+			return err
+		}
+		if info.Description, err = ask("Description, for example opening hours (optional)", info.Description, false); err != nil {
+			return err
+		}
+		_, _, err = st.Update(func(s *store.State) error { return s.SetInfo(info) })
+		if err == nil {
+			return nil
+		}
+		fmt.Fprintf(stdout, "Not saved: %v\n", err)
+	}
 }
 
 func hostkeyCmd(args []string, stdout, stderr io.Writer) error {
@@ -443,64 +523,6 @@ func hostkeyCmd(args []string, stdout, stderr io.Writer) error {
 		return err
 	} else if ok {
 		fmt.Fprintf(stdout, "from the next start: %s\n", auth.Fingerprint(n.PublicKey()))
-	}
-	return nil
-}
-
-// verificationCmd prints what a company enters in the HelpBuoy portal to get
-// its server verified (PLAN.md 12.7): the host key line and the id. It never
-// prints the salt itself.
-func verificationCmd(args []string, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet("verification", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	state := fs.String("state", "", "state directory")
-	next := fs.Bool("new", false, "make a new salt, used from the next server start on, and print its id")
-	pos, err := parse(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) != 0 {
-		return fmt.Errorf("%w: verification [--new]", errUsage)
-	}
-	dir, err := stateDir(*state)
-	if err != nil {
-		return err
-	}
-	// The host key and salt the server uses after its next start.
-	hk, pendingKey, err := hostkey.Pending(dir)
-	if err != nil {
-		return err
-	}
-	if !pendingKey {
-		if hk, err = hostkey.LoadOrCreate(dir); err != nil {
-			return err
-		}
-	}
-	var s []byte
-	pendingSalt := false
-	switch {
-	case *next:
-		s, err = salt.Next(dir)
-	default:
-		if s, pendingSalt, err = salt.Pending(dir); err == nil && !pendingSalt {
-			s, err = salt.LoadOrCreate(dir)
-		}
-	}
-	if err != nil {
-		return err
-	}
-	fmt.Fprintf(stdout, "host key: %s\n", hostkey.PublicLine(hk))
-	fmt.Fprintf(stdout, "id:       %s\n", verify.ID(hk.PublicKey(), s))
-	switch {
-	case *next:
-		fmt.Fprintln(stdout, "This id is used from the next server start on. Enter it in the HelpBuoy portal\n"+
-			"and restart the server only once the portal says its file is live; until then\n"+
-			"computers would see this server as not verified.")
-	default:
-		if pendingKey || pendingSalt {
-			fmt.Fprintln(stdout, "This is the id from the next server start on; until then the server uses its\n"+
-				"current host key and salt.")
-		}
 	}
 	return nil
 }

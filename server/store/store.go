@@ -1,5 +1,6 @@
 // Package store keeps the server's persistent state, state.json in the state
-// directory: the techie keys and the registered computer keys.
+// directory: who runs the server, the techie keys and the registered computer
+// keys with the servers approved for each (PLAN.md 12).
 //
 // Writes go to a temporary file that is synced and then renamed over
 // state.json, so readers always see a complete file. A lock file serializes
@@ -20,6 +21,7 @@ import (
 	"time"
 
 	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 	"github.com/helpbuoy/helpbuoy/server/auth"
 )
 
@@ -33,8 +35,6 @@ const (
 const (
 	MaxTechieName   = 64
 	MaxComputerName = 128
-	MaxTitle        = 64
-	MaxInstruction  = 160
 )
 
 // Techie is a techie key added by the server admin.
@@ -51,13 +51,20 @@ type Computer struct {
 	RegisteredBy string    `json:"registered_by"`
 	RegisteredAt time.Time `json:"registered_at"`
 	LastSeen     time.Time `json:"last_seen,omitzero"`
-	Extra        Extra     `json:"-"`
+	// Approved are the servers this server approved for the computer, and
+	// Listings its open requests to approve one (PLAN.md 12.3).
+	Approved []control.ApprovedServer `json:"approved,omitempty"`
+	Listings []control.ListingRequest `json:"listings,omitempty"`
+	Extra    Extra                    `json:"-"`
 }
 
 // State is the content of state.json.
 type State struct {
-	Title       string     `json:"title,omitempty"`       // shown by the apps, see control.ServerInfo
-	Instruction string     `json:"instruction,omitempty"` // shown by the apps, see control.ServerInfo
+	// Who runs the server, see control.ServerInfo.
+	Address     string     `json:"address,omitempty"`
+	Company     string     `json:"company,omitempty"`
+	Phone       string     `json:"phone,omitempty"`
+	Description string     `json:"description,omitempty"`
 	Techies     []Techie   `json:"techies"`
 	Computers   []Computer `json:"computers"`
 	Extra       Extra      `json:"-"`
@@ -83,10 +90,7 @@ type Index struct {
 // NewIndex validates st and builds its index. st must not be changed afterwards.
 func NewIndex(st *State) (*Index, error) {
 	idx := &Index{State: st, techies: map[string]int{}, computers: map[string]int{}}
-	if _, err := cleanLine("title", st.Title, MaxTitle); err != nil {
-		return nil, err
-	}
-	if _, err := cleanLine("instruction", st.Instruction, MaxInstruction); err != nil {
+	if err := checkInfo(st.Info(), false); err != nil {
 		return nil, err
 	}
 	names := map[string]bool{}
@@ -120,6 +124,16 @@ func NewIndex(st *State) (*Index, error) {
 		}
 		if _, dup := idx.computers[fp]; dup {
 			return nil, fmt.Errorf("computer %q: key %s is registered twice", c.Name, fp)
+		}
+		for _, a := range c.Approved {
+			if err := checkServer(a.Address, a.Fingerprint); err != nil {
+				return nil, fmt.Errorf("computer %q: approved server: %w", c.Name, err)
+			}
+		}
+		for _, l := range c.Listings {
+			if err := checkServer(l.Address, l.Fingerprint); err != nil {
+				return nil, fmt.Errorf("computer %q: listing request: %w", c.Name, err)
+			}
 		}
 		idx.computers[fp] = i
 		idx.fps = append(idx.fps, fp)
@@ -158,8 +172,11 @@ func (x *Index) Computer(fp string) (Computer, bool) {
 // Clone returns a deep copy.
 func (st *State) Clone() *State {
 	// Extra maps are shared: they are never changed, only replaced.
-	return &State{Title: st.Title, Instruction: st.Instruction,
-		Techies: slices.Clone(st.Techies), Computers: slices.Clone(st.Computers), Extra: st.Extra}
+	// The Approved and Listings slices of computers are shared too: they are
+	// replaced, never changed in place.
+	n := *st
+	n.Techies, n.Computers = slices.Clone(st.Techies), slices.Clone(st.Computers)
+	return &n
 }
 
 // Store reads and writes state.json in a directory.
@@ -317,19 +334,148 @@ func writeAtomic(path string, b []byte) error {
 	return nil
 }
 
-// SetInfo sets the title and instruction line the apps show. Each is one
-// line of printable text; empty clears it.
-func (st *State) SetInfo(title, instruction string) error {
-	t, err := cleanLine("title", title, MaxTitle)
-	if err != nil {
+// Info returns who runs the server, as the apps get it.
+func (st *State) Info() control.ServerInfo {
+	return control.ServerInfo{Address: st.Address, Company: st.Company, Phone: st.Phone, Description: st.Description}
+}
+
+// SetInfo sets who runs the server. Each field is one line of printable
+// text; the company name and phone number are required, the address must be
+// a server address or empty, and the description may be empty.
+func (st *State) SetInfo(info control.ServerInfo) error {
+	var err error
+	if info.Address, err = cleanLine("address", info.Address, control.MaxAddress); err != nil {
 		return err
 	}
-	in, err := cleanLine("instruction", instruction, MaxInstruction)
-	if err != nil {
+	if info.Address != "" {
+		a, err := serveraddr.Parse(info.Address)
+		if err != nil {
+			return fmt.Errorf("address: %w", err)
+		}
+		info.Address = a.String()
+	}
+	if info.Company, err = cleanLine("company name", info.Company, control.MaxCompany); err != nil {
 		return err
 	}
-	st.Title, st.Instruction = t, in
+	if info.Phone, err = cleanLine("phone number", info.Phone, control.MaxPhone); err != nil {
+		return err
+	}
+	if info.Description, err = cleanLine("description", info.Description, control.MaxDescription); err != nil {
+		return err
+	}
+	if err := checkInfo(info, true); err != nil {
+		return err
+	}
+	st.Address, st.Company, st.Phone, st.Description = info.Address, info.Company, info.Phone, info.Description
 	return nil
+}
+
+// checkInfo checks stored server info. With required, the company name and
+// phone number must be set.
+func checkInfo(info control.ServerInfo, required bool) error {
+	for _, f := range []struct {
+		what, v string
+		max     int
+	}{
+		{"address", info.Address, control.MaxAddress},
+		{"company name", info.Company, control.MaxCompany},
+		{"phone number", info.Phone, control.MaxPhone},
+		{"description", info.Description, control.MaxDescription},
+	} {
+		if _, err := cleanLine(f.what, f.v, f.max); err != nil {
+			return err
+		}
+	}
+	switch {
+	case required && info.Company == "":
+		return errors.New("the company name is required")
+	case required && info.Phone == "":
+		return errors.New("the phone number is required")
+	}
+	return nil
+}
+
+// checkServer checks a server address and host key fingerprint of an
+// approved server or a listing request.
+func checkServer(addr, fp string) error {
+	a, err := serveraddr.Parse(addr)
+	if err != nil {
+		return err
+	}
+	if a.String() != addr {
+		return fmt.Errorf("address %q is not normalized", addr)
+	}
+	if !control.ValidFingerprint(fp) {
+		return fmt.Errorf("bad fingerprint %q", fp)
+	}
+	return nil
+}
+
+// Listing outcomes of RequestListing.
+type Listing int
+
+const (
+	ListingAdded    Listing = iota // a new open request
+	ListingOpen                    // the same request was already open
+	ListingApproved                // the server is already approved
+)
+
+// RequestListing adds an open request of computer fp to approve the server
+// at addr with host key fingerprint serverFP.
+func (st *State) RequestListing(fp, addr, serverFP string, at time.Time) (Listing, error) {
+	a, err := serveraddr.Parse(addr)
+	if err != nil {
+		return 0, err
+	}
+	addr = a.String()
+	if err := checkServer(addr, serverFP); err != nil {
+		return 0, err
+	}
+	i := slices.IndexFunc(st.Computers, func(c Computer) bool { return sameKey(c.PublicKey, fp) })
+	if i < 0 {
+		return 0, fmt.Errorf("no computer with fingerprint %s", fp)
+	}
+	c := &st.Computers[i]
+	if slices.Contains(c.Approved, control.ApprovedServer{Address: addr, Fingerprint: serverFP}) {
+		return ListingApproved, nil
+	}
+	if slices.ContainsFunc(c.Listings, func(l control.ListingRequest) bool {
+		return l.Address == addr && l.Fingerprint == serverFP
+	}) {
+		return ListingOpen, nil
+	}
+	if len(c.Listings) >= control.MaxListingRequests {
+		return 0, fmt.Errorf("too many open listing requests (max %d)", control.MaxListingRequests)
+	}
+	c.Listings = append(slices.Clone(c.Listings), control.ListingRequest{Address: addr, Fingerprint: serverFP, RequestedAt: at.UTC()})
+	return ListingAdded, nil
+}
+
+// DecideListing closes the open request of computer fp for the server at
+// addr with fingerprint serverFP. Allowing puts the server on the
+// computer's approved list, in place of an older approval for the same
+// address. It returns the computer's name.
+func (st *State) DecideListing(fp, addr, serverFP string, allow bool) (string, error) {
+	i := slices.IndexFunc(st.Computers, func(c Computer) bool { return sameKey(c.PublicKey, fp) })
+	if i < 0 {
+		return "", fmt.Errorf("no computer with fingerprint %s", fp)
+	}
+	c := &st.Computers[i]
+	j := slices.IndexFunc(c.Listings, func(l control.ListingRequest) bool {
+		return l.Address == addr && l.Fingerprint == serverFP
+	})
+	if j < 0 {
+		return "", fmt.Errorf("no open request for %s (%s)", addr, serverFP)
+	}
+	c.Listings = slices.Delete(slices.Clone(c.Listings), j, j+1)
+	if allow {
+		approved := slices.DeleteFunc(slices.Clone(c.Approved), func(a control.ApprovedServer) bool { return a.Address == addr })
+		if len(approved) >= control.MaxApprovedServers {
+			return "", fmt.Errorf("too many approved servers (max %d)", control.MaxApprovedServers)
+		}
+		c.Approved = append(approved, control.ApprovedServer{Address: addr, Fingerprint: serverFP})
+	}
+	return c.Name, nil
 }
 
 // cleanLine trims s and checks it like a name, but allows it to be empty.

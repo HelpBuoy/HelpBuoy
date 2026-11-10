@@ -7,7 +7,7 @@ package ui
 
 import (
 	"context"
-	"sync/atomic"
+	"strings"
 	"time"
 	"unicode/utf16"
 	"unsafe"
@@ -32,10 +32,6 @@ const dialogWidth = 320
 
 // Computer area size in 96-DPI units.
 const clientW, clientH = 460, 330
-
-// statusY is the position of the waiting screen's status line; it moves
-// down by titleH when the server's title is shown above it.
-const statusY, titleH = 160, 26
 
 // fontKind selects one of the window's fonts.
 type fontKind int
@@ -77,7 +73,8 @@ type Window struct {
 	// ScreenMain
 	lblWaiting    *ui.Static
 	lblStatus     *ui.Static
-	lblInfoTitle  *ui.Static // the server's title, above the status line
+	lblInfoTitle  *ui.Static // the server's company name, above lblWho
+	lblWho        *ui.Static // its phone number, description and address
 	btnDisconnect *ui.Button
 	lblComment    *ui.Static
 	lnkUpdate     *ui.SysLink // "Check for updates", bottom right
@@ -141,6 +138,7 @@ func New(iconID uint16) *Window {
 	w.lblWaiting = static("", co.SS_CENTER)
 	w.lblStatus = static("", co.SS_CENTER)
 	w.lblInfoTitle = static("", co.SS_CENTER)
+	w.lblWho = static("", co.SS_CENTER)
 	w.btnDisconnect = button(i18n.Trans("&Disconnect"), co.BS_PUSHBUTTON)
 	w.lblComment = static("", co.SS_CENTER)
 	w.lnkUpdate = link("<a>"+i18n.Trans("Check for updates")+"</a>", co.LWS_RIGHT)
@@ -154,7 +152,7 @@ func New(iconID uint16) *Window {
 
 	w.items = []item{
 		{w.lblHeading, 24, 22, 412, 30, fontHeading},
-		{w.lblAddrHint, 24, 62, 412, 36, fontNormal},
+		{w.lblAddrHint, 24, 58, 412, 42, fontNormal},
 		{w.edtAddr, 24, 106, 300, 26, fontNormal},
 		{w.btnConnect, 334, 105, 102, 28, fontNormal},
 		{w.lblAddrError, 24, 146, 412, 80, fontNormal},
@@ -169,10 +167,11 @@ func New(iconID uint16) *Window {
 		{w.lblKeyNotice, 24, 256, 412, 40, fontNormal},
 		{w.lnkChange, 24, 302, 412, 20, fontNormal},
 
-		{w.lblComment, 24, 44, 412, 34, fontHeading},
-		{w.lblWaiting, 24, 104, 412, 40, fontBig},
-		{w.lblInfoTitle, 24, 152, 412, 28, fontHeading},
-		{w.lblStatus, 24, statusY, 412, 64, fontNormal},
+		{w.lblComment, 24, 16, 412, 30, fontHeading},
+		{w.lblWaiting, 24, 52, 412, 40, fontBig},
+		{w.lblInfoTitle, 24, 100, 412, 26, fontHeading},
+		{w.lblWho, 24, 128, 412, 56, fontNormal},
+		{w.lblStatus, 24, 192, 412, 60, fontNormal},
 		{w.btnDisconnect, 150, 258, 160, 32, fontNormal},
 		{w.lnkUpdate, 236, 304, 212, 20, fontNormal},
 
@@ -203,74 +202,20 @@ func (w *Window) Render(v app.View) {
 	w.wnd.UiThread(func() { w.apply(v) })
 }
 
-// Task dialog icons that windigo does not name: a shield with a green or
-// yellow banner across the dialog's top.
-const (
-	tdShieldSuccess = co.TDICON(0xfff8) // TD_SHIELD_SUCCESS_ICON
-	tdShieldWarning = co.TDICON(0xfffa) // TD_SHIELD_WARNING_ICON
-)
-
-// checkWait is how long the approval dialog waits for the verified server
-// check before it opens with "Checking who runs this server..." (PLAN.md
-// 12.5).
-const checkWait = 3 * time.Second
-
 // ConfirmTechie implements app.UI with a modal dialog that asks whether the
-// techie may take control. A verified server gets a green banner with the
-// company, where no text from the server is shown (PLAN.md 12.6). A changed
-// techie key gets its own dialog with an error icon, a warning headline and
-// Cancel as the default button. While the verified server check still runs
-// the dialog says so, and it is shown again with the answer once it is in.
-func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie, oldFP string, b *app.Badges) bool {
+// techie may take control. A changed techie key gets its own dialog with an
+// error icon, a warning headline and Cancel as the default button.
+func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie, oldFP string) bool {
 	if w.wnd.Hwnd() == 0 {
 		return false
 	}
-	select {
-	case <-b.Done():
-	case <-time.After(checkWait):
-	case <-ctx.Done():
-		return false
-	}
-	for {
-		done := isClosed(b.Done())
-		cfg := techieDialog(h, oldFP, b.Badge())
-		var refresh atomic.Bool
-		shown := make(chan struct{})
-		if !done {
-			go func() {
-				select {
-				case <-b.Done():
-					refresh.Store(true)
-					w.wnd.UiThread(w.closeTaskDialog)
-				case <-shown:
-				}
-			}()
-		}
-		id, ok := w.askTaskDialog(ctx, &cfg)
-		close(shown)
-		switch {
-		case !ok || ctx.Err() != nil:
-			return false
-		case id == co.ID_OK:
-			return true
-		case refresh.Load():
-			continue // closed for the answer of the check: show it
-		}
-		return false
-	}
+	cfg := techieDialog(h, oldFP)
+	id, ok := w.askTaskDialog(ctx, &cfg)
+	return ok && ctx.Err() == nil && id == co.ID_OK
 }
 
-func isClosed(c <-chan struct{}) bool {
-	select {
-	case <-c:
-		return true
-	default:
-		return false
-	}
-}
-
-// techieDialog builds the approval dialog for techie h with badge b.
-func techieDialog(h session.Techie, oldFP string, b app.Badge) win.TASKDIALOGCONFIG {
+// techieDialog builds the approval dialog for techie h.
+func techieDialog(h session.Techie, oldFP string) win.TASKDIALOGCONFIG {
 	cfg := win.TASKDIALOGCONFIG{
 		WindowTitle: Title,
 		Flags:       co.TDF_ALLOW_DIALOG_CANCELLATION | co.TDF_POSITION_RELATIVE_TO_WINDOW,
@@ -279,45 +224,60 @@ func techieDialog(h session.Techie, oldFP string, b app.Badge) win.TASKDIALOGCON
 	quoted := `"` + h.Name + `"`
 	esc := i18n.Trans("You can take back control at any time by pressing Esc.")
 	fingerprint := i18n.Trans("Key fingerprint:") + "\n" + h.Fingerprint
-	switch {
-	case oldFP != "":
+	warn := i18n.Trans("Only allow this if you know the person asking personally. " +
+		"Banks, Microsoft and the police never ask for this.")
+	if oldFP != "" {
 		cfg.HMainIcon = win.TdcIconTdi(co.TDICON_ERROR)
 		cfg.MainInstruction = i18n.Trans("Warning: the key of {0} has changed", quoted)
 		cfg.Content = i18n.Trans("Key last time:") + "\n" + oldFP + "\n\n" +
 			i18n.Trans("Key now:") + "\n" + h.Fingerprint + "\n\n" +
 			i18n.Trans("This may be someone pretending to be a techie. Do not continue "+
 				"unless the techie confirmed by phone that they have a new key.")
-		// The badge goes in the footer, which has its own icon.
-		if b.Verified {
-			cfg.HFooterIcon = win.TdcIconTdi(co.TDICON_SHIELD)
-			cfg.Footer = b.Heading + "\n" + b.Server
-		} else {
-			cfg.HFooterIcon = win.TdcIconTdi(co.TDICON_WARNING)
-			cfg.Footer = b.Text
-		}
 		cfg.Buttons = []win.TASKDIALOG_BUTTON{
 			{Id: co.ID_CANCEL, Text: i18n.Trans("&Cancel")},
 			{Id: co.ID_OK, Text: i18n.Trans("Allow &anyway")},
 		}
 		cfg.DefaultButtonId = uint16(co.ID_CANCEL)
 		return cfg
-	case b.Verified:
-		cfg.HMainIcon = win.TdcIconTdi(tdShieldSuccess)
-		cfg.MainInstruction = b.Heading
-		cfg.Content = b.Server + "\n" + b.Text + "\n\n" +
-			i18n.Trans("Allow {0} to take control of this computer?", quoted) + "\n\n" +
-			fingerprint + "\n\n" + esc
-	default:
-		cfg.HMainIcon = win.TdcIconTdi(tdShieldWarning)
-		cfg.MainInstruction = i18n.Trans("Allow {0} to take control of this computer?", quoted)
-		cfg.Content = b.Text + "\n\n" + fingerprint + "\n\n" + esc
 	}
+	cfg.HMainIcon = win.TdcIconTdi(co.TDICON_WARNING)
+	cfg.MainInstruction = i18n.Trans("Allow {0} to take control of this computer?", quoted)
+	cfg.Content = warn + "\n\n" + fingerprint + "\n\n" + esc
 	cfg.Buttons = []win.TASKDIALOG_BUTTON{
 		{Id: co.ID_OK, Text: i18n.Trans("&Allow")},
 		{Id: co.ID_CANCEL, Text: i18n.Trans("&Cancel")},
 	}
 	cfg.DefaultButtonId = uint16(co.ID_OK)
 	return cfg
+}
+
+// ConfirmLock implements app.UI with a modal dialog that asks whether to
+// lock this PC to the server of company (PLAN.md 12.1).
+func (w *Window) ConfirmLock(ctx context.Context, company string) bool {
+	if w.wnd.Hwnd() == 0 {
+		return false
+	}
+	cfg := win.TASKDIALOGCONFIG{
+		WindowTitle:     Title,
+		Flags:           co.TDF_ALLOW_DIALOG_CANCELLATION | co.TDF_POSITION_RELATIVE_TO_WINDOW,
+		Width:           dialogWidth,
+		HMainIcon:       win.TdcIconTdi(co.TDICON_SHIELD),
+		MainInstruction: i18n.Trans("Get help only through {0}?", company),
+		Content:         lockQuestion(company),
+		Buttons: []win.TASKDIALOG_BUTTON{
+			{Id: co.ID_OK, Text: i18n.Trans("&Lock to {0}", company)},
+			{Id: co.ID_CANCEL, Text: i18n.Trans("&Not now")},
+		},
+		DefaultButtonId: uint16(co.ID_OK),
+	}
+	id, ok := w.askTaskDialog(ctx, &cfg)
+	return ok && ctx.Err() == nil && id == co.ID_OK
+}
+
+// lockQuestion is the text of the lock question for company.
+func lockQuestion(company string) string {
+	return i18n.Trans("To protect you from scam calls, do you want this PC to get help via HelpBuoy only "+
+		"through {0}? Other helpdesks can then only reach this PC after {0} allowed them.", company)
 }
 
 // askTaskDialog shows cfg modally on the UI thread and returns the button
@@ -574,23 +534,6 @@ func (w *Window) fitButtons() {
 	fit(w.btnRemoveKey, 160)
 }
 
-// moveStatus puts the status line of the waiting screen below the server's
-// title when it is shown, and in the title's place when not.
-func (w *Window) moveStatus(belowTitle bool) {
-	y := statusY
-	if belowTitle {
-		y += titleH
-	}
-	for i := range w.items {
-		if w.items[i].ctl == w.lblStatus && w.items[i].y != y {
-			w.items[i].y = y
-			it := w.items[i]
-			w.lblStatus.Hwnd().MoveWindow(win.POINT{X: w.scale(it.x), Y: w.scale(it.y)},
-				win.SIZE{Cx: w.scale(it.w), Cy: w.scale(it.h)}, true)
-		}
-	}
-}
-
 func show(c ui.Window, on bool) {
 	if on {
 		c.Hwnd().ShowWindow(co.SW_SHOW)
@@ -615,6 +558,11 @@ func (w *Window) apply(v app.View) {
 		show(c, addr)
 	}
 	if addr {
+		hint := i18n.Trans("Type the server address a techie gave you, for example helpme.example.com.")
+		if v.LockedTo != "" {
+			hint = i18n.Trans("This PC gets help through {0}. Other servers can only connect after {0} allowed them.", v.LockedTo)
+		}
+		setText(w.lblAddrHint, hint)
 		if entered && v.Address != "" {
 			w.edtAddr.SetText(v.Address)
 		}
@@ -675,9 +623,9 @@ func (w *Window) apply(v app.View) {
 	main := v.Screen == app.ScreenMain
 	show(w.lblWaiting, main)
 	show(w.lblStatus, main)
-	title := main && v.Ready && v.Error == "" && v.Notice == "" && w.updating == "" && v.Title != ""
-	show(w.lblInfoTitle, title)
-	w.moveStatus(title)
+	who := main && v.Company != ""
+	show(w.lblInfoTitle, who)
+	show(w.lblWho, who)
 	show(w.btnDisconnect, main)
 	show(w.lblComment, main)
 	show(w.lnkUpdate, main)
@@ -694,9 +642,11 @@ func (w *Window) apply(v app.View) {
 			status = v.Notice
 		}
 		if status == "" && v.Ready {
-			// The server's instruction line, or the default text.
-			setText(w.lblInfoTitle, v.Title)
 			status = v.Instruction
+		}
+		if who {
+			setText(w.lblInfoTitle, v.Company)
+			setText(w.lblWho, whoLines(v))
 		}
 		if w.updating != "" {
 			status = w.updating
@@ -728,8 +678,8 @@ func (w *Window) apply(v app.View) {
 	if version := w.ctrl.Version(); update.IsRelease(version) {
 		caption += " " + version
 	}
-	if v.Title != "" {
-		caption = v.Title + " - " + caption
+	if v.Screen == app.ScreenMain && v.Company != "" {
+		caption = v.Company + " - " + caption
 	}
 	setText(w.wnd, caption)
 
@@ -866,4 +816,15 @@ func (w *Window) confirmRemoveKey() {
 	if err := w.ctrl.RemoveKey(); err != nil {
 		ui.MsgError(w.wnd, Title, i18n.Trans("The key could not be removed"), err.Error())
 	}
+}
+
+// whoLines are the lines below the company name on the waiting screen:
+// the phone number, the description and the server address.
+func whoLines(v app.View) string {
+	lines := []string{i18n.Trans("Phone: {0}", v.Phone)}
+	if v.Description != "" {
+		lines = append(lines, v.Description)
+	}
+	lines = append(lines, i18n.Trans("Server: {0}", v.ServerAddress))
+	return strings.Join(lines, "\n")
 }

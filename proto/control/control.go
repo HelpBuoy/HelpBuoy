@@ -21,8 +21,19 @@
 // key the server sends Registered and from then on treats the connection as a
 // computer (no reconnect needed).
 //
-// Right after Hello the server sends ServerInfo (title and instruction line set
-// by the techies), and again to every connection whenever it changes.
+// Right after Hello the server sends ServerInfo (who runs the server: address,
+// company name, phone number and description), and again to every connection
+// whenever it changes. A server without a company name and phone number
+// doesn't accept computers: it sends Error instead of Hello to computers and
+// pending keys.
+//
+// The lock to a primary server (PLAN.md 12): right after Hello (registered
+// computers) or Registered (pending ones), the server sends ApprovedServers,
+// the servers it approved for this computer, and again whenever that list
+// changes. A locked computer asks its primary server to approve another server
+// with RequestListing; techies see the open requests in Presence and decide
+// with DecideListing. Allowing adds the server to ApprovedServers, refusing
+// sends ListingRefused.
 //
 // Techie commands carry a Seq; the server answers each with Reply{Seq, Error}.
 // Presence is a full snapshot, sent after Hello and after every change.
@@ -60,6 +71,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -113,8 +125,14 @@ const (
 	MsgRegisterTechie   MsgType = 16
 	MsgSetServerInfo    MsgType = 18
 	MsgUnregisterTechie MsgType = 19
+	MsgDecideListing    MsgType = 23
 	// server -> any
 	MsgServerInfo MsgType = 17
+	// server -> computer
+	MsgApprovedServers MsgType = 20
+	MsgListingRefused  MsgType = 22
+	// computer -> server
+	MsgRequestListing MsgType = 21
 )
 
 // Hello is the server's first message on every control channel.
@@ -125,33 +143,115 @@ type Hello struct {
 	// Name is the techie's name, techies only. Computers are not told the name
 	// techies gave them; that name is only for techies.
 	Name string `json:"name,omitempty"`
-	// Salt is the server's verification salt in hex, for the verified server
-	// check (PLAN.md 12.4). Only registered computers and techies get it,
-	// never pending keys.
-	Salt string `json:"salt,omitempty"`
 }
 
-// ServerInfo is the server's title and instruction line, e.g. "Example Inc" and
-// "Call +1 234 567 890 for support". Both may be empty. Computers show them to
-// their user; techies show and edit them on the Server tab.
+// ServerInfo says who runs the server, so the user of a computer knows who
+// they are waiting for and who to call. Company and Phone are set on every
+// server that accepts computers; Address (the address computers use, e.g.
+// "helpme.example.com") and Description (e.g. opening hours) may be empty.
+// Computers show it on the waiting screen; techies show and edit it on the
+// Server tab.
 type ServerInfo struct {
-	Title       string `json:"title"`
-	Instruction string `json:"instruction"`
+	Address     string `json:"address"`
+	Company     string `json:"company"`
+	Phone       string `json:"phone"`
+	Description string `json:"description"`
 }
 
-// DefaultInstruction is what computers show when the server's instruction line
-// is empty. An empty title shows nothing. The apps show the same text through
-// i18n.Trans so it is translated; keep them in sync.
+// Configured reports whether the server may accept computers: it has a
+// company name and a phone number.
+func (i ServerInfo) Configured() bool { return i.Company != "" && i.Phone != "" }
+
+// Limits of the ServerInfo fields, in characters.
+const (
+	MaxAddress     = 253
+	MaxCompany     = 64
+	MaxPhone       = 32
+	MaxDescription = 160
+)
+
+// SetServerInfo replaces the server's ServerInfo. Each field is one line of
+// printable text within its limit; Company and Phone are required, Address
+// (a valid server address) and Description may be empty. Every connection
+// gets the new ServerInfo.
+type SetServerInfo struct {
+	Seq         uint32 `json:"seq"`
+	Address     string `json:"address"`
+	Company     string `json:"company"`
+	Phone       string `json:"phone"`
+	Description string `json:"description"`
+}
+
+// DefaultInstruction is what computers show below who they are waiting for.
+// The apps show the same text through i18n.Trans so it is translated; keep
+// them in sync.
 const DefaultInstruction = "A techie can now ask to connect. You will be asked first, " +
 	"and pressing Esc always takes back control."
 
-// SetServerInfo replaces the server's title and instruction line (each one line
-// of printable text, title at most 64 and instruction at most 160 characters,
-// empty to clear). Every connection gets the new ServerInfo.
-type SetServerInfo struct {
+// ApprovedServer is a server a primary server approved for one of its
+// computers: one address with one host key.
+type ApprovedServer struct {
+	Address     string `json:"address"`     // normalized host:port
+	Fingerprint string `json:"fingerprint"` // SHA256:... of its host key
+}
+
+// ApprovedServers is the full list of servers this server approved for the
+// computer, sent after Hello or Registered and whenever it changes.
+type ApprovedServers struct {
+	Servers []ApprovedServer `json:"servers"`
+}
+
+// RequestListing asks the primary server to approve another server for this
+// computer. Only registered computers may send it.
+type RequestListing struct {
+	Address     string `json:"address"`
+	Fingerprint string `json:"fingerprint"`
+}
+
+// ListingRefused tells the computer that a techie refused its request to
+// list this server.
+type ListingRefused struct {
+	Address     string `json:"address"`
+	Fingerprint string `json:"fingerprint"`
+}
+
+// DecideListing allows or refuses a computer's open listing request.
+// Computer is the computer's fingerprint.
+type DecideListing struct {
 	Seq         uint32 `json:"seq"`
-	Title       string `json:"title"`
-	Instruction string `json:"instruction"`
+	Computer    string `json:"computer"`
+	Address     string `json:"address"`
+	Fingerprint string `json:"fingerprint"`
+	Allow       bool   `json:"allow"`
+}
+
+// ListingRequest is an open listing request as techies see it.
+type ListingRequest struct {
+	Address     string    `json:"address"`
+	Fingerprint string    `json:"fingerprint"`
+	RequestedAt time.Time `json:"requested_at"`
+}
+
+// MaxListingRequests bounds the open listing requests of one computer, and
+// MaxApprovedServers its approved list.
+const (
+	MaxListingRequests = 5
+	MaxApprovedServers = 100
+)
+
+// ValidFingerprint accepts a SHA256 key fingerprint as ssh.FingerprintSHA256
+// makes it: "SHA256:" and 43 characters of unpadded base64.
+func ValidFingerprint(fp string) bool {
+	rest, ok := strings.CutPrefix(fp, "SHA256:")
+	if !ok || len(rest) != 43 {
+		return false
+	}
+	for _, ch := range rest {
+		if !(ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9' || ch == '+' || ch == '/') {
+			return false
+		}
+	}
+	return true
 }
 
 // ComputerHello is sent by computers and pending connections right after opening
@@ -178,6 +278,10 @@ type ComputerInfo struct {
 	LastSeen      time.Time    `json:"last_seen"`
 	Request       *RequestInfo `json:"request,omitempty"`         // request of a Connect, nil if none
 	InSessionWith string       `json:"in_session_with,omitempty"` // techie name while a session runs
+	// Approved are the servers approved for this computer (PLAN.md 12).
+	Approved []ApprovedServer `json:"approved,omitempty"`
+	// Listings are its open requests to approve another server.
+	Listings []ListingRequest `json:"listings,omitempty"`
 }
 
 // RequestState of the request a techie's Connect creates.
@@ -282,10 +386,7 @@ type Reply struct {
 // Registered tells a pending connection that it is now a registered computer.
 // It carries no name: the name a computer is registered under is only for
 // techies.
-type Registered struct {
-	// Salt is the server's verification salt in hex, like Hello.Salt.
-	Salt string `json:"salt,omitempty"`
-}
+type Registered struct{}
 
 // CancelRequest refuses a techie's Connect (or ends it before the session
 // channel is opened). The techie who sent the Connect may send it too, to
@@ -394,6 +495,14 @@ func typeOf(m any) (MsgType, error) {
 		return MsgCancelRequest, nil
 	case *Error, Error:
 		return MsgError, nil
+	case *ApprovedServers, ApprovedServers:
+		return MsgApprovedServers, nil
+	case *RequestListing, RequestListing:
+		return MsgRequestListing, nil
+	case *ListingRefused, ListingRefused:
+		return MsgListingRefused, nil
+	case *DecideListing, DecideListing:
+		return MsgDecideListing, nil
 	}
 	return 0, fmt.Errorf("control: unknown message type %T", m)
 }
@@ -435,6 +544,14 @@ func newOf(t MsgType) (any, error) {
 		return &CancelRequest{}, nil
 	case MsgError:
 		return &Error{}, nil
+	case MsgApprovedServers:
+		return &ApprovedServers{}, nil
+	case MsgRequestListing:
+		return &RequestListing{}, nil
+	case MsgListingRefused:
+		return &ListingRefused{}, nil
+	case MsgDecideListing:
+		return &DecideListing{}, nil
 	}
 	return nil, fmt.Errorf("control: unknown message type byte %d", t)
 }

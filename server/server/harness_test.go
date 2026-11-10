@@ -73,6 +73,9 @@ func testLogger() *slog.Logger {
 	return slog.New(slog.DiscardHandler)
 }
 
+// testInfo is who runs the test server; without it computers are refused.
+var testInfo = control.ServerInfo{Company: "Example Inc", Phone: "+1 234 567 890"}
+
 func newEnv(t *testing.T, mod func(*server.Config)) *env {
 	t.Helper()
 	e := &env{t: t, dir: t.TempDir(), clock: newClock()}
@@ -92,6 +95,9 @@ func newEnv(t *testing.T, mod func(*server.Config)) *env {
 	}
 	var err error
 	if e.st, err = store.Open(e.dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := e.st.Update(func(st *store.State) error { return st.SetInfo(testInfo) }); err != nil {
 		t.Fatal(err)
 	}
 	e.start()

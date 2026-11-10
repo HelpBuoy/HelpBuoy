@@ -18,7 +18,7 @@ import (
 	"github.com/helpbuoy/helpbuoy/client-windows/internal/fakeserver"
 	"github.com/helpbuoy/helpbuoy/client-windows/session"
 	"github.com/helpbuoy/helpbuoy/proto/appkey"
-	"github.com/helpbuoy/helpbuoy/proto/verify"
+	"github.com/helpbuoy/helpbuoy/proto/control"
 )
 
 type fakeUI struct {
@@ -32,6 +32,26 @@ type fakeUI struct {
 	// gate, if set, holds ConfirmTechie until it is closed (then the
 	// answer is "allow") or the question becomes moot.
 	gate chan struct{}
+	// lock is how ConfirmLock answers; locks counts the questions and
+	// company is the company of the last one.
+	lock    bool
+	locks   int
+	company string
+}
+
+func (u *fakeUI) ConfirmLock(ctx context.Context, company string) bool {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.locks++
+	u.company = company
+	return u.lock
+}
+
+// lockQuestions returns the number of lock questions so far.
+func (u *fakeUI) lockQuestions() int {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.locks
 }
 
 // answer sets how ConfirmTechie answers from now on.
@@ -47,7 +67,7 @@ func (u *fakeUI) Render(v View) {
 	}
 	u.views <- v
 }
-func (u *fakeUI) ConfirmTechie(ctx context.Context, _ session.Techie, _ string, _ *Badges) bool {
+func (u *fakeUI) ConfirmTechie(ctx context.Context, _ session.Techie, _ string) bool {
 	u.mu.Lock()
 	refuse, gate := u.refuse, u.gate
 	u.mu.Unlock()
@@ -106,13 +126,16 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := fakeserver.Start("", fakeserver.Options{})
+	server, err := fakeserver.Start("", fakeserver.Options{Info: testInfo})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { server.Close() })
 	return &env{t: t, dir: t.TempDir(), key: k, server: server}
 }
+
+// testInfo is who runs the fake servers.
+var testInfo = control.ServerInfo{Company: "Example Inc", Phone: "+1 234 567 890", Description: "Mon-Fri\n9-17"}
 
 func (e *env) fp() string { return e.key.Fingerprint }
 
@@ -447,24 +470,164 @@ func TestFirstConnectionWarning(t *testing.T) {
 	}
 }
 
-func TestBadge(t *testing.T) {
-	b := (&Badges{v: session.Finished(verify.Result{State: verify.Verified, Company: "Example Inc", Country: "NL"}),
-		addr: "HelpMe.Example.com:5959"}).Badge()
-	if !b.Verified || b.Heading != "Verified: Example Inc, Netherlands" || b.Server != "Server: helpme.example.com" {
-		t.Errorf("verified %+v", b)
+// TestWaitingScreen: the waiting screen shows who the user is waiting for,
+// with server text on one line.
+func TestWaitingScreen(t *testing.T) {
+	e := newEnv(t)
+	registered(t, e)
+	c, ui := e.controller()
+	c.Start()
+	v := ui.wait(t, "main with info", func(v View) bool { return readyMain(v) && v.Company != "" })
+	if v.Company != "Example Inc" || v.Phone != "+1 234 567 890" || v.Description != "Mon-Fri 9-17" ||
+		v.ServerAddress != e.server.Addr() || v.Instruction == "" {
+		t.Fatalf("view %+v", v)
 	}
-	b = (&Badges{v: session.Finished(verify.Result{State: verify.Verified, Company: "Example Inc", Country: "ZZ"})}).Badge()
-	if b.Heading != "Verified: Example Inc, ZZ" {
-		t.Errorf("unknown country %+v", b)
+}
+
+// TestNotNow: Not now leaves the PC unlocked and the question comes back on
+// the next connection.
+func TestNotNow(t *testing.T) {
+	e := newEnv(t)
+	registered(t, e)
+	c, ui := e.controller()
+	c.Start()
+	ui.wait(t, "main", readyMain)
+	waitFor(t, func() bool { return ui.lockQuestions() == 1 })
+	if ui.company != "Example Inc" {
+		t.Fatalf("asked for %q", ui.company)
 	}
-	warn := "Only allow this if you know the person asking personally."
-	for state, want := range map[verify.State]string{
-		verify.NotVerified: "HelpBuoy has not verified who runs this server.",
-		verify.Unknown:     "HelpBuoy could not check who runs this server.",
-	} {
-		b := (&Badges{v: session.Finished(verify.Result{State: state})}).Badge()
-		if b.Verified || b.Heading != "" || !strings.HasPrefix(b.Text, want) || !strings.Contains(b.Text, warn) {
-			t.Errorf("%v: %+v", state, b)
+	c.Disconnect()
+	c.Connect(e.server.Addr())
+	ui.wait(t, "main", readyMain)
+	waitFor(t, func() bool { return ui.lockQuestions() == 2 })
+	if e.config().Lock != nil {
+		t.Fatal("locked after Not now")
+	}
+	if v := c.View(); v.LockedTo != "" {
+		t.Fatalf("view %+v", v)
+	}
+}
+
+// lockedEnv is a PC registered on e.server and locked to it.
+func lockedEnv(t *testing.T) (*env, *Controller, *fakeUI) {
+	t.Helper()
+	e := newEnv(t)
+	registered(t, e)
+	c, ui := e.controller()
+	ui.lock = true
+	c.Start()
+	ui.wait(t, "main", readyMain)
+	waitFor(t, func() bool { return e.config().Lock != nil })
+	l := e.config().Lock
+	if l.Address != e.server.Addr() || l.HostKey != identity.KeyLine(e.server.HostKey(), "") || l.Company != "Example Inc" {
+		t.Fatalf("lock %+v", l)
+	}
+	if v := ui.wait(t, "locked view", func(v View) bool { return v.LockedTo != "" }); v.LockedTo != "Example Inc" {
+		t.Fatalf("locked to %q", v.LockedTo)
+	}
+	return e, c, ui
+}
+
+// TestLockAndApprove: a locked PC that connects to a server that is not
+// approved asks its primary server, waits there, and connects once the
+// primary server approved that server. The lock stays.
+func TestLockAndApprove(t *testing.T) {
+	e, c, ui := lockedEnv(t)
+	other := startServer(t)
+	c.Disconnect()
+	ui.wait(t, "address screen", screenIs(ScreenAddress))
+	c.Connect(other.Addr())
+	v := ui.wait(t, "waiting for approval", func(v View) bool { return readyMain(v) && strings.Contains(v.Notice, other.Addr()) })
+	if v.ServerAddress != e.server.Addr() {
+		t.Fatalf("waiting on %q, want the primary server", v.ServerAddress)
+	}
+	want := control.ApprovedServer{Address: other.Addr(), Fingerprint: ssh.FingerprintSHA256(other.HostKey())}
+	if l := recvMsg[*control.RequestListing](t, e.server); l.Address != want.Address || l.Fingerprint != want.Fingerprint {
+		t.Fatalf("listing %+v, want %+v", l, want)
+	}
+	if other.Online(e.fp()) {
+		t.Fatal("connected to the server before it was approved")
+	}
+	e.server.SetApproved(e.fp(), []control.ApprovedServer{want})
+	waitFor(t, func() bool { return other.Online(e.fp()) })
+	waitOffline(t, e.server, e.fp())
+	cfg := e.config()
+	if cfg.Lock == nil || cfg.Lock.Address != e.server.Addr() || len(cfg.Lock.Approved) != 1 || cfg.Lock.Approved[0] != want {
+		t.Fatalf("lock %+v", cfg.Lock)
+	}
+
+	// Now approved, the PC connects there directly.
+	c.Disconnect()
+	ui.wait(t, "address screen", screenIs(ScreenAddress))
+	c.Connect(other.Addr())
+	waitFor(t, func() bool { return other.Online(e.fp()) })
+	if e.server.Online(e.fp()) {
+		t.Fatal("asked the primary server again")
+	}
+}
+
+// TestLockRefused: a refused server brings the user back to the address
+// screen with the reason.
+func TestLockRefused(t *testing.T) {
+	e, c, ui := lockedEnv(t)
+	other := startServer(t)
+	c.Disconnect()
+	ui.wait(t, "address screen", screenIs(ScreenAddress))
+	c.Connect(other.Addr())
+	l := recvMsg[*control.RequestListing](t, e.server)
+	e.server.Send(e.fp(), control.ListingRefused{Address: l.Address, Fingerprint: l.Fingerprint})
+	v := ui.wait(t, "refused", func(v View) bool { return v.Screen == ScreenAddress && v.Error != "" })
+	if !strings.Contains(v.Error, "Example Inc did not allow") {
+		t.Fatalf("error %q", v.Error)
+	}
+	if other.Online(e.fp()) {
+		t.Fatal("connected to the refused server")
+	}
+}
+
+// TestLockedRestart: a locked PC whose last address is no longer allowed
+// starts on its primary server, and Remove key keeps the lock.
+func TestLockedRestart(t *testing.T) {
+	e, c, _ := lockedEnv(t)
+	c.Close()
+	cfg := e.config()
+	cfg.LastAddress = "elsewhere.example.com:5959"
+	config.Store{Dir: e.dir}.Save(cfg)
+	c2, ui2 := e.controller()
+	c2.Start()
+	ui2.wait(t, "main", readyMain)
+	if err := c2.RemoveKey(); err != nil {
+		t.Fatal(err)
+	}
+	if l := e.config().Lock; l == nil || l.Address != e.server.Addr() {
+		t.Fatalf("lock after Remove key %+v", l)
+	}
+}
+
+func waitFor(t *testing.T, ok func() bool) {
+	t.Helper()
+	for i := 0; i < 500; i++ {
+		if ok() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("timed out")
+}
+
+func recvMsg[T any](t *testing.T, r *fakeserver.Server) T {
+	t.Helper()
+	timeout := time.After(5 * time.Second)
+	for {
+		select {
+		case m := <-r.Received():
+			if v, ok := m.Msg.(T); ok {
+				return v
+			}
+		case <-timeout:
+			var zero T
+			t.Fatalf("timed out waiting for %T", zero)
+			return zero
 		}
 	}
 }

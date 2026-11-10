@@ -11,6 +11,10 @@ firewall (and forward it on the router if the server is behind NAT). The
 apps use port 5959 when no port is given, so with the default users only
 type the host name, e.g. server.example.com.
 
+The server refuses computers until it knows who runs it: set the company
+name and phone number, which users waiting for a techie see, with the info
+command below (or on the desk app's Server tab).
+
 Admin commands go through helpbuoy-serverctl, which runs helpbuoy-server as the
 service user on the service's state:
 
@@ -20,9 +24,7 @@ service user on the service's state:
   sudo helpbuoy-serverctl techie remove alice
   sudo helpbuoy-serverctl computer list
   sudo helpbuoy-serverctl computer remove SHA256:...
-  sudo helpbuoy-serverctl title 'Example Inc'
-  sudo helpbuoy-serverctl instruction 'Call +1 234 567 890 for support'
-  sudo helpbuoy-serverctl verification         # host key and id for the HelpBuoy portal
+  sudo helpbuoy-serverctl info --company 'Example Inc' --phone '+1 234 567 890'
 
 The running server picks up changes within a second. Logs are in the
 journal (journalctl -u helpbuoy-server) and in /var/lib/helpbuoy-server/server.log.

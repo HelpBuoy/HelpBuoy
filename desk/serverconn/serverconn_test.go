@@ -178,6 +178,14 @@ func (r *fakeServer) control(sc *ssh.ServerConn, ch ssh.Channel, role control.Ro
 				continue
 			}
 			cc.Send(&control.Reply{Seq: m.Seq})
+		case *control.SetServerInfo:
+			cc.Send(&control.Reply{Seq: m.Seq})
+		case *control.DecideListing:
+			if m.Computer != "SHA256:a" || m.Address != "other.example.com:5959" || m.Fingerprint != "SHA256:o" || !m.Allow {
+				cc.Send(&control.Reply{Seq: m.Seq, Error: "bad decision"})
+				continue
+			}
+			cc.Send(&control.Reply{Seq: m.Seq})
 		case *control.Connect:
 			if m.Fingerprint != "SHA256:a" {
 				cc.Send(&control.Reply{Seq: m.Seq, Error: "computer is not online"})
@@ -272,6 +280,14 @@ func TestOnlinePresenceCommandsAndSession(t *testing.T) {
 	if err := waitResult(t, c.RenameComputer("SHA256:a", "Anna laptop")); err != nil {
 		t.Errorf("rename: %v", err)
 	}
+	info := control.ServerInfo{Address: "helpme.example.com", Company: "Example Inc", Phone: "+1 234 567 890", Description: "Weekdays"}
+	if err := waitResult(t, c.SetServerInfo(info)); err != nil {
+		t.Errorf("set server info: %v", err)
+	}
+	req := control.ListingRequest{Address: "other.example.com:5959", Fingerprint: "SHA256:o"}
+	if err := waitResult(t, c.DecideListing("SHA256:a", req, true)); err != nil {
+		t.Errorf("decide listing: %v", err)
+	}
 	if err := waitResult(t, c.Connect("SHA256:nope", "r0")); err == nil {
 		t.Error("connect to an offline computer succeeded")
 	}
@@ -302,6 +318,13 @@ func TestOnlinePresenceCommandsAndSession(t *testing.T) {
 			s = m.Seq
 		case *control.RenameComputer:
 			s = m.Seq
+		case *control.SetServerInfo:
+			s = m.Seq
+			if m.Company != "Example Inc" || m.Phone != "+1 234 567 890" || m.Address != "helpme.example.com" || m.Description != "Weekdays" {
+				t.Errorf("set server info = %+v", m)
+			}
+		case *control.DecideListing:
+			s = m.Seq
 		case *control.Connect:
 			s = m.Seq
 		}
@@ -310,7 +333,7 @@ func TestOnlinePresenceCommandsAndSession(t *testing.T) {
 		}
 		seqs[s] = true
 	}
-	if len(got) != 5 {
+	if len(got) != 7 {
 		t.Errorf("server received %d commands", len(got))
 	}
 

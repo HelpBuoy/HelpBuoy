@@ -185,7 +185,6 @@ func main() {
 		// Releases are published as a Windows MSI only, so there is no
 		// update to offer here yet.
 		CheckUpdate: nil,
-		Verify:      app.NewVerifier(version),
 		AppVersion:  version,
 		UserMachine: userMachine,
 		Logger:      log,

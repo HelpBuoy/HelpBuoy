@@ -3,6 +3,7 @@ package views
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -68,6 +69,8 @@ func newDemo(a *App) *demo {
 	p := &control.Presence{Techies: []control.TechieInfo{{Name: "techie", Online: true}, {Name: "bob", Online: true}}}
 	anna := computer("anna@ANNA-LAPTOP", true)
 	jan := computer("jan@KANTOOR-PC", true)
+	other, _, _ := newKey("")
+	jan.Listings = []control.ListingRequest{{Address: "help.other-example.com:5959", Fingerprint: ssh.FingerprintSHA256(other.PublicKey()), RequestedAt: now.Add(-5 * time.Minute)}}
 	oma := computer("oma@WOONKAMER", true)
 	oma.Request = &control.RequestInfo{ID: "demo-3", Created: now.Add(-10 * time.Minute), State: control.RequestTaken, TakenBy: "bob"}
 	oma.InSessionWith = "bob"
@@ -77,7 +80,7 @@ func newDemo(a *App) *demo {
 	kees.LastSeen = now.Add(-2 * time.Hour)
 	p.Computers = []control.ComputerInfo{piet, oma, anna, lisa, jan, kees}
 	a.setPresence(p)
-	a.setServerInfo(&control.ServerInfo{Title: "Example Inc", Instruction: "Call +1 234 567 890 for support"})
+	a.setServerInfo(&control.ServerInfo{Address: "helpme.example.com:5959", Company: "Example Inc", Phone: "+1 234 567 890", Description: "Monday to Friday 9:00 to 17:00"})
 	return d
 }
 
@@ -107,10 +110,37 @@ func (d *demo) RegisterComputer(line, name string) <-chan error {
 	return done(nil)
 }
 
-// SetServerInfo changes the demo server's title and instruction locally.
-func (d *demo) SetServerInfo(title, instruction string) <-chan error {
-	d.a.setServerInfo(&control.ServerInfo{Title: strings.TrimSpace(title), Instruction: strings.TrimSpace(instruction)})
+// SetServerInfo changes who runs the demo server locally, with the server's
+// rules.
+func (d *demo) SetServerInfo(info control.ServerInfo) <-chan error {
+	if problem, _ := checkInfo(info); problem != "" {
+		return done(errors.New(problem))
+	}
+	info.Address = normAddress(info.Address)
+	d.a.setServerInfo(&info)
 	return done(nil)
+}
+
+// DecideListing allows or refuses a demo listing request locally.
+func (d *demo) DecideListing(fp string, req control.ListingRequest, allow bool) <-chan error {
+	p := d.a.presence
+	for i := range p.Computers {
+		c := &p.Computers[i]
+		if c.Fingerprint != fp {
+			continue
+		}
+		for j, l := range c.Listings {
+			if l.Address == req.Address && l.Fingerprint == req.Fingerprint {
+				c.Listings = append(c.Listings[:j:j], c.Listings[j+1:]...)
+				if allow {
+					c.Approved = append(c.Approved, control.ApprovedServer{Address: l.Address, Fingerprint: l.Fingerprint})
+				}
+				return done(nil)
+			}
+		}
+		return done(fmt.Errorf("no such listing request"))
+	}
+	return done(fmt.Errorf("no computer with fingerprint %s", fp))
 }
 
 // RegisterTechie adds a demo techie locally.

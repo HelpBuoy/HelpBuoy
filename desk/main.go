@@ -24,14 +24,12 @@ import (
 	"slices"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
-	"golang.org/x/crypto/ssh"
 
 	"github.com/helpbuoy/helpbuoy/desk/identity"
 	"github.com/helpbuoy/helpbuoy/desk/perf"
 	"github.com/helpbuoy/helpbuoy/desk/views"
 	"github.com/helpbuoy/helpbuoy/proto/instance"
 	"github.com/helpbuoy/helpbuoy/proto/update"
-	"github.com/helpbuoy/helpbuoy/proto/verify"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -119,15 +117,6 @@ func main() {
 		// with the system's packages.
 		opts.CheckUpdate = func(ctx context.Context) (*update.Release, error) {
 			return update.Check(ctx, update.LatestReleaseURL, version, update.DeskMSI)
-		}
-	}
-	if !*demo {
-		// The Server tab shows whether this server is verified (PLAN.md
-		// 12.5). It checks the host key only: the local server is reached
-		// at localhost, which is never in a file's host names.
-		checker := verify.NewChecker(version, verify.Options{})
-		opts.Verify = func(ctx context.Context, hostKey ssh.PublicKey, salt []byte) verify.Result {
-			return checker.Check(ctx, hostKey, salt, "", false)
 		}
 	}
 	app := views.New(opts)

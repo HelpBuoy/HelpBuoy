@@ -43,9 +43,6 @@ type Config struct {
 	PendingIdle          time.Duration // pending connections are closed after this (24 h)
 	MaxSessionsPerTechie int           // 20
 	Version              string        // server version for Hello
-	// Salt is the verification salt in hex. Hello and Registered carry it to
-	// registered computers and techies, never to pending keys (PLAN.md 12.4).
-	Salt string
 	// Mutate persists a change to the stored state. The implementation must
 	// call SetIndex with the new state before it returns.
 	Mutate func(fn func(*store.State) error) error
@@ -55,6 +52,9 @@ type Config struct {
 // Protocol errors returned by Handle; the caller closes the connection.
 var (
 	ErrNotAllowed = errors.New("message not allowed for this role")
+	// ErrKicked is returned by OpenControl when it kicked the connection;
+	// the Kick closes it once the Error is sent.
+	ErrKicked = errors.New("connection kicked")
 )
 
 // Conn is an attached connection.
@@ -236,6 +236,12 @@ func (r *Registry) OpenControl(c *Conn) error {
 		return errors.New("control channel already open")
 	}
 	c.control = true
+	if c.role != control.RoleTechie && !r.idx.State.Info().Configured() {
+		r.log.Info("computer refused: no company name and phone number set", "fp", c.fp, "ip", c.ip)
+		r.detachLocked(c)
+		c.peer.Kick(ReasonNotSetUp)
+		return ErrKicked
+	}
 	h := &control.Hello{
 		Role:          c.role,
 		ServerVersion: r.cfg.Version,
@@ -244,15 +250,28 @@ func (r *Registry) OpenControl(c *Conn) error {
 	if c.role == control.RoleTechie {
 		h.Name = c.name // computers are not told the name techies gave them
 	}
-	if c.role == control.RoleTechie || c.role == control.RoleComputer {
-		h.Salt = r.cfg.Salt
-	}
 	c.peer.Send(h)
 	c.peer.Send(r.serverInfoLocked())
-	if c.role == control.RoleTechie {
+	switch c.role {
+	case control.RoleTechie:
 		c.peer.NotifyPresence()
+	case control.RoleComputer:
+		c.peer.Send(r.approvedLocked(c.fp))
 	}
 	return nil
+}
+
+// ReasonNotSetUp is the Error computers get from a server that has no
+// company name and phone number yet.
+const ReasonNotSetUp = "this server is not set up yet: a techie must first enter the company name and phone number"
+
+// approvedLocked returns the ApprovedServers message for computer fp.
+func (r *Registry) approvedLocked(fp string) *control.ApprovedServers {
+	m := &control.ApprovedServers{Servers: []control.ApprovedServer{}}
+	if sc, ok := r.idx.Computer(fp); ok {
+		m.Servers = append(m.Servers, sc.Approved...)
+	}
+	return m
 }
 
 // send queues m if the connection can receive messages.
@@ -263,7 +282,8 @@ func send(c *Conn, m any) {
 }
 
 func (r *Registry) serverInfoLocked() *control.ServerInfo {
-	return &control.ServerInfo{Title: r.idx.State.Title, Instruction: r.idx.State.Instruction}
+	info := r.idx.State.Info()
+	return &info
 }
 
 // changedLocked marks the Presence snapshot stale and tells the techies.
@@ -310,6 +330,8 @@ func (r *Registry) presenceLocked() control.Presence {
 			RegisteredBy: sc.RegisteredBy,
 			RegisteredAt: sc.RegisteredAt,
 			LastSeen:     sc.LastSeen,
+			Approved:     slices.Clone(sc.Approved),
+			Listings:     slices.Clone(sc.Listings),
 		}
 		if t, ok := r.lastSeen[fp]; ok && t.After(ci.LastSeen) {
 			ci.LastSeen = t.UTC()
@@ -353,8 +375,9 @@ func (r *Registry) SetIndex(idx *store.Index) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	old := r.idx.State
+	oldIdx := r.idx
 	r.idx = idx
-	if old.Title != idx.State.Title || old.Instruction != idx.State.Instruction {
+	if old.Info() != idx.State.Info() {
 		info := r.serverInfoLocked()
 		for _, c := range r.conns {
 			send(c, info)
@@ -365,6 +388,13 @@ func (r *Registry) SetIndex(idx *store.Index) {
 		switch {
 		case id.Role == c.role:
 			c.name, c.keyLine = id.Name, id.KeyLine
+			if c.role == control.RoleComputer {
+				was, _ := oldIdx.Computer(fp)
+				now, _ := idx.Computer(fp)
+				if !slices.Equal(was.Approved, now.Approved) {
+					send(c, r.approvedLocked(fp))
+				}
+			}
 		case c.role == control.RolePending && id.Role == control.RoleComputer:
 			c.role = control.RoleComputer
 			c.name, c.keyLine = id.Name, id.KeyLine
@@ -373,7 +403,8 @@ func (r *Registry) SetIndex(idx *store.Index) {
 				c.release = nil
 			}
 			r.lastSeen[fp] = r.cfg.Now()
-			send(c, &control.Registered{Salt: r.cfg.Salt})
+			send(c, &control.Registered{})
+			send(c, r.approvedLocked(fp))
 			r.log.Info("pending promoted", "fp", fp, "name", id.Name, "ip", c.ip)
 		default:
 			reason := "key removed from the server"
@@ -410,6 +441,10 @@ func (r *Registry) Handle(c *Conn, m any) error {
 		return r.renameComputer(c, m)
 	case *control.SetServerInfo:
 		return r.setServerInfo(c, m)
+	case *control.RequestListing:
+		return r.requestListing(c, m)
+	case *control.DecideListing:
+		return r.decideListing(c, m)
 	}
 	return fmt.Errorf("%w: %T", ErrNotAllowed, m)
 }
@@ -629,9 +664,68 @@ func (r *Registry) setServerInfo(c *Conn, m *control.SetServerInfo) error {
 	if err != nil {
 		return err
 	}
-	err = r.mutate(func(st *store.State) error { return st.SetInfo(m.Title, m.Instruction) })
+	info := control.ServerInfo{Address: m.Address, Company: m.Company, Phone: m.Phone, Description: m.Description}
+	err = r.mutate(func(st *store.State) error { return st.SetInfo(info) })
 	if err == nil {
-		r.log.Info("server info set", "title", strings.TrimSpace(m.Title), "instruction", strings.TrimSpace(m.Instruction), "by", by)
+		r.log.Info("server info set", "address", strings.TrimSpace(m.Address), "company", strings.TrimSpace(m.Company),
+			"phone", strings.TrimSpace(m.Phone), "description", strings.TrimSpace(m.Description), "by", by)
+	}
+	r.reply(c, m.Seq, err)
+	return nil
+}
+
+// requestListing stores a locked computer's request to approve another
+// server (PLAN.md 12.3). A server that is already approved gets the
+// computer its list again, so it goes on.
+func (r *Registry) requestListing(c *Conn, m *control.RequestListing) error {
+	r.mu.Lock()
+	role := c.role
+	r.mu.Unlock()
+	if role != control.RoleComputer {
+		return fmt.Errorf("%w: RequestListing from %s", ErrNotAllowed, role)
+	}
+	var res store.Listing
+	err := r.mutate(func(st *store.State) error {
+		var err error
+		res, err = st.RequestListing(c.fp, m.Address, m.Fingerprint, r.cfg.Now())
+		return err
+	})
+	switch {
+	case err != nil:
+		r.log.Info("listing request refused", "fp", c.fp, "address", m.Address, "server", m.Fingerprint, "err", err)
+	case res == store.ListingAdded:
+		r.log.Info("listing requested", "fp", c.fp, "address", m.Address, "server", m.Fingerprint)
+	case res == store.ListingApproved:
+		r.mu.Lock()
+		send(c, r.approvedLocked(c.fp))
+		r.mu.Unlock()
+	}
+	return nil
+}
+
+// decideListing allows or refuses a computer's listing request on behalf of
+// techie c. The computer gets its new approved list, or ListingRefused.
+func (r *Registry) decideListing(c *Conn, m *control.DecideListing) error {
+	by, err := r.techieName(c, "DecideListing")
+	if err != nil {
+		return err
+	}
+	var name string
+	err = r.mutate(func(st *store.State) error {
+		var err error
+		name, err = st.DecideListing(m.Computer, m.Address, m.Fingerprint, m.Allow)
+		return err
+	})
+	if err == nil {
+		r.log.Info("listing decided", "fp", m.Computer, "name", name, "address", m.Address, "server", m.Fingerprint,
+			"allow", m.Allow, "by", by)
+		if !m.Allow {
+			r.mu.Lock()
+			if cl := r.conns[m.Computer]; cl != nil && cl.role == control.RoleComputer {
+				send(cl, &control.ListingRefused{Address: m.Address, Fingerprint: m.Fingerprint})
+			}
+			r.mu.Unlock()
+		}
 	}
 	r.reply(c, m.Seq, err)
 	return nil

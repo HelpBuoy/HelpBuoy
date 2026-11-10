@@ -150,6 +150,9 @@ func (a *App) drawRegister(p *registerPage, x, y, w float32) float32 {
 	y += 34
 	y += c.Paragraph(ui.Regular, ui.SizeBody, intro, x, y, w, ui.ColMuted)
 	y += 12
+	if !p.techie && a.notSetUp() {
+		y = a.drawNotSetUp(x, y, w) + 16
+	}
 
 	res := c.TextField(id+"key", rl.NewRectangle(x, y, w, 40), &p.key)
 	if res.Changed {

@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
+	"io"
 	"strings"
 	"testing"
 	"time"
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/helpbuoy/helpbuoy/proto/control"
 	"github.com/helpbuoy/helpbuoy/server/auth"
 	"github.com/helpbuoy/helpbuoy/server/store"
 )
@@ -161,30 +161,47 @@ func TestStateDirEnv(t *testing.T) {
 	}
 }
 
-func TestTitleAndInstruction(t *testing.T) {
+func TestInfo(t *testing.T) {
 	dir := t.TempDir()
-	if out := runOK(t, "title", "--state", dir); out != "\n" {
-		t.Fatalf("empty title: %q", out)
+	if out := runOK(t, "info", "--state", dir); !strings.Contains(out, "can't connect") {
+		t.Fatalf("empty info: %q", out)
 	}
-	if out := runOK(t, "instruction", "--state", dir); out != control.DefaultInstruction+" (default)\n" {
-		t.Fatalf("empty instruction: %q", out)
+	runFail(t, "info", "--company", "Example Inc", "--state", dir) // no phone yet
+	runOK(t, "info", "--company", "  Example Inc ", "--phone", "+1 234 567 890", "--state", dir)
+	runOK(t, "info", "--address", "Help.Example.com", "--description", "Mon-Fri 9-17", "--state", dir)
+	want := "company:     Example Inc\nphone:       +1 234 567 890\naddress:     help.example.com:5959\ndescription: Mon-Fri 9-17\n"
+	if out := runOK(t, "info", "--state", dir); out != want {
+		t.Fatalf("info: %q", out)
 	}
-	runOK(t, "title", "  Example Inc ", "--state", dir)
-	runOK(t, "instruction", "Call +1 234 567 890 for support", "--state", dir)
-	if out := runOK(t, "title", "--state", dir); out != "Example Inc\n" {
-		t.Fatalf("title: %q", out)
+	runFail(t, "info", "--company", strings.Repeat("x", 65), "--state", dir)
+	runFail(t, "info", "--phone", "two\nlines", "--state", dir)
+	runFail(t, "info", "--phone", "", "--state", dir)
+	runFail(t, "info", "extra", "--state", dir)
+	runOK(t, "info", "--description", "", "--state", dir)
+	if out := runOK(t, "info", "--state", dir); !strings.Contains(out, "description: \n") || !strings.Contains(out, "Example Inc") {
+		t.Fatalf("cleared description: %q", out)
 	}
-	if out := runOK(t, "instruction", "--state", dir); out != "Call +1 234 567 890 for support\n" {
-		t.Fatalf("instruction: %q", out)
+}
+
+func TestSetup(t *testing.T) {
+	dir := t.TempDir()
+	defer func(r io.Reader, i func() bool) { stdin, interactive = r, i }(stdin, interactive)
+	interactive = func() bool { return false }
+	var out bytes.Buffer
+	if err := setup(dir, &out); err != nil || !strings.Contains(out.String(), "helpbuoy-server info") {
+		t.Fatalf("non-interactive setup: %v, %q", err, out.String())
 	}
-	runFail(t, "title", strings.Repeat("x", 65), "--state", dir)
-	runFail(t, "instruction", "two\nlines", "--state", dir)
-	runFail(t, "title", "a", "b", "--state", dir)
-	runOK(t, "title", "", "--state", dir)
-	if out := runOK(t, "title", "--state", dir); out != "\n" {
-		t.Fatalf("cleared title: %q", out)
+	interactive = func() bool { return true }
+	stdin = strings.NewReader("\nExample Inc\n+1 234\n\nMon-Fri\n")
+	out.Reset()
+	if err := setup(dir, &out); err != nil {
+		t.Fatalf("setup: %v (%s)", err, out.String())
 	}
-	if out := runOK(t, "instruction", "--state", dir); out != "Call +1 234 567 890 for support\n" {
-		t.Fatalf("instruction after clearing the title: %q", out)
+	if got := runOK(t, "info", "--state", dir); got != "company:     Example Inc\nphone:       +1 234\naddress:     \ndescription: Mon-Fri\n" {
+		t.Fatalf("after setup: %q", got)
+	}
+	stdin = strings.NewReader("")
+	if err := setup(dir, &out); err != nil {
+		t.Fatalf("setup when set up: %v", err)
 	}
 }

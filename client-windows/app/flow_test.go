@@ -17,7 +17,7 @@ import (
 
 func startServer(t *testing.T) *fakeserver.Server {
 	t.Helper()
-	r, err := fakeserver.Start("", fakeserver.Options{})
+	r, err := fakeserver.Start("", fakeserver.Options{Info: testInfo})
 	if err != nil {
 		t.Fatal(err)
 	}

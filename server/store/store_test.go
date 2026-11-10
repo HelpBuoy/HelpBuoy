@@ -194,14 +194,14 @@ func TestUnknownFieldsAreKept(t *testing.T) {
 		t.Fatal(err)
 	}
 	hk, ck := newKey(t), newKey(t)
-	in := `{"title":"T","msp":{"phone":"+1 234"},"techies":[{"name":"alice","admin":true,"public_key":"` +
+	in := `{"company":"T","phone":"1","msp":{"phone":"+1 234"},"techies":[{"name":"alice","admin":true,"public_key":"` +
 		auth.KeyLine(hk, "") + `"}],"computers":[{"public_key":"` + auth.KeyLine(ck, "anna@PC") +
-		`","name":"anna@PC","registered_by":"alice","registered_at":"2026-01-02T03:04:05Z","approved":["a.example.com"]}]}`
+		`","name":"anna@PC","registered_by":"alice","registered_at":"2026-01-02T03:04:05Z","tags":["a.example.com"]}]}`
 	if err := os.WriteFile(s.Path(), []byte(in), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	_, out, err := s.Update(func(st *State) error {
-		if err := st.SetInfo("New", ""); err != nil {
+		if err := st.SetInfo(control.ServerInfo{Company: "New", Phone: "+1 234"}); err != nil {
 			return err
 		}
 		_, err := st.RenameComputer(auth.Fingerprint(ck), "anna@LAPTOP")
@@ -215,7 +215,7 @@ func TestUnknownFieldsAreKept(t *testing.T) {
 		t.Fatal(err)
 	}
 	st := idx.State
-	if st.Title != "New" || st.Computers[0].Name != "anna@LAPTOP" {
+	if st.Company != "New" || st.Computers[0].Name != "anna@LAPTOP" {
 		t.Errorf("update lost: %s", out)
 	}
 	if string(st.Extra["msp"]) != `{"phone":"+1 234"}` {
@@ -224,10 +224,10 @@ func TestUnknownFieldsAreKept(t *testing.T) {
 	if string(st.Techies[0].Extra["admin"]) != "true" {
 		t.Errorf("techie extra %q", st.Techies[0].Extra)
 	}
-	if string(st.Computers[0].Extra["approved"]) != `["a.example.com"]` {
+	if string(st.Computers[0].Extra["tags"]) != `["a.example.com"]` {
 		t.Errorf("computer extra %q", st.Computers[0].Extra)
 	}
-	if _, ok := st.Extra["title"]; ok {
+	if _, ok := st.Extra["company"]; ok {
 		t.Error("known field kept as extra")
 	}
 }

@@ -11,32 +11,58 @@ import (
 	"github.com/helpbuoy/helpbuoy/desk/ui"
 	"github.com/helpbuoy/helpbuoy/proto/control"
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
+	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 )
 
-// The server's limits for the title and instruction line.
-const (
-	maxTitle       = 64
-	maxInstruction = 160
-)
-
-// infoForm edits the server's title and instruction line on the Server tab.
+// infoForm edits who runs the server on the Server tab.
 type infoForm struct {
-	title       ui.Field
-	instruction ui.Field
+	company     ui.Field
+	phone       ui.Field
+	address     ui.Field
+	description ui.Field
 	busy        bool
 	result      string
 	failed      bool
 }
 
 func (f *infoForm) init() {
-	f.title.Placeholder = i18n.Trans("Empty: no title")
-	f.title.Edit.Max = maxTitle
-	f.instruction.Placeholder = i18n.Trans("Empty: {0}", i18n.Trans("A techie can now ask to connect. You will be asked first, "+
-		"and pressing Esc always takes back control."))
-	f.instruction.Edit.Max = maxInstruction
+	f.company.Placeholder = i18n.Trans("For example {0}", "Example Inc")
+	f.company.Edit.Max = control.MaxCompany
+	f.phone.Placeholder = i18n.Trans("For example {0}", "+1 234 567 890")
+	f.phone.Edit.Max = control.MaxPhone
+	f.address.Placeholder = i18n.Trans("For example {0}", "helpme.example.com")
+	f.address.Edit.Max = control.MaxAddress
+	f.description.Placeholder = i18n.Trans("For example {0}", i18n.Trans("Monday to Friday 9:00 to 17:00"))
+	f.description.Edit.Max = control.MaxDescription
 }
 
-// validLine reports whether the server accepts s as a title or instruction:
+// fields returns the form's fields with the ServerInfo field each edits.
+func (f *infoForm) fields(info *control.ServerInfo) []struct {
+	field *ui.Field
+	value *string
+} {
+	return []struct {
+		field *ui.Field
+		value *string
+	}{
+		{&f.company, &info.Company},
+		{&f.phone, &info.Phone},
+		{&f.address, &info.Address},
+		{&f.description, &info.Description},
+	}
+}
+
+// typed returns what the techie typed, trimmed.
+func (f *infoForm) typed() control.ServerInfo {
+	return control.ServerInfo{
+		Company:     strings.TrimSpace(f.company.Edit.String()),
+		Phone:       strings.TrimSpace(f.phone.Edit.String()),
+		Address:     strings.TrimSpace(f.address.Edit.String()),
+		Description: strings.TrimSpace(f.description.Edit.String()),
+	}
+}
+
+// validLine reports whether the server accepts s as a server info field:
 // empty, or at most max printable characters.
 func validLine(s string, max int) bool {
 	s = strings.TrimSpace(s)
@@ -51,22 +77,50 @@ func validLine(s string, max int) bool {
 	return true
 }
 
-// setServerInfo stores the server's title and instruction (nil when not
-// connected). Fields the techie did not change follow the server's values.
+// normAddress returns the address as the server stores it (host:port), or s
+// itself when it is empty or not a valid address.
+func normAddress(s string) string {
+	if a, err := serveraddr.Parse(s); err == nil {
+		return a.String()
+	}
+	return s
+}
+
+// checkInfo returns why the server would refuse info, or "" when it is fine.
+// missing is true when only a required field is empty.
+func checkInfo(info control.ServerInfo) (problem string, missing bool) {
+	if !validLine(info.Company, control.MaxCompany) || !validLine(info.Phone, control.MaxPhone) ||
+		!validLine(info.Address, control.MaxAddress) || !validLine(info.Description, control.MaxDescription) {
+		return i18n.Trans("Company name up to {0}, phone number up to {1}, description up to {2} printable characters.",
+			control.MaxCompany, control.MaxPhone, control.MaxDescription), false
+	}
+	if info.Address != "" {
+		if _, err := serveraddr.Parse(info.Address); err != nil {
+			return i18n.Trans("The address is not valid: {0}", err), false
+		}
+	}
+	if info.Company == "" || info.Phone == "" {
+		return i18n.Trans("Enter the company name and phone number."), true
+	}
+	return "", false
+}
+
+// setServerInfo stores who runs the server (nil when not connected). Fields
+// the techie did not change follow the server's values.
 func (a *App) setServerInfo(info *control.ServerInfo) {
 	f := &a.infoForm
-	var oldT, oldI, newT, newI string
+	var old, now control.ServerInfo
 	if a.info != nil {
-		oldT, oldI = a.info.Title, a.info.Instruction
+		old = *a.info
 	}
 	if info != nil {
-		newT, newI = info.Title, info.Instruction
+		now = *info
 	}
-	if f.title.Edit.String() == oldT {
-		f.title.Edit.SetText(newT)
-	}
-	if f.instruction.Edit.String() == oldI {
-		f.instruction.Edit.SetText(newI)
+	olds, nows := f.fields(&old), f.fields(&now)
+	for i, o := range olds {
+		if o.field.Edit.String() == *o.value {
+			o.field.Edit.SetText(*nows[i].value)
+		}
 	}
 	if info == nil {
 		f.result, f.failed = "", false
@@ -74,37 +128,77 @@ func (a *App) setServerInfo(info *control.ServerInfo) {
 	a.info = info
 }
 
-// drawServerInfo draws the title and instruction fields and Save.
+// notSetUp reports whether the connected server has no company name and
+// phone number yet, so it refuses computers.
+func (a *App) notSetUp() bool {
+	return a.info != nil && !a.info.Configured()
+}
+
+// drawNotSetUp draws the notice that computers cannot connect until the
+// server is set up, with a button to the Server tab. It returns the y below.
+func (a *App) drawNotSetUp(x, y, w float32) float32 {
+	c := a.ui
+	text := i18n.Trans("Computers cannot connect to this server until you enter the company name and phone number on the Server tab.")
+	btnL := i18n.Trans("Open the Server tab")
+	th := float32(len(c.Wrap(ui.Regular, ui.SizeBody, text, w-24))) * ui.SizeBody * 1.35
+	h := 12 + th + 10 + 30 + 12
+	box := rl.NewRectangle(x, y, w, h)
+	rl.DrawRectangleRec(box, ui.ColErrorSoft)
+	rl.DrawRectangleLinesEx(box, 1, ui.ColError)
+	c.Paragraph(ui.Regular, ui.SizeBody, text, x+12, y+12, w-24, ui.ColText)
+	if c.Button("setup/server", rl.NewRectangle(x+12, y+12+th+10, a.btnW(btnL, 100), 30), btnL, ui.Primary, false) {
+		a.openPage(tabServer)
+	}
+	return y + h
+}
+
+// drawServerInfo draws the company name, phone number, address and
+// description fields and Save.
 func (a *App) drawServerInfo(x, y, w float32) float32 {
 	c := a.ui
 	f := &a.infoForm
-	y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Computers waiting for a techie show this title and instruction line, for example your company name and \"Call +1 234 567 890 for support\". The grey text shows what an empty field gives."), x, y, w, ui.ColMuted)
-	y += 6
+	y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Users waiting for a techie see this, so they know who is helping them and who to call. The company name and phone number are required before computers can connect."), x, y, w, ui.ColMuted)
+	y += 10
 	fw := min(w, 560)
-	y = label(c, i18n.Trans("Title"), x, y)
-	r1 := c.TextField("server/title", rl.NewRectangle(x, y, fw, 40), &f.title)
-	y += 48
-	y = label(c, i18n.Trans("Instruction"), x, y)
-	r2 := c.TextField("server/instruction", rl.NewRectangle(x, y, fw, 40), &f.instruction)
-	y += 48
-	if r1.Changed || r2.Changed {
+	var changedAny, submitted bool
+	for _, fl := range []struct {
+		id, label string
+		field     *ui.Field
+	}{
+		{"server/company", i18n.Trans("Company name"), &f.company},
+		{"server/phone", i18n.Trans("Phone number"), &f.phone},
+		{"server/address", i18n.Trans("Address computers use (optional)"), &f.address},
+		{"server/description", i18n.Trans("Description, for example opening hours (optional)"), &f.description},
+	} {
+		y = label(c, fl.label, x, y)
+		r := c.TextField(fl.id, rl.NewRectangle(x, y, fw, 40), fl.field)
+		changedAny = changedAny || r.Changed
+		submitted = submitted || r.Submitted
+		y += 48
+	}
+	if changedAny {
 		f.result = ""
 	}
-	title, instr := f.title.Edit.String(), f.instruction.Edit.String()
-	valid := validLine(title, maxTitle) && validLine(instr, maxInstruction)
-	if !valid {
-		y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Title up to {0}, instruction up to {1} printable characters.", maxTitle, maxInstruction), x, y, w, ui.ColError)
+	info := f.typed()
+	problem, missing := checkInfo(info)
+	if problem != "" {
+		col := ui.ColError
+		if missing {
+			col = ui.ColWarn
+		}
+		y += c.Paragraph(ui.Regular, ui.SizeSmall, problem, x, y, w, col)
 		y += 3
 	}
-	changed := a.info != nil && (strings.TrimSpace(title) != a.info.Title || strings.TrimSpace(instr) != a.info.Instruction)
-	ready := valid && changed && !f.busy && a.online()
+	changed := a.info != nil && (info.Company != a.info.Company || info.Phone != a.info.Phone ||
+		normAddress(info.Address) != a.info.Address || info.Description != a.info.Description)
+	ready := problem == "" && changed && !f.busy && a.online()
 	saveL, savingL := i18n.Trans("Save"), i18n.Trans("Saving…")
 	text := saveL
 	if f.busy {
 		text = savingL
 	}
-	if c.Button("server/saveinfo", rl.NewRectangle(x, y, max(a.btnW(saveL, 130), a.btnW(savingL, 130)), 34), text, ui.Primary, !ready) || ((r1.Submitted || r2.Submitted) && ready) {
-		a.saveServerInfo(title, instr)
+	if c.Button("server/saveinfo", rl.NewRectangle(x, y, max(a.btnW(saveL, 130), a.btnW(savingL, 130)), 34), text, ui.Primary, !ready) || (submitted && ready) {
+		a.saveServerInfo(info)
 	}
 	y += 44
 	if f.result != "" {
@@ -118,19 +212,23 @@ func (a *App) drawServerInfo(x, y, w float32) float32 {
 }
 
 // saveServerInfo sends SetServerInfo.
-func (a *App) saveServerInfo(title, instruction string) {
+func (a *App) saveServerInfo(info control.ServerInfo) {
 	f := &a.infoForm
 	if f.busy || a.backend == nil {
 		return
 	}
 	f.busy, f.result = true, ""
-	a.run(a.backend.SetServerInfo(title, instruction), func(err error) {
+	a.run(a.backend.SetServerInfo(info), func(err error) {
 		f.busy = false
 		if err != nil {
 			f.result, f.failed = i18n.Trans("Not saved: {0}", err), true
 			return
 		}
 		f.result, f.failed = i18n.Trans("Saved."), false
+		// The server stores the address as host:port; show it so.
+		if t := strings.TrimSpace(f.address.Edit.String()); t != "" && normAddress(t) != t {
+			f.address.Edit.SetText(normAddress(t))
+		}
 	})
 }
 
@@ -165,7 +263,6 @@ func (a *App) drawServer(x, y, w float32) float32 {
 		c.Text(ui.Regular, ui.SizeBody, i18n.Trans("Not known yet; pinned on the first connection."), x, y, ui.ColMuted)
 	}
 	y += 34
-	y = a.drawVerification(x, y, w)
 	if a.info != nil {
 		y = a.drawServerInfo(x, y, w)
 	}

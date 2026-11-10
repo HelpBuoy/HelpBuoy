@@ -40,8 +40,8 @@ type Options struct {
 	AutoConnect time.Duration
 	TechieName  string
 	TechieKey   string
-	// Salt is sent in Hello and Registered to registered computers.
-	Salt   string
+	// Info is sent after every Hello.
+	Info   control.ServerInfo
 	Logger *slog.Logger
 }
 
@@ -56,8 +56,9 @@ type Server struct {
 	sessions chan Session
 
 	mu         sync.Mutex
-	registered map[string]bool  // fingerprints of registered keys
-	conns      map[string]*conn // online, by fingerprint
+	registered map[string]bool                     // fingerprints of registered keys
+	approved   map[string][]control.ApprovedServer // by computer fingerprint
+	conns      map[string]*conn                    // online, by fingerprint
 	refuseAll  bool
 }
 
@@ -97,6 +98,7 @@ func Start(addr string, opts Options) (*Server, error) {
 		recv:       make(chan Received, 64),
 		sessions:   make(chan Session, 4),
 		registered: make(map[string]bool),
+		approved:   make(map[string][]control.ApprovedServer),
 		conns:      make(map[string]*conn),
 	}
 	go r.serve()
@@ -109,12 +111,23 @@ func (r *Server) Addr() string { return r.ln.Addr().String() }
 // HostKey is the server's host key.
 func (r *Server) HostKey() ssh.PublicKey { return r.hostKey.PublicKey() }
 
-// SetSalt sets the verification salt (hex) sent to registered computers from
-// the next Hello or Registered on.
-func (r *Server) SetSalt(hex string) {
+// SetApproved sets the approved list of computer fp and sends it if the
+// computer is online and registered.
+func (r *Server) SetApproved(fp string, servers []control.ApprovedServer) {
 	r.mu.Lock()
-	r.opts.Salt = hex
+	r.approved[fp] = servers
+	c := r.conns[fp]
+	reg := r.registered[fp]
 	r.mu.Unlock()
+	if c != nil && reg {
+		c.ctl.Send(r.approvedFor(fp))
+	}
+}
+
+func (r *Server) approvedFor(fp string) control.ApprovedServers {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return control.ApprovedServers{Servers: append([]control.ApprovedServer{}, r.approved[fp]...)}
 }
 
 // Received delivers control messages sent by computers (except ComputerHello).
@@ -150,10 +163,8 @@ func (r *Server) Register(fp string) {
 	c := r.conns[fp]
 	r.mu.Unlock()
 	if c != nil && !was {
-		r.mu.Lock()
-		salt := r.opts.Salt
-		r.mu.Unlock()
-		c.ctl.Send(control.Registered{Salt: salt})
+		c.ctl.Send(control.Registered{})
+		c.ctl.Send(r.approvedFor(fp))
 		r.autoConnect(fp)
 	}
 }
@@ -315,12 +326,16 @@ func (r *Server) control(c *conn) {
 	hello := control.Hello{Role: control.RolePending, ServerVersion: "fake", ServerTime: time.Now()}
 	if registered {
 		hello.Role = control.RoleComputer
-		r.mu.Lock()
-		hello.Salt = r.opts.Salt
-		r.mu.Unlock()
 	}
 	if err := c.ctl.Send(hello); err != nil {
 		return
+	}
+	r.mu.Lock()
+	info := r.opts.Info
+	r.mu.Unlock()
+	c.ctl.Send(info)
+	if registered {
+		c.ctl.Send(r.approvedFor(c.fp))
 	}
 	if registered {
 		r.autoConnect(c.fp)

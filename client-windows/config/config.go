@@ -1,7 +1,8 @@
 // Package config stores what the computer learns about its server in
 // config.json in the app's data directory (PLAN.md section 0): the server
-// address, the pinned server host key, the pinned key
-// of every techie met on that server, and the hand-set performance mode. The app key lives next to it but is managed by
+// address, the pinned server host key, the pinned key of every techie met on
+// that server, the lock to a primary server (PLAN.md 12) and the hand-set
+// performance mode. The app key lives next to it but is managed by
 // proto/appkey.
 package config
 
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 
 	"github.com/helpbuoy/helpbuoy/proto/appkey"
+	"github.com/helpbuoy/helpbuoy/proto/control"
 )
 
 // FileName is the configuration file inside the data directory.
@@ -38,9 +40,37 @@ type Config struct {
 	// config.json.
 	PerformanceMode bool `json:"performance_mode,omitempty"`
 	// WarnedServers are the fingerprints of the server keys the first
-	// connection warning was shown and accepted for (PLAN.md 12.6), so it
+	// connection warning was shown and accepted for (PLAN.md 6.2), so it
 	// shows once per server key.
 	WarnedServers []string `json:"warned_servers,omitempty"`
+	// Lock is the primary server the user locked this PC to, nil while
+	// unlocked. Only removing config.json undoes it.
+	Lock *Lock `json:"lock,omitempty"`
+}
+
+// Lock ties the computer to its primary server (PLAN.md 12): it only
+// connects there and to the servers the primary server approved.
+type Lock struct {
+	// Address is the normalized hostname:port of the primary server, and
+	// HostKey its pinned host key line.
+	Address string `json:"address"`
+	HostKey string `json:"host_key"`
+	// Company is the primary server's company name as it last said.
+	Company string `json:"company,omitempty"`
+	// Approved are the servers the primary server approved for this PC.
+	Approved []control.ApprovedServer `json:"approved,omitempty"`
+}
+
+// ApprovedAt returns the approved server at addr, if any.
+func (l *Lock) ApprovedAt(addr string) (control.ApprovedServer, bool) {
+	if l != nil {
+		for _, a := range l.Approved {
+			if a.Address == addr {
+				return a, true
+			}
+		}
+	}
+	return control.ApprovedServer{}, false
 }
 
 // Registered reports whether the first-run flow has been completed.
@@ -55,6 +85,11 @@ func (c *Config) Clone() *Config {
 	}
 	n := *c
 	n.WarnedServers = append([]string(nil), c.WarnedServers...)
+	if c.Lock != nil {
+		l := *c.Lock
+		l.Approved = append([]control.ApprovedServer(nil), c.Lock.Approved...)
+		n.Lock = &l
+	}
 	if c.KnownTechies != nil {
 		n.KnownTechies = make(map[string]string, len(c.KnownTechies))
 		for k, v := range c.KnownTechies {

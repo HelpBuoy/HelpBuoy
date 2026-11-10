@@ -52,7 +52,7 @@ func TestRoundTripAll(t *testing.T) {
 
 func TestReceiveSkipsUnknown(t *testing.T) {
 	var buf rw
-	if err := wire.NewWriter(&buf).WriteFrame(250, []byte(`{"salt":"x"}`)); err != nil {
+	if err := wire.NewWriter(&buf).WriteFrame(250, []byte(`{"x":"y"}`)); err != nil {
 		t.Fatal(err)
 	}
 	c := NewConn(&buf)
@@ -70,7 +70,7 @@ func TestReceiveSkipsUnknown(t *testing.T) {
 
 func TestReceiveIgnoresUnknownFields(t *testing.T) {
 	var buf rw
-	if err := wire.NewWriter(&buf).WriteFrame(uint8(MsgRegistered), []byte(`{"salt":"x"}`)); err != nil {
+	if err := wire.NewWriter(&buf).WriteFrame(uint8(MsgRegistered), []byte(`{"x":"y"}`)); err != nil {
 		t.Fatal(err)
 	}
 	got, err := NewConn(&buf).Receive()

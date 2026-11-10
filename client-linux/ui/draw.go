@@ -31,26 +31,7 @@ var (
 	colSelection  = color.RGBA{0x99, 0xc9, 0xef, 0xff}
 	colLink       = color.RGBA{0x00, 0x66, 0xcc, 0xff}
 	colWarning    = color.RGBA{0xe8, 0xa3, 0x17, 0xff}
-	colVerified   = color.RGBA{0x1e, 0x7b, 0x34, 0xff} // the verified server badge only
 )
-
-// checkMark draws a check mark inside r in col.
-func checkMark(c *canvas, r image.Rectangle, col color.RGBA) {
-	w := float64(r.Dx())
-	pts := [][2]float64{{0.26, 0.52}, {0.43, 0.69}, {0.75, 0.33}}
-	th := max(2, int(w*0.11))
-	for i := 0; i+1 < len(pts); i++ {
-		x0, y0 := pts[i][0]*w, pts[i][1]*w
-		x1, y1 := pts[i+1][0]*w, pts[i+1][1]*w
-		n := int(math.Hypot(x1-x0, y1-y0)) * 2
-		for k := 0; k <= n; k++ {
-			t := float64(k) / float64(n)
-			x := r.Min.X + int(x0+(x1-x0)*t) - th/2
-			y := r.Min.Y + int(y0+(y1-y0)*t) - th/2
-			c.fill(image.Rect(x, y, x+th, y+th), col)
-		}
-	}
-}
 
 // fontKind selects one of the window's fonts.
 type fontKind int

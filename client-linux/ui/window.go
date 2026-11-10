@@ -10,6 +10,7 @@ package ui
 import (
 	"context"
 	"image"
+	"strings"
 	"time"
 
 	"github.com/helpbuoy/helpbuoy/client-windows/app"
@@ -25,10 +26,6 @@ const clientW, clientH = 460, 330
 
 // contentW is the width of the content between the 24-unit side margins.
 const contentW = clientW - 48
-
-// statusY is the position of the waiting screen's status line; it moves
-// down by titleH when the server's title is shown above it.
-const statusY, titleH = 160, 26
 
 // Window is the computer's only window.
 type Window struct {
@@ -50,8 +47,8 @@ type Window struct {
 	lblKeyIntro, lblKeyFp, lblServerFp, lblKeyNotice *widget
 	edtKey, btnCopy, lnkChange                       *widget
 	// ScreenMain
-	lblComment, lblWaiting, lblInfoTitle, lblStatus *widget
-	btnDisconnect                                   *widget
+	lblComment, lblWaiting, lblInfoTitle, lblWho, lblStatus *widget
+	btnDisconnect                                           *widget
 	// ScreenKeyError
 	lblKeyErr, btnRemoveKey *widget
 	// ScreenWarning
@@ -108,19 +105,11 @@ type permRow struct {
 // dialog is a modal question drawn over the whole window.
 type dialog struct {
 	icon    iconKind
-	badge   *badge // the verified server badge, drawn as a band at the top
 	heading string
 	body    string
 	buttons []*widget
 	cancel  int // index of the button Esc and closing choose
 	done    func(int)
-}
-
-// badge is the verified server badge (PLAN.md 12.6). It has its own band,
-// color and icon, where no text from the server is ever drawn.
-type badge struct {
-	heading string // "Verified: Example Inc, Netherlands"
-	server  string // "Server: helpme.example.com"
 }
 
 type iconKind int
@@ -152,7 +141,7 @@ func NewWithHost(host Host, icons [][]byte) *Window {
 
 	w.lblHeading = label(24, 22, 412, 30, fontHeading, alignLeft)
 	w.lblHeading.text = i18n.Trans("Connect to a techie")
-	w.lblAddrHint = label(24, 62, 412, 36, fontNormal, alignLeft)
+	w.lblAddrHint = label(24, 58, 412, 42, fontNormal, alignLeft)
 	w.lblAddrHint.text = i18n.Trans("Type the server address a techie gave you, for example helpme.example.com.")
 	w.edtAddr = newWidget(kindField, 24, 106, 300, 28, fontNormal)
 	w.edtAddr.field.limit = 300
@@ -173,10 +162,11 @@ func NewWithHost(host Host, icons [][]byte) *Window {
 	w.lnkChange.text = i18n.Trans("Use a different server address")
 	w.lnkChange.onClick = func() { w.ctrl.Disconnect() }
 
-	w.lblComment = label(24, 44, 412, 34, fontHeading, alignCenter)
-	w.lblWaiting = label(24, 104, 412, 40, fontBig, alignCenter)
-	w.lblInfoTitle = label(24, 152, 412, 28, fontHeading, alignCenter)
-	w.lblStatus = label(24, statusY, 412, 64, fontNormal, alignCenter)
+	w.lblComment = label(24, 16, 412, 30, fontHeading, alignCenter)
+	w.lblWaiting = label(24, 52, 412, 40, fontBig, alignCenter)
+	w.lblInfoTitle = label(24, 100, 412, 26, fontHeading, alignCenter)
+	w.lblWho = label(24, 128, 412, 58, fontNormal, alignCenter)
+	w.lblStatus = label(24, 192, 412, 60, fontNormal, alignCenter)
 	w.btnDisconnect = button(i18n.Trans("Disconnect"), 150, 258, 160, 32, fontNormal, func() {
 		if w.view.InSession {
 			w.ctrl.EndSession()
@@ -211,7 +201,7 @@ func NewWithHost(host Host, icons [][]byte) *Window {
 	w.widgets = []*widget{
 		w.lblHeading, w.lblAddrHint, w.edtAddr, w.btnConnect, w.lblAddrError,
 		w.lblKeyIntro, w.edtKey, w.btnCopy, w.lblKeyFp, w.lblServerFp, w.lblKeyNotice, w.lnkChange,
-		w.lblComment, w.lblWaiting, w.lblInfoTitle, w.lblStatus, w.btnDisconnect,
+		w.lblComment, w.lblWaiting, w.lblInfoTitle, w.lblWho, w.lblStatus, w.btnDisconnect,
 		w.lblKeyErr, w.btnRemoveKey,
 		w.lblWarnHeading, w.lblWarnText, w.btnContinue,
 		w.lblUnsupHeading, w.lblUnsup, w.btnClose,
@@ -391,29 +381,12 @@ func (w *Window) Render(v app.View) {
 	w.do(func() { w.apply(v) })
 }
 
-// checkWait is how long the approval dialog waits for the verified server
-// check before it opens with "Checking who runs this server..." (PLAN.md
-// 12.5).
-const checkWait = 3 * time.Second
-
 // ConfirmTechie implements app.UI with a dialog in the window that asks
-// whether the techie may take control. A verified server gets a green band
-// with the company at the top, where no text from the server is shown
-// (PLAN.md 12.6). A changed techie key gets an error icon, a warning
-// headline and Cancel as the default button. While the verified server check
-// still runs the dialog says so, and it changes once the answer is in.
-func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie, oldFP string, b *app.Badges) bool {
-	select {
-	case <-b.Done():
-	case <-time.After(checkWait):
-	case <-ctx.Done():
-		return false
-	case <-w.quit:
-		return false
-	}
+// whether the techie may take control. A changed techie key gets an error
+// icon, a warning headline and Cancel as the default button.
+func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie, oldFP string) bool {
 	d := &dialog{}
-	fill := func() { techieDialog(d, h, oldFP, b.Badge()) }
-	fill()
+	techieDialog(d, h, oldFP)
 	allow := 0
 	if oldFP != "" {
 		d.setButtons(0, 0, i18n.Trans("Cancel"), i18n.Trans("Allow anyway"))
@@ -421,6 +394,24 @@ func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie, oldFP stri
 	} else {
 		d.setButtons(0, 1, i18n.Trans("Allow"), i18n.Trans("Cancel"))
 	}
+	return w.ask(ctx, d) == allow
+}
+
+// ConfirmLock implements app.UI with a dialog in the window that asks
+// whether to lock this PC to the server of company (PLAN.md 12.1).
+func (w *Window) ConfirmLock(ctx context.Context, company string) bool {
+	d := &dialog{
+		heading: i18n.Trans("Get help only through {0}?", company),
+		body: i18n.Trans("To protect you from scam calls, do you want this PC to get help via HelpBuoy only "+
+			"through {0}? Other helpdesks can then only reach this PC after {0} allowed them.", company),
+	}
+	d.setButtons(0, 1, i18n.Trans("Lock to {0}", company), i18n.Trans("Not now"))
+	return w.ask(ctx, d) == 0
+}
+
+// ask shows d and returns the button pressed, or d.cancel when the
+// question became moot (ctx ended) or the window closed.
+func (w *Window) ask(ctx context.Context, d *dialog) int {
 	answer := make(chan int, 1)
 	d.done = func(i int) { answer <- i }
 	w.do(func() {
@@ -431,55 +422,42 @@ func (w *Window) ConfirmTechie(ctx context.Context, h session.Techie, oldFP stri
 			answer <- d.cancel
 		}
 	})
-	checked := b.Done()
-	for {
-		select {
-		case i := <-answer:
-			return i == allow && ctx.Err() == nil
-		case <-checked:
-			checked = nil
-			w.do(fill)
-		case <-ctx.Done():
-			// The question became moot (the techie gave up, the server
-			// connection was lost): close it as if Cancel was pressed.
-			w.do(func() { w.closeDialog(d, d.cancel) })
-			return false
-		case <-w.quit:
-			return false
+	select {
+	case i := <-answer:
+		if ctx.Err() != nil {
+			return d.cancel
 		}
+		return i
+	case <-ctx.Done():
+		// The question became moot (the techie gave up, the server
+		// connection was lost): close it as if Cancel was pressed.
+		w.do(func() { w.closeDialog(d, d.cancel) })
+		return d.cancel
+	case <-w.quit:
+		return d.cancel
 	}
 }
 
-// techieDialog sets the texts of the approval dialog for techie h with
-// badge b; the buttons stay.
-func techieDialog(d *dialog, h session.Techie, oldFP string, b app.Badge) {
+// techieDialog sets the texts of the approval dialog for techie h; the
+// buttons stay.
+func techieDialog(d *dialog, h session.Techie, oldFP string) {
 	quoted := `"` + h.Name + `"`
 	esc := i18n.Trans("You can take back control at any time by pressing Esc.")
 	fingerprint := i18n.Trans("Key fingerprint:\n{0}", h.Fingerprint)
-	d.badge = nil
-	if b.Verified {
-		d.badge = &badge{heading: b.Heading, server: b.Server}
-	}
-	switch {
-	case oldFP != "":
+	warn := i18n.Trans("Only allow this if you know the person asking personally. " +
+		"Banks, Microsoft and the police never ask for this.")
+	if oldFP != "" {
 		d.icon = iconError
 		d.heading = i18n.Trans("Warning: the key of {0} has changed", quoted)
 		d.body = i18n.Trans("Key last time:\n{0}\n"+
 			"Key now:\n{1}\n\n"+
 			"This may be someone pretending to be a techie. Do not continue "+
 			"unless the techie confirmed by phone that they have a new key.", oldFP, h.Fingerprint)
-		if !b.Verified {
-			d.body += "\n\n" + b.Text
-		}
-	case b.Verified:
-		d.icon = iconNone
-		d.heading = i18n.Trans("Allow {0} to take control of this computer?", quoted)
-		d.body = b.Text + "\n\n" + fingerprint + "\n\n" + esc
-	default:
-		d.icon = iconWarning
-		d.heading = i18n.Trans("Allow {0} to take control of this computer?", quoted)
-		d.body = b.Text + "\n\n" + fingerprint + "\n\n" + esc
+		return
 	}
+	d.icon = iconWarning
+	d.heading = i18n.Trans("Allow {0} to take control of this computer?", quoted)
+	d.body = warn + "\n\n" + fingerprint + "\n\n" + esc
 }
 
 // setButtons creates the dialog's buttons; def is the default one.
@@ -657,6 +635,10 @@ func (w *Window) apply(v app.View) {
 	addr := v.Screen == app.ScreenAddress
 	show(addr, w.lblHeading, w.lblAddrHint, w.edtAddr, w.btnConnect, w.lblAddrError)
 	if addr {
+		w.lblAddrHint.text = i18n.Trans("Type the server address a techie gave you, for example helpme.example.com.")
+		if v.LockedTo != "" {
+			w.lblAddrHint.text = i18n.Trans("This PC gets help through {0}. Other servers can only connect after {0} allowed them.", v.LockedTo)
+		}
 		if entered && v.Address != "" {
 			w.edtAddr.field.set(v.Address)
 		}
@@ -709,13 +691,9 @@ func (w *Window) apply(v app.View) {
 	}
 
 	main := v.Screen == app.ScreenMain
-	title := main && v.Ready && v.Error == "" && v.Notice == "" && v.Title != ""
+	who := main && v.Company != ""
 	show(main, w.lblWaiting, w.lblStatus, w.btnDisconnect, w.lblComment)
-	show(title, w.lblInfoTitle)
-	w.lblStatus.y = statusY
-	if title {
-		w.lblStatus.y += titleH
-	}
+	show(who, w.lblInfoTitle, w.lblWho)
 	if main {
 		w.lblComment.text = v.KeyComment
 		w.lblWaiting.text = ""
@@ -727,8 +705,16 @@ func (w *Window) apply(v app.View) {
 			status = v.Notice
 		}
 		if status == "" && v.Ready {
-			w.lblInfoTitle.text = v.Title
 			status = v.Instruction
+		}
+		if who {
+			w.lblInfoTitle.text = v.Company
+			lines := []string{i18n.Trans("Phone: {0}", v.Phone)}
+			if v.Description != "" {
+				lines = append(lines, v.Description)
+			}
+			lines = append(lines, i18n.Trans("Server: {0}", v.ServerAddress))
+			w.lblWho.text = strings.Join(lines, "\n")
 		}
 		w.lblStatus.text = status
 		w.lblStatus.color = colGray
@@ -760,8 +746,8 @@ func (w *Window) apply(v app.View) {
 
 	if w.opened {
 		caption := Title
-		if v.Title != "" {
-			caption = v.Title + " - " + Title
+		if v.Screen == app.ScreenMain && v.Company != "" {
+			caption = v.Company + " - " + Title
 		}
 		w.host.SetTitle(caption)
 		// During a session the window gets out of the way; afterwards it
@@ -1049,18 +1035,6 @@ func (w *Window) redraw() {
 
 func (w *Window) drawDialog(c *canvas, d *dialog) {
 	top := w.px(24)
-	if d.badge != nil {
-		const bandH = 70
-		c.fill(image.Rect(0, 0, w.px(clientW), w.px(bandH)), colVerified)
-		r := image.Rect(w.px(24), w.px(19), w.px(24+32), w.px(19+32))
-		c.disc(r, colWhite)
-		checkMark(c, r, colVerified)
-		tr := image.Rect(w.px(70), w.px(12), w.px(clientW-24), w.px(bandH))
-		h := c.textBox(fontHeading, d.badge.heading, tr, alignLeft, colWhite)
-		tr.Min.Y += h + w.px(2)
-		c.textBox(fontNormal, d.badge.server, tr, alignLeft, colWhite)
-		top = w.px(bandH + 14)
-	}
 	x := 24
 	if d.icon != iconNone {
 		col := colWarning

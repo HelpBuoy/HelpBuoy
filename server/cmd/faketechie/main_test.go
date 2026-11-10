@@ -33,7 +33,12 @@ func TestFakeTechieEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	st, _ := store.Open(dir)
-	st.Update(func(s *store.State) error { return s.AddTechie("alice", fake.KeyLine(hk.PublicKey(), "")) })
+	st.Update(func(s *store.State) error {
+		if err := s.SetInfo(control.ServerInfo{Company: "Example Inc", Phone: "+1 234"}); err != nil {
+			return err
+		}
+		return s.AddTechie("alice", fake.KeyLine(hk.PublicKey(), ""))
+	})
 	srv, err := server.New(server.Config{StateDir: dir})
 	if err != nil {
 		t.Fatal(err)
