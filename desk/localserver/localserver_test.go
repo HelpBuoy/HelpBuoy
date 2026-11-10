@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"errors"
 	"net"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
+	"github.com/helpbuoy/helpbuoy/desk/reach"
 	"github.com/helpbuoy/helpbuoy/proto/transport"
 	"github.com/helpbuoy/helpbuoy/server/store"
 )
@@ -55,6 +57,29 @@ func techies(t *testing.T, dir string) []store.Techie {
 	return idx.State.Techies
 }
 
+// expectBanner dials addr as the apps do and expects the server's SSH
+// banner. Falling back from HTTPS to plain SSH must not take long.
+func expectBanner(t *testing.T, addr string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	start := time.Now()
+	nc, err := transport.Dial(ctx, addr, transport.DialOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nc.Close()
+	if d := time.Since(start); d > time.Second {
+		t.Errorf("%s: falling back to plain SSH took %v", addr, d)
+	}
+	nc.SetDeadline(time.Now().Add(5 * time.Second))
+	buf := make([]byte, 64)
+	n, _ := nc.Read(buf)
+	if !strings.HasPrefix(string(buf[:n]), "SSH-2.0-helpbuoyserver_") {
+		t.Fatalf("%s: banner %q", addr, buf[:n])
+	}
+}
+
 // TestRunsInProcess starts the server inside the test process, checks that it
 // speaks SSH, adds the techie's key once, and stops cleanly.
 func TestRunsInProcess(t *testing.T) {
@@ -66,19 +91,13 @@ func TestRunsInProcess(t *testing.T) {
 		t.Fatalf("status %+v", st)
 	}
 
-	// A real SSH handshake with the server's host key, over HTTPS.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	nc, err := transport.Dial(ctx, net.JoinHostPort("127.0.0.1", itoa(port)), transport.DialOptions{})
-	cancel()
-	if err != nil {
-		t.Fatal(err)
-	}
-	nc.SetDeadline(time.Now().Add(5 * time.Second))
-	buf := make([]byte, 64)
-	n, _ := nc.Read(buf)
-	nc.Close()
-	if !strings.HasPrefix(string(buf[:n]), "SSH-2.0-") {
-		t.Fatalf("banner %q", buf[:n])
+	// The apps' dial tries HTTPS first and falls back to plain SSH.
+	expectBanner(t, net.JoinHostPort("127.0.0.1", itoa(port)))
+	// The address in the local network that the Server tab shows works too.
+	if ap, err := reach.LANAddr(port); err == nil {
+		expectBanner(t, ap.String())
+	} else if !errors.Is(err, reach.ErrNoLAN) {
+		t.Error(err)
 	}
 
 	if hs := techies(t, dir); len(hs) != 1 || hs[0].Name != "alice" {

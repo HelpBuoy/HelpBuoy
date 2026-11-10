@@ -98,6 +98,7 @@ func (a *App) disconnect() {
 		a.local = nil
 	}
 	a.localWait, a.reached, a.notTechie = false, false, false
+	a.give = giveOut{}
 	a.presence, a.me = nil, ""
 	a.setServerInfo(nil)
 	a.status = serverconn.StatusEvent{}
@@ -116,6 +117,7 @@ func (a *App) pollLocal() {
 	case localserver.StateRunning, localserver.StateExternal:
 		a.localWait = false
 		a.openConn("127.0.0.1:" + strconv.Itoa(a.addr.Port))
+		a.startLAN(a.addr.Port)
 	case localserver.StateExited:
 		msg := i18n.Trans("The server on this computer could not start.")
 		if st.Err != nil {

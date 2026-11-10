@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/helpbuoy/helpbuoy/proto/datadir"
-	"github.com/helpbuoy/helpbuoy/proto/transport"
 	"github.com/helpbuoy/helpbuoy/server/auth"
 	"github.com/helpbuoy/helpbuoy/server/logfile"
 	"github.com/helpbuoy/helpbuoy/server/server"
@@ -178,10 +177,12 @@ func (r *Server) run() {
 		r.fail(err)
 		return
 	}
-	// The built-in HTTPS server with a self-signed certificate: a techie's
-	// own PC has no reverse proxy, and computers don't check the certificate
-	// (they pin the SSH host key).
-	ln, err := transport.Listen(":" + strconv.Itoa(r.opts.Port))
+	// Plain SSH on all interfaces, like helpbuoy-server in ssh mode: a
+	// techie's own PC has no reverse proxy or certificate, and the apps try
+	// HTTPS first and fall back to SSH when the port sends an SSH banner.
+	// Listening on all interfaces makes the address in the local network
+	// work too (desk/reach).
+	ln, err := net.Listen("tcp", ":"+strconv.Itoa(r.opts.Port))
 	if err != nil {
 		r.fail(err)
 		return
@@ -207,7 +208,7 @@ func (r *Server) run() {
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ln) }()
 	r.set(StateRunning, nil)
-	r.logLine(fmt.Sprintf("server listening on :%d (HTTPS), state in %s", r.opts.Port, dir))
+	r.logLine(fmt.Sprintf("server listening on :%d (plain SSH), state in %s", r.opts.Port, dir))
 
 	select {
 	case err := <-served:
