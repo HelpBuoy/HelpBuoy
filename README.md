@@ -28,9 +28,9 @@ The server runs in one of three modes, chosen with `--mode`:
 
 In http mode (`--mode http`) the server runs behind a reverse proxy (nginx, Apache or HAProxy) that serves HTTPS and passes the path `/helpbuoy` on as a WebSocket, keeping the `Host` header and adding `X-Forwarded-For`. [docs/proxy.md](docs/proxy.md) has tested configurations for all three, for several servers behind one proxy and one certificate, either as one process with virtual hosts or as separate processes.
 
-Without a reverse proxy, `helpbuoy-server serve --mode https` serves HTTPS itself on `:443`, or on the port given with `--listen`. It takes a certificate with `--cert` and `--key` (loaded again when the files change), gets one from Let's Encrypt with `--acme --acme-host help.example.com` (port 443 must be reachable from the internet), or makes a self-signed one. A server on another port is given out as `host:port`. The desk app's own server always works this way, on port 5959.
+Without a reverse proxy, `helpbuoy-server serve --mode https` serves HTTPS itself on `:443`, or on the port given with `--listen`. It takes a certificate with `--cert` and `--key` (loaded again when the files change), gets one from Let's Encrypt with `--acme --acme-host help.example.com` (port 443 must be reachable from the internet), or makes a self-signed one. A server on another port is given out as `host:port`.
 
-`helpbuoy-server serve --mode ssh` skips HTTP and TLS altogether: the apps speak SSH straight to the port. That is a little lighter and just as safe, since the pinned host key protects the connection in every mode, but it needs the port open in firewalls and doesn't pass HTTP proxies. Virtual hosts need http or https mode, since plain SSH can't name the host.
+`helpbuoy-server serve --mode ssh` skips HTTP and TLS altogether: the apps speak SSH straight to the port. That is a little lighter and just as safe, since the pinned host key protects the connection in every mode, but it needs the port open in firewalls and doesn't pass HTTP proxies. Virtual hosts need http or https mode, since plain SSH can't name the host. The desk app's own server always works this way, on port 5959.
 
 ### Virtual hosts
 

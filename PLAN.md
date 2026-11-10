@@ -75,9 +75,9 @@ Performance target: **as fast as RDP** for normal desktop work (section 5).
   each proxy. With `--mode https` it serves HTTPS itself on `:443` (or the `--listen`
   port), with certificate files, Let's Encrypt (`--acme`, TLS-ALPN) or a self-signed
   certificate. It also runs inside the desk app (7.1), on the techie's own
-  Linux, macOS or Windows machine, with the built-in HTTPS server on port 5959, which
-  usually means one port forward on the router and allowing the OS firewall prompt on first
-  start.
+  Linux, macOS or Windows machine, in ssh mode (plain SSH, see direct connect below) on port
+  5959, which usually means one port forward on the router and allowing the OS firewall
+  prompt on first start.
 - **Direct connect**: `--mode ssh`, the default, serves plain SSH without the WebSocket and TLS, on `:5959`.
   The apps always try HTTPS first; when that fails without an HTTP server answering, they
   connect again with plain SSH and keep that connection only if the port sends an SSH
@@ -807,12 +807,28 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
 - **Local server**: the server is compiled into the desk app (`server/server`, the same code
   as `helpbuoy-server`). Connecting with an empty address (or `localhost`, or `localhost:<port>`)
   serves the server in-process on that port (5959 when left out, since a normal user can't
-  listen on 443) with the built-in HTTPS server and a self-signed certificate, until
-  Disconnect or exit (unless something already listens on the port). There is no separate executable
+  listen on 443) in ssh mode (plain SSH on all interfaces, the direct connect of section 0), until
+  Disconnect or exit (unless something already listens on the port). A techie's own PC has
+  no reverse proxy or certificate, and the apps fall back from HTTPS to plain SSH within one
+  round trip, since the TLS handshake fails as soon as the SSH banner arrives. There is no separate executable
   to find, so `go run .` works too. It uses the same state directory as `helpbuoy-server serve`, so
   the standalone server and its admin commands share the techies, computers and host key. The
   app connects to `localhost:<port>` itself, while computers and other techies use the
   machine's public `hostname:port`, with the port, since it is not 443.
+- **Address to give out** (issue #17): with the local server running, the Server tab shows
+  the address in the local network instead of `localhost:5959`, with **Copy**, and says to
+  forward the port on the router to it and to give out the public address or a dynamic DNS
+  name with `:5959`. The address (`desk/reach`) is the IPv4 address on the interface of the
+  default route (found with a UDP "dial" to a public address, which sends nothing), skipping
+  loopback, link-local, point-to-point (VPN) interfaces and interfaces named like container,
+  VM or VPN adapters (`docker0`, `br-…`, `veth…`, `virbr…`, `wg…`, `tailscale…`,
+  `vEthernet (…)`, VirtualBox, VMware); without such a route, the first private address. The
+  app only shows it after a TCP connect to it succeeds. The app does not look up the public
+  address or check from outside: that would need a service on helpbuoy.com, and a techie
+  for whom setting up a server is too difficult is better off with managed hosting. With no
+  IPv4 route, or a local address in `100.64.0.0/10` (carrier-grade NAT), the tab says a port
+  forward can't work and points to the always-on server page. No UPnP or NAT-PMP: the
+  router is never changed without the techie doing it.
 - **This techie on the local server**: if this techie's key is not a techie there yet, the app
   adds it to the server state directly (with a number after the name if that name is taken),
   so nobody has to copy keys around. Other techies are added with **Add techie** on the Techies tab

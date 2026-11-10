@@ -258,8 +258,8 @@ func label(c *ui.Context, text string, x, y float32) float32 {
 	return y + 20
 }
 
-// drawServer is the Server tab: the connection status, the address and
-// fingerprint to read out to users, and Disconnect.
+// drawServer is the Server tab: the connection status, the address (for the
+// server inside this app, the addresses to give out) and the fingerprint to read out to users, and Disconnect.
 func (a *App) drawServer(x, y, w float32) float32 {
 	c := a.ui
 	c.Text(ui.Bold, ui.SizeHeading, i18n.Trans("Server"), x, y, ui.ColText)
@@ -272,7 +272,10 @@ func (a *App) drawServer(x, y, w float32) float32 {
 		y += c.Paragraph(ui.Regular, ui.SizeSmall, detail, x+16, y, w-16, ui.ColMuted)
 	}
 	y += 12
-	if a.demo == nil {
+	if a.localShown() {
+		// Not localhost, which on the other computers points at themselves.
+		y = a.drawGiveOut(x, y, w)
+	} else {
 		y = label(c, i18n.Trans("Address"), x, y)
 		c.Text(ui.Regular, ui.SizeBody, c.Ellipsize(ui.Regular, ui.SizeBody, a.addr.String(), w), x, y, ui.ColText)
 		y += 30

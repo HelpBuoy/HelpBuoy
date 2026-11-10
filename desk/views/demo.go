@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/helpbuoy/helpbuoy/proto/appkey"
 	"github.com/helpbuoy/helpbuoy/proto/control"
 	"github.com/helpbuoy/helpbuoy/proto/identity"
+	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 )
 
 // demo fakes a server with a few computers so the UI can be seen and tried
@@ -53,7 +55,11 @@ func newDemo(a *App) *demo {
 	a.key = &appkey.Key{Signer: s, Public: s.PublicKey(), Comment: "techie@demo", Line: line, Fingerprint: ssh.FingerprintSHA256(s.PublicKey())}
 	hk, _, _ := newKey("")
 	a.hostKey = hk.PublicKey()
-	a.cfg.ServerAddr = "helpme.example.com:443"
+	// The demo plays a server inside the app, as most techies run it, with a
+	// made-up address in the local network.
+	a.cfg.ServerAddr = "localhost:5959"
+	a.addr = serveraddr.Addr{Host: "localhost", Port: 5959}
+	a.give.lan = netip.MustParseAddrPort("192.168.1.20:5959")
 	a.status = serverconn.StatusEvent{Status: serverconn.StatusOnline, HostKey: a.hostKey}
 	a.me = "techie"
 	a.backend = d
@@ -87,7 +93,7 @@ func newDemo(a *App) *demo {
 	oma.Customer, anna.Customer = "demo-family", "demo-family"
 	p.Computers = []control.ComputerInfo{piet, oma, anna, lisa, jan, kees}
 	a.setPresence(p)
-	a.setServerInfo(&control.ServerInfo{Address: "helpme.example.com:443", Company: "Example Inc", Phone: "+1 234 567 890", Description: "Monday to Friday 9:00 to 17:00"})
+	a.setServerInfo(&control.ServerInfo{Address: "helpme.example.com:5959", Company: "Example Inc", Phone: "+1 234 567 890", Description: "Monday to Friday 9:00 to 17:00"})
 	return d
 }
 

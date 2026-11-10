@@ -140,6 +140,7 @@ type App struct {
 
 	local      *localserver.Server
 	localAdded int
+	give       giveOut // the addresses to give out for the local server
 
 	cs        connectScreen
 	upd       updater
@@ -394,6 +395,7 @@ func (a *App) drain() {
 		break
 	}
 	a.pollLocal()
+	a.pollGiveOut()
 	a.pollUpdate()
 	if a.demo != nil {
 		a.demo.frame()
