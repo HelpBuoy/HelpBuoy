@@ -281,7 +281,7 @@ func TestOnlinePresenceCommandsAndSession(t *testing.T) {
 	if err := waitResult(t, c.RenameComputer("SHA256:a", "Anna laptop")); err != nil {
 		t.Errorf("rename: %v", err)
 	}
-	info := control.ServerInfo{Address: "helpme.example.com", Company: "Example Inc", Phone: "+1 234 567 890", Description: "Weekdays"}
+	info := control.ServerInfo{Company: "Example Inc", Phone: "+1 234 567 890", Description: "Weekdays"}
 	if err := waitResult(t, c.SetServerInfo(info)); err != nil {
 		t.Errorf("set server info: %v", err)
 	}
@@ -321,7 +321,7 @@ func TestOnlinePresenceCommandsAndSession(t *testing.T) {
 			s = m.Seq
 		case *control.SetServerInfo:
 			s = m.Seq
-			if m.Company != "Example Inc" || m.Phone != "+1 234 567 890" || m.Address != "helpme.example.com" || m.Description != "Weekdays" {
+			if m.Company != "Example Inc" || m.Phone != "+1 234 567 890" || m.Description != "Weekdays" {
 				t.Errorf("set server info = %+v", m)
 			}
 		case *control.DecideListing:

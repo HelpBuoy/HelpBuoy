@@ -160,12 +160,10 @@ type Hello struct {
 
 // ServerInfo says who runs the server, so the user of a computer knows who
 // they are waiting for and who to call. Company and Phone are set on every
-// server that accepts computers; Address (the address computers use, e.g.
-// "helpme.example.com") and Description (e.g. opening hours) may be empty.
+// server that accepts computers; Description (e.g. opening hours) may be empty.
 // Computers show it on the waiting screen; techies show and edit it on the
 // Server tab.
 type ServerInfo struct {
-	Address     string `json:"address"`
 	Company     string `json:"company"`
 	Phone       string `json:"phone"`
 	Description string `json:"description"`
@@ -177,19 +175,17 @@ func (i ServerInfo) Configured() bool { return i.Company != "" && i.Phone != "" 
 
 // Limits of the ServerInfo fields, in characters.
 const (
-	MaxAddress     = 253
 	MaxCompany     = 64
 	MaxPhone       = 32
 	MaxDescription = 160
 )
 
 // SetServerInfo replaces the server's ServerInfo. Each field is one line of
-// printable text within its limit; Company and Phone are required, Address
-// (a valid server address) and Description may be empty. Every connection
+// printable text within its limit; Company and Phone are required, Description
+// may be empty. Every connection
 // gets the new ServerInfo.
 type SetServerInfo struct {
 	Seq         uint32 `json:"seq"`
-	Address     string `json:"address"`
 	Company     string `json:"company"`
 	Phone       string `json:"phone"`
 	Description string `json:"description"`

@@ -93,7 +93,7 @@ func newDemo(a *App) *demo {
 	oma.Customer, anna.Customer = "demo-family", "demo-family"
 	p.Computers = []control.ComputerInfo{piet, oma, anna, lisa, jan, kees}
 	a.setPresence(p)
-	a.setServerInfo(&control.ServerInfo{Address: "helpme.example.com:5959", Company: "Example Inc", Phone: "+1 234 567 890", Description: "Monday to Friday 9:00 to 17:00"})
+	a.setServerInfo(&control.ServerInfo{Company: "Example Inc", Phone: "+1 234 567 890", Description: "Monday to Friday 9:00 to 17:00"})
 	return d
 }
 
@@ -202,7 +202,6 @@ func (d *demo) SetServerInfo(info control.ServerInfo) <-chan error {
 	if problem, _ := checkInfo(info); problem != "" {
 		return done(errors.New(problem))
 	}
-	info.Address = normAddress(info.Address)
 	d.a.setServerInfo(&info)
 	return done(nil)
 }

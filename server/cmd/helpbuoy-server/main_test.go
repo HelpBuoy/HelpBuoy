@@ -168,8 +168,8 @@ func TestInfo(t *testing.T) {
 	}
 	runFail(t, "info", "--company", "Example Inc", "--state", dir) // no phone yet
 	runOK(t, "info", "--company", "  Example Inc ", "--phone", "+1 234 567 890", "--state", dir)
-	runOK(t, "info", "--address", "Help.Example.com", "--description", "Mon-Fri 9-17", "--state", dir)
-	want := "company:     Example Inc\nphone:       +1 234 567 890\naddress:     help.example.com:443\ndescription: Mon-Fri 9-17\n"
+	runOK(t, "info", "--description", "Mon-Fri 9-17", "--state", dir)
+	want := "company:     Example Inc\nphone:       +1 234 567 890\ndescription: Mon-Fri 9-17\n"
 	if out := runOK(t, "info", "--state", dir); out != want {
 		t.Fatalf("info: %q", out)
 	}
@@ -192,12 +192,12 @@ func TestSetup(t *testing.T) {
 		t.Fatalf("non-interactive setup: %v, %q", err, out.String())
 	}
 	interactive = func() bool { return true }
-	stdin = strings.NewReader("\nExample Inc\n+1 234\n\nMon-Fri\n")
+	stdin = strings.NewReader("\nExample Inc\n+1 234\nMon-Fri\n")
 	out.Reset()
 	if err := setup(dir, &out); err != nil {
 		t.Fatalf("setup: %v (%s)", err, out.String())
 	}
-	if got := runOK(t, "info", "--state", dir); got != "company:     Example Inc\nphone:       +1 234\naddress:     \ndescription: Mon-Fri\n" {
+	if got := runOK(t, "info", "--state", dir); got != "company:     Example Inc\nphone:       +1 234\ndescription: Mon-Fri\n" {
 		t.Fatalf("after setup: %q", got)
 	}
 	stdin = strings.NewReader("")

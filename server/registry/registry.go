@@ -841,13 +841,12 @@ func (r *Registry) setServerInfo(c *Conn, m *control.SetServerInfo) error {
 		return err
 	}
 	err = r.deniedLimited(c)
-	info := control.ServerInfo{Address: m.Address, Company: m.Company, Phone: m.Phone, Description: m.Description}
+	info := control.ServerInfo{Company: m.Company, Phone: m.Phone, Description: m.Description}
 	if err == nil {
 		err = r.mutate(func(st *store.State) error { return st.SetInfo(info) })
 	}
 	if err == nil {
-		r.log.Info("server info set", "address", strings.TrimSpace(m.Address), "company", strings.TrimSpace(m.Company),
-			"phone", strings.TrimSpace(m.Phone), "description", strings.TrimSpace(m.Description), "by", by)
+		r.log.Info("server info set", "company", strings.TrimSpace(m.Company), "phone", strings.TrimSpace(m.Phone), "description", strings.TrimSpace(m.Description), "by", by)
 	}
 	r.reply(c, m.Seq, err)
 	return nil

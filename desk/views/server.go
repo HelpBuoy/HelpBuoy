@@ -11,14 +11,12 @@ import (
 	"github.com/helpbuoy/helpbuoy/desk/ui"
 	"github.com/helpbuoy/helpbuoy/proto/control"
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
-	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 )
 
 // infoForm edits who runs the server on the Server tab.
 type infoForm struct {
 	company     ui.Field
 	phone       ui.Field
-	address     ui.Field
 	description ui.Field
 	busy        bool
 	result      string
@@ -30,8 +28,6 @@ func (f *infoForm) init() {
 	f.company.Edit.Max = control.MaxCompany
 	f.phone.Placeholder = i18n.Trans("For example {0}", "+1 234 567 890")
 	f.phone.Edit.Max = control.MaxPhone
-	f.address.Placeholder = i18n.Trans("For example {0}", "helpme.example.com")
-	f.address.Edit.Max = control.MaxAddress
 	f.description.Placeholder = i18n.Trans("For example {0}", i18n.Trans("Monday to Friday 9:00 to 17:00"))
 	f.description.Edit.Max = control.MaxDescription
 }
@@ -47,7 +43,6 @@ func (f *infoForm) fields(info *control.ServerInfo) []struct {
 	}{
 		{&f.company, &info.Company},
 		{&f.phone, &info.Phone},
-		{&f.address, &info.Address},
 		{&f.description, &info.Description},
 	}
 }
@@ -57,7 +52,6 @@ func (f *infoForm) typed() control.ServerInfo {
 	return control.ServerInfo{
 		Company:     strings.TrimSpace(f.company.Edit.String()),
 		Phone:       strings.TrimSpace(f.phone.Edit.String()),
-		Address:     strings.TrimSpace(f.address.Edit.String()),
 		Description: strings.TrimSpace(f.description.Edit.String()),
 	}
 }
@@ -77,27 +71,13 @@ func validLine(s string, max int) bool {
 	return true
 }
 
-// normAddress returns the address as the server stores it (host:port), or s
-// itself when it is empty or not a valid address.
-func normAddress(s string) string {
-	if a, err := serveraddr.Parse(s); err == nil {
-		return a.String()
-	}
-	return s
-}
-
 // checkInfo returns why the server would refuse info, or "" when it is fine.
 // missing is true when only a required field is empty.
 func checkInfo(info control.ServerInfo) (problem string, missing bool) {
 	if !validLine(info.Company, control.MaxCompany) || !validLine(info.Phone, control.MaxPhone) ||
-		!validLine(info.Address, control.MaxAddress) || !validLine(info.Description, control.MaxDescription) {
+		!validLine(info.Description, control.MaxDescription) {
 		return i18n.Trans("Company name up to {0}, phone number up to {1}, description up to {2} printable characters.",
 			control.MaxCompany, control.MaxPhone, control.MaxDescription), false
-	}
-	if info.Address != "" {
-		if _, err := serveraddr.Parse(info.Address); err != nil {
-			return i18n.Trans("The address is not valid: {0}", err), false
-		}
 	}
 	if info.Company == "" || info.Phone == "" {
 		return i18n.Trans("Enter the company name and phone number."), true
@@ -152,8 +132,8 @@ func (a *App) drawNotSetUp(x, y, w float32) float32 {
 	return y + h
 }
 
-// drawServerInfo draws the company name, phone number, address and
-// description fields and Save.
+// drawServerInfo draws the company name, phone number and description
+// fields and Save.
 func (a *App) drawServerInfo(x, y, w float32) float32 {
 	c := a.ui
 	f := &a.infoForm
@@ -167,7 +147,6 @@ func (a *App) drawServerInfo(x, y, w float32) float32 {
 	}{
 		{"server/company", i18n.Trans("Company name"), &f.company},
 		{"server/phone", i18n.Trans("Phone number"), &f.phone},
-		{"server/address", i18n.Trans("Address computers use (optional)"), &f.address},
 		{"server/description", i18n.Trans("Description, for example opening hours (optional)"), &f.description},
 	} {
 		y = label(c, fl.label, x, y)
@@ -190,7 +169,7 @@ func (a *App) drawServerInfo(x, y, w float32) float32 {
 		y += 3
 	}
 	changed := a.info != nil && (info.Company != a.info.Company || info.Phone != a.info.Phone ||
-		normAddress(info.Address) != a.info.Address || info.Description != a.info.Description)
+		info.Description != a.info.Description)
 	ready := problem == "" && changed && !f.busy && a.online()
 	saveL, savingL := i18n.Trans("Save"), i18n.Trans("Saving…")
 	text := saveL
@@ -218,7 +197,6 @@ func (a *App) drawServerInfoReadOnly(x, y, w float32) float32 {
 	for _, f := range []struct{ label, value string }{
 		{i18n.Trans("Company name"), a.info.Company},
 		{i18n.Trans("Phone number"), a.info.Phone},
-		{i18n.Trans("Address computers use (optional)"), a.info.Address},
 		{i18n.Trans("Description, for example opening hours (optional)"), a.info.Description},
 	} {
 		if f.value == "" {
@@ -246,10 +224,6 @@ func (a *App) saveServerInfo(info control.ServerInfo) {
 			return
 		}
 		f.result, f.failed = i18n.Trans("Saved."), false
-		// The server stores the address as host:port; show it so.
-		if t := strings.TrimSpace(f.address.Edit.String()); t != "" && normAddress(t) != t {
-			f.address.Edit.SetText(normAddress(t))
-		}
 	})
 }
 

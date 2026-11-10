@@ -61,7 +61,7 @@ commands:
   customer rename CUSTOMER NAME          rename a customer
   customer remove CUSTOMER               remove a customer; its computers are kept, without customer
   info [--company C] [--phone P]         print or set who runs this server, shown to users waiting
-       [--address A] [--description D]   for a techie; the company name and phone number are required
+       [--description D]                 for a techie; the company name and phone number are required
                                          before computers can connect
   limit [--sessions N]                   print or set how many sessions the server allows at the
                                          same time (0: no limit, the default); techies can't change it
@@ -406,7 +406,6 @@ func infoCmd(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("info", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	state := addStateFlags(fs)
-	address := fs.String("address", "", "the address computers use, e.g. helpme.example.com (\"\" to clear)")
 	company := fs.String("company", "", "company name")
 	phone := fs.String("phone", "", "phone number users call for help")
 	description := fs.String("description", "", "optional line, for example opening hours (\"\" to clear)")
@@ -415,7 +414,7 @@ func infoCmd(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if len(pos) != 0 {
-		return fmt.Errorf("%w: info [--company C] [--phone P] [--address A] [--description D]", errUsage)
+		return fmt.Errorf("%w: info [--company C] [--phone P] [--description D]", errUsage)
 	}
 	set := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
@@ -431,9 +430,6 @@ func infoCmd(args []string, stdout, stderr io.Writer) error {
 	} else {
 		idx, _, err = st.Update(func(s *store.State) error {
 			info := s.Info()
-			if set["address"] {
-				info.Address = *address
-			}
 			if set["company"] {
 				info.Company = *company
 			}
@@ -456,7 +452,6 @@ func infoCmd(args []string, stdout, stderr io.Writer) error {
 func printInfo(w io.Writer, info control.ServerInfo) {
 	fmt.Fprintf(w, "company:     %s\n", info.Company)
 	fmt.Fprintf(w, "phone:       %s\n", info.Phone)
-	fmt.Fprintf(w, "address:     %s\n", info.Address)
 	fmt.Fprintf(w, "description: %s\n", info.Description)
 	if !info.Configured() {
 		fmt.Fprintln(w, "Computers can't connect until the company name and phone number are set.")
@@ -523,9 +518,6 @@ func setup(dir string, stdout io.Writer) error {
 			return err
 		}
 		if info.Phone, err = ask("Phone number", info.Phone, true); err != nil {
-			return err
-		}
-		if info.Address, err = ask("Address computers use (optional)", info.Address, false); err != nil {
 			return err
 		}
 		if info.Description, err = ask("Description, for example opening hours (optional)", info.Description, false); err != nil {

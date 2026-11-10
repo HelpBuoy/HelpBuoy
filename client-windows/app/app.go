@@ -821,7 +821,6 @@ func (h handler) ServerInfo(info control.ServerInfo) {
 		return
 	}
 	c.info = &control.ServerInfo{
-		Address:     servertext.Clean(info.Address),
 		Company:     servertext.Clean(info.Company),
 		Phone:       servertext.Clean(info.Phone),
 		Description: servertext.Clean(info.Description),

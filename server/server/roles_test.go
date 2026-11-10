@@ -561,11 +561,11 @@ func TestSetServerInfo(t *testing.T) {
 	cl, _ := e.computer("anna@PC")
 	mustWait[control.ServerInfo](t, cl, func(m *control.ServerInfo) bool { return *m == testInfo })
 
-	h.Send(&control.SetServerInfo{Seq: 2, Address: "Help.Example.com", Company: " Other Inc ", Phone: "+31 20 123 4567", Description: "Mon-Fri 9-17"})
+	h.Send(&control.SetServerInfo{Seq: 2, Company: " Other Inc ", Phone: "+31 20 123 4567", Description: "Mon-Fri 9-17"})
 	if rep := mustWait[control.Reply](t, h, func(r *control.Reply) bool { return r.Seq == 2 }); rep.Error != "" {
 		t.Fatalf("set: %s", rep.Error)
 	}
-	wantInfo := control.ServerInfo{Address: "help.example.com:443", Company: "Other Inc", Phone: "+31 20 123 4567", Description: "Mon-Fri 9-17"}
+	wantInfo := control.ServerInfo{Company: "Other Inc", Phone: "+31 20 123 4567", Description: "Mon-Fri 9-17"}
 	want := func(m *control.ServerInfo) bool { return *m == wantInfo }
 	mustWait[control.ServerInfo](t, cl, want)
 	idx, _, err := e.st.Load()
@@ -583,7 +583,6 @@ func TestSetServerInfo(t *testing.T) {
 		{Seq: 4, Company: "A", Phone: "two\nlines"},
 		{Seq: 5, Company: "", Phone: "1"},
 		{Seq: 6, Company: "A", Phone: ""},
-		{Seq: 7, Company: "A", Phone: "1", Address: "not an address!"},
 	} {
 		h.Send(m)
 		if rep := mustWait[control.Reply](t, h, func(r *control.Reply) bool { return r.Seq == m.Seq }); rep.Error == "" {

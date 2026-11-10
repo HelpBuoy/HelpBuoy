@@ -83,7 +83,6 @@ type Computer struct {
 // State is the content of state.json.
 type State struct {
 	// Who runs the server, see control.ServerInfo.
-	Address     string     `json:"address,omitempty"`
 	Company     string     `json:"company,omitempty"`
 	Phone       string     `json:"phone,omitempty"`
 	Description string     `json:"description,omitempty"`
@@ -410,7 +409,7 @@ func writeAtomic(path string, b []byte) error {
 
 // Info returns who runs the server, as the apps get it.
 func (st *State) Info() control.ServerInfo {
-	return control.ServerInfo{Address: st.Address, Company: st.Company, Phone: st.Phone, Description: st.Description}
+	return control.ServerInfo{Company: st.Company, Phone: st.Phone, Description: st.Description}
 }
 
 // SetMaxSessions sets how many sessions the server allows at the same time,
@@ -424,20 +423,10 @@ func (st *State) SetMaxSessions(n int) error {
 }
 
 // SetInfo sets who runs the server. Each field is one line of printable
-// text; the company name and phone number are required, the address must be
-// a server address or empty, and the description may be empty.
+// text; the company name and phone number are required and the description
+// may be empty.
 func (st *State) SetInfo(info control.ServerInfo) error {
 	var err error
-	if info.Address, err = cleanLine("address", info.Address, control.MaxAddress); err != nil {
-		return err
-	}
-	if info.Address != "" {
-		a, err := serveraddr.Parse(info.Address)
-		if err != nil {
-			return fmt.Errorf("address: %w", err)
-		}
-		info.Address = a.String()
-	}
 	if info.Company, err = cleanLine("company name", info.Company, control.MaxCompany); err != nil {
 		return err
 	}
@@ -450,7 +439,7 @@ func (st *State) SetInfo(info control.ServerInfo) error {
 	if err := checkInfo(info, true); err != nil {
 		return err
 	}
-	st.Address, st.Company, st.Phone, st.Description = info.Address, info.Company, info.Phone, info.Description
+	st.Company, st.Phone, st.Description = info.Company, info.Phone, info.Description
 	return nil
 }
 
@@ -461,7 +450,6 @@ func checkInfo(info control.ServerInfo, required bool) error {
 		what, v string
 		max     int
 	}{
-		{"address", info.Address, control.MaxAddress},
 		{"company name", info.Company, control.MaxCompany},
 		{"phone number", info.Phone, control.MaxPhone},
 		{"description", info.Description, control.MaxDescription},

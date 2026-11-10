@@ -274,7 +274,7 @@ func (c *Conn) UnregisterComputer(fingerprint string) <-chan error {
 // phone number and description.
 func (c *Conn) SetServerInfo(info control.ServerInfo) <-chan error {
 	return c.command(func(seq uint32) any {
-		return &control.SetServerInfo{Seq: seq, Address: info.Address, Company: info.Company, Phone: info.Phone, Description: info.Description}
+		return &control.SetServerInfo{Seq: seq, Company: info.Company, Phone: info.Phone, Description: info.Description}
 	})
 }
 

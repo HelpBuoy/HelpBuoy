@@ -333,7 +333,7 @@ list of their own (13.2, 13.3).
 | `helpbuoy-server computer add 'ssh-ed25519 ...' ['Anna laptop']` | register a computer key, like Register computer in the desk app; the name defaults to the key comment, and "registered by" is `admin` |
 | `helpbuoy-server computer rename SHA256:... 'Anna laptop'` | rename a registered computer; the same as Rename in the desk app, every techie sees the new name |
 | `helpbuoy-server computer remove SHA256:...` | remove a registered computer; an online computer is disconnected |
-| `helpbuoy-server info [--company C] [--phone P] [--address A] [--description D]` | print or set who runs the server (12.4); only the flags given change, and the company name and phone number can't be cleared. The same values techies edit on the desk app's Server tab. `serve` asks for the company name and phone number when they are missing and it runs in a terminal; until they are set the server refuses computers |
+| `helpbuoy-server info [--company C] [--phone P] [--description D]` | print or set who runs the server (12.4); only the flags given change, and the company name and phone number can't be cleared. The same values techies edit on the desk app's Server tab. `serve` asks for the company name and phone number when they are missing and it runs in a terminal; until they are set the server refuses computers |
 | `helpbuoy-server customer list` / `add` / `rename` / `remove` | manage the customers on the server (13.2) |
 | `helpbuoy-server computer move SHA256:... 'Acme BV' \| --none` | move a computer to another customer, or out of its customer (13.2); `computer add` and `computer list` take `--customer` |
 | `helpbuoy-server techie limit alice 'Acme BV' ... \| --all` | limit a techie to some customers, or lift the limit (13.3); `techie add` takes `--customer` (repeatable) too |
@@ -356,7 +356,7 @@ Techie commands carry a sequence number and the server answers each with a `Repl
 | Message | Direction | Content |
 |---|---|---|
 | `Hello` | server → any | role, server time, limits |
-| `ServerInfo` | server → any | who runs the server: address, company name, phone number and description (12.4), right after `Hello` and again whenever they change |
+| `ServerInfo` | server → any | who runs the server: company name, phone number and description (12.4), right after `Hello` and again whenever they change |
 | `ApprovedServers` | server → computer | the servers this server approved for the computer, each an address and host key fingerprint (12.3), after `Hello` or `Registered` and again whenever the list changes |
 | `RequestListing` | computer → server | address and host key fingerprint of a server the locked computer wants to use (12.3) |
 | `ListingRefused` | server → computer | a techie refused that request |
@@ -366,7 +366,7 @@ Techie commands carry a sequence number and the server answers each with a `Repl
 | `RegisterComputer` / `UnregisterComputer` | techie → server | public key line or fingerprint (name taken from the key comment, or given when the comment is empty) |
 | `RegisterTechie` | techie → server | public key line and name: adds another techie, like `helpbuoy-server techie add` |
 | `UnregisterTechie` | techie → server | name: removes another techie, like `helpbuoy-server techie remove`; an online techie is disconnected, and a techie cannot remove itself |
-| `SetServerInfo` | techie → server | new address (optional, a valid server address), company name (up to 64 characters), phone number (up to 32) and description (optional, up to 160), one line each; stored in `state.json` |
+| `SetServerInfo` | techie → server | new company name (up to 64 characters), phone number (up to 32) and description (optional, up to 160), one line each; stored in `state.json` |
 | `Reply` | server → techie | answer to a techie command: sequence number and error text if it failed |
 | `Registered` | server → computer | the key is now registered (no name: that is only for techies) |
 | `RequestHelp` | computer → server | (no content) |
@@ -805,8 +805,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   (**Add techie** on the Techies tab) or its admin (`helpbuoy-server techie add`) and keeps retrying, so it moves on by itself once the key is added.
 - Once online the tabs appear. The **Server** tab shows the connection status, the address,
   the server fingerprint to read out to users, and who runs the server (12.4): **Company
-  name** and **Phone number** (required) and the optional **Address computers use** and
-  **Description**, with **Save** (any techie can change them; every computer and techie gets
+  name** and **Phone number** (required) and the optional **Description**, with **Save** (any techie can change them; every computer and techie gets
   the new values right away). While the company name or phone number is missing, the
   Computers tab and Add computer say that computers can't connect yet, with a button to the
   Server tab, and **Disconnect** (not while sessions are open; back to the connect screen,
@@ -1181,7 +1180,7 @@ an `Error`, also a pending key the moment it is registered as a computer. Techie
 pending keys get in, so the first techie can set them and a techie not added yet can see
 the key line to send. They are separate fields in `ServerInfo` and `SetServerInfo`,
 so the client shows them in its own layout. The address shown is the one the PC is
-connected to; the address field in `ServerInfo` is what techies give out.
+connected to.
 
 ### 12.5 Where it lives
 
