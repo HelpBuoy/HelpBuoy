@@ -272,7 +272,7 @@ func TestOnlinePresenceCommandsAndSession(t *testing.T) {
 		t.Fatalf("presence = %+v", p.Presence)
 	}
 
-	if err := waitResult(t, c.RegisterComputer("ssh-ed25519 AAAA bob@pc", "")); err != nil {
+	if err := waitResult(t, c.RegisterComputer("ssh-ed25519 AAAA bob@pc", "", "")); err != nil {
 		t.Errorf("register: %v", err)
 	}
 	if err := waitResult(t, c.UnregisterComputer("SHA256:x")); err == nil || err.Error() != "unknown computer" {

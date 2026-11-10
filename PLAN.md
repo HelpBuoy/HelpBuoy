@@ -99,11 +99,10 @@ Performance target: **as fast as RDP** for normal desktop work (section 5).
   other techies simply see the server as unreachable until it is started again.
 - **Identity = key**. The server maps each public key to exactly one of: techie, registered
   computer, or unknown. User names in the SSH handshake are ignored (computers send `sv`).
-- **One group per server**: every techie on a server sees every registered computer and can ask
-  to connect to it. Separate groups of techies use separate servers.
-  Planned (13): the computers on a server are grouped per customer, so one helpdesk can
-  serve many customers from one server, and a techie can be limited to some customers.
-  Separate helpdesks still use separate servers or virtual hosts.
+- **One helpdesk per server**: every techie on a server sees every registered computer and
+  can ask to connect to it, unless the techie is limited to some customers (13). The
+  computers are grouped per customer, so one helpdesk serves many customers from one server.
+  Separate helpdesks use separate servers or virtual hosts.
 
 ### Stored computer configuration
 
@@ -301,8 +300,8 @@ transport in `x/crypto/ssh`, the auth callback, the control parser and the splic
 
 A key can't be both techie and computer.
 
-Planned (13.3): a techie limited to some customers only sees and reaches the computers of
-those customers, and can't manage techies, customers or the server info.
+A techie limited to some customers (13.3) only sees and reaches the computers of those
+customers, and can't manage techies, customers or the server info.
 
 ### 3.2 State and admin
 
@@ -317,8 +316,8 @@ only by `UnregisterComputer` or `helpbuoy-server computer remove`. They are adde
 Fields in `state.json` that a version doesn't know, at the top level or in a techie or
 computer entry, are kept and written back on every save, so a newer version can add fields
 without an older one sharing the state directory dropping them.
-Planned (13.2): a list of customers, the customer of every computer, and limited techies in
-a list of their own.
+It also holds the customers, the customer of every computer, and the limited techies in a
+list of their own (13.2, 13.3).
 
 | Command | What it does |
 |---|---|
@@ -335,9 +334,9 @@ a list of their own.
 | `helpbuoy-server computer rename SHA256:... 'Anna laptop'` | rename a registered computer; the same as Rename in the desk app, every techie sees the new name |
 | `helpbuoy-server computer remove SHA256:...` | remove a registered computer; an online computer is disconnected |
 | `helpbuoy-server info [--company C] [--phone P] [--address A] [--description D]` | print or set who runs the server (12.4); only the flags given change, and the company name and phone number can't be cleared. The same values techies edit on the desk app's Server tab. `serve` asks for the company name and phone number when they are missing and it runs in a terminal; until they are set the server refuses computers |
-| `helpbuoy-server customer list` / `add` / `rename` / `remove` | planned (13.2): manage the customers on the server |
-| `helpbuoy-server computer move SHA256:... 'Acme BV'` | planned (13.2): move a computer to another customer; `computer add` and `computer list` take `--customer` |
-| `helpbuoy-server techie limit alice 'Acme BV' ... \| --all` | planned (13.3): limit a techie to some customers, or lift the limit; `techie add` takes `--customer` too |
+| `helpbuoy-server customer list` / `add` / `rename` / `remove` | manage the customers on the server (13.2) |
+| `helpbuoy-server computer move SHA256:... 'Acme BV' \| --none` | move a computer to another customer, or out of its customer (13.2); `computer add` and `computer list` take `--customer` |
+| `helpbuoy-server techie limit alice 'Acme BV' ... \| --all` | limit a techie to some customers, or lift the limit (13.3); `techie add` takes `--customer` (repeatable) too |
 | `helpbuoy-server hostkey` | print the host key fingerprint, for techies to compare with what computers show |
 | `helpbuoy-server hostkey --new` | replace the host key, keeping all techies and computers; it takes effect at the next server start, since the running server only watches `state.json`; every computer then shows the changed server identity warning (3.5), and servers that approved this one for their computers (12.3) must approve it again |
 
@@ -376,9 +375,9 @@ Techie commands carry a sequence number and the server answers each with a `Repl
 | `SessionReady` | server → computer | request id, techie name and public key: a techie wants to connect |
 | `Error` | server → any | reason, sent just before the server closes a connection on purpose |
 
-Planned (13.5): `Presence` gets the customers and the customer of every computer, filtered
-for limited techies, and techies get `AddCustomer`, `RenameCustomer`, `RemoveCustomer`,
-`MoveComputer` and `LimitTechie`. Nothing changes for computers.
+Customers (13.5): `Presence` carries the customers and the customer of every computer,
+filtered for limited techies, and techies have `AddCustomer`, `RenameCustomer`,
+`RemoveCustomer`, `MoveComputer` and `LimitTechie`. Nothing changes for computers.
 
 The apps skip a message of a type they don't know, and ignore JSON fields they don't
 know, so a newer server can add both without breaking older apps. The server stays strict:
@@ -450,7 +449,7 @@ Role caps and timeouts:
   approval at the PC for that techie, and Esc or exiting the client application always ends the
   session locally, even if the server misbehaves.
 - **Pending keys** are never shown to anyone.
-- **Limited techies** (planned, 13.3) are limited by the server, not by the desk app hiding
+- **Limited techies** (13.3) are limited by the server, not by the desk app hiding
   rows: they never get the computers of other customers in `Presence`, and the server refuses
   their commands for those computers.
 - **A locked computer** (12) only connects to its primary server and the servers
@@ -866,7 +865,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
 - **Remove** a computer (unregister) from the list.
 - **Server requests** (12.3): a locked computer that asks for another server shows the
   requested address and fingerprint below its row, with **Allow** and **Refuse**.
-- **Customers** (planned, 13.4): the computers show per customer in collapsible sections,
+- **Customers** (13.4): the computers show per customer in collapsible sections,
   with a filter field, **Move** next to Rename and Remove, and **Add customer** next to Add
   computer.
 - Each opened session becomes a tab after the fixed ones; any number at once. When a
@@ -965,7 +964,7 @@ The Linux client, the desk app and `helpbuoy-server` also ship as arm64 Debian p
 The lock question, the approved list and listing requests, mandatory company name and phone
 number on every server, and the waiting screen showing who the user waits for.
 
-**Phase 9 - customers (13)** (planned, issue #20)
+**Phase 9 - customers (13)** (done, issue #20)
 Customers on the server, the customer of every computer, techies limited to customers, and
 the Computers tab grouped per customer.
 
@@ -1006,7 +1005,7 @@ clients.
   about a server that is not approved after seeing only its host key, connects there once
   approved, pins approved servers by the approved fingerprint, starts on the primary server
   when its last address is no longer allowed, and keeps the lock through Remove key.
-- Customers (13, planned): a state without customers loads with every computer in "No
+- Customers (13): a state without customers loads with every computer in "No
   customer"; removing a customer keeps its computers; a limited techie never gets other
   customers' computers or techies in `Presence`, and the server refuses its `OpenRequest`,
   `RegisterComputer`, renames, moves and `DecideListing` for them and every command that
@@ -1174,7 +1173,7 @@ reach the PC, so nothing in a session depends on helpbuoy.com being reachable.
 
 ## 13. Customers on one server
 
-Planned, issue #20. A server is one flat group today (0): every techie sees every
+Issue #20. A server is one flat group today (0): every techie sees every
 registered computer in one list. That fits a single helpdesk, but an MSP helps many
 customers from one team. With a few hundred computers from twenty companies in one list,
 the techie can't tell whose PC is whose, and the only way to keep customers apart is a
@@ -1266,16 +1265,19 @@ keys as unknown and refuses them, instead of letting them see every computer.
 - **Add customer** sits next to Add computer and adds a section with an inline name field.
   Hovering a section header shows **Rename** and **Remove**; Remove asks "Remove this
   customer? Its computers move to No customer." with Remove and Cancel.
-- Hovering a computer row shows **Move** next to Rename and Remove: a list of the customers
-  to pick from. Dragging rows between sections is not planned.
+- Hovering a computer row shows **Move** next to Rename and Remove: the customers to pick
+  from open below the row as buttons, with Cancel. Dragging rows between sections is not
+  planned.
 - **Register computer** gets a customer choice, prefilled with the customer last used in
-  this app (or the section the techie opened it from), and "No customer" for a techie who
-  isn't limited.
-- **Register techie** gets an optional choice of customers, empty meaning all. The
-  **Techies** tab shows the customers of a limited techie in place of "all customers", and a
-  hover action **Customers** changes the limit.
-- A limited techie doesn't see Add customer, Add techie, the section actions or the edit
-  fields on the Server tab.
+  this app, and "No customer" for a techie who isn't limited. A limited techie only gets its
+  own customers and always has one chosen.
+- **Register techie** gets "All customers, and computers without customer", checked by
+  default; unchecked, at least one customer must be chosen. The **Techies** tab shows "Only
+  for" the customers of a limited techie in place of its fingerprint, and a hover action
+  **Customers** changes the limit with the same choice, Save and Cancel.
+- A limited techie doesn't see Add customer, Add techie, the section actions, Remove and
+  Customers on the Techies tab, or the edit fields on the Server tab, which shows who runs
+  the server read-only.
 - A session tab shows the customer name before the computer name, so a techie with several
   sessions open sees which customer each belongs to.
 
@@ -1286,8 +1288,10 @@ keys as unknown and refuses them, instead of letting them see every computer.
   techie as in 13.3. Older desk apps ignore the new fields (3.3) and show the flat list.
 - New techie commands, answered with `Reply`: `AddCustomer` (name), `RenameCustomer` (id and
   name), `RemoveCustomer` (id), `MoveComputer` (computer fingerprint and customer id, empty
-  for "No customer") and `LimitTechie` (name and customer ids, empty for all).
-- `RegisterComputer` gets an optional customer id and `RegisterTechie` optional customer ids.
+  for "No customer") and `LimitTechie` (name, a `Limited` flag and customer ids; a techie
+  can't change its own limit). The protocol names customers by id only.
+- `RegisterComputer` gets an optional customer id, and `RegisterTechie` the same `Limited`
+  flag and customer ids as `LimitTechie`.
 - Nothing is sent to computers.
 
 ### 13.6 Open points

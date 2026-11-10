@@ -18,17 +18,27 @@ import (
 )
 
 // drawComputersPage draws the Computers tab: the computers, online first,
-// offline collapsed. The server status is on the Server tab.
+// offline collapsed, per customer once the server has customers. The server
+// status is on the Server tab.
 func (a *App) drawComputersPage(r rl.Rectangle) {
 	c := a.ui
 	rl.DrawRectangleRec(r, ui.ColPanel)
 	c.Text(ui.Bold, ui.SizeHeading, i18n.Trans("Computers"), r.X+16, r.Y+14, ui.ColText)
 	a.addButton("computers/add", i18n.Trans("Add computer"), tabRegister, r)
+	if !a.limited() {
+		addL := i18n.Trans("Add customer")
+		bw := a.ui.ButtonWidth(addL)
+		x := r.X + r.Width - 16 - a.ui.ButtonWidth(i18n.Trans("Add computer")) - 8 - bw
+		if c.Button("customers/open", rl.NewRectangle(x, r.Y+11, bw, 34), addL, ui.Normal, a.backend == nil || a.presence == nil) {
+			a.openAddCustomer()
+		}
+	}
 	top := r.Y + 56
 	rl.DrawLineV(rl.NewVector2(r.X, top), rl.NewVector2(r.X+r.Width, top), ui.ColBorder)
 	if a.notSetUp() {
 		top = a.drawNotSetUp(r.X+16, top+12, r.Width-32) + 12
 	}
+	top = a.drawCustomerTop(r, top)
 	a.drawComputerList(rl.NewRectangle(r.X, top, r.Width, r.Y+r.Height-top))
 }
 
@@ -112,58 +122,26 @@ func computerRowH(ci control.ComputerInfo) float32 {
 
 func (a *App) drawComputerList(r rl.Rectangle) {
 	c := a.ui
-	online, offline := sortedComputers(a.presence)
-	if a.presence != nil && len(online)+len(offline) == 0 {
-		c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("No registered computers yet. Use Add computer to add one."), 16, r.Y+16, r.Width-32, ui.ColMuted)
-		return
-	}
 	if a.presence == nil {
 		return
 	}
-	contentH := float32(40)
-	for _, ci := range online {
-		contentH += computerRowH(ci)
+	if len(a.presence.Computers) == 0 && !a.hasCustomers() && !a.cust.adding {
+		c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("No registered computers yet. Use Add computer to add one."), 16, r.Y+16, r.Width-32, ui.ColMuted)
+		return
 	}
-	if a.offlineOpen {
-		for _, ci := range offline {
-			contentH += computerRowH(ci)
-		}
+	items := a.listItems(r.Width)
+	contentH := float32(40)
+	for _, it := range items {
+		contentH += it.h
 	}
 	off := c.BeginScroll("computers", r, contentH)
 	y := r.Y + off
-	if len(online) == 0 {
-		c.Text(ui.Regular, ui.SizeSmall, i18n.Trans("No computers online."), 16, y+14, ui.ColMuted)
-		y += 44
-		contentH += 44
+	for _, it := range items {
+		a.drawListItem(it, rl.NewRectangle(0, y, r.Width, it.h))
+		y += it.h
 	}
-	for _, ci := range online {
-		h := computerRowH(ci)
-		a.drawComputerRow(ci, rl.NewRectangle(0, y, r.Width, h))
-		y += h
-	}
-	if len(offline) > 0 {
-		hr := rl.NewRectangle(0, y, r.Width, 40)
-		hover, clicked := c.Row("offline/header", hr, ui.ColPanel, false)
-		arrow := "►"
-		if a.offlineOpen {
-			arrow = "▼"
-		}
-		c.TextIn(ui.Regular, ui.SizeSmall, arrow, rl.NewRectangle(16, y, 20, 40), ui.ColMuted)
-		c.TextIn(ui.Bold, ui.SizeSmall, i18n.Trans("Offline ({0})", len(offline)), rl.NewRectangle(34, y, r.Width, 40), ui.ColMuted)
-		if hover {
-			c.SetCursor(rl.MouseCursorPointingHand)
-		}
-		if clicked {
-			a.offlineOpen = !a.offlineOpen
-		}
-		y += 40
-		if a.offlineOpen {
-			for _, ci := range offline {
-				h := computerRowH(ci)
-				a.drawComputerRow(ci, rl.NewRectangle(0, y, r.Width, h))
-				y += h
-			}
-		}
+	if a.hasCustomers() && len(items) == 0 {
+		c.Text(ui.Regular, ui.SizeSmall, i18n.Trans("Nothing matches the filter."), 16, y+14, ui.ColMuted)
 	}
 	c.EndScroll()
 }
@@ -194,12 +172,20 @@ func (a *App) drawComputerRow(ci control.ComputerInfo, r rl.Rectangle) {
 	}
 	x += 16
 	listingClicked := a.drawListings(ci, x, r.Y+rowH-6, r.X+r.Width-x-8)
+	if a.cust.moving == ci.Fingerprint {
+		if a.drawMove(ci, x, r.Y+computerRowH(ci), r.X+r.Width-x-16) {
+			listingClicked = true
+		}
+	}
 
 	// Right side action area. Buttons grow with longer (translated) labels.
 	removeL, cancelL, renameL := i18n.Trans("Remove"), i18n.Trans("Cancel"), i18n.Trans("Rename")
 	connectL, askingL := i18n.Trans("Connect"), i18n.Trans("Asking…")
 	wConfirm, wCancel := a.btnW(removeL, 74), a.btnW(cancelL, 68)
 	wRename, wRemove := a.btnW(renameL, 66), a.btnW(removeL, 66)
+	moveL := i18n.Trans("Move")
+	wMove := a.btnW(moveL, 60)
+	canMove := a.hasCustomers() && !a.cust.moveBusy[ci.Fingerprint]
 	wConnect := max(a.btnW(connectL, 86), a.btnW(askingL, 86), a.btnW(cancelL, 86))
 	actionW := float32(0)
 	confirming := a.confirmRemove == ci.Fingerprint
@@ -210,6 +196,9 @@ func (a *App) drawComputerRow(ci control.ComputerInfo, r rl.Rectangle) {
 		actionW = wConfirm + 6 + wCancel + 2
 	case hover:
 		actionW = wRename + 4
+		if canMove {
+			actionW += wMove + 4
+		}
 		if tabIdx < 0 {
 			actionW += wRemove + 4
 		}
@@ -263,6 +252,17 @@ func (a *App) drawComputerRow(ci control.ComputerInfo, r rl.Rectangle) {
 				actionClicked = true
 			}
 			bx += wRename + 4
+			if canMove {
+				if c.Button(id+"/move", rl.NewRectangle(bx, ay, wMove, 30), moveL, ui.Flat, !a.online()) {
+					if a.cust.moving == ci.Fingerprint {
+						a.cust.moving = ""
+					} else {
+						a.cust.moving = ci.Fingerprint
+					}
+					actionClicked = true
+				}
+				bx += wMove + 4
+			}
 			if tabIdx < 0 {
 				if c.Button(id+"/remove", rl.NewRectangle(bx, ay, wRemove, 30), removeL, ui.Flat, !a.online()) {
 					a.confirmRemove = ci.Fingerprint

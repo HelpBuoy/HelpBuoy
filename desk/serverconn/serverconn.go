@@ -200,10 +200,43 @@ func (c *Conn) Close() {
 	<-c.done
 }
 
-// RegisterTechie adds another techie key under name.
-func (c *Conn) RegisterTechie(line, name string) <-chan error {
+// RegisterTechie adds another techie key under name, limited to the
+// customer ids in limit when it is not nil.
+func (c *Conn) RegisterTechie(line, name string, limit []string) <-chan error {
 	return c.command(func(seq uint32) any {
-		return &control.RegisterTechie{Seq: seq, PublicKey: line, Name: name}
+		return &control.RegisterTechie{Seq: seq, PublicKey: line, Name: name, Limited: limit != nil, Customers: limit}
+	})
+}
+
+// LimitTechie limits the techie with the given name to the customer ids in
+// limit, or lifts its limit when limit is nil.
+func (c *Conn) LimitTechie(name string, limit []string) <-chan error {
+	return c.command(func(seq uint32) any {
+		return &control.LimitTechie{Seq: seq, Name: name, Limited: limit != nil, Customers: limit}
+	})
+}
+
+// AddCustomer adds a customer.
+func (c *Conn) AddCustomer(name string) <-chan error {
+	return c.command(func(seq uint32) any { return &control.AddCustomer{Seq: seq, Name: name} })
+}
+
+// RenameCustomer renames the customer with the given id.
+func (c *Conn) RenameCustomer(id, name string) <-chan error {
+	return c.command(func(seq uint32) any { return &control.RenameCustomer{Seq: seq, ID: id, Name: name} })
+}
+
+// RemoveCustomer removes the customer with the given id; its computers stay,
+// without customer.
+func (c *Conn) RemoveCustomer(id string) <-chan error {
+	return c.command(func(seq uint32) any { return &control.RemoveCustomer{Seq: seq, ID: id} })
+}
+
+// MoveComputer moves the computer with the given fingerprint to the customer
+// with id customer, or to no customer when it is empty.
+func (c *Conn) MoveComputer(fingerprint, customer string) <-chan error {
+	return c.command(func(seq uint32) any {
+		return &control.MoveComputer{Seq: seq, Fingerprint: fingerprint, Customer: customer}
 	})
 }
 
@@ -214,10 +247,11 @@ func (c *Conn) UnregisterTechie(name string) <-chan error {
 	})
 }
 
-// RegisterComputer registers a computer key line; name overrides the comment.
-func (c *Conn) RegisterComputer(line, name string) <-chan error {
+// RegisterComputer registers a computer key line; name overrides the comment
+// and customer is the id of its customer, or empty.
+func (c *Conn) RegisterComputer(line, name, customer string) <-chan error {
 	return c.command(func(seq uint32) any {
-		return &control.RegisterComputer{Seq: seq, PublicKey: line, Name: name}
+		return &control.RegisterComputer{Seq: seq, PublicKey: line, Name: name, Customer: customer}
 	})
 }
 

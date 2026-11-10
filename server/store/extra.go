@@ -19,16 +19,52 @@ type (
 	plainState    State
 	plainTechie   Techie
 	plainComputer Computer
+	plainCustomer Customer
 )
 
+// UnmarshalJSON reads state.json. The limited techies are read from
+// limited_techies into Techies, with Limited set.
 func (st *State) UnmarshalJSON(b []byte) error {
 	var err error
 	st.Extra, err = unmarshalWithExtra(b, (*plainState)(st))
+	if err != nil {
+		return err
+	}
+	for _, h := range st.LimitedTechies {
+		h.Limited = true
+		if h.Customers == nil {
+			h.Customers = []string{}
+		}
+		st.Techies = append(st.Techies, h)
+	}
+	st.LimitedTechies = nil
+	return nil
+}
+
+// MarshalJSON writes state.json, with the limited techies in
+// limited_techies.
+func (st State) MarshalJSON() ([]byte, error) {
+	var limited []Techie
+	for _, h := range st.Techies {
+		if h.Limited {
+			limited = append(limited, h)
+		}
+	}
+	if limited != nil {
+		st.Techies = slices.DeleteFunc(slices.Clone(st.Techies), func(h Techie) bool { return h.Limited })
+	}
+	st.LimitedTechies = limited
+	return marshalWithExtra(plainState(st), st.Extra)
+}
+
+func (cu *Customer) UnmarshalJSON(b []byte) error {
+	var err error
+	cu.Extra, err = unmarshalWithExtra(b, (*plainCustomer)(cu))
 	return err
 }
 
-func (st State) MarshalJSON() ([]byte, error) {
-	return marshalWithExtra(plainState(st), st.Extra)
+func (cu Customer) MarshalJSON() ([]byte, error) {
+	return marshalWithExtra(plainCustomer(cu), cu.Extra)
 }
 
 func (h *Techie) UnmarshalJSON(b []byte) error {

@@ -2,6 +2,7 @@ package views
 
 import (
 	"errors"
+	"slices"
 	"strings"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -25,6 +26,14 @@ type registerPage struct {
 	line      string
 	parseErr  error
 	nameFor   string // key line the name field was filled for
+
+	// customer is the chosen customer id of a computer, once customerSet;
+	// until then it follows the customer last used (PLAN.md 13.4).
+	customer    string
+	customerSet bool
+	// someCustomers limits a new techie to the customers in only.
+	someCustomers bool
+	only          map[string]bool
 
 	busy   bool
 	result string // last outcome, shown under the button
@@ -78,6 +87,98 @@ func (p *registerPage) reset() {
 	p.parsedFor, p.nameFor = "", ""
 	p.pubKey, p.comment, p.line, p.parseErr = nil, "", "", nil
 	p.result, p.failed = "", false
+	p.customer, p.customerSet = "", false
+	p.someCustomers, p.only = false, nil
+}
+
+// regCustomer returns the customer a new computer goes to: the one chosen,
+// else the one last used, as long as this techie may still use it. A
+// limited techie always gets one of its own customers.
+func (a *App) regCustomer(p *registerPage) string {
+	limited, mine := a.myLimit()
+	ok := func(id string) bool {
+		if limited {
+			return slices.Contains(mine, id)
+		}
+		return id == "" || a.customerName(id) != ""
+	}
+	if p.customerSet && ok(p.customer) {
+		return p.customer
+	}
+	if ok(a.cust.lastUsed) {
+		return a.cust.lastUsed
+	}
+	if limited {
+		for _, cu := range a.customerList() {
+			if slices.Contains(mine, cu.ID) {
+				return cu.ID
+			}
+		}
+	}
+	return ""
+}
+
+// regLimit returns the limit of a new techie: nil for all customers, else
+// the chosen customer ids that still exist.
+func (a *App) regLimit(p *registerPage) []string {
+	if !p.someCustomers {
+		return nil
+	}
+	ids := []string{}
+	for _, cu := range a.customerList() {
+		if p.only[cu.ID] {
+			ids = append(ids, cu.ID)
+		}
+	}
+	return ids
+}
+
+// drawRegCustomers draws the customer choice of a Register page from y in
+// width w and returns the y below it: one customer for a computer, all or
+// some customers for a techie. It draws nothing without customers.
+func (a *App) drawRegCustomers(p *registerPage, id string, x, y, w float32) float32 {
+	c := a.ui
+	if !a.hasCustomers() {
+		return y
+	}
+	limited, mine := a.myLimit()
+	if !p.techie {
+		c.Text(ui.Regular, ui.SizeSmall, i18n.Trans("CUSTOMER"), x, y, ui.ColMuted)
+		y += 22
+		cur := a.regCustomer(p)
+		chips := a.customerChips(func(id string) bool { return id == cur }, !limited)
+		if limited {
+			chips = slices.DeleteFunc(chips, func(ch chip) bool { return !slices.Contains(mine, ch.key) })
+		}
+		if key, ok := a.drawChips(id+"customer", chips, x, y, w, p.busy); ok {
+			p.customer, p.customerSet = chipCustomer(key), true
+		}
+		_, h := a.layoutChips(chips, x, y, w)
+		return y + h + 14
+	}
+	c.Text(ui.Regular, ui.SizeSmall, i18n.Trans("CUSTOMERS this techie can help"), x, y, ui.ColMuted)
+	y += 22
+	all := !p.someCustomers
+	if c.Checkbox(id+"allcustomers", rl.NewRectangle(x, y, min(w, 420), 28), i18n.Trans("All customers, and computers without customer"), &all) {
+		p.someCustomers = !all
+	}
+	y += 34
+	if p.someCustomers {
+		if p.only == nil {
+			p.only = map[string]bool{}
+		}
+		chips := a.customerChips(func(id string) bool { return p.only[id] }, false)
+		if key, ok := a.drawChips(id+"only", chips, x, y, w, p.busy); ok {
+			p.only[key] = !p.only[key]
+		}
+		_, h := a.layoutChips(chips, x, y, w)
+		y += h + 8
+		if len(a.regLimit(p)) == 0 {
+			c.Text(ui.Regular, ui.SizeSmall, i18n.Trans("Choose at least one customer."), x, y, ui.ColWarn)
+			y += 22
+		}
+	}
+	return y + 6
 }
 
 // parse re-parses the pasted text when it changed. A newly found key fills
@@ -182,6 +283,7 @@ func (a *App) drawRegister(p *registerPage, x, y, w float32) float32 {
 			c.Text(ui.Regular, ui.SizeSmall, nameRule, x, y, ui.ColError)
 			y += 22
 		}
+		y = a.drawRegCustomers(p, id, x, y, w)
 		c.Text(ui.Regular, ui.SizeSmall, fpLabel, x, y, ui.ColMuted)
 		y += 22
 		y = a.bigFingerprint(fp, x, y, w)
@@ -201,7 +303,7 @@ func (a *App) drawRegister(p *registerPage, x, y, w float32) float32 {
 	}
 
 	y += 8
-	ready := p.pubKey != nil && p.nameOK()
+	ready := p.pubKey != nil && p.nameOK() && (!p.techie || !p.someCustomers || len(a.regLimit(p)) > 0)
 	regL, regingL := i18n.Trans("Register"), i18n.Trans("Registering…")
 	label := regL
 	if p.busy {
@@ -265,16 +367,27 @@ func (a *App) register(p *registerPage) {
 		return
 	}
 	name := strings.TrimSpace(p.name.Edit.String())
-	p.busy, p.result = true, ""
-	send := a.backend.RegisterComputer
+	var res <-chan error
+	customer := ""
 	if p.techie {
-		send = a.backend.RegisterTechie
+		limit := a.regLimit(p)
+		if limit != nil && len(limit) == 0 {
+			return
+		}
+		res = a.backend.RegisterTechie(p.line, name, limit)
+	} else {
+		customer = a.regCustomer(p)
+		res = a.backend.RegisterComputer(p.line, name, customer)
 	}
-	a.run(send(p.line, name), func(err error) {
+	p.busy, p.result = true, ""
+	a.run(res, func(err error) {
 		p.busy = false
 		if err != nil {
 			p.result, p.failed = i18n.Trans("Not registered: {0}", err), true
 			return
+		}
+		if !p.techie {
+			a.cust.lastUsed = customer
 		}
 		// Back to the list, where the new entry shows. A Register tab of
 		// the other kind opened meanwhile stays.

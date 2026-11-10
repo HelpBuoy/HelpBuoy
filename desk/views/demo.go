@@ -66,7 +66,11 @@ func newDemo(a *App) *demo {
 			RegisteredBy: "techie", RegisteredAt: now.Add(-30 * 24 * time.Hour), LastSeen: now.Add(-26 * time.Hour),
 		}
 	}
-	p := &control.Presence{Techies: []control.TechieInfo{{Name: "techie", Online: true}, {Name: "bob", Online: true}}}
+	bob, _, _ := newKey("bob")
+	p := &control.Presence{Techies: []control.TechieInfo{
+		{Name: "techie", Online: true, Fingerprint: a.key.Fingerprint},
+		{Name: "bob", Online: true, Fingerprint: ssh.FingerprintSHA256(bob.PublicKey())},
+	}}
 	anna := computer("anna@ANNA-LAPTOP", true)
 	jan := computer("jan@KANTOOR-PC", true)
 	other, _, _ := newKey("")
@@ -78,6 +82,9 @@ func newDemo(a *App) *demo {
 	lisa := computer("lisa@LISA-PC", false)
 	kees := computer("kees@KEES-LAPTOP", false)
 	kees.LastSeen = now.Add(-2 * time.Hour)
+	p.Customers = []control.CustomerInfo{{ID: "demo-acme", Name: "Acme Ltd"}, {ID: "demo-family", Name: "Family"}}
+	jan.Customer, piet.Customer, kees.Customer = "demo-acme", "demo-acme", "demo-acme"
+	oma.Customer, anna.Customer = "demo-family", "demo-family"
 	p.Computers = []control.ComputerInfo{piet, oma, anna, lisa, jan, kees}
 	a.setPresence(p)
 	a.setServerInfo(&control.ServerInfo{Address: "helpme.example.com:443", Company: "Example Inc", Phone: "+1 234 567 890", Description: "Monday to Friday 9:00 to 17:00"})
@@ -91,7 +98,7 @@ func done(err error) <-chan error {
 	return c
 }
 
-func (d *demo) RegisterComputer(line, name string) <-chan error {
+func (d *demo) RegisterComputer(line, name, customer string) <-chan error {
 	key, comment, err := identity.ParseLine(line)
 	if err != nil {
 		return done(err)
@@ -106,8 +113,81 @@ func (d *demo) RegisterComputer(line, name string) <-chan error {
 			return done(fmt.Errorf("already registered as %s", c.Name))
 		}
 	}
-	p.Computers = append(p.Computers, control.ComputerInfo{Fingerprint: fp, Name: name, RegisteredBy: d.a.me, RegisteredAt: time.Now()})
+	p.Computers = append(p.Computers, control.ComputerInfo{Fingerprint: fp, Name: name, RegisteredBy: d.a.me, RegisteredAt: time.Now(), Customer: customer})
 	return done(nil)
+}
+
+// AddCustomer adds a demo customer locally, with the server's rules.
+func (d *demo) AddCustomer(name string) <-chan error {
+	name = strings.TrimSpace(name)
+	if !validCustomerName(name) {
+		return done(fmt.Errorf("name must be 1 to %d printable characters", control.MaxCustomerName))
+	}
+	p := d.a.presence
+	for _, cu := range p.Customers {
+		if strings.EqualFold(cu.Name, name) {
+			return done(fmt.Errorf("customer %q already exists", cu.Name))
+		}
+	}
+	p.Customers = append(p.Customers, control.CustomerInfo{ID: control.NewRequestID()[:16], Name: name})
+	return done(nil)
+}
+
+// RenameCustomer renames a demo customer locally.
+func (d *demo) RenameCustomer(id, name string) <-chan error {
+	name = strings.TrimSpace(name)
+	p := d.a.presence
+	for i, cu := range p.Customers {
+		if cu.ID == id {
+			p.Customers[i].Name = name
+			return done(nil)
+		}
+	}
+	return done(fmt.Errorf("no customer %q", id))
+}
+
+// RemoveCustomer removes a demo customer locally; its computers stay.
+func (d *demo) RemoveCustomer(id string) <-chan error {
+	p := d.a.presence
+	for i, cu := range p.Customers {
+		if cu.ID == id {
+			p.Customers = append(p.Customers[:i:i], p.Customers[i+1:]...)
+			for j := range p.Computers {
+				if p.Computers[j].Customer == id {
+					p.Computers[j].Customer = ""
+				}
+			}
+			return done(nil)
+		}
+	}
+	return done(fmt.Errorf("no customer %q", id))
+}
+
+// MoveComputer moves a demo computer to another customer locally.
+func (d *demo) MoveComputer(fp, customer string) <-chan error {
+	p := d.a.presence
+	for i := range p.Computers {
+		if p.Computers[i].Fingerprint == fp {
+			p.Computers[i].Customer = customer
+			return done(nil)
+		}
+	}
+	return done(fmt.Errorf("no computer with fingerprint %s", fp))
+}
+
+// LimitTechie changes a demo techie's customers locally.
+func (d *demo) LimitTechie(name string, limit []string) <-chan error {
+	if name == d.a.me {
+		return done(fmt.Errorf("you cannot change your own limit"))
+	}
+	p := d.a.presence
+	for i := range p.Techies {
+		if p.Techies[i].Name == name {
+			p.Techies[i].Limited, p.Techies[i].Customers = limit != nil, limit
+			return done(nil)
+		}
+	}
+	return done(fmt.Errorf("no techie named %q", name))
 }
 
 // SetServerInfo changes who runs the demo server locally, with the server's
@@ -144,7 +224,7 @@ func (d *demo) DecideListing(fp string, req control.ListingRequest, allow bool) 
 }
 
 // RegisterTechie adds a demo techie locally.
-func (d *demo) RegisterTechie(line, name string) <-chan error {
+func (d *demo) RegisterTechie(line, name string, limit []string) <-chan error {
 	key, _, err := identity.ParseLine(line)
 	if err != nil {
 		return done(err)
@@ -159,7 +239,7 @@ func (d *demo) RegisterTechie(line, name string) <-chan error {
 			return done(fmt.Errorf("key %s is already the key of techie %q", fp, h.Name))
 		}
 	}
-	p.Techies = append(p.Techies, control.TechieInfo{Name: name, Fingerprint: fp})
+	p.Techies = append(p.Techies, control.TechieInfo{Name: name, Fingerprint: fp, Limited: limit != nil, Customers: limit})
 	return done(nil)
 }
 

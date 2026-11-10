@@ -65,8 +65,13 @@ const (
 // backend is what the views need from the server connection; the demo mode
 // has its own.
 type backend interface {
-	RegisterComputer(line, name string) <-chan error
-	RegisterTechie(line, name string) <-chan error
+	RegisterComputer(line, name, customer string) <-chan error
+	RegisterTechie(line, name string, limit []string) <-chan error
+	LimitTechie(name string, limit []string) <-chan error
+	AddCustomer(name string) <-chan error
+	RenameCustomer(id, name string) <-chan error
+	RemoveCustomer(id string) <-chan error
+	MoveComputer(fingerprint, customer string) <-chan error
 	UnregisterTechie(name string) <-chan error
 	RenameComputer(fingerprint, name string) <-chan error
 	UnregisterComputer(fingerprint string) <-chan error
@@ -152,6 +157,8 @@ type App struct {
 	deciding      map[string]bool      // listing requests with a DecideListing in flight, by listingKey
 	offlineOpen   bool
 	rename        renameState
+	cust          custState  // customers on the Computers tab
+	limitEdit     limitState // changing a techie's customers on the Techies tab
 
 	tabs       []*tab
 	active     int          // index into tabs
@@ -198,6 +205,7 @@ func New(opts Options) *App {
 	a.ui.SetIcon(opts.Icon)
 	a.reg.init(false)
 	a.regTechie.init(true)
+	a.cust.init()
 	a.infoForm.init()
 	a.cs.init()
 	if opts.Demo {
@@ -585,6 +593,11 @@ func (a *App) sessionName(st *sessionTab) string {
 	if a.presence != nil {
 		for _, c := range a.presence.Computers {
 			if c.Fingerprint == st.s.Info.Fingerprint && c.Name != "" {
+				// The customer comes first, so a techie with several
+				// sessions sees whose computer each is (PLAN.md 13.4).
+				if cu := a.customerName(c.Customer); cu != "" {
+					return cu + " · " + c.Name
+				}
 				return c.Name
 			}
 		}
@@ -642,8 +655,10 @@ func (a *App) leaveTab(i int) {
 			a.endRename()
 		}
 		a.confirmRemove = ""
+		a.cust.reset()
 	case tabTechies:
 		a.confirmRemove = ""
+		a.limitEdit = limitState{}
 	}
 }
 

@@ -211,6 +211,27 @@ func (a *App) drawServerInfo(x, y, w float32) float32 {
 	return y + 12
 }
 
+// drawServerInfoReadOnly shows who runs the server to a techie limited to
+// some customers, who may not change it.
+func (a *App) drawServerInfoReadOnly(x, y, w float32) float32 {
+	c := a.ui
+	for _, f := range []struct{ label, value string }{
+		{i18n.Trans("Company name"), a.info.Company},
+		{i18n.Trans("Phone number"), a.info.Phone},
+		{i18n.Trans("Address computers use (optional)"), a.info.Address},
+		{i18n.Trans("Description, for example opening hours (optional)"), a.info.Description},
+	} {
+		if f.value == "" {
+			continue
+		}
+		y = label(c, f.label, x, y)
+		c.Text(ui.Regular, ui.SizeBody, c.Ellipsize(ui.Regular, ui.SizeBody, f.value, w), x, y, ui.ColText)
+		y += 30
+	}
+	y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("You help only some customers of this server, so you can't change this."), x, y, w, ui.ColMuted)
+	return y + 16
+}
+
 // saveServerInfo sends SetServerInfo.
 func (a *App) saveServerInfo(info control.ServerInfo) {
 	f := &a.infoForm
@@ -263,7 +284,10 @@ func (a *App) drawServer(x, y, w float32) float32 {
 		c.Text(ui.Regular, ui.SizeBody, i18n.Trans("Not known yet; pinned on the first connection."), x, y, ui.ColMuted)
 	}
 	y += 34
-	if a.info != nil {
+	switch {
+	case a.info != nil && a.limited():
+		y = a.drawServerInfoReadOnly(x, y, w)
+	case a.info != nil:
 		y = a.drawServerInfo(x, y, w)
 	}
 	if a.demo == nil {

@@ -540,7 +540,7 @@ func (c *conn) writer(ch ssh.Channel) {
 				return
 			}
 			if pres {
-				b, gen := c.s.reg.Presence()
+				b, gen := c.s.reg.Presence(c.rc)
 				if gen != sentGen {
 					if err := fw.WriteFrame(uint8(control.MsgPresence), b); err != nil {
 						c.close()

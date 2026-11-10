@@ -46,12 +46,20 @@ commands:
                                          (default 127.0.0.1,::1)
     [--vhosts DIR]                       http and https: serve every virtual host in DIR (see vhost)
   techie list                            list techies
-  techie add NAME 'ssh-ed25519 ...'      add a techie key
+  techie add NAME 'ssh-ed25519 ...'      add a techie key; with --customer C (repeatable) the
+                                         techie only reaches the computers of those customers
+  techie limit NAME CUSTOMER... | --all  limit a techie to some customers, or lift the limit
   techie remove NAME                     remove a techie
-  computer list                          list registered computers
-  computer add 'ssh-ed25519 ...' [NAME]  register a computer key (NAME defaults to the key comment)
+  computer list [--customer C]           list registered computers, or those of one customer
+  computer add 'ssh-ed25519 ...' [NAME]  register a computer key (NAME defaults to the key comment);
+                                         --customer C puts it in a customer
   computer rename SHA256:... NAME        rename a registered computer
+  computer move SHA256:... CUSTOMER      move a computer to a customer; --none for no customer
   computer remove SHA256:...             remove a registered computer
+  customer list                          list customers with their number of computers
+  customer add NAME                      add a customer, a group of computers
+  customer rename CUSTOMER NAME          rename a customer
+  customer remove CUSTOMER               remove a customer; its computers are kept, without customer
   info [--company C] [--phone P]         print or set who runs this server, shown to users waiting
        [--address A] [--description D]   for a techie; the company name and phone number are required
                                          before computers can connect
@@ -90,6 +98,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		err = techieCmd(args[1:], stdout, stderr)
 	case "computer":
 		err = computerCmd(args[1:], stdout, stderr)
+	case "customer":
+		err = customerCmd(args[1:], stdout, stderr)
 	case "info":
 		err = infoCmd(args[1:], stdout, stderr)
 	case "hostkey":
@@ -159,11 +169,19 @@ func openStore(state *stateFlags) (*store.Store, error) {
 
 func techieCmd(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("%w: techie list|add|remove", errUsage)
+		return fmt.Errorf("%w: techie list|add|limit|remove", errUsage)
 	}
 	fs := flag.NewFlagSet("techie "+args[0], flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	state := addStateFlags(fs)
+	var customers stringList
+	all := false
+	switch args[0] {
+	case "add":
+		fs.Var(&customers, "customer", "limit the techie to this customer (repeatable)")
+	case "limit":
+		fs.BoolVar(&all, "all", false, "lift the limit: the techie reaches every computer")
+	}
 	pos, err := parse(fs, args[1:])
 	if err != nil {
 		return err
@@ -182,21 +200,42 @@ func techieCmd(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 		tw := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(tw, "NAME\tFINGERPRINT")
+		fmt.Fprintln(tw, "NAME\tFINGERPRINT\tCUSTOMERS")
 		for i, h := range idx.State.Techies {
-			fmt.Fprintf(tw, "%s\t%s\n", h.Name, idx.TechieFingerprint(i))
+			fmt.Fprintf(tw, "%s\t%s\t%s\n", h.Name, idx.TechieFingerprint(i), limitText(idx.State, h))
 		}
 		tw.Flush()
 	case "add":
 		if len(pos) != 2 {
-			return fmt.Errorf("%w: techie add NAME 'ssh-ed25519 ...'", errUsage)
+			return fmt.Errorf("%w: techie add NAME 'ssh-ed25519 ...' [--customer C ...]", errUsage)
 		}
-		_, _, err := st.Update(func(s *store.State) error { return s.AddTechie(pos[0], pos[1]) })
+		_, _, err := st.Update(func(s *store.State) error {
+			if err := s.AddTechie(pos[0], pos[1]); err != nil {
+				return err
+			}
+			if len(customers) == 0 {
+				return nil
+			}
+			return s.LimitTechie(strings.TrimSpace(pos[0]), true, customers)
+		})
 		if err != nil {
 			return err
 		}
 		k, _, _ := auth.ParseKey(pos[1])
 		fmt.Fprintf(stdout, "added techie %s (%s)\n", pos[0], auth.Fingerprint(k))
+	case "limit":
+		if len(pos) == 0 || all == (len(pos) > 1) {
+			return fmt.Errorf("%w: techie limit NAME CUSTOMER... | techie limit NAME --all", errUsage)
+		}
+		idx, _, err := st.Update(func(s *store.State) error { return s.LimitTechie(pos[0], !all, pos[1:]) })
+		if err != nil {
+			return err
+		}
+		for _, h := range idx.State.Techies {
+			if h.Name == pos[0] {
+				fmt.Fprintf(stdout, "techie %s reaches %s\n", h.Name, limitText(idx.State, h))
+			}
+		}
 	case "remove":
 		if len(pos) != 1 {
 			return fmt.Errorf("%w: techie remove NAME", errUsage)
@@ -206,18 +245,36 @@ func techieCmd(args []string, stdout, stderr io.Writer) error {
 		}
 		fmt.Fprintf(stdout, "removed techie %s\n", pos[0])
 	default:
-		return fmt.Errorf("%w: techie list|add|remove", errUsage)
+		return fmt.Errorf("%w: techie list|add|limit|remove", errUsage)
 	}
 	return nil
 }
 
+// limitText describes which customers a techie reaches.
+func limitText(st *store.State, h store.Techie) string {
+	if !h.Limited {
+		return "all"
+	}
+	if len(h.Customers) == 0 {
+		return "none"
+	}
+	return strings.Join(st.CustomerNames(h.Customers), ", ")
+}
+
 func computerCmd(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("%w: computer list|add|rename|remove", errUsage)
+		return fmt.Errorf("%w: computer list|add|rename|move|remove", errUsage)
 	}
 	fs := flag.NewFlagSet("computer "+args[0], flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	state := addStateFlags(fs)
+	customer, none := "", false
+	switch args[0] {
+	case "list", "add":
+		fs.StringVar(&customer, "customer", "", "customer name or id")
+	case "move":
+		fs.BoolVar(&none, "none", false, "move the computer out of its customer")
+	}
 	pos, err := parse(fs, args[1:])
 	if err != nil {
 		return err
@@ -235,14 +292,29 @@ func computerCmd(args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
+		only := ""
+		if customer != "" {
+			i, err := idx.State.FindCustomer(customer)
+			if err != nil {
+				return err
+			}
+			only = idx.State.Customers[i].ID
+		}
 		tw := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(tw, "NAME\tFINGERPRINT\tREGISTERED BY\tREGISTERED AT\tLAST SEEN")
+		fmt.Fprintln(tw, "NAME\tFINGERPRINT\tCUSTOMER\tREGISTERED BY\tREGISTERED AT\tLAST SEEN")
 		for i, c := range idx.State.Computers {
+			if only != "" && c.Customer != only {
+				continue
+			}
 			seen := "never"
 			if !c.LastSeen.IsZero() {
 				seen = c.LastSeen.Local().Format(time.DateTime)
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", c.Name, idx.ComputerFingerprint(i), c.RegisteredBy,
+			cu := "-"
+			if c.Customer != "" {
+				cu = strings.Join(idx.State.CustomerNames([]string{c.Customer}), "")
+			}
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", c.Name, idx.ComputerFingerprint(i), cu, c.RegisteredBy,
 				c.RegisteredAt.Local().Format(time.DateTime), seen)
 		}
 		tw.Flush()
@@ -258,6 +330,10 @@ func computerCmd(args []string, stdout, stderr io.Writer) error {
 		_, _, err := st.Update(func(s *store.State) error {
 			var err error
 			fp, name, err = s.AddComputer(pos[0], name, "admin", time.Now())
+			if err != nil || customer == "" {
+				return err
+			}
+			_, err = s.MoveComputer(fp, customer)
 			return err
 		})
 		if err != nil {
@@ -278,6 +354,28 @@ func computerCmd(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 		fmt.Fprintf(stdout, "renamed computer %s to %s (%s)\n", old, strings.TrimSpace(pos[1]), pos[0])
+	case "move":
+		if none == (len(pos) == 2) || len(pos) < 1 || len(pos) > 2 {
+			return fmt.Errorf("%w: computer move SHA256:... CUSTOMER | computer move SHA256:... --none", errUsage)
+		}
+		to := ""
+		if !none {
+			to = pos[1]
+		}
+		var name string
+		_, _, err := st.Update(func(s *store.State) error {
+			var err error
+			name, err = s.MoveComputer(pos[0], to)
+			return err
+		})
+		if err != nil {
+			return err
+		}
+		if none {
+			fmt.Fprintf(stdout, "moved computer %s (%s) out of its customer\n", name, pos[0])
+		} else {
+			fmt.Fprintf(stdout, "moved computer %s (%s) to %s\n", name, pos[0], strings.TrimSpace(to))
+		}
 	case "remove":
 		if len(pos) != 1 {
 			return fmt.Errorf("%w: computer remove SHA256:...", errUsage)
@@ -293,7 +391,7 @@ func computerCmd(args []string, stdout, stderr io.Writer) error {
 		}
 		fmt.Fprintf(stdout, "removed computer %s (%s)\n", name, pos[0])
 	default:
-		return fmt.Errorf("%w: computer list|add|rename|remove", errUsage)
+		return fmt.Errorf("%w: computer list|add|rename|move|remove", errUsage)
 	}
 	return nil
 }

@@ -35,6 +35,14 @@
 // with DecideListing. Allowing adds the server to ApprovedServers, refusing
 // sends ListingRefused.
 //
+// Customers (PLAN.md 13): the computers of a server are grouped per customer.
+// Presence carries the customers and the customer of every computer. A techie
+// limited to some customers only gets those customers, their computers and
+// the techies that share one of them in Presence, and the server refuses its
+// commands for other computers and the commands that affect every customer:
+// RegisterTechie, UnregisterTechie, LimitTechie, SetServerInfo and the
+// customer commands. Computers are never told their customer.
+//
 // Techie commands carry a Seq; the server answers each with Reply{Seq, Error}.
 // Presence is a full snapshot, sent after Hello and after every change.
 //
@@ -126,6 +134,11 @@ const (
 	MsgSetServerInfo    MsgType = 18
 	MsgUnregisterTechie MsgType = 19
 	MsgDecideListing    MsgType = 23
+	MsgAddCustomer      MsgType = 24
+	MsgRenameCustomer   MsgType = 25
+	MsgRemoveCustomer   MsgType = 26
+	MsgMoveComputer     MsgType = 27
+	MsgLimitTechie      MsgType = 28
 	// server -> any
 	MsgServerInfo MsgType = 17
 	// server -> computer
@@ -261,11 +274,22 @@ type ComputerHello struct {
 	UserMachine string `json:"user_machine"` // current %USERNAME%@%COMPUTERNAME%, lower-case user
 }
 
-// Presence is a full snapshot for techies.
+// Presence is a full snapshot for techies. A techie limited to some
+// customers only gets what it may see (PLAN.md 13.3).
 type Presence struct {
 	Computers []ComputerInfo `json:"computers"` // all registered computers, online or not
 	Techies   []TechieInfo   `json:"techies"`   // all techies, online or not
+	Customers []CustomerInfo `json:"customers,omitempty"`
 }
+
+// CustomerInfo is one customer: a group of computers (PLAN.md 13).
+type CustomerInfo struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// MaxCustomerName is the longest customer name, in characters.
+const MaxCustomerName = 64
 
 // ComputerInfo describes one registered computer.
 type ComputerInfo struct {
@@ -282,6 +306,8 @@ type ComputerInfo struct {
 	Approved []ApprovedServer `json:"approved,omitempty"`
 	// Listings are its open requests to approve another server.
 	Listings []ListingRequest `json:"listings,omitempty"`
+	// Customer is the id of its customer, empty for none (PLAN.md 13).
+	Customer string `json:"customer,omitempty"`
 }
 
 // RequestState of the request a techie's Connect creates.
@@ -306,6 +332,9 @@ type TechieInfo struct {
 	Name        string `json:"name"`
 	Fingerprint string `json:"fingerprint"`
 	Online      bool   `json:"online"`
+	// Limited techies only reach the computers of Customers (PLAN.md 13.3).
+	Limited   bool     `json:"limited,omitempty"`
+	Customers []string `json:"customers,omitempty"`
 }
 
 // RegisterComputer registers a computer key. PublicKey is the authorized_keys line
@@ -315,14 +344,57 @@ type RegisterComputer struct {
 	Seq       uint32 `json:"seq"`
 	PublicKey string `json:"public_key"`
 	Name      string `json:"name,omitempty"`
+	// Customer is the id of the computer's customer, empty for none. A
+	// limited techie must give one of its own customers.
+	Customer string `json:"customer,omitempty"`
 }
 
 // RegisterTechie adds another techie key, like helpbuoy-server techie add. Name
-// is required (1 to 64 characters, no spaces).
+// is required (1 to 64 characters, no spaces). Limited with Customers adds
+// a techie limited to those customers.
 type RegisterTechie struct {
-	Seq       uint32 `json:"seq"`
-	PublicKey string `json:"public_key"`
-	Name      string `json:"name"`
+	Seq       uint32   `json:"seq"`
+	PublicKey string   `json:"public_key"`
+	Name      string   `json:"name"`
+	Limited   bool     `json:"limited,omitempty"`
+	Customers []string `json:"customers,omitempty"`
+}
+
+// AddCustomer adds a customer. The name is unique on the server.
+type AddCustomer struct {
+	Seq  uint32 `json:"seq"`
+	Name string `json:"name"`
+}
+
+// RenameCustomer renames the customer with id ID.
+type RenameCustomer struct {
+	Seq  uint32 `json:"seq"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// RemoveCustomer removes a customer. Its computers move to no customer, and
+// limited techies lose it.
+type RemoveCustomer struct {
+	Seq uint32 `json:"seq"`
+	ID  string `json:"id"`
+}
+
+// MoveComputer moves a computer to the customer with id Customer, or to no
+// customer when it is empty.
+type MoveComputer struct {
+	Seq         uint32 `json:"seq"`
+	Fingerprint string `json:"fingerprint"`
+	Customer    string `json:"customer"`
+}
+
+// LimitTechie limits the techie Name to Customers, or lifts the limit when
+// Limited is false. A techie cannot change its own limit.
+type LimitTechie struct {
+	Seq       uint32   `json:"seq"`
+	Name      string   `json:"name"`
+	Limited   bool     `json:"limited"`
+	Customers []string `json:"customers,omitempty"`
 }
 
 // RenameComputer changes the name techies see for a registered computer (and the
@@ -503,6 +575,16 @@ func typeOf(m any) (MsgType, error) {
 		return MsgListingRefused, nil
 	case *DecideListing, DecideListing:
 		return MsgDecideListing, nil
+	case *AddCustomer, AddCustomer:
+		return MsgAddCustomer, nil
+	case *RenameCustomer, RenameCustomer:
+		return MsgRenameCustomer, nil
+	case *RemoveCustomer, RemoveCustomer:
+		return MsgRemoveCustomer, nil
+	case *MoveComputer, MoveComputer:
+		return MsgMoveComputer, nil
+	case *LimitTechie, LimitTechie:
+		return MsgLimitTechie, nil
 	}
 	return 0, fmt.Errorf("control: unknown message type %T", m)
 }
@@ -552,6 +634,16 @@ func newOf(t MsgType) (any, error) {
 		return &ListingRefused{}, nil
 	case MsgDecideListing:
 		return &DecideListing{}, nil
+	case MsgAddCustomer:
+		return &AddCustomer{}, nil
+	case MsgRenameCustomer:
+		return &RenameCustomer{}, nil
+	case MsgRemoveCustomer:
+		return &RemoveCustomer{}, nil
+	case MsgMoveComputer:
+		return &MoveComputer{}, nil
+	case MsgLimitTechie:
+		return &LimitTechie{}, nil
 	}
 	return nil, fmt.Errorf("control: unknown message type byte %d", t)
 }

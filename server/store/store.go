@@ -1,6 +1,7 @@
 // Package store keeps the server's persistent state, state.json in the state
 // directory: who runs the server, the techie keys and the registered computer
-// keys with the servers approved for each (PLAN.md 12).
+// keys with the servers approved for each (PLAN.md 12), and the customers the
+// computers are grouped in (PLAN.md 13).
 //
 // Writes go to a temporary file that is synced and then renamed over
 // state.json, so readers always see a complete file. A lock file serializes
@@ -11,6 +12,8 @@ package store
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,7 +44,21 @@ const (
 type Techie struct {
 	Name      string `json:"name"`
 	PublicKey string `json:"public_key"` // authorized_keys line
-	Extra     Extra  `json:"-"`
+	// Limited techies only reach the computers of Customers, a list of
+	// customer ids that may be empty (PLAN.md 13.3). They are stored in
+	// limited_techies instead of techies, so an older server that doesn't
+	// know about limits treats their keys as unknown instead of letting them
+	// see every computer.
+	Limited   bool     `json:"-"`
+	Customers []string `json:"customers,omitempty"`
+	Extra     Extra    `json:"-"`
+}
+
+// Customer is a group of computers on the server (PLAN.md 13).
+type Customer struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Extra Extra  `json:"-"`
 }
 
 // Computer is a registered computer key.
@@ -55,7 +72,9 @@ type Computer struct {
 	// Listings its open requests to approve one (PLAN.md 12.3).
 	Approved []control.ApprovedServer `json:"approved,omitempty"`
 	Listings []control.ListingRequest `json:"listings,omitempty"`
-	Extra    Extra                    `json:"-"`
+	// Customer is the id of the computer's customer, empty for none.
+	Customer string `json:"customer,omitempty"`
+	Extra    Extra  `json:"-"`
 }
 
 // State is the content of state.json.
@@ -67,7 +86,11 @@ type State struct {
 	Description string     `json:"description,omitempty"`
 	Techies     []Techie   `json:"techies"`
 	Computers   []Computer `json:"computers"`
-	Extra       Extra      `json:"-"`
+	Customers   []Customer `json:"customers,omitempty"`
+	// LimitedTechies is only used to read and write state.json: the limited
+	// techies are in Techies with Limited set (see Techie).
+	LimitedTechies []Techie `json:"limited_techies,omitempty"`
+	Extra          Extra    `json:"-"`
 }
 
 // Identity is what a fingerprint maps to.
@@ -75,6 +98,9 @@ type Identity struct {
 	Role    control.Role
 	Name    string // techie name or computer name; empty for pending
 	KeyLine string // authorized_keys line; empty for pending
+	// Limited techies only reach the computers of these customer ids.
+	Limited   bool
+	Customers []string
 }
 
 // Index is a read-only lookup view of a State by key fingerprint. It is
@@ -83,15 +109,33 @@ type Index struct {
 	State     *State
 	techies   map[string]int // fingerprint -> index in State.Techies
 	computers map[string]int
-	fps       []string // fingerprint of State.Computers[i]
-	hfps      []string // fingerprint of State.Techies[i]
+	fps       []string       // fingerprint of State.Computers[i]
+	hfps      []string       // fingerprint of State.Techies[i]
+	customers map[string]int // customer id -> index in State.Customers
 }
 
 // NewIndex validates st and builds its index. st must not be changed afterwards.
 func NewIndex(st *State) (*Index, error) {
-	idx := &Index{State: st, techies: map[string]int{}, computers: map[string]int{}}
+	idx := &Index{State: st, techies: map[string]int{}, computers: map[string]int{}, customers: map[string]int{}}
 	if err := checkInfo(st.Info(), false); err != nil {
 		return nil, err
+	}
+	cnames := map[string]bool{}
+	for i, cu := range st.Customers {
+		if !validCustomerID(cu.ID) {
+			return nil, fmt.Errorf("customer %q: bad id %q", cu.Name, cu.ID)
+		}
+		if _, dup := idx.customers[cu.ID]; dup {
+			return nil, fmt.Errorf("customer id %q is used twice", cu.ID)
+		}
+		if _, err := auth.CleanName(cu.Name, control.MaxCustomerName); err != nil {
+			return nil, fmt.Errorf("customer %q: %w", cu.Name, err)
+		}
+		if cnames[strings.ToLower(cu.Name)] {
+			return nil, fmt.Errorf("customer %q is listed twice", cu.Name)
+		}
+		cnames[strings.ToLower(cu.Name)] = true
+		idx.customers[cu.ID] = i
 	}
 	names := map[string]bool{}
 	for i, h := range st.Techies {
@@ -100,6 +144,14 @@ func NewIndex(st *State) (*Index, error) {
 		}
 		if names[h.Name] {
 			return nil, fmt.Errorf("techie %q is listed twice", h.Name)
+		}
+		if !h.Limited && len(h.Customers) > 0 {
+			return nil, fmt.Errorf("techie %q has customers but is not limited", h.Name)
+		}
+		for _, id := range h.Customers {
+			if _, ok := idx.customers[id]; !ok {
+				return nil, fmt.Errorf("techie %q: no customer with id %q", h.Name, id)
+			}
 		}
 		names[h.Name] = true
 		k, _, err := auth.ParseKey(h.PublicKey)
@@ -125,6 +177,9 @@ func NewIndex(st *State) (*Index, error) {
 		if _, dup := idx.computers[fp]; dup {
 			return nil, fmt.Errorf("computer %q: key %s is registered twice", c.Name, fp)
 		}
+		if _, ok := idx.customers[c.Customer]; c.Customer != "" && !ok {
+			return nil, fmt.Errorf("computer %q: no customer with id %q", c.Name, c.Customer)
+		}
 		for _, a := range c.Approved {
 			if err := checkServer(a.Address, a.Fingerprint); err != nil {
 				return nil, fmt.Errorf("computer %q: approved server: %w", c.Name, err)
@@ -145,7 +200,8 @@ func NewIndex(st *State) (*Index, error) {
 func (x *Index) Lookup(fp string) Identity {
 	if i, ok := x.techies[fp]; ok {
 		h := x.State.Techies[i]
-		return Identity{Role: control.RoleTechie, Name: h.Name, KeyLine: h.PublicKey}
+		return Identity{Role: control.RoleTechie, Name: h.Name, KeyLine: h.PublicKey,
+			Limited: h.Limited, Customers: h.Customers}
 	}
 	if i, ok := x.computers[fp]; ok {
 		c := x.State.Computers[i]
@@ -169,13 +225,23 @@ func (x *Index) Computer(fp string) (Computer, bool) {
 	return x.State.Computers[i], true
 }
 
+// Customer returns the customer with the id.
+func (x *Index) Customer(id string) (Customer, bool) {
+	i, ok := x.customers[id]
+	if !ok {
+		return Customer{}, false
+	}
+	return x.State.Customers[i], true
+}
+
 // Clone returns a deep copy.
 func (st *State) Clone() *State {
 	// Extra maps are shared: they are never changed, only replaced.
-	// The Approved and Listings slices of computers are shared too: they are
-	// replaced, never changed in place.
+	// The Approved and Listings slices of computers and the Customers slices
+	// of techies are shared too: they are replaced, never changed in place.
 	n := *st
 	n.Techies, n.Computers = slices.Clone(st.Techies), slices.Clone(st.Computers)
+	n.Customers = slices.Clone(st.Customers)
 	return &n
 }
 
@@ -615,4 +681,162 @@ func (st *State) SetLastSeen(seen map[string]time.Time) {
 func sameKey(line, fp string) bool {
 	k, _, err := auth.ParseKey(line)
 	return err == nil && auth.Fingerprint(k) == fp
+}
+
+// validCustomerID accepts customer ids as newCustomerID makes them, and any
+// other short lower-case id a newer version might use.
+func validCustomerID(id string) bool {
+	if id == "" || len(id) > 32 {
+		return false
+	}
+	for _, ch := range id {
+		if (ch < '0' || ch > '9') && (ch < 'a' || ch > 'z') && ch != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+// newCustomerID returns a random customer id: 16 lower-case hex digits.
+func newCustomerID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(b)
+}
+
+// FindCustomer returns the index of the customer with id or name ref
+// (names match without regard to case).
+func (st *State) FindCustomer(ref string) (int, error) {
+	ref = strings.TrimSpace(ref)
+	if i := slices.IndexFunc(st.Customers, func(c Customer) bool { return c.ID == ref }); i >= 0 {
+		return i, nil
+	}
+	if i := slices.IndexFunc(st.Customers, func(c Customer) bool { return strings.EqualFold(c.Name, ref) }); i >= 0 {
+		return i, nil
+	}
+	return -1, fmt.Errorf("no customer %q", ref)
+}
+
+// cleanCustomerName checks a new customer name and that no other customer
+// than the one at index self has it.
+func (st *State) cleanCustomerName(name string, self int) (string, error) {
+	name, err := auth.CleanName(name, control.MaxCustomerName)
+	if err != nil {
+		return "", err
+	}
+	for i, c := range st.Customers {
+		if i != self && strings.EqualFold(c.Name, name) {
+			return "", fmt.Errorf("customer %q already exists", c.Name)
+		}
+	}
+	return name, nil
+}
+
+// AddCustomer adds a customer and returns its id.
+func (st *State) AddCustomer(name string) (string, error) {
+	name, err := st.cleanCustomerName(name, -1)
+	if err != nil {
+		return "", err
+	}
+	id := newCustomerID()
+	st.Customers = append(st.Customers, Customer{ID: id, Name: name})
+	return id, nil
+}
+
+// RenameCustomer renames the customer with id or name ref and returns its
+// old name.
+func (st *State) RenameCustomer(ref, name string) (string, error) {
+	i, err := st.FindCustomer(ref)
+	if err != nil {
+		return "", err
+	}
+	if name, err = st.cleanCustomerName(name, i); err != nil {
+		return "", err
+	}
+	old := st.Customers[i].Name
+	st.Customers[i].Name = name
+	return old, nil
+}
+
+// RemoveCustomer removes the customer with id or name ref and returns its
+// name. Its computers move to no customer, and limited techies lose it.
+func (st *State) RemoveCustomer(ref string) (string, error) {
+	i, err := st.FindCustomer(ref)
+	if err != nil {
+		return "", err
+	}
+	cu := st.Customers[i]
+	st.Customers = slices.Delete(st.Customers, i, i+1)
+	for j := range st.Computers {
+		if st.Computers[j].Customer == cu.ID {
+			st.Computers[j].Customer = ""
+		}
+	}
+	for j, h := range st.Techies {
+		if slices.Contains(h.Customers, cu.ID) {
+			st.Techies[j].Customers = slices.DeleteFunc(slices.Clone(h.Customers), func(id string) bool { return id == cu.ID })
+		}
+	}
+	return cu.Name, nil
+}
+
+// MoveComputer puts the computer with fingerprint fp in the customer with id
+// or name ref, or in no customer when ref is empty. It returns the
+// computer's name.
+func (st *State) MoveComputer(fp, ref string) (string, error) {
+	i := slices.IndexFunc(st.Computers, func(c Computer) bool { return sameKey(c.PublicKey, fp) })
+	if i < 0 {
+		return "", fmt.Errorf("no computer with fingerprint %s", fp)
+	}
+	id := ""
+	if strings.TrimSpace(ref) != "" {
+		j, err := st.FindCustomer(ref)
+		if err != nil {
+			return "", err
+		}
+		id = st.Customers[j].ID
+	}
+	st.Computers[i].Customer = id
+	return st.Computers[i].Name, nil
+}
+
+// LimitTechie limits the techie name to the customers with ids or names
+// refs, or lifts the limit when limited is false.
+func (st *State) LimitTechie(name string, limited bool, refs []string) error {
+	i := slices.IndexFunc(st.Techies, func(h Techie) bool { return h.Name == name })
+	if i < 0 {
+		return fmt.Errorf("no techie %q", name)
+	}
+	if !limited {
+		if len(refs) > 0 {
+			return errors.New("customers given for a techie that is not limited")
+		}
+		st.Techies[i].Limited, st.Techies[i].Customers = false, nil
+		return nil
+	}
+	ids := []string{}
+	for _, ref := range refs {
+		j, err := st.FindCustomer(ref)
+		if err != nil {
+			return err
+		}
+		if !slices.Contains(ids, st.Customers[j].ID) {
+			ids = append(ids, st.Customers[j].ID)
+		}
+	}
+	st.Techies[i].Limited, st.Techies[i].Customers = true, ids
+	return nil
+}
+
+// CustomerNames returns the names of customer ids, for messages and lists.
+func (st *State) CustomerNames(ids []string) []string {
+	names := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if i := slices.IndexFunc(st.Customers, func(c Customer) bool { return c.ID == id }); i >= 0 {
+			names = append(names, st.Customers[i].Name)
+		}
+	}
+	return names
 }
