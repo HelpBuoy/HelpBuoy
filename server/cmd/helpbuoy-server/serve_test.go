@@ -21,20 +21,23 @@ import (
 
 func TestParseServe(t *testing.T) {
 	t.Setenv("HELPBUOY_SERVER_VHOSTS", "")
+	t.Setenv("HELPBUOY_SERVER_MODE", "")
+	t.Setenv("HELPBUOY_SERVER_LISTEN", "")
 	state := t.TempDir()
 	ok := []struct {
 		args   []string
 		listen string
 		mode   string
 	}{
-		{[]string{"--state", state}, "127.0.0.1:5959", "http"},
+		{[]string{"--state", state}, ":5959", "ssh"},
+		{[]string{"--state", state, "--mode", "http"}, "127.0.0.1:5959", "http"},
 		{[]string{"--state", state, "--mode", "https"}, ":443", "https"},
 		{[]string{"--state", state, "--mode", "https", "--listen", ":8443"}, ":8443", "https"},
 		{[]string{"--state", state, "--mode", "https", "--cert", "c.pem", "--key", "k.pem"}, ":443", "https"},
 		{[]string{"--state", state, "--mode", "https", "--acme", "--acme-host", "help.example.com"}, ":443", "https"},
 		{[]string{"--state", state, "--mode", "ssh"}, ":5959", "ssh"},
 		{[]string{"--vhosts", state, "--mode", "https", "--acme"}, ":443", "https"},
-		{[]string{"--vhosts", state}, "127.0.0.1:5959", "http"},
+		{[]string{"--vhosts", state, "--mode", "http"}, "127.0.0.1:5959", "http"},
 	}
 	for _, tt := range ok {
 		cfg, err := parseServe(tt.args, io.Discard)
@@ -56,6 +59,7 @@ func TestParseServe(t *testing.T) {
 		{"--state", state, "--vhosts", state},
 		{"--vhosts", state, "--mode", "https", "--acme", "--acme-host", "a.example.com"},
 		{"--vhosts", state, "--mode", "ssh"}, // plain SSH can't name the host
+		{"--vhosts", state},                  // the default mode is ssh
 		{"--state", state, "--trusted-proxy", "proxy.example.com"},
 	} {
 		if _, err := parseServe(args, io.Discard); err == nil {

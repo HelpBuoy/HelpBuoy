@@ -233,6 +233,7 @@
   "Type the server address a techie gave you, for example helpme.example.com.": "Scrivi l'indirizzo del server che ti ha dato un tecnico, per esempio helpme.example.com.",
   "Type the server address you told the computer to use, for example helpme.example.com.": "Scrivi l'indirizzo del server che hai indicato al computer, per esempio helpme.example.com.",
   "Use a different server address": "Usa un altro indirizzo server",
+  "Use system proxy settings": "Usa le impostazioni proxy di sistema",
   "Users waiting for a techie see this, so they know who is helping them and who to call. The company name and phone number are required before computers can connect.": "Gli utenti in attesa di un tecnico vedono queste informazioni, così sanno chi li aiuta e chi chiamare. Il nome dell'azienda e il numero di telefono sono obbligatori prima che i computer possano collegarsi.",
   "Waiting for a techie": "In attesa di un tecnico",
   "Waiting for a techie to add this key. This window changes by itself when that is done.": "In attesa che un tecnico aggiunga questa chiave. Questa finestra cambia da sola quando è fatto.",

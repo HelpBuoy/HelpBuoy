@@ -41,9 +41,9 @@ const (
 	modeHTTP = "http"
 	// modeHTTPS serves the WebSocket with the built-in HTTPS server.
 	modeHTTPS = "https"
-	// modeSSH serves plain SSH without WebSocket and TLS (direct connect).
-	// The apps try HTTPS first and connect again with plain SSH when the
-	// port answers with the server's SSH banner.
+	// modeSSH serves plain SSH without WebSocket and TLS (direct connect),
+	// the default. The apps try HTTPS first and connect again with plain
+	// SSH when the port answers with the server's SSH banner.
 	modeSSH = "ssh"
 )
 
@@ -74,7 +74,7 @@ type serveConfig struct {
 func parseServe(args []string, stderr io.Writer) (serveConfig, error) {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	mode := fs.String("mode", envOr("HELPBUOY_SERVER_MODE", modeHTTP), "http: plain HTTP behind a reverse proxy; https: built-in HTTPS server; ssh: plain SSH (direct connect)")
+	mode := fs.String("mode", envOr("HELPBUOY_SERVER_MODE", modeSSH), "ssh (default): plain SSH, direct connect; http: plain HTTP behind a reverse proxy; https: built-in HTTPS server")
 	listen := fs.String("listen", os.Getenv("HELPBUOY_SERVER_LISTEN"), "address to listen on, host:port or :port (default: http 127.0.0.1:5959, https :443, ssh :5959)")
 	state := fs.String("state", "", "state directory (default: $HELPBUOY_SERVER_STATE, else the per-user data directory)")
 	vhosts := fs.String("vhosts", "", "directory with one state directory per virtual host (default: $HELPBUOY_SERVER_VHOSTS)")

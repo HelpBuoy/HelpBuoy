@@ -2,6 +2,8 @@
 #   systemctl restart helpbuoy-server
 #
 # The server runs in one of three modes:
+#   ssh    plain SSH without WebSocket and TLS (direct connect) on :5959; the
+#          apps try HTTPS first and fall back to it
 #   http   plain HTTP on 127.0.0.1:5959, behind a reverse proxy (Apache, nginx,
 #          HAProxy) that serves HTTPS on port 443 and passes the WebSocket on;
 #          see /usr/share/doc/helpbuoy-server/README.Debian
@@ -10,8 +12,7 @@
 #          "--cert FILE --key FILE" (without one it makes a self-signed one).
 #          Port 443 needs an extra capability, see
 #          /usr/lib/systemd/system/helpbuoy-server.service.
-#   ssh    plain SSH without WebSocket and TLS (direct connect) on :5959
-HELPBUOY_SERVER_MODE=http
+HELPBUOY_SERVER_MODE=ssh
 #
 # Address to listen on, host:port or :port, instead of the mode's default.
 #HELPBUOY_SERVER_LISTEN=

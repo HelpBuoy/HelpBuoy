@@ -20,13 +20,13 @@ The apps connect to `wss://host/helpbuoy` and run SSH inside the WebSocket. An a
 
 The server runs in one of three modes, chosen with `--mode`:
 
-- `http` (the default): plain HTTP on `127.0.0.1:5959`, behind a reverse proxy that serves HTTPS.
+- `ssh` (the default): plain SSH without the WebSocket and TLS (direct connect), on `:5959`.
+- `http`: plain HTTP on `127.0.0.1:5959`, behind a reverse proxy that serves HTTPS.
 - `https`: the built-in HTTPS server, on `:443`.
-- `ssh`: plain SSH without the WebSocket and TLS (direct connect), on `:5959`.
 
 `--listen` picks another address. The apps always try HTTPS first and fall back to plain SSH when that fails and the port answers with an SSH banner, so users type the same kind of address for every mode: `help.example.com`, or `help.example.com:5959` for a server in ssh mode.
 
-In http mode the server runs behind a reverse proxy (nginx, Apache or HAProxy) that serves HTTPS and passes the path `/helpbuoy` on as a WebSocket, keeping the `Host` header and adding `X-Forwarded-For`. [docs/proxy.md](docs/proxy.md) has tested configurations for all three, for several servers behind one proxy and one certificate, either as one process with virtual hosts or as separate processes.
+In http mode (`--mode http`) the server runs behind a reverse proxy (nginx, Apache or HAProxy) that serves HTTPS and passes the path `/helpbuoy` on as a WebSocket, keeping the `Host` header and adding `X-Forwarded-For`. [docs/proxy.md](docs/proxy.md) has tested configurations for all three, for several servers behind one proxy and one certificate, either as one process with virtual hosts or as separate processes.
 
 Without a reverse proxy, `helpbuoy-server serve --mode https` serves HTTPS itself on `:443`, or on the port given with `--listen`. It takes a certificate with `--cert` and `--key` (loaded again when the files change), gets one from Let's Encrypt with `--acme --acme-host help.example.com` (port 443 must be reachable from the internet), or makes a self-signed one. A server on another port is given out as `host:port`. The desk app's own server always works this way, on port 5959.
 

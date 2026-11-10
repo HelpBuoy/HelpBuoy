@@ -42,7 +42,7 @@ type Window struct {
 
 	// ScreenAddress
 	lblHeading, lblAddrHint, lblAddrError *widget
-	edtAddr, btnConnect                   *widget
+	edtAddr, btnConnect, chkProxy         *widget
 	// ScreenKey
 	lblKeyIntro, lblKeyFp, lblServerFp, lblKeyNotice *widget
 	edtKey, btnCopy, lnkChange                       *widget
@@ -147,7 +147,14 @@ func NewWithHost(host Host, icons [][]byte) *Window {
 	w.edtAddr.field.limit = 300
 	w.btnConnect = button(i18n.Trans("Connect"), 334, 106, 102, 28, fontNormal, w.connect)
 	w.btnConnect.isDefault = true
-	w.lblAddrError = label(24, 146, 412, 80, fontNormal, alignLeft)
+	w.chkProxy = newWidget(kindCheck, 24, 142, 412, 22, fontNormal)
+	w.chkProxy.text = i18n.Trans("Use system proxy settings")
+	w.chkProxy.checked = true
+	w.chkProxy.onClick = func() {
+		w.chkProxy.checked = !w.chkProxy.checked
+		w.ctrl.SetUseSystemProxy(w.chkProxy.checked)
+	}
+	w.lblAddrError = label(24, 172, 412, 70, fontNormal, alignLeft)
 	w.lblAddrError.color = colError
 
 	w.lblKeyIntro = label(24, 18, 412, 36, fontNormal, alignLeft)
@@ -199,7 +206,7 @@ func NewWithHost(host Host, icons [][]byte) *Window {
 	w.lblPermNote.color = colGray
 
 	w.widgets = []*widget{
-		w.lblHeading, w.lblAddrHint, w.edtAddr, w.btnConnect, w.lblAddrError,
+		w.lblHeading, w.lblAddrHint, w.edtAddr, w.btnConnect, w.chkProxy, w.lblAddrError,
 		w.lblKeyIntro, w.edtKey, w.btnCopy, w.lblKeyFp, w.lblServerFp, w.lblKeyNotice, w.lnkChange,
 		w.lblComment, w.lblWaiting, w.lblInfoTitle, w.lblWho, w.lblStatus, w.btnDisconnect,
 		w.lblKeyErr, w.btnRemoveKey,
@@ -633,7 +640,7 @@ func (w *Window) apply(v app.View) {
 	}
 
 	addr := v.Screen == app.ScreenAddress
-	show(addr, w.lblHeading, w.lblAddrHint, w.edtAddr, w.btnConnect, w.lblAddrError)
+	show(addr, w.lblHeading, w.lblAddrHint, w.edtAddr, w.btnConnect, w.chkProxy, w.lblAddrError)
 	if addr {
 		w.lblAddrHint.text = i18n.Trans("Type the server address a techie gave you, for example helpme.example.com.")
 		if v.LockedTo != "" {
@@ -644,6 +651,8 @@ func (w *Window) apply(v app.View) {
 		}
 		w.edtAddr.enabled = !v.Connecting
 		w.btnConnect.enabled = !v.Connecting
+		w.chkProxy.enabled = !v.Connecting
+		w.chkProxy.checked = v.UseSystemProxy
 		if v.Connecting {
 			w.btnConnect.text = i18n.Trans("Connecting...")
 			w.lblAddrError.text = ""
@@ -884,6 +893,9 @@ func (w *Window) at(px, py int) *widget {
 		if wd.kind == kindLink {
 			r.Max.X = r.Min.X + w.fonts.width(wd.font, wd.text)
 		}
+		if wd.kind == kindCheck { // the box and its label, not the empty rest
+			r.Max.X = min(r.Max.X, r.Min.X+w.px(22)+w.fonts.width(wd.font, wd.text)+w.px(2))
+		}
 		if p.In(r) {
 			return wd
 		}
@@ -912,7 +924,7 @@ func (w *Window) mouseMove(px, py int, dragging bool) {
 	switch {
 	case wd != nil && wd.kind == kindField && wd.enabled:
 		w.host.SetCursor(CursorText)
-	case wd != nil && wd.kind == kindLink && wd.enabled:
+	case wd != nil && (wd.kind == kindLink || wd.kind == kindCheck) && wd.enabled:
 		w.host.SetCursor(CursorHand)
 	default:
 		w.host.SetCursor(CursorArrow)
@@ -959,7 +971,7 @@ func (w *Window) key(k KeyEvent) {
 		return
 	}
 	switch f.kind {
-	case kindButton, kindLink:
+	case kindButton, kindLink, kindCheck:
 		if k.Key == KeyEnter || k.Char == ' ' {
 			if f.onClick != nil {
 				f.onClick()

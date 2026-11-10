@@ -29,7 +29,7 @@ var version = "dev"
 const usage = `usage: helpbuoy-server <command> [flags]
 
 commands:
-  serve [--mode MODE]                    run the server in one of three modes (default http):
+  serve [--mode MODE]                    run the server in one of three modes (default ssh):
                                            http   plain HTTP on 127.0.0.1:5959, behind a reverse
                                                   proxy (Apache, nginx, HAProxy) that handles HTTPS
                                            https  the built-in HTTPS server, on :443

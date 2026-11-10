@@ -23,6 +23,8 @@ import (
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
 	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 	"github.com/helpbuoy/helpbuoy/proto/servertext"
+	"github.com/helpbuoy/helpbuoy/proto/sysproxy"
+	"github.com/helpbuoy/helpbuoy/proto/transport"
 	"github.com/helpbuoy/helpbuoy/proto/update"
 )
 
@@ -61,6 +63,9 @@ type View struct {
 	// locked to, "" while unlocked. The address screen says that other
 	// servers need its approval.
 	LockedTo string
+	// UseSystemProxy is the "Use system proxy settings" box under the
+	// address field.
+	UseSystemProxy bool
 
 	// ScreenKey
 	ServerFingerprint string
@@ -247,6 +252,7 @@ func (c *Controller) viewLocked() View {
 		v.Instruction = i18n.Trans("A techie can now ask to connect. You will be asked first, " +
 			"and pressing Esc always takes back control.")
 	}
+	v.UseSystemProxy = !c.cfg.NoSystemProxy
 	if l := c.cfg.Lock; l != nil {
 		v.LockedTo = l.Company
 		if v.LockedTo == "" {
@@ -441,6 +447,7 @@ func (c *Controller) newComputerLocked(addr, hostKey, fp string, techies map[str
 		Runner:            runner,
 		EscHook:           c.d.EscHook,
 		Logger:            c.log,
+		Transport:         c.transportLocked(),
 	}
 	if listing != nil {
 		opts.Listing = &control.RequestListing{Address: listing.Address, Fingerprint: listing.Fingerprint}
@@ -469,6 +476,28 @@ func (c *Controller) stopComputerLocked() {
 	c.probing = false
 	c.listing = nil
 	c.st = session.State{}
+}
+
+// SetUseSystemProxy is the "Use system proxy settings" box on the address
+// screen. It applies from the next connection on.
+func (c *Controller) SetUseSystemProxy(on bool) {
+	c.mu.Lock()
+	changed := c.cfg.NoSystemProxy == on
+	c.cfg.NoSystemProxy = !on
+	c.mu.Unlock()
+	if changed {
+		c.save()
+	}
+	c.update()
+}
+
+// transportLocked returns how to reach servers: through the system's proxy
+// unless the user unticked "Use system proxy settings".
+func (c *Controller) transportLocked() transport.DialOptions {
+	if c.cfg.NoSystemProxy {
+		return transport.DialOptions{Proxy: sysproxy.Off}
+	}
+	return transport.DialOptions{Proxy: sysproxy.Func()}
 }
 
 // Connect is the Connect button on the address screen.
@@ -509,8 +538,9 @@ func (c *Controller) probeLocked(addr string) {
 	c.stopProbe = cancel
 	probe := c.d.Probe
 	if probe == nil {
+		topts := c.transportLocked()
 		probe = func(ctx context.Context, addr string) (ssh.PublicKey, error) {
-			return session.ProbeHostKey(ctx, addr, 0)
+			return session.ProbeHostKey(ctx, addr, 0, topts)
 		}
 	}
 	c.log.Info("looking up the host key of a server that is not approved", "server", addr)

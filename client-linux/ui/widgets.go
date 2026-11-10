@@ -16,6 +16,7 @@ const (
 	kindField       // one line text entry
 	kindKeyBox      // read-only wrapped text on white, for the key line
 	kindLink        // underlined clickable text
+	kindCheck       // checkbox with its label on the right
 )
 
 // widget is one control. Positions are in 96-DPI units; the window scales
@@ -31,6 +32,7 @@ type widget struct {
 	visible    bool
 	enabled    bool
 	isDefault  bool // a default button has a blue border
+	checked    bool // kindCheck
 	onClick    func()
 
 	field *field // kindField
@@ -45,7 +47,7 @@ func newWidget(k kind, x, y, w, h int, f fontKind) *widget {
 }
 
 func (wd *widget) focusable() bool {
-	return wd.visible && wd.enabled && (wd.kind == kindButton || wd.kind == kindField || wd.kind == kindLink)
+	return wd.visible && wd.enabled && (wd.kind == kindButton || wd.kind == kindField || wd.kind == kindLink || wd.kind == kindCheck)
 }
 
 // field is the editing state of a text entry. Positions are rune indexes.
@@ -240,11 +242,66 @@ func (wd *widget) draw(c *canvas, r image.Rectangle, s float64, focused, hover, 
 			sub.fill(image.Rect(x0+cx, ty, x0+cx+px(1), ty+lh), colText)
 		}
 
+	case kindCheck:
+		size := px(14)
+		box := image.Rect(r.Min.X, r.Min.Y+(r.Dy()-size)/2, r.Min.X+size, r.Min.Y+(r.Dy()-size)/2+size)
+		bg, border := colWhite, colEditBorder
+		switch {
+		case !wd.enabled:
+			bg, border = colBg, colBorder
+		case wd.checked:
+			bg, border = colAccent, colAccent
+		case hover || focused:
+			border = colAccent
+		}
+		c.fill(box, bg)
+		c.frame(box, border, 1)
+		if wd.checked {
+			tick(c, box, px(2), colWhite)
+		}
+		col := colText
+		if !wd.enabled {
+			col = colDisabled
+		}
+		lh := c.fonts.lineHeight(wd.font)
+		tx := box.Max.X + px(8)
+		c.text(wd.font, wd.text, tx, r.Min.Y+(r.Dy()-lh)/2, col)
+		if focused {
+			tw := c.fonts.width(wd.font, wd.text)
+			dotted(c, image.Rect(tx-px(2), r.Min.Y+(r.Dy()-lh)/2-px(1), tx+tw+px(2), r.Min.Y+(r.Dy()+lh)/2+px(1)), colText)
+		}
+
 	case kindKeyBox:
 		c.fill(r, colWhite)
 		c.frame(r, colBorder, 1)
 		c.textBox(wd.font, wd.text, r.Inset(px(5)), alignLeft, colText)
 	}
+}
+
+// tick draws a check mark of line width lw inside box: a short stroke down
+// to the right, then a long one up to the right.
+func tick(c *canvas, box image.Rectangle, lw int, col color.Color) {
+	w := box.Dx()
+	x0, y0 := box.Min.X+w*3/14, box.Min.Y+w*7/14
+	x1, y1 := box.Min.X+w*6/14, box.Min.Y+w*10/14
+	x2, y2 := box.Min.X+w*11/14, box.Min.Y+w*4/14
+	seg := func(ax, ay, bx, by int) {
+		n := max(abs(bx-ax), abs(by-ay))
+		for i := 0; i <= n; i++ {
+			x := ax + (bx-ax)*i/max(n, 1)
+			y := ay + (by-ay)*i/max(n, 1)
+			c.fill(image.Rect(x-lw/2, y-lw/2, x-lw/2+lw, y-lw/2+lw), col)
+		}
+	}
+	seg(x0, y0, x1, y1)
+	seg(x1, y1, x2, y2)
+}
+
+func abs(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
 }
 
 // dotted draws a dotted focus rectangle.

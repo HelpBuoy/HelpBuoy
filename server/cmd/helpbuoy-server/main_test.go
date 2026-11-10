@@ -54,8 +54,8 @@ func TestParseServeDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.listen != "127.0.0.1:5959" || cfg.mode != modeHTTP {
-		t.Errorf("listen = %q, mode %q; want http on 127.0.0.1:5959", cfg.listen, cfg.mode)
+	if cfg.listen != ":5959" || cfg.mode != modeSSH {
+		t.Errorf("listen = %q, mode %q; want ssh on :5959", cfg.listen, cfg.mode)
 	}
 	if !strings.HasSuffix(cfg.state, "helpbuoy-server") {
 		t.Errorf("state = %q, want a path ending in helpbuoy-server", cfg.state)

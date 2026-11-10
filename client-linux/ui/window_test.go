@@ -166,3 +166,46 @@ func TestAddressEditing(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestProxyCheckbox: the box under the address field shows the setting,
+// and Space toggles it.
+func TestProxyCheckbox(t *testing.T) {
+	host := newFakeHost()
+	w := NewWithHost(host, nil)
+	var loads atomic.Int32
+	ctrl := newController(t, &loads, w)
+	done := make(chan error, 1)
+	go func() { done <- w.Run(ctrl) }()
+	waitFor(t, "the controller to start", func() bool { return loads.Load() > 0 })
+
+	w.do(func() {
+		w.apply(app.View{Screen: app.ScreenAddress, Address: "helpme.example.com", UseSystemProxy: true,
+			Error: "Nothing is answering at this address."})
+		w.focus = w.chkProxy
+	})
+	var checked, visible bool
+	w.do(func() { checked, visible = w.chkProxy.checked, w.chkProxy.visible })
+	if !checked || !visible {
+		t.Fatalf("checkbox checked %v visible %v", checked, visible)
+	}
+	if out := os.Getenv("HELPBUOY_UI_PNG"); out != "" {
+		w.do(func() { w.redraw() })
+		host.mu.Lock()
+		if f, err := os.Create(out); err == nil {
+			png.Encode(f, host.frame)
+			f.Close()
+		}
+		host.mu.Unlock()
+	}
+	w.do(func() {
+		w.key(KeyEvent{Char: ' ', Text: " "})
+		checked = w.chkProxy.checked
+	})
+	if checked {
+		t.Error("Space did not untick the box")
+	}
+	host.events <- CloseEvent{}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}

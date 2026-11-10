@@ -6,9 +6,15 @@ helpbuoy-server, with its host key, techies and registered computers in
 /var/lib/helpbuoy-server.
 
 The server runs in one of three modes, set with HELPBUOY_SERVER_MODE in
-/etc/default/helpbuoy-server: http (the default), https or ssh.
+/etc/default/helpbuoy-server: ssh (the default), http or https.
 
-The apps reach the server over HTTPS on port 443. In http mode the server
+In ssh mode the server serves plain SSH without WebSocket and TLS (direct
+connect) on :5959; open that port in the firewall (and forward it on the
+router if the server is behind NAT). Users type help.example.com:5959; the
+apps try HTTPS first and then plain SSH.
+
+Behind a reverse proxy the apps reach the server over HTTPS on port 443, and
+users only type the host name. In http mode the server
 listens on plain HTTP on 127.0.0.1:5959, behind a reverse proxy (Apache,
 nginx or HAProxy) that serves HTTPS and passes the path /helpbuoy on as a
 WebSocket. The proxy must keep the Host header, add X-Forwarded-For and allow
@@ -39,12 +45,8 @@ help.example.com" in /etc/default/helpbuoy-server (see the comments there),
 give the service the capability to bind port 443 as described in the unit
 file, and run "systemctl restart helpbuoy-server".
 
-HELPBUOY_SERVER_MODE=ssh serves plain SSH without WebSocket and TLS (direct
-connect) on :5959; open that port in the firewall. Users then type
-help.example.com:5959; the apps try HTTPS first and then plain SSH.
-
-To host many helpdesks, one per host name, set HELPBUOY_SERVER_VHOSTS in
-/etc/default/helpbuoy-server and add them with
+To host many helpdesks, one per host name (in http or https mode), set
+HELPBUOY_SERVER_VHOSTS in /etc/default/helpbuoy-server and add them with
 "sudo helpbuoy-serverctl vhost add acme.relay.example.com". The admin
 commands below then take --vhost acme.relay.example.com.
 

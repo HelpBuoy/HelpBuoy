@@ -12,6 +12,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -82,6 +84,8 @@ type Options struct {
 
 	// Dial overrides the TCP dialer under the WebSocket transport, for tests.
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
+	// Proxy picks the HTTP proxy (proto/sysproxy); nil uses HTTPS_PROXY.
+	Proxy func(*http.Request) (*url.URL, error)
 }
 
 func (o *Options) defaults() {
@@ -377,7 +381,7 @@ func classify(online bool, err error) Status {
 // as far as a techie Hello.
 func (c *Conn) connect() (online bool, err error) {
 	ctx, cancel := context.WithTimeout(c.ctx, c.opts.HandshakeTimeout)
-	nc, err := transport.Dial(ctx, c.opts.Addr, transport.DialOptions{Dial: c.opts.Dial})
+	nc, err := transport.Dial(ctx, c.opts.Addr, transport.DialOptions{Dial: c.opts.Dial, Proxy: c.opts.Proxy})
 	cancel()
 	if err != nil {
 		return false, err

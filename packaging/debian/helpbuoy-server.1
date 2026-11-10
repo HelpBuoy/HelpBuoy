@@ -62,20 +62,22 @@ Ed25519 keys and splices their sessions. The screen and input run end to end ove
 that the server cannot read.
 .PP
 .B serve
-runs the server. By default it listens on plain HTTP on
+runs the server. By default
+.RB ( "\-\-mode ssh" )
+it serves plain SSH without WebSocket and TLS on
+.BR :5959 ;
+the apps try HTTPS first and fall back to plain SSH. With
+.B \-\-mode http
+it listens on plain HTTP on
 .BR 127.0.0.1:5959 ,
 behind a reverse proxy (Apache, nginx, HAProxy) that serves HTTPS on port 443
 and passes the path
 .B /helpbuoy
-on as a WebSocket, keeping the Host header (mode http). With
+on as a WebSocket, keeping the Host header. With
 .B \-\-mode https
 it serves HTTPS itself, by default on
 .BR :443 .
-With
-.B \-\-mode ssh
-it serves plain SSH without WebSocket and TLS, by default on
-.BR :5959 ;
-the apps try HTTPS first and fall back to plain SSH. Exactly one mode is on.
+Exactly one mode is on.
 The other commands change or show the state directory; a running server picks
 up changes within a second.
 .PP
@@ -107,8 +109,10 @@ Comma-separated proxy addresses or CIDR prefixes whose X-Forwarded-For header
 gives the client address. Default: 127.0.0.1,::1.
 .TP
 .BI \-\-mode " mode"
-.B http
-(default): plain HTTP behind a reverse proxy.
+.B ssh
+(default): plain SSH (direct connect).
+.BR http :
+plain HTTP behind a reverse proxy.
 .BR https :
 the built-in HTTPS server. Without
 .B \-\-cert
@@ -116,8 +120,7 @@ or
 .B \-\-acme
 it uses a self-signed certificate; the apps identify the server by its SSH
 host key, not by the certificate.
-.BR ssh :
-plain SSH (direct connect). Default: $HELPBUOY_SERVER_MODE, else http.
+Default: $HELPBUOY_SERVER_MODE, else ssh.
 .TP
 .BI \-\-cert " file" " \-\-key" " file"
 Certificate chain and private key in PEM format, loaded again when they change.

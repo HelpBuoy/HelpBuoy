@@ -9,7 +9,7 @@ Type=exec
 User=helpbuoy-server
 Group=helpbuoy-server
 Environment=HELPBUOY_SERVER_STATE=/var/lib/helpbuoy-server
-Environment=HELPBUOY_SERVER_MODE=http
+Environment=HELPBUOY_SERVER_MODE=ssh
 Environment=HELPBUOY_SERVER_OPTS=
 EnvironmentFile=-/etc/default/helpbuoy-server
 ExecStart=/usr/bin/helpbuoy-server serve $HELPBUOY_SERVER_OPTS

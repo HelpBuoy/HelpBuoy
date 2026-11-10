@@ -697,3 +697,31 @@ func TestOneQuestionAtATime(t *testing.T) {
 		t.Fatalf("%d questions open at once", ui.maxOpen)
 	}
 }
+
+// TestUseSystemProxy: the box is ticked by default, and unticking it is
+// stored for the next start.
+func TestUseSystemProxy(t *testing.T) {
+	e := newEnv(t)
+	c, _ := e.controller()
+	c.Start()
+	if !c.View().UseSystemProxy {
+		t.Fatal("system proxy off by default")
+	}
+	c.SetUseSystemProxy(false)
+	if c.View().UseSystemProxy {
+		t.Fatal("still on after unticking")
+	}
+	cfg, err := config.Store{Dir: e.dir}.Load()
+	if err != nil || !cfg.NoSystemProxy {
+		t.Fatalf("stored %+v, %v", cfg, err)
+	}
+	c.Close()
+	c2, _ := e.controller()
+	c2.Start()
+	defer c2.Close()
+	if c2.View().UseSystemProxy {
+		t.Fatal("setting lost after a restart")
+	}
+	c2.SetUseSystemProxy(true)
+	c2.Connect(e.server.Addr()) // still connects with the proxy function on
+}

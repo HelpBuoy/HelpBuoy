@@ -38,6 +38,10 @@ type Config struct {
 	ServerAddr string `json:"server_addr,omitempty"`
 	// ServerHostKey is the pinned host key of ServerAddr as an authorized_keys line.
 	ServerHostKey string `json:"server_host_key,omitempty"`
+	// NoSystemProxy is the unticked "Use system proxy settings" box on the
+	// connect screen: connect directly, without the system's proxy. The box
+	// is ticked by default.
+	NoSystemProxy bool `json:"no_system_proxy,omitempty"`
 }
 
 // LocalPort is the port of the server inside this app when the address

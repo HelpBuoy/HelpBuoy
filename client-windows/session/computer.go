@@ -779,13 +779,13 @@ var errProbed = errors.New("host key seen")
 // host key (PLAN.md 12.3): it ends the SSH handshake right after the server
 // showed its key, before authenticating, so nothing else happens with that
 // server.
-func ProbeHostKey(ctx context.Context, addr string, timeout time.Duration) (ssh.PublicKey, error) {
+func ProbeHostKey(ctx context.Context, addr string, timeout time.Duration, o transport.DialOptions) (ssh.PublicKey, error) {
 	if timeout == 0 {
 		timeout = 10 * time.Second
 	}
 	dctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	tcp, err := transport.Dial(dctx, addr, transport.DialOptions{})
+	tcp, err := transport.Dial(dctx, addr, o)
 	if err != nil {
 		return nil, err
 	}

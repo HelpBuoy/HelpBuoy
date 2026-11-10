@@ -61,6 +61,7 @@ type Window struct {
 	lblAddrHint  *ui.Static
 	edtAddr      *ui.Edit
 	btnConnect   *ui.Button
+	chkProxy     *ui.CheckBox // "Use system proxy settings"
 	lblAddrError *ui.Static
 	// ScreenKey
 	lblKeyIntro  *ui.Static
@@ -125,6 +126,8 @@ func New(iconID uint16) *Window {
 	w.lblAddrHint = static(i18n.Trans("Type the server address a techie gave you, for example helpme.example.com."), co.SS_LEFT)
 	w.edtAddr = ui.NewEdit(p, ui.OptsEdit())
 	w.btnConnect = button(i18n.Trans("&Connect"), co.BS_DEFPUSHBUTTON)
+	w.chkProxy = ui.NewCheckBox(p, ui.OptsCheckBox().Text(i18n.Trans("Use system proxy settings")).
+		Size(1, 1).CtrlStyle(co.BS_AUTOCHECKBOX).State(co.BST_CHECKED))
 	w.lblAddrError = static("", co.SS_LEFT)
 
 	w.lblKeyIntro = static(i18n.Trans("Paste this key into a chat with a techie (for example WhatsApp)."), co.SS_LEFT)
@@ -155,7 +158,8 @@ func New(iconID uint16) *Window {
 		{w.lblAddrHint, 24, 58, 412, 42, fontNormal},
 		{w.edtAddr, 24, 106, 300, 26, fontNormal},
 		{w.btnConnect, 334, 105, 102, 28, fontNormal},
-		{w.lblAddrError, 24, 146, 412, 80, fontNormal},
+		{w.chkProxy, 24, 140, 412, 22, fontNormal},
+		{w.lblAddrError, 24, 170, 412, 70, fontNormal},
 
 		{w.lblKeyIntro, 24, 18, 412, 36, fontNormal},
 		{w.edtKey, 24, 56, 412, 62, fontNormal},
@@ -384,6 +388,7 @@ func (w *Window) events() {
 		}
 	})
 	w.btnConnect.On().BnClicked(w.connect)
+	w.chkProxy.On().BnClicked(func() { w.ctrl.SetUseSystemProxy(w.chkProxy.IsChecked()) })
 	w.btnCopy.On().BnClicked(func() { w.copyText(w.view.KeyLine, w.btnCopy) })
 	w.btnRemoveKey.On().BnClicked(w.confirmRemoveKey)
 	w.btnContinue.On().BnClicked(func() { w.ctrl.ContinueWarning() })
@@ -554,7 +559,7 @@ func (w *Window) apply(v app.View) {
 	entered := !w.rendered || prev.Screen != v.Screen
 
 	addr := v.Screen == app.ScreenAddress
-	for _, c := range []ui.Window{w.lblHeading, w.lblAddrHint, w.edtAddr, w.btnConnect, w.lblAddrError} {
+	for _, c := range []ui.Window{w.lblHeading, w.lblAddrHint, w.edtAddr, w.btnConnect, w.chkProxy, w.lblAddrError} {
 		show(c, addr)
 	}
 	if addr {
@@ -568,6 +573,10 @@ func (w *Window) apply(v app.View) {
 		}
 		w.edtAddr.Hwnd().EnableWindow(!v.Connecting && w.updating == "")
 		w.btnConnect.Hwnd().EnableWindow(!v.Connecting && w.updating == "")
+		w.chkProxy.Hwnd().EnableWindow(!v.Connecting && w.updating == "")
+		if w.chkProxy.IsChecked() != v.UseSystemProxy {
+			w.chkProxy.SetCheck(v.UseSystemProxy)
+		}
 		if w.updating != "" {
 			setText(w.lblAddrError, w.updating)
 		} else if v.Connecting {

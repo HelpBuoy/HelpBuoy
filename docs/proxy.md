@@ -1,6 +1,6 @@
 # Running HelpBuoy behind a reverse proxy
 
-The apps connect to `wss://host/helpbuoy` and run SSH inside the WebSocket. In its default mode (`--mode http`), `helpbuoy-server` listens on plain HTTP on `127.0.0.1:5959` and leaves HTTPS to a reverse proxy in front of it: nginx, Apache or HAProxy. This page shows how to put several HelpBuoy servers behind one proxy and one certificate, each on its own host name:
+The apps connect to `wss://host/helpbuoy` and run SSH inside the WebSocket. With `--mode http`, `helpbuoy-server` listens on plain HTTP on `127.0.0.1:5959` and leaves HTTPS to a reverse proxy in front of it: nginx, Apache or HAProxy. This page shows how to put several HelpBuoy servers behind one proxy and one certificate, each on its own host name:
 
 | Host name | Server |
 | --- | --- |
@@ -43,7 +43,7 @@ The simplest setup for many helpdesks is one `helpbuoy-server` process with virt
     helpbuoy-server vhost add acme.help.example.com
     helpbuoy-server info --vhost acme.help.example.com --company "Acme" --phone "+1 234 567 890"
     helpbuoy-server techie add --vhost acme.help.example.com alice 'ssh-ed25519 AAAA...'
-    helpbuoy-server serve
+    helpbuoy-server serve --mode http
 
 Adding a helpdesk later is `vhost add` again; the running server picks it up within a second, and the proxy needs no change. These configurations also serve a single server without virtual hosts: just use one host name.
 
@@ -112,8 +112,8 @@ backend helpbuoy
 
 Run separate `helpbuoy-server` processes when the helpdesks must not share a process, for example to run them as different system users or to update them one at a time. Each gets its own state directory and port:
 
-    helpbuoy-server serve --state /var/lib/helpbuoy-acme --listen 127.0.0.1:5959
-    helpbuoy-server serve --state /var/lib/helpbuoy-beta --listen 127.0.0.1:5960
+    helpbuoy-server serve --mode http --state /var/lib/helpbuoy-acme --listen 127.0.0.1:5959
+    helpbuoy-server serve --mode http --state /var/lib/helpbuoy-beta --listen 127.0.0.1:5960
 
 The proxy then picks the port by host name, and answers 404 for host names without a server.
 
@@ -235,4 +235,4 @@ A `404` means the proxy or the server doesn't know the host name, a `502` or `50
 
 ## Without a proxy
 
-The server can also serve HTTPS itself (`--mode https`, with `--cert`/`--key`, `--acme` or a self-signed certificate), or plain SSH without WebSocket and TLS (`--mode ssh`, by default on port 5959). Exactly one mode is on per server. The apps always try HTTPS first and fall back to plain SSH, so users type the same kind of address for every mode: the host name, or `host:port` when the server is not on port 443. See `helpbuoy-server help`.
+The server can also serve HTTPS itself (`--mode https`, with `--cert`/`--key`, `--acme` or a self-signed certificate), or plain SSH without WebSocket and TLS (`--mode ssh`, the default, on port 5959). Exactly one mode is on per server. The apps always try HTTPS first and fall back to plain SSH, so users type the same kind of address for every mode: the host name, or `host:port` when the server is not on port 443. See `helpbuoy-server help`.

@@ -17,6 +17,7 @@ import (
 	"github.com/helpbuoy/helpbuoy/client-windows/identity"
 	"github.com/helpbuoy/helpbuoy/client-windows/internal/fakeserver"
 	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/transport"
 )
 
 // testHandler records what the computer reports.
@@ -647,7 +648,7 @@ func TestServerFingerprint(t *testing.T) {
 
 func TestProbeHostKey(t *testing.T) {
 	f := setup(t, nil)
-	k, err := ProbeHostKey(context.Background(), f.server.Addr(), time.Second)
+	k, err := ProbeHostKey(context.Background(), f.server.Addr(), time.Second, transport.DialOptions{})
 	if err != nil || !sameKey(k, f.server.HostKey()) {
 		t.Fatalf("probe: %v, %v", k, err)
 	}
@@ -660,7 +661,7 @@ func TestProbeHostKey(t *testing.T) {
 	}
 	addr := ln.Addr().String()
 	ln.Close()
-	if _, err := ProbeHostKey(context.Background(), addr, time.Second); err == nil {
+	if _, err := ProbeHostKey(context.Background(), addr, time.Second, transport.DialOptions{}); err == nil {
 		t.Fatal("probe of a closed port succeeded")
 	}
 }

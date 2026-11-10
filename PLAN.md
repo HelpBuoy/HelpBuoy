@@ -60,21 +60,25 @@ Performance target: **as fast as RDP** for normal desktop work (section 5).
 - **Transport**: the apps open `wss://host:port/helpbuoy` (`proto/transport`) and run SSH
   inside the WebSocket, one binary message per write, with the subprotocol `helpbuoy-ssh`.
   This gets through office, hotel and school networks that only let web traffic out, and
-  through HTTP proxies (`HTTPS_PROXY`). The TLS certificate is not checked: the pinned SSH
+  through HTTP proxies: `HTTPS_PROXY`, else the system's proxy settings (`proto/sysproxy`:
+  Internet Options on Windows, `scutil --proxy` on macOS, GNOME's settings on Linux). A
+  "Use system proxy settings" box under the address field, ticked by default, turns that
+  off; the apps then connect directly. The TLS certificate is not checked: the pinned SSH
   host key identifies the server (3.5), so self-signed certificates and TLS-inspecting
   proxies work and can't pose as the server.
-- **Server**: the `helpbuoy-server` executable (`helpbuoy-server.exe` on Windows). By default
-  it listens on plain HTTP on `127.0.0.1:5959` behind a reverse proxy (Apache, nginx, HAProxy)
-  that serves HTTPS on 443 and passes `/helpbuoy` on, keeping the `Host` header and adding
-  `X-Forwarded-For` (read only from `--trusted-proxy`, default `127.0.0.1,::1`). The README has
-  a working example for each proxy. This is `--mode http`, one of three modes; exactly one is
-  on per server. With `--mode https` it serves HTTPS itself on `:443` (or the `--listen`
+- **Server**: the `helpbuoy-server` executable (`helpbuoy-server.exe` on Windows). It runs in
+  one of three modes; exactly one is on per server. By default (`--mode ssh`) it serves plain
+  SSH on `:5959` (direct connect, below). With `--mode http` it listens on plain HTTP on
+  `127.0.0.1:5959` behind a reverse proxy (Apache, nginx, HAProxy) that serves HTTPS on 443
+  and passes `/helpbuoy` on, keeping the `Host` header and adding `X-Forwarded-For` (read only
+  from `--trusted-proxy`, default `127.0.0.1,::1`); `docs/proxy.md` has tested examples for
+  each proxy. With `--mode https` it serves HTTPS itself on `:443` (or the `--listen`
   port), with certificate files, Let's Encrypt (`--acme`, TLS-ALPN) or a self-signed
   certificate. It also runs inside the desk app (7.1), on the techie's own
   Linux, macOS or Windows machine, with the built-in HTTPS server on port 5959, which
   usually means one port forward on the router and allowing the OS firewall prompt on first
   start.
-- **Direct connect**: `--mode ssh` serves plain SSH without the WebSocket and TLS, on `:5959`.
+- **Direct connect**: `--mode ssh`, the default, serves plain SSH without the WebSocket and TLS, on `:5959`.
   The apps always try HTTPS first; when that fails without an HTTP server answering, they
   connect again with plain SSH and keep that connection only if the port sends an SSH
   banner. Not with virtual hosts, since plain SSH can't name the host.
@@ -318,10 +322,10 @@ a list of their own.
 
 | Command | What it does |
 |---|---|
-| `helpbuoy-server serve [--listen 127.0.0.1:5959]` | run the server on plain HTTP behind a reverse proxy (0) |
+| `helpbuoy-server serve [--listen :5959]` | run the server on plain SSH (direct connect), the default mode (0) |
+| `helpbuoy-server serve --mode http [--listen 127.0.0.1:5959]` | run the server on plain HTTP behind a reverse proxy |
 | `helpbuoy-server serve --mode https [--listen :443] [--cert F --key F \| --acme --acme-host H]` | run the server with its built-in HTTPS server |
-| `helpbuoy-server serve --mode ssh [--listen :5959]` | run the server on plain SSH (direct connect) |
-| `helpbuoy-server serve --vhosts DIR` | serve every virtual host in `DIR` (0) |
+| `helpbuoy-server serve --mode http --vhosts DIR` | serve every virtual host in `DIR` (http or https mode) |
 | `helpbuoy-server vhost list` / `vhost add NAME` | list or add virtual hosts; the other commands take `--vhost NAME` |
 | `helpbuoy-server techie list` | list techies with their fingerprints |
 | `helpbuoy-server techie add alice 'ssh-ed25519 ...'` | add a techie with the public key copied from their desk app |
@@ -1024,8 +1028,8 @@ clients.
 
 ## 10. Open questions
 
-- The apps only read `HTTPS_PROXY`; the system proxy settings of Windows and macOS (and PAC
-  files) are not used yet.
+- The apps use a proxy entered by hand in the system settings, but not automatic proxy
+  configuration (PAC files, WPAD).
 - Does a server on the techie's own machine behind a home or office router need a dynamic DNS
   name in the docs, since computers store `hostname:port` once and never change it?
 - Is TOFU for the server plus server-vouched techies enough, or should the computer also be able

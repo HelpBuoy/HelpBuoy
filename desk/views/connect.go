@@ -14,6 +14,7 @@ import (
 	"github.com/helpbuoy/helpbuoy/desk/ui"
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
 	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
+	"github.com/helpbuoy/helpbuoy/proto/sysproxy"
 )
 
 // connectScreen is the state of the first screen: the server address and
@@ -78,7 +79,11 @@ func (a *App) openConn(addr string) {
 	if k, err := config.ParseHostKey(a.cfg.ServerHostKey); err == nil && a.cfg.ServerHostKey != "" {
 		a.hostKey = k
 	}
-	a.conn = serverconn.Start(serverconn.Options{Addr: addr, Signer: a.key.Signer, HostKey: a.cfg.ServerHostKey})
+	proxy := sysproxy.Func()
+	if a.cfg.NoSystemProxy {
+		proxy = sysproxy.Off
+	}
+	a.conn = serverconn.Start(serverconn.Options{Addr: addr, Signer: a.key.Signer, HostKey: a.cfg.ServerHostKey, Proxy: proxy})
 	a.backend = a.conn
 }
 
@@ -188,7 +193,14 @@ func (a *App) drawConnect(x, y, w float32) float32 {
 	if c.Button("start/connect", rl.NewRectangle(x+fieldW+10, y, bw, 38), label, ui.Primary, busy) || res.Submitted && !busy {
 		a.startConnect()
 	}
-	y += 44
+	y += 46
+	// A copy, so a click while connecting changes nothing.
+	useProxy := !a.cfg.NoSystemProxy
+	if c.Checkbox("start/proxy", rl.NewRectangle(x, y, w, 24), i18n.Trans("Use system proxy settings"), &useProxy) && !busy {
+		a.cfg.NoSystemProxy = !useProxy
+		a.saveConfig()
+	}
+	y += 32
 	y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Leave empty to run a local server on this computer, with you as its techie."), x, y, w, ui.ColMuted)
 	if s.err != "" {
 		y += 10

@@ -46,6 +46,10 @@ type Config struct {
 	// Lock is the primary server the user locked this PC to, nil while
 	// unlocked. Only removing config.json undoes it.
 	Lock *Lock `json:"lock,omitempty"`
+	// NoSystemProxy is the unticked "Use system proxy settings" box on the
+	// address screen: connect to the server directly, without the proxy the
+	// system is set up with. The box is ticked by default.
+	NoSystemProxy bool `json:"no_system_proxy,omitempty"`
 }
 
 // Lock ties the computer to its primary server (PLAN.md 12): it only
