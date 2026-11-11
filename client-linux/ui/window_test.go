@@ -179,7 +179,7 @@ func TestProxyCheckbox(t *testing.T) {
 	waitFor(t, "the controller to start", func() bool { return loads.Load() > 0 })
 
 	w.do(func() {
-		w.apply(app.View{Screen: app.ScreenAddress, Address: "helpme.example.com", UseSystemProxy: true,
+		w.apply(app.View{Screen: app.ScreenAddress, Address: "helpbuoy.example.com", UseSystemProxy: true,
 			Error: "Nothing is answering at this address."})
 		w.focus = w.chkProxy
 	})

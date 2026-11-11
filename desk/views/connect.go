@@ -179,7 +179,7 @@ func (a *App) drawConnect(x, y, w float32) float32 {
 	busy := a.connecting() || a.upd.download != nil
 	c.Text(ui.Bold, ui.SizeHeading, i18n.Trans("Connect to your computer"), x, y, ui.ColText)
 	y += 36
-	y += c.Paragraph(ui.Regular, ui.SizeBody, i18n.Trans("Type the server address you told the computer to use, for example helpme.example.com."), x, y, w, ui.ColMuted)
+	y += c.Paragraph(ui.Regular, ui.SizeBody, i18n.Trans("Type the server address you told the computer to use, for example helpbuoy.example.com."), x, y, w, ui.ColMuted)
 	y += 14
 	connectL, connectingL := i18n.Trans("Connect"), i18n.Trans("Connecting…")
 	bw := max(a.btnW(connectL, 120), a.btnW(connectingL, 120))

@@ -477,11 +477,11 @@ func listVhosts(dir string) ([]string, error) {
 // in the Host header.
 func validVhost(name string) error {
 	if strings.HasPrefix(name, ".") || strings.HasSuffix(name, ".") || net.ParseIP(name) != nil {
-		return fmt.Errorf("virtual host %q: use a host name like acme.relay.example.com", name)
+		return fmt.Errorf("virtual host %q: use a host name like acme.helpbuoy.example.com", name)
 	}
 	a, err := serveraddr.Parse(name)
 	if err != nil || a.Host != name {
-		return fmt.Errorf("virtual host %q: use a lower-case host name like acme.relay.example.com", name)
+		return fmt.Errorf("virtual host %q: use a lower-case host name like acme.helpbuoy.example.com", name)
 	}
 	return nil
 }

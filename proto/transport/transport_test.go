@@ -13,11 +13,11 @@ import (
 
 func TestURL(t *testing.T) {
 	for in, want := range map[string]string{
-		"helpme.example.com:443":  "wss://helpme.example.com/helpbuoy",
-		"helpme.example.com:5959": "wss://helpme.example.com:5959/helpbuoy",
-		"192.0.2.1:443":           "wss://192.0.2.1/helpbuoy",
-		"[2001:db8::1]:443":       "wss://[2001:db8::1]/helpbuoy",
-		"[2001:db8::1]:8443":      "wss://[2001:db8::1]:8443/helpbuoy",
+		"helpbuoy.example.com:443":  "wss://helpbuoy.example.com/helpbuoy",
+		"helpbuoy.example.com:5959": "wss://helpbuoy.example.com:5959/helpbuoy",
+		"192.0.2.1:443":             "wss://192.0.2.1/helpbuoy",
+		"[2001:db8::1]:443":         "wss://[2001:db8::1]/helpbuoy",
+		"[2001:db8::1]:8443":        "wss://[2001:db8::1]:8443/helpbuoy",
 	} {
 		got, err := URL(in)
 		if err != nil || got != want {

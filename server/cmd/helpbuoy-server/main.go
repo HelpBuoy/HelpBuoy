@@ -69,7 +69,7 @@ commands:
   hostkey [--new]                        print the server host key and fingerprint; --new makes a
                                          new host key, used from the next server start on
   vhost list                             list the virtual hosts in the --vhosts directory
-  vhost add NAME                         add a virtual host, e.g. acme.relay.example.com; a running
+  vhost add NAME                         add a virtual host, e.g. acme.helpbuoy.example.com; a running
                                          server picks it up within a second
   version                                print the version
 

@@ -4,8 +4,8 @@ The apps connect to `wss://host/helpbuoy` and run SSH inside the WebSocket. With
 
 | Host name | Server |
 | --- | --- |
-| `acme.help.example.com` | one helpdesk |
-| `beta.help.example.com` | another helpdesk |
+| `acme.helpbuoy.example.com` | one helpdesk |
+| `beta.helpbuoy.example.com` | another helpdesk |
 
 Users type the host name in the app, without a port. Every configuration below was tested with nginx 1.27, Apache 2.4 and HAProxy 3.0.
 
@@ -20,19 +20,19 @@ Any certificate works for the apps, even a self-signed one, since they identify 
 
 ## One certificate for all host names
 
-Give all helpdesks host names under one domain and use one wildcard certificate for `*.help.example.com`. Let's Encrypt issues wildcard certificates only with the DNS-01 challenge, for example with a certbot DNS plugin for your DNS provider:
+Give all helpdesks host names under one domain and use one wildcard certificate for `*.helpbuoy.example.com`. Let's Encrypt issues wildcard certificates only with the DNS-01 challenge, for example with a certbot DNS plugin for your DNS provider:
 
     certbot certonly --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini \
-        -d 'help.example.com' -d '*.help.example.com'
+        -d 'helpbuoy.example.com' -d '*.helpbuoy.example.com'
 
-With a wildcard DNS record (`*.help.example.com` pointing at the proxy), adding a helpdesk needs no DNS or certificate change.
+With a wildcard DNS record (`*.helpbuoy.example.com` pointing at the proxy), adding a helpdesk needs no DNS or certificate change.
 
 When the host names are not under one domain (`help.acme.com`, `support.beta.org`), list them all in one certificate instead, `-d help.acme.com -d support.beta.org`, which also works with the HTTP-01 challenge. The configurations stay the same apart from the names.
 
 HAProxy wants the certificate, its chain and its key in one file. Make it again after every renewal, for example in a certbot deploy hook:
 
-    cat /etc/letsencrypt/live/help.example.com/fullchain.pem \
-        /etc/letsencrypt/live/help.example.com/privkey.pem > /etc/haproxy/certs/help.example.com.pem
+    cat /etc/letsencrypt/live/helpbuoy.example.com/fullchain.pem \
+        /etc/letsencrypt/live/helpbuoy.example.com/privkey.pem > /etc/haproxy/certs/helpbuoy.example.com.pem
     systemctl reload haproxy
 
 ## Option 1: one server with virtual hosts
@@ -40,9 +40,9 @@ HAProxy wants the certificate, its chain and its key in one file. Make it again 
 The simplest setup for many helpdesks is one `helpbuoy-server` process with virtual hosts. Every host name goes to the same backend, and the server picks the helpdesk from the `Host` header. Each virtual host has its own host key, techies, computers and log, and the server refuses host names it doesn't know.
 
     export HELPBUOY_SERVER_VHOSTS=/var/lib/helpbuoy-server/vhosts
-    helpbuoy-server vhost add acme.help.example.com
-    helpbuoy-server info --vhost acme.help.example.com --company "Acme" --phone "+1 234 567 890"
-    helpbuoy-server techie add --vhost acme.help.example.com alice 'ssh-ed25519 AAAA...'
+    helpbuoy-server vhost add acme.helpbuoy.example.com
+    helpbuoy-server info --vhost acme.helpbuoy.example.com --company "Acme" --phone "+1 234 567 890"
+    helpbuoy-server techie add --vhost acme.helpbuoy.example.com alice 'ssh-ed25519 AAAA...'
     helpbuoy-server serve --mode http
 
 Adding a helpdesk later is `vhost add` again; the running server picks it up within a second, and the proxy needs no change. These configurations also serve a single server without virtual hosts: just use one host name.
@@ -53,10 +53,10 @@ Adding a helpdesk later is `vhost add` again; the running server picks it up wit
 server {
     listen 443 ssl;
     listen [::]:443 ssl;
-    server_name *.help.example.com;
+    server_name *.helpbuoy.example.com;
 
-    ssl_certificate     /etc/letsencrypt/live/help.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/help.example.com/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/helpbuoy.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/helpbuoy.example.com/privkey.pem;
 
     location /helpbuoy {
         proxy_pass http://127.0.0.1:5959;
@@ -77,11 +77,11 @@ Apache 2.4.47 or later with `mod_ssl`, `mod_proxy` and `mod_proxy_http`. Unknown
 
 ```apache
 <VirtualHost *:443>
-    ServerName help.example.com
-    ServerAlias *.help.example.com
+    ServerName helpbuoy.example.com
+    ServerAlias *.helpbuoy.example.com
     SSLEngine on
-    SSLCertificateFile    /etc/letsencrypt/live/help.example.com/fullchain.pem
-    SSLCertificateKeyFile /etc/letsencrypt/live/help.example.com/privkey.pem
+    SSLCertificateFile    /etc/letsencrypt/live/helpbuoy.example.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/helpbuoy.example.com/privkey.pem
     ProxyPreserveHost On
     ProxyPass /helpbuoy http://127.0.0.1:5959/helpbuoy upgrade=websocket timeout=3600
 </VirtualHost>
@@ -98,8 +98,8 @@ defaults
     timeout tunnel 1h
 
 frontend https
-    bind :443 ssl crt /etc/haproxy/certs/help.example.com.pem
-    bind :::443 v6only ssl crt /etc/haproxy/certs/help.example.com.pem
+    bind :443 ssl crt /etc/haproxy/certs/helpbuoy.example.com.pem
+    bind :::443 v6only ssl crt /etc/haproxy/certs/helpbuoy.example.com.pem
     option forwardfor
     http-request return status 404 if !{ path /helpbuoy }
     default_backend helpbuoy
@@ -124,18 +124,18 @@ The `map` holds one line per server.
 ```nginx
 # Which helpbuoy-server serves which host name.
 map $host $helpbuoy {
-    acme.help.example.com  127.0.0.1:5959;
-    beta.help.example.com  127.0.0.1:5960;
+    acme.helpbuoy.example.com  127.0.0.1:5959;
+    beta.helpbuoy.example.com  127.0.0.1:5960;
 }
 
 server {
     listen 443 ssl;
     listen [::]:443 ssl;
-    server_name *.help.example.com;
+    server_name *.helpbuoy.example.com;
 
     # One wildcard certificate for every host name.
-    ssl_certificate     /etc/letsencrypt/live/help.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/help.example.com/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/helpbuoy.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/helpbuoy.example.com/privkey.pem;
 
     location /helpbuoy {
         if ($helpbuoy = "") {
@@ -162,27 +162,27 @@ Apache 2.4.47 or later with `mod_ssl`, `mod_proxy`, `mod_proxy_http` and `mod_al
 
 # The first virtual host catches host names that have no server: 404.
 <VirtualHost *:443>
-    ServerName unknown.help.example.com
+    ServerName unknown.helpbuoy.example.com
     SSLEngine on
-    SSLCertificateFile    /etc/letsencrypt/live/help.example.com/fullchain.pem
-    SSLCertificateKeyFile /etc/letsencrypt/live/help.example.com/privkey.pem
+    SSLCertificateFile    /etc/letsencrypt/live/helpbuoy.example.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/helpbuoy.example.com/privkey.pem
     Redirect 404 /
 </VirtualHost>
 
 <VirtualHost *:443>
-    ServerName acme.help.example.com
+    ServerName acme.helpbuoy.example.com
     SSLEngine on
-    SSLCertificateFile    /etc/letsencrypt/live/help.example.com/fullchain.pem
-    SSLCertificateKeyFile /etc/letsencrypt/live/help.example.com/privkey.pem
+    SSLCertificateFile    /etc/letsencrypt/live/helpbuoy.example.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/helpbuoy.example.com/privkey.pem
     ProxyPreserveHost On
     ProxyPass /helpbuoy http://127.0.0.1:5959/helpbuoy upgrade=websocket timeout=3600
 </VirtualHost>
 
 <VirtualHost *:443>
-    ServerName beta.help.example.com
+    ServerName beta.helpbuoy.example.com
     SSLEngine on
-    SSLCertificateFile    /etc/letsencrypt/live/help.example.com/fullchain.pem
-    SSLCertificateKeyFile /etc/letsencrypt/live/help.example.com/privkey.pem
+    SSLCertificateFile    /etc/letsencrypt/live/helpbuoy.example.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/helpbuoy.example.com/privkey.pem
     ProxyPreserveHost On
     ProxyPass /helpbuoy http://127.0.0.1:5960/helpbuoy upgrade=websocket timeout=3600
 </VirtualHost>
@@ -194,8 +194,8 @@ The map file `/etc/haproxy/helpbuoy.map` holds one line per server, naming its b
 
 ```
 # host name               backend
-acme.help.example.com     acme
-beta.help.example.com     beta
+acme.helpbuoy.example.com     acme
+beta.helpbuoy.example.com     beta
 ```
 
 ```haproxy
@@ -208,8 +208,8 @@ defaults
 
 frontend https
     # One file with the wildcard certificate, its chain and its key.
-    bind :443 ssl crt /etc/haproxy/certs/help.example.com.pem
-    bind :::443 v6only ssl crt /etc/haproxy/certs/help.example.com.pem
+    bind :443 ssl crt /etc/haproxy/certs/helpbuoy.example.com.pem
+    bind :::443 v6only ssl crt /etc/haproxy/certs/helpbuoy.example.com.pem
     option forwardfor
     # The backend for this host name, from the map file.
     http-request set-var(req.backend) req.hdr(host),field(1,:),lower,map(/etc/haproxy/helpbuoy.map)
@@ -227,7 +227,7 @@ backend beta
 
 The WebSocket upgrade should come back as `101 Switching Protocols`:
 
-    curl -si --http1.1 --max-time 3 https://acme.help.example.com/helpbuoy \
+    curl -si --http1.1 --max-time 3 https://acme.helpbuoy.example.com/helpbuoy \
         -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
         -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H 'Sec-WebSocket-Protocol: helpbuoy-ssh' | head -1
 

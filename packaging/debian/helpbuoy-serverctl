@@ -7,8 +7,8 @@
 #   sudo helpbuoy-serverctl techie list
 #   sudo helpbuoy-serverctl computer list
 #   sudo helpbuoy-serverctl hostkey
-#   sudo helpbuoy-serverctl vhost add acme.relay.example.com
-#   sudo helpbuoy-serverctl techie list --vhost acme.relay.example.com
+#   sudo helpbuoy-serverctl vhost add acme.helpbuoy.example.com
+#   sudo helpbuoy-serverctl techie list --vhost acme.helpbuoy.example.com
 #
 # A running server picks up changes within a second.
 set -e

@@ -38,7 +38,7 @@ func TestLoadMissingGivesDefaults(t *testing.T) {
 }
 
 func TestIsLocal(t *testing.T) {
-	for s, want := range map[string]bool{"localhost": true, "localhost:2300": true, "helpme.example.com": false, "127.0.0.1": false} {
+	for s, want := range map[string]bool{"localhost": true, "localhost:2300": true, "helpbuoy.example.com": false, "127.0.0.1": false} {
 		a, err := serveraddr.Parse(s)
 		if err != nil {
 			t.Fatal(err)
@@ -159,12 +159,12 @@ func TestLoadDropsInvalidAddr(t *testing.T) {
 
 func TestParseAddr(t *testing.T) {
 	for in, want := range map[string]string{
-		"localhost":          "localhost:5959",
-		"LocalHost":          "localhost:5959",
-		"localhost:443":      "localhost:443",
-		"helpme.example.com": "helpme.example.com:443",
-		"192.0.2.1":          "192.0.2.1:443",
-		"192.0.2.1:5959":     "192.0.2.1:5959",
+		"localhost":            "localhost:5959",
+		"LocalHost":            "localhost:5959",
+		"localhost:443":        "localhost:443",
+		"helpbuoy.example.com": "helpbuoy.example.com:443",
+		"192.0.2.1":            "192.0.2.1:443",
+		"192.0.2.1:5959":       "192.0.2.1:5959",
 	} {
 		a, err := ParseAddr(in)
 		if err != nil || a.String() != want {

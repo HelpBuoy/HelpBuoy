@@ -110,7 +110,7 @@ func (a *App) drawGiveOut(x, y, w float32) float32 {
 		y += 10
 	}
 	y += 4
-	y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Forward TCP port {0} on your router to this address. Then give the people you help and the techies you add your public address, or a dynamic DNS name that points to it, with :{0} at the end, for example helpme.example.com:{0}. On the same network this address works too.", port), x, y, w, ui.ColMuted)
+	y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Forward TCP port {0} on your router to this address. Then give the people you help and the techies you add your public address, or a dynamic DNS name that points to it, with :{0} at the end, for example helpbuoy.example.com:{0}. On the same network this address works too.", port), x, y, w, ui.ColMuted)
 	y += 10
 
 	if g.problem != noProblem {

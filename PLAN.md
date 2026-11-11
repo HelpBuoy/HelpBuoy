@@ -116,9 +116,9 @@ connection and stored in `config.json` in the client's data directory:
 
 | Field | Example | Learned |
 |---|---|---|
-| server address | `helpme.example.com` (port 443 unless given) | typed by the user; the server this PC got registered on |
+| server address | `helpbuoy.example.com` (port 443 unless given) | typed by the user; the server this PC got registered on |
 | server host key | `ssh-ed25519 AAAA...` (`SHA256:3q2+7w...`) | first successful connection, pinned from then on |
-| last address | `helpme.example.com` | the last address that reached a server, to prefill the field |
+| last address | `helpbuoy.example.com` | the last address that reached a server, to prefill the field |
 | lock (12) | primary server address and host key, approved servers | when the user agrees to lock to a server |
 
 The key is stored next to it, as its own application-specific key pair (6.1). Adding or removing a techie never touches
@@ -155,7 +155,7 @@ stored server. The computer remembers nothing about techies: the server vouches 
 ### First contact (once per computer key)
 
 1. The client starts for the first time and asks for the server's `hostname:port` (the techie
-   tells the user what to type, e.g. `helpme.example.com`, with `:port` only when the server
+   tells the user what to type, e.g. `helpbuoy.example.com`, with `:port` only when the server
    doesn't use the default 443). On this first start
    it generates its own Ed25519 key pair in
    `%LOCALAPPDATA%\helpbuoy\` (section 6.1), with the comment `user@machine`, e.g.
@@ -795,7 +795,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   server does not know this techie yet. No certificates.
 - **Connect screen**, like the computer's: every start shows a centered box on the grey window
   with "Connect to your computer", "Type the server address you told the computer to use, for
-  example helpme.example.com.", the address field (prefilled with the last address) and
+  example helpbuoy.example.com.", the address field (prefilled with the last address) and
   **Connect**, with the hint "Leave empty to run a local server on this computer, with you as
   its techie." Like the computer, it connects by itself to the last address once that server
   was reached (its host key is pinned), right at the start. Errors show in the box. The server host key is pinned on the first

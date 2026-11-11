@@ -24,22 +24,22 @@ The server runs in one of three modes, chosen with `--mode`:
 - `http`: plain HTTP on `127.0.0.1:5959`, behind a reverse proxy that serves HTTPS.
 - `https`: the built-in HTTPS server, on `:443`.
 
-`--listen` picks another address. The apps always try HTTPS first and fall back to plain SSH when that fails and the port answers with an SSH banner, so users type the same kind of address for every mode: `help.example.com`, or `help.example.com:5959` for a server in ssh mode.
+`--listen` picks another address. The apps always try HTTPS first and fall back to plain SSH when that fails and the port answers with an SSH banner, so users type the same kind of address for every mode: `helpbuoy.example.com`, or `helpbuoy.example.com:5959` for a server in ssh mode.
 
 In http mode (`--mode http`) the server runs behind a reverse proxy (nginx, Apache or HAProxy) that serves HTTPS and passes the path `/helpbuoy` on as a WebSocket, keeping the `Host` header and adding `X-Forwarded-For`. [docs/proxy.md](docs/proxy.md) has tested configurations for all three, for several servers behind one proxy and one certificate, either as one process with virtual hosts or as separate processes.
 
-Without a reverse proxy, `helpbuoy-server serve --mode https` serves HTTPS itself on `:443`, or on the port given with `--listen`. It takes a certificate with `--cert` and `--key` (loaded again when the files change), gets one from Let's Encrypt with `--acme --acme-host help.example.com` (port 443 must be reachable from the internet), or makes a self-signed one. A server on another port is given out as `host:port`.
+Without a reverse proxy, `helpbuoy-server serve --mode https` serves HTTPS itself on `:443`, or on the port given with `--listen`. It takes a certificate with `--cert` and `--key` (loaded again when the files change), gets one from Let's Encrypt with `--acme --acme-host helpbuoy.example.com` (port 443 must be reachable from the internet), or makes a self-signed one. A server on another port is given out as `host:port`.
 
 `helpbuoy-server serve --mode ssh` skips HTTP and TLS altogether: the apps speak SSH straight to the port. That is a little lighter and just as safe, since the pinned host key protects the connection in every mode, but it needs the port open in firewalls and doesn't pass HTTP proxies. Virtual hosts need http or https mode, since plain SSH can't name the host. The desk app's own server always works this way, on port 5959.
 
 ### Virtual hosts
 
-`helpbuoy-server serve --vhosts DIR` serves one helpdesk per host name, for example `acme.relay.example.com` and `beta.relay.example.com`, all on the same address and port. Every subdirectory of `DIR` named after a host name is a normal state directory, with its own host key, techies, computers, company details and log. Techies of one virtual host never see the computers of another, and a request for an unknown host name is refused. With a wildcard DNS record and a wildcard certificate on the proxy (see [docs/proxy.md](docs/proxy.md)), adding a helpdesk needs no DNS, certificate or proxy change:
+`helpbuoy-server serve --vhosts DIR` serves one helpdesk per host name, for example `acme.helpbuoy.example.com` and `beta.helpbuoy.example.com`, all on the same address and port. Every subdirectory of `DIR` named after a host name is a normal state directory, with its own host key, techies, computers, company details and log. Techies of one virtual host never see the computers of another, and a request for an unknown host name is refused. With a wildcard DNS record and a wildcard certificate on the proxy (see [docs/proxy.md](docs/proxy.md)), adding a helpdesk needs no DNS, certificate or proxy change:
 
-    helpbuoy-server vhost add acme.relay.example.com --vhosts DIR
-    helpbuoy-server info --vhost acme.relay.example.com --vhosts DIR --company "Acme" --phone "+1 234 567 890"
-    helpbuoy-server techie add --vhost acme.relay.example.com --vhosts DIR alice 'ssh-ed25519 AAAA...'
-    helpbuoy-server limit --vhost acme.relay.example.com --vhosts DIR --sessions 1
+    helpbuoy-server vhost add acme.helpbuoy.example.com --vhosts DIR
+    helpbuoy-server info --vhost acme.helpbuoy.example.com --vhosts DIR --company "Acme" --phone "+1 234 567 890"
+    helpbuoy-server techie add --vhost acme.helpbuoy.example.com --vhosts DIR alice 'ssh-ed25519 AAAA...'
+    helpbuoy-server limit --vhost acme.helpbuoy.example.com --vhosts DIR --sessions 1
 
 `limit --sessions N` caps how many sessions a helpdesk has open at the same time, for all its techies together (0, the default, is no limit). Only the admin sets it; techies can't change it from the desk app.
 

@@ -34,7 +34,7 @@ func TestParseServe(t *testing.T) {
 		{[]string{"--state", state, "--mode", "https"}, ":443", "https"},
 		{[]string{"--state", state, "--mode", "https", "--listen", ":8443"}, ":8443", "https"},
 		{[]string{"--state", state, "--mode", "https", "--cert", "c.pem", "--key", "k.pem"}, ":443", "https"},
-		{[]string{"--state", state, "--mode", "https", "--acme", "--acme-host", "help.example.com"}, ":443", "https"},
+		{[]string{"--state", state, "--mode", "https", "--acme", "--acme-host", "helpbuoy.example.com"}, ":443", "https"},
 		{[]string{"--state", state, "--mode", "ssh"}, ":5959", "ssh"},
 		{[]string{"--vhosts", state, "--mode", "https", "--acme"}, ":443", "https"},
 		{[]string{"--vhosts", state, "--mode", "http"}, "127.0.0.1:5959", "http"},
@@ -73,7 +73,7 @@ func TestParseServe(t *testing.T) {
 }
 
 func TestValidVhost(t *testing.T) {
-	for _, name := range []string{"acme.relay.example.com", "localhost", "a-b.example"} {
+	for _, name := range []string{"acme.helpbuoy.example.com", "localhost", "a-b.example"} {
 		if err := validVhost(name); err != nil {
 			t.Errorf("%q: %v", name, err)
 		}
@@ -88,31 +88,31 @@ func TestValidVhost(t *testing.T) {
 func TestVhostCommands(t *testing.T) {
 	base := t.TempDir()
 	t.Setenv("HELPBUOY_SERVER_VHOSTS", base)
-	out := runOK(t, "vhost", "add", "Acme.Relay.Example.com")
-	if !strings.Contains(out, "added acme.relay.example.com, host key SHA256:") {
+	out := runOK(t, "vhost", "add", "Acme.HelpBuoy.Example.com")
+	if !strings.Contains(out, "added acme.helpbuoy.example.com, host key SHA256:") {
 		t.Errorf("add: %q", out)
 	}
-	runFail(t, "vhost", "add", "acme.relay.example.com") // exists
+	runFail(t, "vhost", "add", "acme.helpbuoy.example.com") // exists
 	runFail(t, "vhost", "add", "not a host")
-	runOK(t, "vhost", "add", "beta.relay.example.com")
+	runOK(t, "vhost", "add", "beta.helpbuoy.example.com")
 
 	line, _ := keyLine(t, "alice@desk")
-	runOK(t, "techie", "add", "alice", line, "--vhost", "acme.relay.example.com")
-	runOK(t, "info", "--vhost", "acme.relay.example.com", "--company", "Acme", "--phone", "+1 234")
-	if out := runOK(t, "techie", "list", "--vhost", "acme.relay.example.com"); !strings.Contains(out, "alice") {
+	runOK(t, "techie", "add", "alice", line, "--vhost", "acme.helpbuoy.example.com")
+	runOK(t, "info", "--vhost", "acme.helpbuoy.example.com", "--company", "Acme", "--phone", "+1 234")
+	if out := runOK(t, "techie", "list", "--vhost", "acme.helpbuoy.example.com"); !strings.Contains(out, "alice") {
 		t.Errorf("acme techies: %q", out)
 	}
-	if out := runOK(t, "techie", "list", "--vhost", "beta.relay.example.com"); strings.Contains(out, "alice") {
+	if out := runOK(t, "techie", "list", "--vhost", "beta.helpbuoy.example.com"); strings.Contains(out, "alice") {
 		t.Errorf("beta techies: %q", out)
 	}
-	runFail(t, "techie", "list", "--vhost", "gamma.relay.example.com") // never made by a typo
-	if _, err := os.Stat(filepath.Join(base, "gamma.relay.example.com")); err == nil {
+	runFail(t, "techie", "list", "--vhost", "gamma.helpbuoy.example.com") // never made by a typo
+	if _, err := os.Stat(filepath.Join(base, "gamma.helpbuoy.example.com")); err == nil {
 		t.Error("a typo made a virtual host")
 	}
 	runFail(t, "techie", "list", "--vhosts", base) // which one?
 
 	out = runOK(t, "vhost", "list")
-	if !strings.Contains(out, "acme.relay.example.com") || !strings.Contains(out, "Acme") || !strings.Contains(out, "beta.relay.example.com") {
+	if !strings.Contains(out, "acme.helpbuoy.example.com") || !strings.Contains(out, "Acme") || !strings.Contains(out, "beta.helpbuoy.example.com") {
 		t.Errorf("list: %q", out)
 	}
 	ents, _ := os.ReadDir(base)

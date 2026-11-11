@@ -123,7 +123,7 @@ func New(iconID uint16) *Window {
 	}
 
 	w.lblHeading = static(i18n.Trans("Connect to a techie"), co.SS_LEFT)
-	w.lblAddrHint = static(i18n.Trans("Type the server address a techie gave you, for example helpme.example.com."), co.SS_LEFT)
+	w.lblAddrHint = static(i18n.Trans("Type the server address a techie gave you, for example helpbuoy.example.com."), co.SS_LEFT)
 	w.edtAddr = ui.NewEdit(p, ui.OptsEdit())
 	w.btnConnect = button(i18n.Trans("&Connect"), co.BS_DEFPUSHBUTTON)
 	w.chkProxy = ui.NewCheckBox(p, ui.OptsCheckBox().Text(i18n.Trans("Use system proxy settings")).
@@ -542,7 +542,7 @@ func (w *Window) apply(v app.View) {
 		show(c, addr)
 	}
 	if addr {
-		hint := i18n.Trans("Type the server address a techie gave you, for example helpme.example.com.")
+		hint := i18n.Trans("Type the server address a techie gave you, for example helpbuoy.example.com.")
 		if v.LockedTo != "" {
 			hint = i18n.Trans("This PC gets help through {0}. Other servers can only connect after {0} allowed them.", v.LockedTo)
 		}

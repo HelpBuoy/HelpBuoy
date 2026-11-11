@@ -88,7 +88,7 @@ func TestTechieNames(t *testing.T) {
 }
 
 func TestFieldText(t *testing.T) {
-	for in, want := range map[string]string{"localhost": "", "localhost:2300": "localhost:2300", "helpme.example.com": "helpme.example.com:443"} {
+	for in, want := range map[string]string{"localhost": "", "localhost:2300": "localhost:2300", "helpbuoy.example.com": "helpbuoy.example.com:443"} {
 		ad, err := config.ParseAddr(in)
 		if err != nil {
 			t.Fatal(err)

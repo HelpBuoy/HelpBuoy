@@ -22,7 +22,7 @@ func TestParseWindows(t *testing.T) {
 	}
 	s := ParseWindows(1, "proxy.corp:8080", "*.corp.example.com;10.*;<local>")
 	for host, direct := range map[string]bool{
-		"help.example.com":      false,
+		"helpbuoy.example.com":  false,
 		"a.corp.example.com":    true,
 		"10.1.2.3":              true,
 		"intranet":              true,
@@ -60,11 +60,11 @@ func TestParseScutil(t *testing.T) {
 		t.Fatalf("got %+v", s)
 	}
 	for host, direct := range map[string]bool{
-		"help.example.com":   false,
-		"printer.local":      true,
-		"corp.example.com":   true,
-		"x.corp.example.com": true,
-		"intranet":           true,
+		"helpbuoy.example.com": false,
+		"printer.local":        true,
+		"corp.example.com":     true,
+		"x.corp.example.com":   true,
+		"intranet":             true,
 	} {
 		u, _ := Lookup(s, host)
 		if (u == nil) != direct {
@@ -84,8 +84,8 @@ func TestParseGsettings(t *testing.T) {
 	if u, _ := Lookup(s, "x.corp"); u != nil {
 		t.Error("*.corp not bypassed")
 	}
-	if u, _ := Lookup(s, "help.example.com"); u == nil || u.Host != "proxy.corp:3128" {
-		t.Errorf("help.example.com: %v", u)
+	if u, _ := Lookup(s, "helpbuoy.example.com"); u == nil || u.Host != "proxy.corp:3128" {
+		t.Errorf("helpbuoy.example.com: %v", u)
 	}
 	if s := ParseGsettings("'none'", "'proxy.corp'", "3128", "@as []"); s.Proxy != "" {
 		t.Errorf("mode none: %+v", s)

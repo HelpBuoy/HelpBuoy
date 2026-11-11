@@ -142,7 +142,7 @@ func NewWithHost(host Host, icons [][]byte) *Window {
 	w.lblHeading = label(24, 22, 412, 30, fontHeading, alignLeft)
 	w.lblHeading.text = i18n.Trans("Connect to a techie")
 	w.lblAddrHint = label(24, 58, 412, 42, fontNormal, alignLeft)
-	w.lblAddrHint.text = i18n.Trans("Type the server address a techie gave you, for example helpme.example.com.")
+	w.lblAddrHint.text = i18n.Trans("Type the server address a techie gave you, for example helpbuoy.example.com.")
 	w.edtAddr = newWidget(kindField, 24, 106, 300, 28, fontNormal)
 	w.edtAddr.field.limit = 300
 	w.btnConnect = button(i18n.Trans("Connect"), 334, 106, 102, 28, fontNormal, w.connect)
@@ -621,7 +621,7 @@ func (w *Window) apply(v app.View) {
 	addr := v.Screen == app.ScreenAddress
 	show(addr, w.lblHeading, w.lblAddrHint, w.edtAddr, w.btnConnect, w.chkProxy, w.lblAddrError)
 	if addr {
-		w.lblAddrHint.text = i18n.Trans("Type the server address a techie gave you, for example helpme.example.com.")
+		w.lblAddrHint.text = i18n.Trans("Type the server address a techie gave you, for example helpbuoy.example.com.")
 		if v.LockedTo != "" {
 			w.lblAddrHint.text = i18n.Trans("This PC gets help through {0}. Other servers can only connect after {0} allowed them.", v.LockedTo)
 		}

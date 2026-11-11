@@ -8,7 +8,7 @@
 #          HAProxy) that serves HTTPS on port 443 and passes the WebSocket on;
 #          see /usr/share/doc/helpbuoy-server/README.Debian
 #   https  the built-in HTTPS server on :443; add a certificate to
-#          HELPBUOY_SERVER_OPTS, e.g. "--acme --acme-host help.example.com" or
+#          HELPBUOY_SERVER_OPTS, e.g. "--acme --acme-host helpbuoy.example.com" or
 #          "--cert FILE --key FILE" (without one it makes a self-signed one).
 #          Port 443 needs an extra capability, see
 #          /usr/lib/systemd/system/helpbuoy-server.service.
