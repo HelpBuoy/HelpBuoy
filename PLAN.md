@@ -86,7 +86,7 @@ Performance target: **as fast as RDP** for normal desktop work (section 5).
   `hostname:port`, and an address typed without a port means 443, so behind a proxy users only
   type the host name. There are no per-techie or per-session ports.
 - **Virtual hosts**: `serve --vhosts DIR` serves one helpdesk per host name from one process
-  and one port, for managed hosting (relay.helpbuoy.com). Every subdirectory of `DIR` named
+  and one port, for managed hosting (on.helpbuoy.com). Every subdirectory of `DIR` named
   after a host name is a state directory of its own (host key, `state.json`, `server.log`); the
   `Host` header picks it, and an unknown name is refused. `helpbuoy-server vhost add NAME`
   makes one, deleting its directory removes it, and a running server notices both within a
@@ -427,7 +427,7 @@ Role caps and timeouts:
   holds its place. A Connect beyond it gets an error Reply ("this server allows one session at
   a time; wait until the other session ends"); running sessions are never ended by it. It is
   set by the admin only, never through the control channel, so a host can sell a helpdesk
-  (a virtual host on relay.helpbuoy.com) with a fixed number of sessions. A change takes effect
+  (a virtual host under on.helpbuoy.com) with a fixed number of sessions. A change takes effect
   at the next Connect.
 - Handshake timeout 10 s, keepalive 15 s, dead connections dropped after 3 missed.
 - Control frames are length-checked before they are read: 16 KiB from computers and pending

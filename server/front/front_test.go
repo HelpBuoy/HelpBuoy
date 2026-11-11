@@ -62,10 +62,10 @@ func TestParsePrefixes(t *testing.T) {
 
 func TestHostOf(t *testing.T) {
 	for in, want := range map[string]string{
-		"Acme.Relay.HelpBuoy.com":     "acme.relay.helpbuoy.com",
-		"acme.relay.helpbuoy.com:443": "acme.relay.helpbuoy.com",
-		"acme.relay.helpbuoy.com.":    "acme.relay.helpbuoy.com",
-		"[::1]:5959":                  "::1",
+		"Acme.On.HelpBuoy.com":     "acme.on.helpbuoy.com",
+		"acme.on.helpbuoy.com:443": "acme.on.helpbuoy.com",
+		"acme.on.helpbuoy.com.":    "acme.on.helpbuoy.com",
+		"[::1]:5959":               "::1",
 	} {
 		r := httptest.NewRequest("GET", "/", nil)
 		r.Host = in
