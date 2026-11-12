@@ -23,36 +23,21 @@ Packages released before the repository existed do not add it. Users of those in
 
 A flat repository is one directory without a `dists/` tree: the .debs of all packages and architectures, and next to them
 
-- `Packages` and `Packages.gz`, the index made by `dpkg-scanpackages --multiversion`. One index serves all architectures, since every entry has its own `Architecture` field.
+- `Packages` and `Packages.gz`, the index made by `apt-ftparchive packages`. One index serves all architectures, since every entry has its own `Architecture` field.
 - `Release`, made by `apt-ftparchive release`, with the checksums of the index and `Origin: HelpBuoy`, which unattended-upgrades matches on.
 - `InRelease` (the clearsigned `Release`) and `Release.gpg` (a detached signature). apt reads `InRelease` and falls back to the other two.
 
 apt trusts the .debs through this chain: the signature on `InRelease` proves the index, and the index holds the SHA256 of every .deb. The .debs themselves are not signed.
 
-The last three versions of each package and architecture stay in the repository, so an admin can roll back with `apt install helpbuoy=<version>`.
+The .debs of the last three GitHub releases stay in the repository, so an admin can roll back with `apt install helpbuoy=<version>`.
 
 The repository lives in `public_html` of its own account, `helpbuoy-apt@ams01.usecue.nl`, apart from the site and its git repository, because the .debs would make that grow by some 20 MB per release.
 
 ## Publishing a release
 
-`./release.sh` checks first that the signing key is in your keyring, before it bumps the version or builds anything. After `make dist` and the GitHub release it runs `./apt-repo.sh`, which
+`./release.sh` creates the GitHub release; nothing more is needed here. The APT server, `helpbuoy-apt@ams01.usecue.nl`, checks the GitHub releases every ten minutes and builds, signs and publishes the repository itself, with the secret key in its own keyring. The script, its cron line and its settings live in the `helpbuoy-apt` repository next to this one; its README describes the steps and what to check when a release does not show up.
 
-1. fetches the repository from the server with rsync. If that fails it stops: uploading an empty copy would delete the old versions.
-2. copies the .debs from `dist/` in and removes all but the last three versions of each package and architecture (`HELPBUOY_APT_KEEP`).
-3. rebuilds `Packages`, `Packages.gz` and `Release`, signs them into `InRelease` and `Release.gpg`, and checks the signature with `gpgv` against `packaging/debian/helpbuoy.asc`, the key the packages install. Signing with any other key stops here.
-4. uploads the new .debs first, then the index and the removals with `rsync --delay-updates`, so apt never sees an index whose .debs are missing.
-
-gpg-agent asks for the key's passphrase while signing. When the step fails after the GitHub release is out, fix the cause and run `./apt-repo.sh` again with the same `dist/`; it can be run any number of times.
-
-Settings, all optional:
-
-| Variable | Default |
-| --- | --- |
-| `HELPBUOY_APT_DEST` | `helpbuoy-apt@ams01.usecue.nl:public_html/` |
-| `HELPBUOY_APT_KEY` | the first key in `packaging/debian/helpbuoy.asc` |
-| `HELPBUOY_APT_KEEP` | `3` |
-
-Needed on the release machine: `sudo apt install dpkg-dev apt-utils gnupg rsync`, and SSH access to `helpbuoy-apt@ams01.usecue.nl`.
+To pull a broken release from the repository, delete it or mark it as a prerelease on GitHub. The next run drops its .debs, and apt offers the version before it again only to machines that did not upgrade yet; machines that did need `apt install helpbuoy=<version>`.
 
 ## Setting up, once
 
@@ -63,7 +48,7 @@ Make the key. ed25519 is small and supported by apt since Debian 9 and Ubuntu 18
 
 Commit `packaging/debian/helpbuoy.asc`. `make deb`, `make deb-client` and `make deb-desk` refuse to build without it, since the packages would install no key.
 
-Make sure `public_html` exists in the home of `helpbuoy-apt@ams01.usecue.nl`. Then the first `./apt-repo.sh` fills it. Check https://apt.helpbuoy.com/InRelease loads afterwards.
+Then install the publisher on the APT server and import the secret key there, as described in the README of `helpbuoy-apt`.
 
 ## Looking after the key
 
@@ -75,11 +60,11 @@ Whoever has the secret key can publish packages that every HelpBuoy installation
 
 The export stays protected by the passphrase. Keep the passphrase somewhere other than the export.
 
-**Another release machine.** Import the export there with `gpg --import helpbuoy-apt-secret.asc`. Nothing else is needed: the scripts find the key by the fingerprint in `packaging/debian/helpbuoy.asc`.
+**Where it lives.** The APT server signs by itself, so the secret key is in the keyring of `helpbuoy-apt@ams01.usecue.nl`, with its passphrase stored next to the script or removed, because cron cannot type it. Anyone who can log in to that account can sign packages. Release machines do not need the key at all. To move the publisher to another server, import the export there and run `deploy.sh` of `helpbuoy-apt` against it.
 
 **Expiry.** The key above never expires. apt rejects signatures by an expired key, so with an expiry date the key must be extended (`gpg --quick-set-expire`) and the extended public key shipped in a release well before the date, or every installation stops updating. Without expiry there is one less thing to forget; the price is that a lost key stays valid on installed machines.
 
-**What the signature does not cover.** `Release` has no `Valid-Until`, so someone who controls the server or the connection could keep serving an older, correctly signed index and hold machines on an old version. HTTPS makes the connection part hard. Adding `Valid-Until` would close it, but then the repository must be signed again before it runs out, even without a release.
+**What the signature does not cover.** The server signs whatever .debs the last GitHub releases hold, so anyone who can upload a release asset on GitHub can get a package signed; keep two-factor authentication on every account with write access. `Release` has no `Valid-Until`, so someone who controls the server or the connection could keep serving an older, correctly signed index and hold machines on an old version. HTTPS makes the connection part hard. Adding `Valid-Until` would close it, with a daily `publish.sh --force` on the server to sign again before it runs out; but when that cron job breaks, every machine stops getting updates.
 
 ## Changing the key
 
@@ -89,8 +74,8 @@ Installed machines trust only the key in `/etc/apt/keyrings/helpbuoy.asc`, and o
 
        gpg --armor --export <old fingerprint> <new fingerprint> > packaging/debian/helpbuoy.asc
 
-   Release a few versions like this, still signed with the old key. The order of the keys in the file is not guaranteed, so set the key explicitly: `HELPBUOY_APT_KEY=<old fingerprint> ./release.sh`. Every machine that upgrades now trusts both keys.
-2. When most machines have had such an upgrade, sign with the new key (`HELPBUOY_APT_KEY=<new fingerprint>`), and in a later release export only the new key into `packaging/debian/helpbuoy.asc`.
+   Import the new secret key on the APT server and run `deploy.sh` of `helpbuoy-apt`, which copies the new `helpbuoy.asc` there. The order of the keys in the file is not guaranteed, so set `HELPBUOY_APT_KEY=<old fingerprint>` in `~/helpbuoy-apt/config` on the server. Release a few versions like this, still signed with the old key. Every machine that upgrades now trusts both keys.
+2. When most machines have had such an upgrade, set `HELPBUOY_APT_KEY=<new fingerprint>` there and sign again with `publish.sh --force`. In a later release export only the new key into `packaging/debian/helpbuoy.asc`, run `deploy.sh` again and remove the old secret key from the server.
 
 Machines that did not upgrade during step 1 fail `apt update` with `NO_PUBKEY` after step 2. They get going again by installing the current .deb from the GitHub release by hand.
 
@@ -98,7 +83,7 @@ Machines that did not upgrade during step 1 fail `apt update` with `NO_PUBKEY` a
 
 **Lost**, with no backup: installed machines cannot be moved to a new key through the repository. Make a new key, publish with it, and tell users (release notes, the site) to install the new .deb by hand once. Until they do, `apt update` reports the HelpBuoy repository as unsigned and skips it; the rest of their updates keep working.
 
-**Leaked**: the old key can still sign updates that installed machines accept, and apt does not check revocation certificates or key servers, so revoking the key does not protect them. The only way out is the key change above, done fast: ship both keys in a release signed with the old key, switch to the new key soon after, then drop the old one. Publish the revocation certificate as well (`gpg --import` the `.rev` file and export the revoked key), so that anyone checking by hand sees it. Check the server for files that did not come from `apt-repo.sh`.
+**Leaked**: the old key can still sign updates that installed machines accept, and apt does not check revocation certificates or key servers, so revoking the key does not protect them. The only way out is the key change above, done fast: ship both keys in a release signed with the old key, switch to the new key soon after, then drop the old one. Publish the revocation certificate as well (`gpg --import` the `.rev` file and export the revoked key), so that anyone checking by hand sees it. Check the server for files that did not come from `publish.sh`, and the GitHub releases for assets that did not come from `release.sh`.
 
 ## Checking by hand
 

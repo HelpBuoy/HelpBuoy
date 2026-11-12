@@ -49,8 +49,7 @@ Without a reverse proxy, `helpbuoy-server serve --mode https` serves HTTPS itsel
 
 - `./run.sh`: builds and starts a server, the desk app and the Windows client (in wine) on this machine for testing. All state lives in `.run/`; `./run.sh reset` clears it.
 - `./screenshot.sh [page]`: makes or updates `screenshot.png`, the desk app in demo mode at 800x500, for this README. Uses `xvfb-run` when installed, otherwise a window shows briefly.
-- `./release.sh [major|minor]`: bumps the version (build number by default), builds and tests everything, then tags, pushes and creates the GitHub release with the client and desk app MSIs, the client, desk app and server Debian packages (amd64 and arm64) and the zipped macOS client and desk app. Then `./apt-repo.sh` adds the Debian packages to the APT repository.
-- `./apt-repo.sh`: publishes the Debian packages in `dist/` to the flat APT repository at https://apt.helpbuoy.com/, keeping the last three versions of each. Run it again by hand when it failed during a release.
+- `./release.sh [major|minor]`: bumps the version (build number by default), builds and tests everything, then tags, pushes and creates the GitHub release with the client and desk app MSIs, the client, desk app and server Debian packages (amd64 and arm64) and the zipped macOS client and desk app. The APT server adds the Debian packages to https://apt.helpbuoy.com/ by itself within ten minutes, see `../helpbuoy-apt`.
 
 ## The APT repository
 

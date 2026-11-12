@@ -202,7 +202,7 @@ DEB_ARCHES := $(patsubst linux/%,%,$(filter linux/%,$(TARGETS)))
 
 # Every package adds the HelpBuoy APT repository in its postinst and removes
 # it in its postrm on purge (packaging/debian/apt-source.*), with the public
-# key of APT_KEY_FILE, which release.sh signs the repository with.
+# key of APT_KEY_FILE, which the APT server signs the repository with.
 APT_KEY_FILE ?= packaging/debian/helpbuoy.asc
 
 # maintscript SCRIPT DEST: install the maintainer script packaging/debian/SCRIPT

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# sudo apt install jq zip wixl msitools gh dpkg dpkg-dev apt-utils gnupg rsync
+# sudo apt install jq zip wixl msitools gh dpkg
 #
 # Releases a new version of helpbuoy:
 #
@@ -18,10 +18,10 @@
 # client and desk app, Debian packages of the client, desk app and
 # helpbuoy-server, zipped macOS apps of the client and desk app, all in
 # dist/), commits the version bump, tags and pushes it and creates the
-# GitHub release v<version> with all files in dist/. Then apt-repo.sh adds
-# the Debian packages to the APT repository at https://apt.helpbuoy.com/,
-# signed with the key of packaging/debian/helpbuoy.asc, which must be in
-# your keyring. The macOS client needs zig and a macOS SDK, see README.md.
+# GitHub release v<version> with all files in dist/. The APT server picks
+# up the Debian packages from the release by itself and adds them to
+# https://apt.helpbuoy.com/ within ten minutes (see ../helpbuoy-apt). The
+# macOS client needs zig and a macOS SDK, see README.md.
 set -e
 cd "$(dirname "$0")"
 
@@ -33,14 +33,6 @@ case $part in major | minor | build) ;; *)
 esac
 if [ -n "$(git status --porcelain)" ]; then
 	echo "working tree not clean, commit first" >&2
-	exit 1
-fi
-
-# The APT repository is signed at the end; check the key is there before
-# anything is built or pushed.
-key=${HELPBUOY_APT_KEY:-$(gpg --show-keys --with-colons packaging/debian/helpbuoy.asc | awk -F: '$1 == "fpr" { print $10; exit }')}
-if ! gpg --list-secret-keys "$key" >/dev/null 2>&1; then
-	echo "no secret key $key in your keyring to sign the APT repository with" >&2
 	exit 1
 fi
 
@@ -81,7 +73,3 @@ git tag "v$version"
 git push
 git push origin "v$version"
 gh release create "v$version" --title "v$version" --verify-tag dist/*
-
-# Publish the Debian packages to the APT repository. If this fails, the
-# release is out: fix the cause and run ./apt-repo.sh again.
-./apt-repo.sh
