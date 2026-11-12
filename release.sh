@@ -19,7 +19,7 @@
 # helpbuoy-server, zipped macOS apps of the client and desk app, all in
 # dist/), commits the version bump, tags and pushes it and creates the
 # GitHub release v<version> with all files in dist/. Then apt-repo.sh adds
-# the Debian packages to the APT repository at https://helpbuoy.com/apt/,
+# the Debian packages to the APT repository at https://apt.helpbuoy.com/,
 # signed with the key of packaging/debian/helpbuoy.asc, which must be in
 # your keyring. The macOS client needs zig and a macOS SDK, see README.md.
 set -e

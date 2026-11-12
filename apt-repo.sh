@@ -3,7 +3,7 @@
 # sudo apt install dpkg-dev apt-utils gnupg rsync
 #
 # Publishes the Debian packages in dist/ to the HelpBuoy APT repository,
-# https://helpbuoy.com/apt/. release.sh runs it after the GitHub release;
+# https://apt.helpbuoy.com/. release.sh runs it after the GitHub release;
 # run it by hand to publish dist/ again when that step failed:
 #
 #   ./apt-repo.sh
@@ -15,10 +15,8 @@
 # HELPBUOY_APT_KEEP versions of each package and architecture so a rollback
 # is possible, rebuilds and signs the index and uploads it all again.
 #
-# HELPBUOY_APT_DEST  rsync location of the repository, by default the
-#                    directory apt in the home of the site's production
-#                    remote (../helpbuoy-site). The site's deploy hook links
-#                    it as /apt into every build of the site.
+# HELPBUOY_APT_DEST  rsync location of the repository, by default
+#                    helpbuoy-apt@ams01.usecue.nl:public_html/.
 # HELPBUOY_APT_KEY   GPG key to sign with, by default the key of
 #                    packaging/debian/helpbuoy.asc, the one the packages
 #                    install. It must be in your keyring.
@@ -30,14 +28,7 @@ cd "$(dirname "$0")"
 pubkey=packaging/debian/helpbuoy.asc
 keep=${HELPBUOY_APT_KEEP:-3}
 key=${HELPBUOY_APT_KEY:-$(gpg --show-keys --with-colons $pubkey | awk -F: '$1 == "fpr" { print $10; exit }')}
-dest=$HELPBUOY_APT_DEST
-if [ -z "$dest" ]; then
-	site=$(git -C ../helpbuoy-site remote get-url production 2>/dev/null) || {
-		echo "set HELPBUOY_APT_DEST, or check out the site in ../helpbuoy-site" >&2
-		exit 1
-	}
-	dest=${site%%:*}:apt/
-fi
+dest=${HELPBUOY_APT_DEST:-helpbuoy-apt@ams01.usecue.nl:public_html/}
 if ! gpg --list-secret-keys "$key" >/dev/null 2>&1; then
 	echo "no secret key $key in your keyring to sign the repository with" >&2
 	exit 1

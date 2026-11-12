@@ -1,6 +1,6 @@
 # The APT repository and its signing key
 
-The Debian packages (helpbuoy, helpbuoy-desk and helpbuoy-server, amd64 and arm64) are published in a flat APT repository at https://helpbuoy.com/apt/, so `apt upgrade` and unattended-upgrades pick up new versions. The repository is signed with one GPG key. This page describes how the repository works, how a release gets into it, and how to look after the key.
+The Debian packages (helpbuoy, helpbuoy-desk and helpbuoy-server, amd64 and arm64) are published in a flat APT repository at https://apt.helpbuoy.com/, so `apt upgrade` and unattended-upgrades pick up new versions. The repository is signed with one GPG key. This page describes how the repository works, how a release gets into it, and how to look after the key.
 
 ## On the user's machine
 
@@ -8,14 +8,13 @@ Every package adds the repository in its postinst (`packaging/debian/apt-source.
 
 | File | Contents |
 | --- | --- |
-| `/etc/apt/sources.list.d/helpbuoy.sources` | the repository, `URIs: https://helpbuoy.com/apt/` with `Suites: ./` |
+| `/etc/apt/sources.list.d/helpbuoy.sources` | the repository, `URIs: https://apt.helpbuoy.com/` with `Suites: ./` |
 | `/etc/apt/keyrings/helpbuoy.asc` | the public key, `Signed-By` of the sources file |
 | `/etc/apt/apt.conf.d/52helpbuoy-unattended-upgrades` | lets unattended-upgrades install from origin `HelpBuoy` |
 
 The sources file is added on a new installation and on an upgrade from a version before the repository existed (before 0.4.29), and only when it is not there yet. An admin who removes it to stop updates keeps it removed: later upgrades do not add it again. The unattended-upgrades file follows the same rules, so an admin who removes it keeps upgrading only by hand. It covers all three packages: for helpbuoy-server an unattended upgrade restarts the service, which ends the running sessions.
 
 The key is written again on every upgrade, as long as the sources file is there. That is how a new key reaches installed machines, see [Changing the key](#changing-the-key).
-
 Purging the last HelpBuoy package removes all three files (`packaging/debian/apt-source.postrm`). Purging one while another is still installed or not yet purged keeps them.
 
 Packages released before the repository existed do not add it. Users of those install the new .deb from the GitHub release once by hand; after that, updates come through apt.
@@ -32,9 +31,7 @@ apt trusts the .debs through this chain: the signature on `InRelease` proves the
 
 The last three versions of each package and architecture stay in the repository, so an admin can roll back with `apt install helpbuoy=<version>`.
 
-The repository lives in the directory `apt` in the home of the site's production host, outside the site's git repository, because the .debs would make that grow by some 20 MB per release. The site's deploy hook builds every version of the site into a fresh directory, so it has to link the repository in after each build:
-
-    ln -s ../apt ../$SECONDARY/apt
+The repository lives in `public_html` of its own account, `helpbuoy-apt@ams01.usecue.nl`, apart from the site and its git repository, because the .debs would make that grow by some 20 MB per release.
 
 ## Publishing a release
 
@@ -51,11 +48,11 @@ Settings, all optional:
 
 | Variable | Default |
 | --- | --- |
-| `HELPBUOY_APT_DEST` | `apt/` on the host of the `production` remote of `../helpbuoy-site` |
+| `HELPBUOY_APT_DEST` | `helpbuoy-apt@ams01.usecue.nl:public_html/` |
 | `HELPBUOY_APT_KEY` | the first key in `packaging/debian/helpbuoy.asc` |
 | `HELPBUOY_APT_KEEP` | `3` |
 
-Needed on the release machine: `sudo apt install dpkg-dev apt-utils gnupg rsync`, and SSH access to the production host.
+Needed on the release machine: `sudo apt install dpkg-dev apt-utils gnupg rsync`, and SSH access to `helpbuoy-apt@ams01.usecue.nl`.
 
 ## Setting up, once
 
@@ -66,7 +63,7 @@ Make the key. ed25519 is small and supported by apt since Debian 9 and Ubuntu 18
 
 Commit `packaging/debian/helpbuoy.asc`. `make deb`, `make deb-client` and `make deb-desk` refuse to build without it, since the packages would install no key.
 
-Make the repository directory on the server (`mkdir ~/apt` as the site's user) and add the `ln -s` line above to the deploy hook, after the `hugo` build succeeds and before the symlink swap. Then the first `./apt-repo.sh` fills it. Check https://helpbuoy.com/apt/InRelease loads after the next site deploy.
+Make sure `public_html` exists in the home of `helpbuoy-apt@ams01.usecue.nl`. Then the first `./apt-repo.sh` fills it. Check https://apt.helpbuoy.com/InRelease loads afterwards.
 
 ## Looking after the key
 
@@ -107,7 +104,7 @@ Machines that did not upgrade during step 1 fail `apt update` with `NO_PUBKEY` a
 
 The signature of the published index, against the key in the repository:
 
-    curl -sO https://helpbuoy.com/apt/InRelease
+    curl -sO https://apt.helpbuoy.com/InRelease
     gpg --dearmor < packaging/debian/helpbuoy.asc > /tmp/helpbuoy.gpg
     gpgv --keyring /tmp/helpbuoy.gpg InRelease
 

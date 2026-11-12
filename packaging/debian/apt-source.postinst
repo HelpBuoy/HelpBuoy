@@ -1,4 +1,4 @@
-# The HelpBuoy APT repository (https://helpbuoy.com/apt/), so that apt
+# The HelpBuoy APT repository (https://apt.helpbuoy.com/), so that apt
 # upgrade installs new versions, like the Chrome and VS Code packages do.
 # The Makefile puts this in the postinst of every package, with the public
 # key of packaging/debian/helpbuoy.asc in place of the APT_KEY line.
@@ -20,7 +20,7 @@ if [ "$1" = configure ]; then
 # The HelpBuoy APT repository, added by the HelpBuoy packages. Removed when
 # the last of them is purged; once removed, an upgrade does not add it again.
 Types: deb
-URIs: https://helpbuoy.com/apt/
+URIs: https://apt.helpbuoy.com/
 Suites: ./
 Signed-By: /etc/apt/keyrings/helpbuoy.asc
 EOF
