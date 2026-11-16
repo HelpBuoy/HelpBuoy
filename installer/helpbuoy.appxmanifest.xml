@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MSIX manifest of the Windows client for the Microsoft Store, used by
+  "make msix". The Makefile fills in @VERSION@ (x.y.z.0, the Store needs the
+  fourth part to be 0). The identity is the one Partner Center reserved for
+  HelpBuoy (Store ID 9NZXVS50R8VB) and must never change.
+
+  The exe is the same as in the MSI, running with full trust. Unlike the MSI
+  version it does not update itself: the Store does that.
+-->
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         IgnorableNamespaces="uap rescap">
+  <Identity Name="MaussoftBV.HelpBuoy"
+            Publisher="CN=843D4B8F-2C93-4B05-8D80-CCE6337BA1FE"
+            Version="@VERSION@"
+            ProcessorArchitecture="x64"/>
+  <Properties>
+    <DisplayName>HelpBuoy</DisplayName>
+    <PublisherDisplayName>Maussoft BV</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0"/>
+  </Dependencies>
+  <Resources>
+    <Resource Language="en-us"/>
+    <Resource Language="nl-nl"/>
+    <Resource Language="de-de"/>
+    <Resource Language="fr-fr"/>
+    <Resource Language="es-es"/>
+    <Resource Language="it-it"/>
+  </Resources>
+  <Applications>
+    <Application Id="HelpBuoy" Executable="helpbuoy.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="HelpBuoy" Description="Remote support client"
+                          BackgroundColor="transparent"
+                          Square150x150Logo="Assets\Square150x150Logo.png"
+                          Square44x44Logo="Assets\Square44x44Logo.png"/>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <!-- The client captures the screen and injects input as a normal desktop app. -->
+    <rescap:Capability Name="runFullTrust"/>
+  </Capabilities>
+</Package>

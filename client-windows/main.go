@@ -136,6 +136,15 @@ func main() {
 		Height:      int(win.GetSystemMetrics(co.SM_CYSCREEN)),
 	}
 
+	// The MSI version updates itself through the "Check for updates" link;
+	// the Store updates the packaged version, which has no link.
+	var checkUpdate func(ctx context.Context) (*update.Release, error)
+	if !packaged() {
+		checkUpdate = func(ctx context.Context) (*update.Release, error) {
+			return update.Check(ctx, update.LatestReleaseURL, version, update.ClientMSI)
+		}
+	}
+
 	w := ui.New(iconID)
 	ctrl := app.New(app.Deps{
 		UI:        w,
@@ -162,9 +171,7 @@ func main() {
 			}
 			return stop
 		},
-		CheckUpdate: func(ctx context.Context) (*update.Release, error) {
-			return update.Check(ctx, update.LatestReleaseURL, version, update.ClientMSI)
-		},
+		CheckUpdate: checkUpdate,
 		AppVersion:  version,
 		UserMachine: userMachine,
 		Logger:      log,

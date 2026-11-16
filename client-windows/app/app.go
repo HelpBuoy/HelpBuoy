@@ -710,6 +710,10 @@ func (c *Controller) WaitClosed(d time.Duration) {
 // Version is the app version, shown in the window title.
 func (c *Controller) Version() string { return c.d.AppVersion }
 
+// CanUpdate reports whether the app updates itself, which decides whether the
+// window shows the update link. The Store version has no CheckUpdate.
+func (c *Controller) CanUpdate() bool { return c.d.CheckUpdate != nil }
+
 // LatestRelease asks for a release newer than Version and returns nil when
 // there is none (or for a development build). It blocks, so the window
 // calls it outside the UI thread, when the user clicks Check for updates.

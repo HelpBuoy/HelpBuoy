@@ -616,7 +616,7 @@ func (w *Window) apply(v app.View) {
 	show(w.lblWho, who)
 	show(w.btnDisconnect, main)
 	show(w.lblComment, main)
-	show(w.lnkUpdate, main)
+	show(w.lnkUpdate, main && w.ctrl.CanUpdate())
 	if main {
 		w.lnkUpdate.Hwnd().EnableWindow(w.updating == "")
 		setText(w.lblComment, v.KeyComment)

@@ -55,6 +55,12 @@ Without a reverse proxy, `helpbuoy-server serve --mode https` serves HTTPS itsel
 
 Every Debian package adds the HelpBuoy APT repository at https://apt.helpbuoy.com/ when it is installed, so installing a .deb from the release once is enough to get updates with `apt upgrade`; unattended-upgrades installs them too, which restarts helpbuoy-server. The repository is signed with a GPG key whose public part is `packaging/debian/helpbuoy.asc`, which `make deb` needs. [docs/signing.md](docs/signing.md) describes the repository, the release steps, and how to make, back up and change the key.
 
+## The Microsoft Store
+
+The Windows client is also in the Microsoft Store (Store ID 9NZXVS50R8VB), as a full-trust MSIX package of the same exe, so it installs without a SmartScreen warning. Once it is live, winget installs it from the Store as well: `winget install 9NZXVS50R8VB`. The Store version has no "Check for updates" link, since the Store updates it.
+
+`make msix` builds the unsigned package in `bin/` from `installer/helpbuoy.appxmanifest.xml`, packed by `tools/mkmsix` because makeappx only runs on Windows. Upload it to Partner Center by hand for each release; the Store signs it. To try a package before it is in the Store, `make msix-test` signs it with a self-signed test certificate: import `bin/msix-test.cer` on the test PC into Local Machine, Trusted People, then open the `_test.msix`.
+
 ## Building the macOS apps
 
 Everything else builds with only Go, including the macOS desk app and the Linux packages for amd64 and arm64, but the macOS client needs cgo for ScreenCaptureKit and AppKit. It is cross compiled on Linux with zig against the macOS 12.3 SDK:
