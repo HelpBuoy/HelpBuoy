@@ -57,9 +57,9 @@ Every Debian package adds the HelpBuoy APT repository at https://apt.helpbuoy.co
 
 ## The Microsoft Store
 
-The Windows client is also in the Microsoft Store (Store ID 9NZXVS50R8VB), as a full-trust MSIX package of the same exe, so it installs without a SmartScreen warning. Once it is live, winget installs it from the Store as well: `winget install 9NZXVS50R8VB`. The Store version has no "Check for updates" link, since the Store updates it.
+The Windows client and the desk app are also in the Microsoft Store (the client as Store ID 9NZXVS50R8VB), as full-trust MSIX packages of the same exes, so they install without a SmartScreen warning. Once they are live, winget installs them from the Store as well: `winget install 9NZXVS50R8VB`. The Store versions have no "Check for updates" link, since the Store updates them.
 
-`make msix` builds the unsigned package in `bin/` from `installer/helpbuoy.appxmanifest.xml`, packed by `tools/mkmsix` because makeappx only runs on Windows. Upload it to Partner Center by hand for each release; the Store signs it. To try a package before it is in the Store, `make msix-test` signs it with a self-signed test certificate: import `bin/msix-test.cer` on the test PC into Local Machine, Trusted People, then open the `_test.msix`.
+`make msix` builds the unsigned packages in `bin/` from `installer/*.appxmanifest.xml`, packed by `tools/mkmsix` because makeappx only runs on Windows. Upload them to Partner Center by hand for each release; the Store signs them. To try a package before it is in the Store, `make msix-test` signs a copy of each with a self-signed test certificate: import `bin/msix-test.cer` on the test PC into Local Machine, Trusted People, then open a `_test.msix`. The listings, screenshots and logos are in `msstore/`, see [msstore/README.md](msstore/README.md).
 
 ## Building the macOS apps
 

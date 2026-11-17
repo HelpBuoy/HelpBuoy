@@ -112,9 +112,10 @@ func main() {
 	}
 
 	opts := views.Options{DataDir: *dataDir, Version: version, Demo: *demo, Page: *page, Icon: iconPNG, Screenshot: *screenshot}
-	if runtime.GOOS == "windows" {
-		// Only Windows updates itself (MSI); the Debian package is updated
-		// with the system's packages.
+	if runtime.GOOS == "windows" && !packaged() {
+		// Only the MSI version updates itself; the Store updates the
+		// packaged version and the Debian package comes with the system's
+		// packages.
 		opts.CheckUpdate = func(ctx context.Context) (*update.Release, error) {
 			return update.Check(ctx, update.LatestReleaseURL, version, update.DeskMSI)
 		}

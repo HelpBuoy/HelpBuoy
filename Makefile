@@ -36,10 +36,11 @@ FILE_VERSION = $(shell jq -r '.RT_VERSION[]["0000"].fixed.file_version' client-w
 DESK_FILE_VERSION = $(shell jq -r '.RT_VERSION[]["0000"].fixed.file_version' desk/resources/winres.json)
 MSI := $(DIST)/helpbuoy_$(APP_VERSION)_amd64.msi
 DESK_MSI := $(DIST)/helpbuoy-desk_$(APP_VERSION)_amd64.msi
-# The client for the Microsoft Store, unsigned: the Store signs it. Not in
-# dist/, since nobody can install an unsigned package from the release.
+# The client and desk app for the Microsoft Store, unsigned: the Store signs
+# them. Not in dist/, since nobody can install an unsigned package from the
+# release.
 MSIX := $(BIN)/helpbuoy_$(APP_VERSION).0_x64.msix
-MSIX_TEST := $(BIN)/helpbuoy_$(APP_VERSION).0_x64_test.msix
+DESK_MSIX := $(BIN)/helpbuoy-desk_$(APP_VERSION).0_x64.msix
 
 .PHONY: help all test vet fuzz server client client-linux client-macos desk-macos zip-macos desk dist msi msix msix-test deb deb-client deb-desk icon clean
 
@@ -56,7 +57,7 @@ help:
 	@echo "make desk-macos    build the universal macOS desk app into $(BIN)/"
 	@echo "make dist     all release packages in $(DIST)/: msi, deb, deb-client, deb-desk and zip-macos"
 	@echo "make msi      per-user installers of the Windows client and desk app (needs wixl and msitools)"
-	@echo "make msix     the Windows client for the Microsoft Store, unsigned, in $(BIN)/"
+	@echo "make msix     the Windows client and desk app for the Microsoft Store, unsigned, in $(BIN)/"
 	@echo "make msix-test  the same, signed with a self-signed test certificate (needs osslsigncode)"
 	@echo "make deb      Debian 13 package of helpbuoy-server with a systemd service (needs dpkg-deb)"
 	@echo "make deb-client  Debian package of the Linux client with a menu entry and icons (needs dpkg-deb)"
@@ -201,25 +202,32 @@ msi: client desk
 	$(call build-msi,installer/helpbuoy.wxs,$(BIN)/windows-amd64/helpbuoy.exe,$(FILE_VERSION),$(MSI))
 	$(call build-msi,installer/helpbuoy-desk.wxs,$(BIN)/windows-amd64/helpbuoy-desk.exe,$(DESK_FILE_VERSION),$(DESK_MSI))
 
-# msix: the Windows client as an MSIX package for the Microsoft Store
-# (installer/helpbuoy.appxmanifest.xml), packed by tools/mkmsix since makeappx
-# only runs on Windows. Upload it to Partner Center unsigned; the Store signs
-# it. The Store needs the fourth part of the version to be 0.
-MSIX_DIR := $(BIN)/msix
-msix: client
-	rm -rf $(MSIX_DIR) && mkdir -p $(MSIX_DIR)/Assets
-	cp $(BIN)/windows-amd64/helpbuoy.exe $(MSIX_DIR)/
-	sed 's/@VERSION@/$(APP_VERSION).0/' installer/helpbuoy.appxmanifest.xml > $(MSIX_DIR)/AppxManifest.xml
-	GOWORK=off GO111MODULE=off go run tools/genicon/main.go $(MSIX_DIR)/Assets/Square44x44Logo.png 44
-	GOWORK=off GO111MODULE=off go run tools/genicon/main.go $(MSIX_DIR)/Assets/Square150x150Logo.png 150
-	GOWORK=off GO111MODULE=off go run tools/genicon/main.go $(MSIX_DIR)/Assets/StoreLogo.png 50
-	GOWORK=off GO111MODULE=off go run tools/mkmsix/main.go $(MSIX_DIR) $(MSIX)
+# msix: the Windows client and desk app as MSIX packages for the Microsoft
+# Store (installer/*.appxmanifest.xml), packed by tools/mkmsix since makeappx
+# only runs on Windows. Upload them to Partner Center unsigned; the Store
+# signs them. The Store needs the fourth part of the version to be 0.
+#
+# build-msix MANIFEST EXE OUT: one package, staged in $(BIN)/msix-<name>.
+define build-msix
+	rm -rf $(BIN)/msix-$(basename $(notdir $(2))) && mkdir -p $(BIN)/msix-$(basename $(notdir $(2)))/Assets
+	cp $(2) $(BIN)/msix-$(basename $(notdir $(2)))/
+	sed 's/@VERSION@/$(APP_VERSION).0/' $(1) > $(BIN)/msix-$(basename $(notdir $(2)))/AppxManifest.xml
+	GOWORK=off GO111MODULE=off go run tools/genicon/main.go $(BIN)/msix-$(basename $(notdir $(2)))/Assets/Square44x44Logo.png 44
+	GOWORK=off GO111MODULE=off go run tools/genicon/main.go $(BIN)/msix-$(basename $(notdir $(2)))/Assets/Square150x150Logo.png 150
+	GOWORK=off GO111MODULE=off go run tools/genicon/main.go $(BIN)/msix-$(basename $(notdir $(2)))/Assets/StoreLogo.png 50
+	GOWORK=off GO111MODULE=off go run tools/mkmsix/main.go $(BIN)/msix-$(basename $(notdir $(2))) $(3)
+endef
 
-# msix-test: the Store package signed with a self-signed certificate whose
-# subject is the Publisher of the manifest, to install it on a test PC before
-# it is in the Store. Import $(BIN)/msix-test.cer there once, into
-# Local Machine, Trusted People, then open the .msix. The key is made on the
-# first run and kept in $(BIN); it signs nothing but test packages.
+msix: client desk
+	$(call build-msix,installer/helpbuoy.appxmanifest.xml,$(BIN)/windows-amd64/helpbuoy.exe,$(MSIX))
+	$(call build-msix,installer/helpbuoy-desk.appxmanifest.xml,$(BIN)/windows-amd64/helpbuoy-desk.exe,$(DESK_MSIX))
+
+# msix-test: the Store packages signed with a self-signed certificate whose
+# subject is the Publisher of the manifests (both apps are in the same
+# Partner Center account), to install them on a test PC before they are in
+# the Store. Import $(BIN)/msix-test.cer there once, into Local Machine,
+# Trusted People, then open a _test.msix. The key is made on the first run
+# and kept in $(BIN); it signs nothing but test packages.
 MSIX_PUBLISHER = $(shell sed -n 's/.*Publisher="\(CN=[^"]*\)".*/\1/p' installer/helpbuoy.appxmanifest.xml)
 msix-test: msix
 	@command -v osslsigncode >/dev/null || { echo "msix-test needs osslsigncode (sudo apt install osslsigncode)" >&2; exit 1; }
@@ -228,9 +236,11 @@ msix-test: msix
 		-addext "basicConstraints=critical,CA:FALSE" -addext "keyUsage=critical,digitalSignature" \
 		-addext "extendedKeyUsage=codeSigning"
 	openssl x509 -in $(BIN)/msix-test.pem -outform der -out $(BIN)/msix-test.cer
-	rm -f $(MSIX_TEST)
-	osslsigncode sign -certs $(BIN)/msix-test.pem -key $(BIN)/msix-test.key -h sha256 \
-		-in $(MSIX) -out $(MSIX_TEST)
+	for m in $(MSIX) $(DESK_MSIX); do \
+		rm -f $${m%.msix}_test.msix && \
+		osslsigncode sign -certs $(BIN)/msix-test.pem -key $(BIN)/msix-test.key \
+			-in $$m -out $${m%.msix}_test.msix || exit 1; \
+	done
 
 # Debian 13 package of helpbuoy-server (packaging/debian): the binary, a hardened
 # systemd service running as the helpbuoy-server system user with its state in
