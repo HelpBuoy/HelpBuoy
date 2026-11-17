@@ -1,0 +1,10 @@
+Chiede il tuo consenso prima di ogni sessione
+Premi Esc per terminare una sessione e riprendere il controllo in qualsiasi momento
+Condivide solo schermo, mouse e tastiera: nessun trasferimento di file, nessuna riga di comando
+Registrati una volta con una chiave, poi ricevi aiuto ogni volta che apri l'app
+Mostra il nome e il numero di telefono dell'helpdesk che ti aiuta
+Blocca questo PC sul tuo helpdesk
+Funziona sulle reti che consentono solo il traffico web, anche tramite proxy
+Nessun account necessario
+Gratuito e open source
+In inglese, olandese, tedesco, francese, spagnolo e italiano

@@ -1,0 +1,21 @@
+Mit HelpBuoy hilft Ihnen ein Techniker Ihres Vertrauens an Ihrem PC. Er sieht Ihren Bildschirm und bedient Maus und Tastatur, aber erst, nachdem Sie es zulassen.
+
+Dies ist die App für die Person, die Hilfe bekommt. Ihr Techniker oder Helpdesk verwendet HelpBuoy Desk und einen HelpBuoy-Server; Sie brauchen nur die Serveradresse, die Sie von dort bekommen.
+
+So funktioniert es
+1. Öffnen Sie HelpBuoy und geben Sie die Serveradresse ein, die Ihnen Ihr Techniker gegeben hat.
+2. HelpBuoy zeigt einen Schlüssel für diesen PC. Kopieren Sie ihn und senden Sie ihn an Ihren Techniker, der diesen PC einmalig registriert.
+3. Wenn Sie Hilfe brauchen, öffnen Sie HelpBuoy. Ihr Techniker bittet um eine Verbindung, und Sie wählen Zulassen oder Nicht jetzt.
+
+Sie behalten die Kontrolle
+• Jede Sitzung fragt zuerst nach Ihrer Zustimmung.
+• Mit Esc beenden Sie die Sitzung jederzeit und übernehmen wieder die Steuerung.
+• Eine Sitzung überträgt nur Ihren Bildschirm sowie Maus und Tastatur des Technikers: keine Dateiübertragung, keine Befehlszeile.
+• HelpBuoy zeigt, wer Ihnen hilft: Name und Telefonnummer Ihres Helpdesks.
+• Binden Sie diesen PC an Ihren Helpdesk, sodass andere Server sich erst verbinden können, nachdem Ihr Helpdesk sie zugelassen hat.
+
+Funktioniert, wo andere scheitern
+• HelpBuoy verbindet sich über HTTPS und kommt so durch Netzwerke, die nur Webverkehr erlauben; dabei verwendet es die Proxy-Einstellungen von Windows.
+• Kein Konto nötig: HelpBuoy verbindet sich nur mit dem Server, den Ihnen Ihr Helpdesk nennt.
+
+HelpBuoy ist kostenlos und Open Source (MIT-Lizenz) und läuft auch unter macOS und Linux.

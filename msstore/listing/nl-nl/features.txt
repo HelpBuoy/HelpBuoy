@@ -1,0 +1,10 @@
+Vraagt voor elke sessie om je toestemming
+Druk op Esc om een sessie te beëindigen en op elk moment de besturing terug te nemen
+Deelt alleen je scherm, muis en toetsenbord: geen bestandsoverdracht, geen opdrachtregel
+Eén keer registreren met een sleutel, daarna hulp zodra je de app opent
+Toont de naam en het telefoonnummer van de helpdesk die je helpt
+Vergrendel deze pc op je helpdesk
+Werkt op netwerken die alleen webverkeer toelaten, ook via een proxy
+Geen account nodig
+Gratis en open source
+In het Engels, Nederlands, Duits, Frans, Spaans en Italiaans

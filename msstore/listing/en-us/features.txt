@@ -1,0 +1,10 @@
+Asks for your approval before every session
+Press Esc to end a session and take back control at any time
+Shares only your screen, mouse and keyboard: no file transfer, no command line
+Register once with a key, then get help whenever you open the app
+Shows the name and phone number of the helpdesk that helps you
+Lock this PC to your helpdesk
+Works on networks that only allow web traffic, through proxies too
+No account needed
+Free and open source
+In English, Dutch, German, French, Spanish and Italian

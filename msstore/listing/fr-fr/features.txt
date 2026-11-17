@@ -1,0 +1,10 @@
+Demande votre accord avant chaque session
+Appuyez sur Esc pour mettre fin à une session et reprendre le contrôle à tout moment
+Ne partage que votre écran, votre souris et votre clavier : pas de transfert de fichiers, pas de ligne de commande
+Enregistrement unique avec une clé, puis de l'aide dès que vous ouvrez l'application
+Affiche le nom et le numéro de téléphone du support qui vous aide
+Verrouillez ce PC sur votre support
+Fonctionne sur les réseaux qui n'autorisent que le trafic web, y compris via un proxy
+Aucun compte nécessaire
+Gratuit et open source
+En anglais, néerlandais, allemand, français, espagnol et italien

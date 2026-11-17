@@ -1,0 +1,21 @@
+Met HelpBuoy helpt een techie die je vertrouwt je op je pc. De techie ziet je scherm en gebruikt je muis en toetsenbord, maar pas nadat je dat toestaat.
+
+Dit is de app voor wie geholpen wordt. Je techie of helpdesk gebruikt HelpBuoy Desk en een HelpBuoy-server; jij hebt alleen het serveradres nodig dat je daarvan krijgt.
+
+Zo werkt het
+1. Open HelpBuoy en typ het serveradres dat je van je techie kreeg.
+2. HelpBuoy toont een sleutel voor deze pc. Kopieer die en stuur hem naar je techie, die deze pc één keer registreert.
+3. Heb je hulp nodig, open dan HelpBuoy. Je techie vraagt om verbinding te maken, en jij kiest Toestaan of Niet nu.
+
+Jij houdt de controle
+• Elke sessie vraagt eerst om je toestemming.
+• Druk op elk moment op Esc om de sessie te beëindigen en de besturing terug te nemen.
+• Een sessie draagt alleen je scherm en de muis en het toetsenbord van de techie over: geen bestandsoverdracht, geen opdrachtregel.
+• HelpBuoy laat zien wie je helpt: de naam en het telefoonnummer van je helpdesk.
+• Vergrendel deze pc op je helpdesk, zodat andere servers pas verbinding kunnen maken nadat je helpdesk dat toestaat.
+
+Werkt waar andere niet werken
+• HelpBuoy maakt verbinding via HTTPS, dus het komt door netwerken die alleen webverkeer toelaten, en het gebruikt de proxyinstellingen van Windows.
+• Geen account nodig: HelpBuoy maakt alleen verbinding met de server die je helpdesk je geeft.
+
+HelpBuoy is gratis en open source (MIT-licentie) en werkt ook op macOS en Linux.

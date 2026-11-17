@@ -1,0 +1,10 @@
+Fragt vor jeder Sitzung nach Ihrer Zustimmung
+Mit Esc beenden Sie eine Sitzung und übernehmen jederzeit wieder die Steuerung
+Überträgt nur Bildschirm, Maus und Tastatur: keine Dateiübertragung, keine Befehlszeile
+Einmal mit einem Schlüssel registrieren, danach Hilfe, sobald Sie die App öffnen
+Zeigt Name und Telefonnummer des Helpdesks, der Ihnen hilft
+Binden Sie diesen PC an Ihren Helpdesk
+Funktioniert in Netzwerken, die nur Webverkehr erlauben, auch über einen Proxy
+Kein Konto nötig
+Kostenlos und Open Source
+Auf Englisch, Niederländisch, Deutsch, Französisch, Spanisch und Italienisch

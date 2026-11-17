@@ -1,0 +1,21 @@
+Con HelpBuoy, un técnico de confianza te ayuda en tu PC. Ve tu pantalla y usa tu ratón y tu teclado, pero solo después de que tú lo permitas.
+
+Esta es la aplicación para la persona que recibe ayuda. Tu técnico o tu servicio de soporte usa HelpBuoy Desk y un servidor HelpBuoy; tú solo necesitas la dirección del servidor que te den.
+
+Cómo funciona
+1. Abre HelpBuoy y escribe la dirección del servidor que te dio tu técnico.
+2. HelpBuoy muestra una clave para este PC. Cópiala y envíasela a tu técnico, que registra este PC una sola vez.
+3. Cuando necesites ayuda, abre HelpBuoy. Tu técnico pide conectarse y tú eliges Permitir o Ahora no.
+
+Tú tienes el control
+• Cada sesión pide primero tu permiso.
+• Pulsa Esc en cualquier momento para terminar la sesión y recuperar el control.
+• Una sesión solo transmite tu pantalla y el ratón y el teclado del técnico: sin transferencia de archivos ni línea de comandos.
+• HelpBuoy muestra quién te ayuda: el nombre y el teléfono de tu servicio de soporte.
+• Bloquea este PC con tu servicio de soporte, para que otros servidores solo puedan conectarse después de que tu soporte los permita.
+
+Funciona donde otros no
+• HelpBuoy se conecta por HTTPS, así que atraviesa redes que solo permiten tráfico web, y usa la configuración de proxy de Windows.
+• Sin cuenta: HelpBuoy solo se conecta al servidor que te indique tu servicio de soporte.
+
+HelpBuoy es gratuito y de código abierto (licencia MIT) y también funciona en macOS y Linux.

@@ -1,0 +1,21 @@
+HelpBuoy lets a techie you trust help you on your PC. They see your screen and use your mouse and keyboard, but only after you allow it.
+
+This is the app for the person who receives help. Your techie or helpdesk uses HelpBuoy Desk and a HelpBuoy server; all you need is the server address they give you.
+
+How it works
+1. Open HelpBuoy and type the server address your techie gave you.
+2. HelpBuoy shows a key for this PC. Copy it and send it to your techie, who registers this PC once.
+3. When you need help, open HelpBuoy. Your techie asks to connect, and you choose Allow or Not now.
+
+You stay in control
+• Every session asks for your approval first.
+• Press Esc at any time to end the session and take back control.
+• A session carries only your screen and the techie's mouse and keyboard: no file transfer, no command line.
+• HelpBuoy shows who is helping you: the name and phone number of your helpdesk.
+• Lock this PC to your helpdesk, so other servers can only connect after your helpdesk allows them.
+
+Works where others don't
+• HelpBuoy connects over HTTPS, so it gets through networks that only allow web traffic, and it uses the proxy settings of Windows.
+• No account needed: HelpBuoy only connects to the server your helpdesk gives you.
+
+HelpBuoy is free and open source (MIT license) and also runs on macOS and Linux.

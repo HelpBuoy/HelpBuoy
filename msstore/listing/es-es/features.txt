@@ -1,0 +1,10 @@
+Pide tu permiso antes de cada sesión
+Pulsa Esc para terminar una sesión y recuperar el control en cualquier momento
+Solo comparte tu pantalla, ratón y teclado: sin transferencia de archivos ni línea de comandos
+Regístrate una vez con una clave y recibe ayuda cada vez que abras la aplicación
+Muestra el nombre y el teléfono del servicio de soporte que te ayuda
+Bloquea este PC con tu servicio de soporte
+Funciona en redes que solo permiten tráfico web, también a través de un proxy
+Sin cuenta
+Gratuito y de código abierto
+En inglés, neerlandés, alemán, francés, español e italiano
