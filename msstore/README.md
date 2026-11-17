@@ -26,6 +26,21 @@ The languages are en-us, nl-nl, de-de, fr-fr, es-es and it-it, those of the pack
 
 `reference/` holds real Windows 11 screenshots of both apps, which the screenshots are measured against.
 
+## Publishing updates
+
+`release.sh` submits every release to the Store by itself, through `msstore/publish.sh`, which can also be run by hand (`msstore/publish.sh 0.5.4`, or with `helpbuoy` or `helpbuoy-desk` after the version for one app). It uses the Microsoft Store Developer CLI, `msstore`, which takes the last published submission of each app, with its listing, screenshots and pricing, puts in the new package and sends it to certification. That takes from hours to a few days; the Store then updates the installed apps. While an update is still being certified, the next one is refused for that app, and the release script says so and how to submit it later.
+
+Changes to the listing, screenshots or logos in this folder still go into Partner Center by hand.
+
+Setting up, once:
+
+1. Submit the first version of each app by hand in Partner Center; the CLI can only update an app that has a published submission.
+2. Install the CLI: `MSStoreCLI-linux-x64.tar.gz` from https://github.com/microsoft/msstore-cli/releases holds one self-contained `msstore` executable (no .NET runtime needed); put it somewhere in your PATH, such as `~/.local/bin`. It sends telemetry by default; `msstore settings --enableTelemetry false` turns that off.
+3. In Partner Center, under Account settings, User management, Microsoft Entra applications, add an application with the Manager role and make a client secret for it. Note the tenant ID, the client ID and the secret, and the seller ID from Account settings, Legal info.
+4. Fill in `msstore/credentials.env`, which git ignores and only you can read (`credentials.env.example` says where each value is in Partner Center). `publish.sh` configures `msstore` from it before every submission, and turns off its telemetry. `msstore/publish.sh --check` checks the credentials without submitting anything: it should list both apps.
+
+The client secret expires (after at most two years). When it has, `msstore` fails to log in: make a new secret in Partner Center and put it in `msstore/credentials.env`.
+
 ## Logos
 
 Both apps have the same icon. The logos are that icon from `tools/genicon`, drawn at 88% of the size and centered on a transparent square, so the rope keeps some room from the edge of the tile. To make them again:

@@ -22,6 +22,11 @@
 # up the Debian packages from the release by itself and adds them to
 # https://apt.helpbuoy.com/ within ten minutes (see ../helpbuoy-apt). The
 # macOS client needs zig and a macOS SDK, see README.md.
+#
+# Last, it submits the MSIX packages of both apps to the Microsoft Store
+# with msstore/publish.sh. When that fails (msstore not set up, or the last
+# update still being certified), the release is done all the same and the
+# script says how to submit later.
 set -e
 cd "$(dirname "$0")"
 
@@ -73,3 +78,9 @@ git tag "v$version"
 git push
 git push origin "v$version"
 gh release create "v$version" --title "v$version" --verify-tag dist/*
+
+# The Microsoft Store.
+make msix VERSION="v$version"
+if ! msstore/publish.sh "$version"; then
+	echo "Released v$version, but not (all) in the Microsoft Store; submit later with: msstore/publish.sh $version" >&2
+fi
