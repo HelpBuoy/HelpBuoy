@@ -130,7 +130,7 @@ func New(iconID uint16) *Window {
 		Size(1, 1).CtrlStyle(co.BS_AUTOCHECKBOX).State(co.BST_CHECKED))
 	w.lblAddrError = static("", co.SS_LEFT)
 
-	w.lblKeyIntro = static(i18n.Trans("Paste this key into a chat with a techie (for example WhatsApp)."), co.SS_LEFT)
+	w.lblKeyIntro = static(i18n.Trans("Paste this key into an email to a techie."), co.SS_LEFT)
 	w.edtKey = ui.NewEdit(p, ui.OptsEdit().CtrlStyle(co.ES_MULTILINE|co.ES_READONLY|co.ES_AUTOVSCROLL))
 	w.btnCopy = button(i18n.Trans("C&opy key"), co.BS_PUSHBUTTON)
 	w.lblKeyFp = static("", co.SS_LEFT)

@@ -36,13 +36,13 @@ other, and splices their channels together.
   quarter of the pixels to encode and send. On first start it asks
   for the server's `hostname:port` and shows its own application-specific SSH public key
   (generated once on first start, kept in AppData) with a **Copy** button, so the user can
-  send it to the techie over a chat such as WhatsApp. After the first successful connection
+  send it to the techie by email. After the first successful connection
   the address is stored and every later start connects to it by itself; the address can only
   be changed when connecting fails or after **Disconnect** on the waiting screen. Once a techie has registered that key, the computer shows up as online for all
   techies. Techies ask to help: a techie presses **Connect** on an online computer, and the
   computer asks its user whether that techie (by name) may take
   control. Nothing happens without that approval. Talking about the problem happens over
-  WhatsApp or the phone, not in the apps.
+  email or the phone, not in the apps.
   A computer is helped by **one techie at a time**; a techie can help many computers at once.
 
 What a session can do, and nothing more:
@@ -167,7 +167,7 @@ stored server. The computer remembers nothing about techies: the server vouches 
    lets the user correct the address; nothing is stored yet.
 3. Once connected, the client shows the public key line (the contents of the `.pub` file)
    with a **Copy key** button and its fingerprint. The user pastes it into a chat with the
-   techie (WhatsApp, Signal, mail). The key is public, so the chat needs no secrecy,
+   techie by email. The key is public, so the email needs no secrecy,
    only the assurance that the message really comes from the user.
 4. The techie pastes the key line into the desk app (7.2) and, if in doubt, compares the
    fingerprint with the user by phone. The computer is registered under the key's comment
@@ -183,13 +183,13 @@ stored server. The computer remembers nothing about techies: the server vouches 
 ### Session (every time)
 
 The apps carry no text between user and techie. Explaining the problem, and saying it's
-fixed, happens over WhatsApp or the phone. The apps also show nothing about sessions starting
+fixed, happens over email or the phone. The apps also show nothing about sessions starting
 or ending.
 
 1. Computer and techies are connected to the server with their persistent keys. Techies see
    `anna@ANNA-LAPTOP` in their list of connected computers.
 2. **The techie presses Connect** on the computer's row (7.2), usually while on the phone or
-   in a WhatsApp chat with the user. The server creates a request taken by that techie and
+   emailing with the user. The server creates a request taken by that techie and
    sends the computer `SessionReady`. Other techies see the computer as busy; if two techies
    connect at the same moment, the first one wins.
 3. **The computer asks the user** whether that techie may take control, showing the techie's
@@ -660,8 +660,8 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   ask you to install this." Continue only works after 5 seconds. It is shown once per server
   key, so people who run their own server see it once per computer.
 - If the server doesn't know this PC's key yet: server fingerprint, the public key line in a
-  read-only box, the key fingerprint, a big **Copy key** button, and "Paste this key into a
-  chat with a techie (for example WhatsApp)." A link goes back to the address field.
+  read-only box, the key fingerprint, a big **Copy key** button, and "Paste this key into an
+  email to a techie." A link goes back to the address field.
 - Waits for `Registered`, then saves the configuration and moves to the waiting screen.
 
 ### 6.3 Waiting screen

@@ -36,7 +36,7 @@
 <use href="#chat" xlink:href="#chat" transform="translate(278 112) scale(1)"/>
 <use href="#chat" xlink:href="#chat" transform="translate(922 112) scale(1)"/>
 <line x1="304" y1="112" x2="896" y2="112" stroke="#E3A83A" stroke-width="2.5" stroke-linecap="round" marker-end="url(#head-E3A83A)"/>
-<text x="600" y="100" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">sends anna@laptop public key (WhatsApp, mail, ...)</text>
+<text x="600" y="100" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">sends anna@laptop public key (email)</text>
 <use href="#pc" xlink:href="#pc" transform="translate(214 238) scale(1)"/>
 <text x="166" y="244" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="end">HelpBuoy</text>
 <text x="166" y="262" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="end">client</text>

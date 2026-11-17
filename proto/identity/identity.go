@@ -51,7 +51,7 @@ var blobFields = map[string]int{
 }
 
 // ParsePasted finds an "ssh-ed25519 AAAA... [comment]" key line inside text
-// as it arrives from WhatsApp, mail or a chat: tolerates line breaks inside the
+// as it arrives from an email or a chat: tolerates line breaks inside the
 // base64, leading/trailing spaces, quotes, backticks, non-breaking and
 // zero-width spaces, and other words before or after the key. It returns the
 // key, its comment (may be empty) and the normalized authorized_keys line

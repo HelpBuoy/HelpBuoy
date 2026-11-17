@@ -162,7 +162,7 @@
   "Paste the key line {0} sent you from another computer they use. The app there shows it when it connects to this server before the key is added.": "Füge die Schlüsselzeile ein, die {0} dir von einem anderen Computer geschickt hat, den {0} benutzt. Die App dort zeigt sie, wenn sie sich mit diesem Server verbindet, bevor der Schlüssel hinzugefügt ist.",
   "Paste the key the techie sent you (ssh-ed25519 AAAA…)": "Schlüssel einfügen, den der Techniker Ihnen geschickt hat (ssh-ed25519 AAAA…)",
   "Paste the key the user sent you (ssh-ed25519 AAAA…)": "Schlüssel einfügen, den der Benutzer Ihnen geschickt hat (ssh-ed25519 AAAA…)",
-  "Paste this key into a chat with a techie (for example WhatsApp).": "Fügen Sie diesen Schlüssel in einen Chat mit einem Techniker ein (zum Beispiel WhatsApp).",
+  "Paste this key into an email to a techie.": "Fügen Sie diesen Schlüssel in eine E-Mail an einen Techniker ein.",
   "Phone number": "Telefonnummer",
   "Phone: {0}": "Telefon: {0}",
   "Quit": "Beenden",
