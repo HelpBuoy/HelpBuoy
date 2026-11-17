@@ -54,7 +54,7 @@ Both apps have the same icon. The logos are that icon from `tools/genicon`, draw
 
 ## Screenshots
 
-`msstore/screenshots.sh` makes them on Linux, for both apps or one, for all languages or the ones given (`msstore/screenshots.sh helpbuoy-desk nl-nl`), in about three minutes for everything. They are 1920x1080 PNGs with the window in a Windows 11 frame; the top of the script says how. Run it again after a change to a window or its texts, or after a release, since the titles show the version.
+`msstore/screenshots.sh` makes them on Linux, for both apps or one, for all languages or the ones given (`msstore/screenshots.sh helpbuoy-desk nl-nl`), in about three minutes for everything. They are 1920x1080 PNGs with the window in a Windows 11 frame; the top of the script says how. Run it again after a change to a window or its texts. The titles leave out the version, so the screenshots stay right from one release to the next.
 
 The client runs for real in Wine against the fake server, at 200%. The PC is anna@ANNA-PC and the helpdesk "Example Helpdesk" with phone number +1 555 0100, so no real names or numbers end up in the Store.
 

@@ -58,11 +58,9 @@ if [ "$1" != --inside ]; then
 		command -v $c >/dev/null || { echo "$c is missing, see the top of $0" >&2; exit 1; }
 	done
 	python3 -c 'import fontTools' 2>/dev/null || { echo "fontTools is missing, see the top of $0" >&2; exit 1; }
-	# The titles show the version, so build the apps as the last release.
 	mkdir -p "$work"
-	tag=$(git describe --tags --abbrev=0)
-	make client VERSION="$tag" >/dev/null
-	make desk TARGETS=linux/amd64 VERSION="$tag" >/dev/null
+	make client >/dev/null
+	make desk TARGETS=linux/amd64 >/dev/null
 	(cd client-windows && go build -o "$work/fakeserver" ./internal/cmd/fakeserver)
 	# Selawik, pinned by its checksum.
 	zip=$work/selawik.zip
@@ -90,11 +88,10 @@ if [ "$1" != --inside ]; then
 		f['head'].macStyle |= 1
 		f.save(sys.argv[1])
 	EOF
-	exec unshare -rnmu "$0" --inside "$tag" "${apps[*]}" "${langs[@]}"
+	exec unshare -rnmu "$0" --inside "${apps[*]}" "${langs[@]}"
 fi
-tag=$2
-read -ra apps <<<"$3"
-shift 3
+read -ra apps <<<"$2"
+shift 2
 langs=("$@")
 
 # Inside the namespace: loopback, port 443 without root, our host names.
@@ -257,7 +254,7 @@ desk() {
 		LANG=${ll}_${cc^^}.UTF-8 bin/linux-amd64/helpbuoy-desk --demo --page "$page" \
 			--demo-screen "$store/reference/remote-win11.png" \
 			--size 1040x600 --screenshot "$work/desk.png" 2>&1 | { grep -v '^WARNING: FONT:' || true; }
-		frame "$work/desk.png" "HelpBuoy Desk $tag" resizable "$work/desk-framed.png"
+		frame "$work/desk.png" "HelpBuoy Desk" resizable "$work/desk-framed.png"
 		desktop "$out/$n-$name.png" "$work/desk-framed.png" -gravity center -composite
 	done
 	xrdb -remove
