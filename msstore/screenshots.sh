@@ -26,7 +26,9 @@
 # Helpdesk.
 #
 # helpbuoy-desk draws its own window with raylib, the same on every system,
-# so its Linux build makes the pictures, in demo mode at 150% (Xft.dpi).
+# so its Linux build makes the pictures, in demo mode at 150% (Xft.dpi). Its
+# demo session shows a real Windows 11 desktop, msstore/reference/remote-win11.png,
+# instead of the test pattern.
 #
 # Without a window manager only the inside of the windows is drawn; the
 # script draws a Windows 11 title bar and border around them, measured from
@@ -253,6 +255,7 @@ desk() {
 		n=$((n + 1)) name=${page%:}
 		[ "$name" = computers ] && page= || page=$name
 		LANG=${ll}_${cc^^}.UTF-8 bin/linux-amd64/helpbuoy-desk --demo --page "$page" \
+			--demo-screen "$store/reference/remote-win11.png" \
 			--size 1040x600 --screenshot "$work/desk.png" 2>&1 | { grep -v '^WARNING: FONT:' || true; }
 		frame "$work/desk.png" "HelpBuoy Desk $tag" resizable "$work/desk-framed.png"
 		desktop "$out/$n-$name.png" "$work/desk-framed.png" -gravity center -composite
