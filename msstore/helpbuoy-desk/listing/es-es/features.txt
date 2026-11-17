@@ -1,0 +1,10 @@
+Ve la pantalla y usa el ratón y el teclado de los equipos a los que das soporte
+Cada sesión necesita el permiso del usuario
+Sesiones en pestañas, para ayudar a varias personas a la vez
+Ajustar, 1:1, adaptar la ventana o pantalla completa
+Cambia de monitor y elige Auto, Nítido o Rápido
+Envía Win, Alt+Tab y otras teclas del sistema
+Agrupa los equipos por cliente y filtra la lista
+Servidor integrado, o conexión a tu propio servidor HelpBuoy
+Añade técnicos, tus compañeros, al mismo servicio de soporte
+Gratuito y de código abierto, también para Linux y macOS

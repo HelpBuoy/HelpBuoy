@@ -1,0 +1,10 @@
+Sehen Sie den Bildschirm und bedienen Sie Maus und Tastatur der betreuten Computer
+Jede Sitzung braucht die Zustimmung des Benutzers
+Sitzungen in Tabs, um mehreren Personen gleichzeitig zu helfen
+Einpassen, 1:1, Fenstergröße anpassen oder Vollbild
+Monitor wechseln und Auto, Scharf oder Schnell wählen
+Win, Alt+Tab und andere Systemtasten senden
+Computer nach Kunden gruppieren und die Liste filtern
+Eingebauter Server oder Verbindung zu Ihrem eigenen HelpBuoy-Server
+Fügen Sie Techniker, Ihre Kollegen, demselben Helpdesk hinzu
+Kostenlos und Open Source, auch für Linux und macOS

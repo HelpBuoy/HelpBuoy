@@ -1,0 +1,10 @@
+Zie het scherm en gebruik muis en toetsenbord van de computers die je ondersteunt
+Elke sessie vraagt om toestemming van de gebruiker
+Sessies in tabbladen, om meerdere mensen tegelijk te helpen
+Passend, 1:1, formaat aanpassen of volledig scherm
+Wissel van beeldscherm en kies Auto, Scherp of Snel
+Stuur Win, Alt+Tab en andere systeemtoetsen
+Groepeer computers per klant en filter de lijst
+Ingebouwde server, of verbind met je eigen HelpBuoy-server
+Voeg techies toe, je collega's, aan dezelfde helpdesk
+Gratis en open source, ook voor Linux en macOS

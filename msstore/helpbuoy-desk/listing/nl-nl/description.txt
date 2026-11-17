@@ -1,0 +1,26 @@
+HelpBuoy Desk is de app voor techies: zie het scherm van een computer die je ondersteunt en gebruik de muis en het toetsenbord, nadat de gebruiker dat toestaat.
+
+Wie je helpt, gebruikt de gratis HelpBuoy-app op Windows, Linux of macOS. HelpBuoy Desk toont hun computers, laat zien welke online zijn en opent een sessie als je op Verbinden klikt.
+
+Zo werkt het
+1. Draai een server: laat het adres leeg om er een op deze computer te draaien, of maak verbinding met een HelpBuoy-server van je helpdesk.
+2. De gebruiker typt jouw serveradres in HelpBuoy en stuurt je de sleutel die het toont, bijvoorbeeld in een chat. Plak die één keer onder Computer registreren.
+3. Hebben ze hulp nodig, dan openen ze HelpBuoy. Klik op Verbinden; zij staan het toe, en jij ziet hun scherm.
+
+Gemaakt om te helpen
+• Sessies openen in tabbladen, zodat je meerdere mensen tegelijk kunt helpen.
+• Pas het scherm in het venster, toon het 1:1 of pas het venster erop aan, of ga naar volledig scherm.
+• Wissel tussen beeldschermen en kies Auto, Scherp of Snel voor het beeld.
+• Stuur Win, Alt+Tab en andere toetsen die het eigen systeem zou afvangen.
+• Groepeer computers per klant en filter de lijst.
+• Voeg techies toe, je collega's, zodat zij dezelfde computers kunnen helpen.
+
+Veilig voor wie je helpt
+• Elke sessie vraagt om toestemming van de gebruiker, en Esc aan hun kant beëindigt hem.
+• Een sessie draagt alleen het scherm en jouw muis en toetsenbord over: geen bestandsoverdracht, geen opdrachtregel.
+• Gebruikers zien de bedrijfsnaam en het telefoonnummer van je helpdesk.
+• Zelf gehost: de verbinding loopt via je eigen server, over HTTPS of gewoon SSH.
+
+HelpBuoy Desk is gratis en open source (MIT-licentie) en werkt ook op Linux en macOS.
+
+Meer over HelpBuoy, en hoe je een helpdesk opzet: www.helpbuoy.com

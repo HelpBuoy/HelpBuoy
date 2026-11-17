@@ -1,0 +1,26 @@
+HelpBuoy Desk est l'application des techniciens : voyez l'écran d'un ordinateur que vous assistez et utilisez sa souris et son clavier, après l'accord de son utilisateur.
+
+La personne que vous aidez utilise l'application gratuite HelpBuoy sous Windows, Linux ou macOS. HelpBuoy Desk liste ses ordinateurs, indique ceux qui sont en ligne et ouvre une session quand vous cliquez sur Se connecter.
+
+Comment ça marche
+1. Faites tourner un serveur : laissez l'adresse vide pour en lancer un sur cet ordinateur, ou connectez-vous à un serveur HelpBuoy de votre support.
+2. L'utilisateur saisit l'adresse de votre serveur dans HelpBuoy et vous envoie la clé affichée, par exemple dans un chat. Collez-la une seule fois sous Enregistrer un ordinateur.
+3. Quand il a besoin d'aide, il ouvre HelpBuoy. Cliquez sur Se connecter ; il donne son accord et vous voyez son écran.
+
+Conçu pour aider
+• Les sessions s'ouvrent dans des onglets, pour aider plusieurs personnes à la fois.
+• Ajustez l'écran à la fenêtre, affichez-le en 1:1, adaptez la fenêtre ou passez en plein écran.
+• Passez d'un moniteur à l'autre et choisissez Auto, Net ou Rapide pour l'image.
+• Envoyez Win, Alt+Tab et d'autres touches que votre propre système intercepterait.
+• Regroupez les ordinateurs par client et filtrez la liste.
+• Ajoutez des techniciens, vos collègues, pour qu'ils puissent aider les mêmes ordinateurs.
+
+Sûr pour les personnes que vous aidez
+• Chaque session demande l'accord de l'utilisateur, et la touche Esc de son côté y met fin.
+• Une session ne transmet que l'écran ainsi que votre souris et votre clavier : pas de transfert de fichiers, pas de ligne de commande.
+• Les utilisateurs voient le nom et le numéro de téléphone de votre support.
+• Auto-hébergé : la connexion passe par votre propre serveur, en HTTPS ou en simple SSH.
+
+HelpBuoy Desk est gratuit et open source (licence MIT) et fonctionne aussi sous Linux et macOS.
+
+Plus d'informations sur HelpBuoy, et comment mettre en place un service d'assistance : www.helpbuoy.com

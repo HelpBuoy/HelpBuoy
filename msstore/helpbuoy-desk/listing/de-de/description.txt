@@ -1,0 +1,26 @@
+HelpBuoy Desk ist die App für Techniker: Sie sehen den Bildschirm eines Computers, den Sie betreuen, und bedienen Maus und Tastatur, nachdem der Benutzer es zulässt.
+
+Die Person, der Sie helfen, verwendet die kostenlose HelpBuoy-App unter Windows, Linux oder macOS. HelpBuoy Desk listet deren Computer auf, zeigt, welche online sind, und öffnet eine Sitzung, wenn Sie auf Verbinden klicken.
+
+So funktioniert es
+1. Betreiben Sie einen Server: Lassen Sie die Adresse leer, um einen auf diesem Computer zu betreiben, oder verbinden Sie sich mit einem HelpBuoy-Server Ihres Helpdesks.
+2. Der Benutzer gibt Ihre Serveradresse in HelpBuoy ein und sendet Ihnen den angezeigten Schlüssel, zum Beispiel per Chat. Fügen Sie ihn einmalig unter Computer registrieren ein.
+3. Wenn er Hilfe braucht, öffnet er HelpBuoy. Klicken Sie auf Verbinden; er lässt es zu, und Sie sehen seinen Bildschirm.
+
+Gemacht zum Helfen
+• Sitzungen öffnen sich in Tabs, so können Sie mehreren Personen gleichzeitig helfen.
+• Passen Sie den Bildschirm ins Fenster ein, zeigen Sie ihn 1:1, passen Sie das Fenster an oder wechseln Sie in den Vollbildmodus.
+• Wechseln Sie zwischen Monitoren und wählen Sie Auto, Scharf oder Schnell für das Bild.
+• Senden Sie Win, Alt+Tab und andere Tasten, die das eigene System abfangen würde.
+• Gruppieren Sie Computer nach Kunden und filtern Sie die Liste.
+• Fügen Sie Techniker hinzu, Ihre Kollegen, damit sie dieselben Computer betreuen können.
+
+Sicher für die Menschen, denen Sie helfen
+• Jede Sitzung braucht die Zustimmung des Benutzers, und Esc auf seiner Seite beendet sie.
+• Eine Sitzung überträgt nur den Bildschirm sowie Ihre Maus und Tastatur: keine Dateiübertragung, keine Befehlszeile.
+• Benutzer sehen Firmennamen und Telefonnummer Ihres Helpdesks.
+• Selbst gehostet: Die Verbindung läuft über Ihren eigenen Server, per HTTPS oder einfachem SSH.
+
+HelpBuoy Desk ist kostenlos und Open Source (MIT-Lizenz) und läuft auch unter Linux und macOS.
+
+Mehr über HelpBuoy und wie Sie einen Helpdesk einrichten: www.helpbuoy.com

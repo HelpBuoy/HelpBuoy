@@ -1,0 +1,10 @@
+Voyez l'écran et utilisez la souris et le clavier des ordinateurs que vous assistez
+Chaque session demande l'accord de l'utilisateur
+Sessions en onglets, pour aider plusieurs personnes à la fois
+Ajuster, 1:1, adapter la fenêtre ou plein écran
+Changez de moniteur et choisissez Auto, Net ou Rapide
+Envoyez Win, Alt+Tab et d'autres touches système
+Regroupez les ordinateurs par client et filtrez la liste
+Serveur intégré, ou connexion à votre propre serveur HelpBuoy
+Ajoutez des techniciens, vos collègues, au même support
+Gratuit et open source, aussi pour Linux et macOS

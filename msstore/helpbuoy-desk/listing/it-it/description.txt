@@ -1,0 +1,26 @@
+HelpBuoy Desk è l'app per i tecnici: vedi lo schermo di un computer che assisti e usa il suo mouse e la sua tastiera, dopo che l'utente lo ha consentito.
+
+La persona che aiuti usa l'app gratuita HelpBuoy su Windows, Linux o macOS. HelpBuoy Desk elenca i suoi computer, mostra quali sono online e apre una sessione quando fai clic su Connetti.
+
+Come funziona
+1. Avvia un server: lascia vuoto l'indirizzo per avviarne uno su questo computer, oppure connettiti a un server HelpBuoy del tuo helpdesk.
+2. L'utente digita l'indirizzo del tuo server in HelpBuoy e ti invia la chiave che mostra, per esempio in una chat. Incollala una sola volta in Registra computer.
+3. Quando ha bisogno di aiuto, apre HelpBuoy. Fai clic su Connetti; lui consente e tu vedi il suo schermo.
+
+Fatto per aiutare
+• Le sessioni si aprono in schede, così puoi aiutare più persone alla volta.
+• Adatta lo schermo alla finestra, mostralo 1:1, adatta la finestra o passa a schermo intero.
+• Passa da un monitor all'altro e scegli Auto, Nitido o Veloce per l'immagine.
+• Invia Win, Alt+Tab e altri tasti che il tuo sistema intercetterebbe.
+• Raggruppa i computer per cliente e filtra l'elenco.
+• Aggiungi tecnici, i tuoi colleghi, perché possano assistere gli stessi computer.
+
+Sicuro per le persone che aiuti
+• Ogni sessione richiede il consenso dell'utente, e Esc dalla sua parte la termina.
+• Una sessione trasmette solo lo schermo e il tuo mouse e la tua tastiera: nessun trasferimento di file, nessuna riga di comando.
+• Gli utenti vedono il nome e il numero di telefono del tuo helpdesk.
+• Self-hosted: la connessione passa dal tuo server, via HTTPS o semplice SSH.
+
+HelpBuoy Desk è gratuito e open source (licenza MIT) e funziona anche su Linux e macOS.
+
+Maggiori informazioni su HelpBuoy e su come allestire un helpdesk: www.helpbuoy.com

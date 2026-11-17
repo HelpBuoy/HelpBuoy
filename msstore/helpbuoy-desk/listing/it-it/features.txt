@@ -1,0 +1,10 @@
+Vedi lo schermo e usa mouse e tastiera dei computer che assisti
+Ogni sessione richiede il consenso dell'utente
+Sessioni in schede, per aiutare più persone alla volta
+Adatta, 1:1, adatta la finestra o schermo intero
+Cambia monitor e scegli Auto, Nitido o Veloce
+Invia Win, Alt+Tab e altri tasti di sistema
+Raggruppa i computer per cliente e filtra l'elenco
+Server integrato, o connessione al tuo server HelpBuoy
+Aggiungi tecnici, i tuoi colleghi, allo stesso helpdesk
+Gratuito e open source, anche per Linux e macOS

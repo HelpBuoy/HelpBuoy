@@ -1,0 +1,26 @@
+HelpBuoy Desk es la aplicación para técnicos: ve la pantalla de un equipo al que das soporte y usa su ratón y su teclado, después de que su usuario lo permita.
+
+La persona a la que ayudas usa la aplicación gratuita HelpBuoy en Windows, Linux o macOS. HelpBuoy Desk muestra sus equipos, indica cuáles están en línea y abre una sesión cuando haces clic en Conectar.
+
+Cómo funciona
+1. Ejecuta un servidor: deja la dirección vacía para ejecutar uno en este equipo, o conéctate a un servidor HelpBuoy de tu servicio de soporte.
+2. El usuario escribe la dirección de tu servidor en HelpBuoy y te envía la clave que muestra, por ejemplo en un chat. Pégala una sola vez en Registrar equipo.
+3. Cuando necesita ayuda, abre HelpBuoy. Haz clic en Conectar; lo permite y ves su pantalla.
+
+Hecho para ayudar
+• Las sesiones se abren en pestañas, para ayudar a varias personas a la vez.
+• Ajusta la pantalla a la ventana, muéstrala 1:1, adapta la ventana o pasa a pantalla completa.
+• Cambia de monitor y elige Auto, Nítido o Rápido para la imagen.
+• Envía Win, Alt+Tab y otras teclas que tu propio sistema capturaría.
+• Agrupa los equipos por cliente y filtra la lista.
+• Añade técnicos, tus compañeros, para que puedan ayudar a los mismos equipos.
+
+Seguro para las personas a las que ayudas
+• Cada sesión necesita el permiso del usuario, y Esc en su lado la termina.
+• Una sesión solo transmite la pantalla y tu ratón y teclado: sin transferencia de archivos ni línea de comandos.
+• Los usuarios ven el nombre y el teléfono de tu servicio de soporte.
+• Autoalojado: la conexión pasa por tu propio servidor, por HTTPS o SSH simple.
+
+HelpBuoy Desk es gratuito y de código abierto (licencia MIT) y también funciona en Linux y macOS.
+
+Más sobre HelpBuoy y cómo montar un servicio de soporte: www.helpbuoy.com

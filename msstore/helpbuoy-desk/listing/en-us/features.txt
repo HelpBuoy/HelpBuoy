@@ -1,0 +1,10 @@
+See the screen and use the mouse and keyboard of the computers you support
+Every session needs the user's approval
+Sessions in tabs, to help several people at once
+Fit, 1:1, resize to the screen, or full screen
+Switch monitors and choose Auto, Sharp or Fast
+Send Win, Alt+Tab and other system keys
+Group computers per customer and filter the list
+Built-in server, or connect to your own HelpBuoy server
+Add techies, your colleagues, to the same helpdesk
+Free and open source, also for Linux and macOS
