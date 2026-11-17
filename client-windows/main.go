@@ -8,7 +8,8 @@
 // and streams the test pattern unless --source screen is given; --log FILE
 // writes a debug log; --record DIR records the primary monitor for
 // --record-for (see encode.Recorder) and exits without any window or
-// network.
+// network; --uninstall deletes the key and the settings and exits, which the
+// MSI runs when HelpBuoy is removed.
 package main
 
 import (
@@ -57,7 +58,21 @@ func main() {
 	recDir := flag.String("record", "", "record the primary monitor into this new directory and exit")
 	recFor := flag.Duration("record-for", 10*time.Second, "how long --record records")
 	recFPS := flag.Int("record-fps", 30, "captures per second for --record")
+	uninstall := flag.Bool("uninstall", false, "delete the key and the settings, then exit")
 	flag.Parse()
+
+	if *uninstall {
+		// The data directory holds only the app key, config.json and the
+		// instance lock, so it goes as a whole.
+		dir, err := identity.Dir()
+		if err == nil {
+			err = os.RemoveAll(dir)
+		}
+		if err != nil {
+			os.Exit(1)
+		}
+		return
+	}
 
 	log := newLogger(*logPath)
 	slog.SetDefault(log)
