@@ -19,3 +19,5 @@ Werkt waar andere niet werken
 • Geen account nodig: HelpBuoy maakt alleen verbinding met de server die je helpdesk je geeft.
 
 HelpBuoy is gratis en open source (MIT-licentie) en werkt ook op macOS en Linux.
+
+Meer over HelpBuoy, en hoe je een helpdesk opzet: www.helpbuoy.com

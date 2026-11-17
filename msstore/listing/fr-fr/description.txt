@@ -19,3 +19,5 @@ Fonctionne là où d'autres échouent
 • Aucun compte nécessaire : HelpBuoy se connecte uniquement au serveur que votre support vous indique.
 
 HelpBuoy est gratuit et open source (licence MIT) et fonctionne aussi sous macOS et Linux.
+
+Plus d'informations sur HelpBuoy, et comment mettre en place un service d'assistance : www.helpbuoy.com

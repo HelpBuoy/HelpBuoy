@@ -19,3 +19,5 @@ Funciona donde otros no
 • Sin cuenta: HelpBuoy solo se conecta al servidor que te indique tu servicio de soporte.
 
 HelpBuoy es gratuito y de código abierto (licencia MIT) y también funciona en macOS y Linux.
+
+Más sobre HelpBuoy y cómo montar un servicio de soporte: www.helpbuoy.com

@@ -19,3 +19,5 @@ Funktioniert, wo andere scheitern
 • Kein Konto nötig: HelpBuoy verbindet sich nur mit dem Server, den Ihnen Ihr Helpdesk nennt.
 
 HelpBuoy ist kostenlos und Open Source (MIT-Lizenz) und läuft auch unter macOS und Linux.
+
+Mehr über HelpBuoy und wie Sie einen Helpdesk einrichten: www.helpbuoy.com
