@@ -162,7 +162,7 @@
   "Paste the key line {0} sent you from another computer they use. The app there shows it when it connects to this server before the key is added.": "Incolla la riga della chiave che {0} ti ha inviato da un altro computer che usa. L'app la mostra lì quando si connette a questo server prima che la chiave sia aggiunta.",
   "Paste the key the techie sent you (ssh-ed25519 AAAA…)": "Incolla la chiave che ti ha inviato il tecnico (ssh-ed25519 AAAA…)",
   "Paste the key the user sent you (ssh-ed25519 AAAA…)": "Incolla la chiave che ti ha inviato l'utente (ssh-ed25519 AAAA…)",
-  "Paste this key into a chat with a techie (for example WhatsApp).": "Incolla questa chiave in una chat con un tecnico (per esempio WhatsApp).",
+  "Paste this key into an email to a techie.": "Incolla questa chiave in un'e-mail a un tecnico.",
   "Phone number": "Numero di telefono",
   "Phone: {0}": "Telefono: {0}",
   "Quit": "Esci",

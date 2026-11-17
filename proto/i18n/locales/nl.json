@@ -162,7 +162,7 @@
   "Paste the key line {0} sent you from another computer they use. The app there shows it when it connects to this server before the key is added.": "Plak de sleutelregel die {0} je stuurde vanaf een andere computer die hij of zij gebruikt. De app daar toont die als hij met deze server verbindt voordat de sleutel is toegevoegd.",
   "Paste the key the techie sent you (ssh-ed25519 AAAA…)": "Plak de sleutel die de techie je stuurde (ssh-ed25519 AAAA…)",
   "Paste the key the user sent you (ssh-ed25519 AAAA…)": "Plak de sleutel die de gebruiker je stuurde (ssh-ed25519 AAAA…)",
-  "Paste this key into a chat with a techie (for example WhatsApp).": "Plak deze sleutel in een chat met een techie (bijvoorbeeld WhatsApp).",
+  "Paste this key into an email to a techie.": "Plak deze sleutel in een e-mail aan een techie.",
   "Phone number": "Telefoonnummer",
   "Phone: {0}": "Telefoon: {0}",
   "Quit": "Afsluiten",

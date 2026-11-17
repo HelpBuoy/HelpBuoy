@@ -158,7 +158,7 @@ func NewWithHost(host Host, icons [][]byte) *Window {
 	w.lblAddrError.color = colError
 
 	w.lblKeyIntro = label(24, 18, 412, 36, fontNormal, alignLeft)
-	w.lblKeyIntro.text = i18n.Trans("Paste this key into a chat with a techie (for example WhatsApp).")
+	w.lblKeyIntro.text = i18n.Trans("Paste this key into an email to a techie.")
 	w.edtKey = newWidget(kindKeyBox, 24, 56, 412, 62, fontNormal)
 	w.btnCopy = button(i18n.Trans("Copy key"), 24, 128, 412, 46, fontBig, w.copyKey)
 	w.lblKeyFp = label(24, 182, 412, 34, fontNormal, alignLeft)
