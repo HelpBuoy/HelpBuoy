@@ -3,8 +3,7 @@
   MSIX manifest of the Windows desk app for the Microsoft Store, used by
   "make msix". The Makefile fills in @VERSION@ (x.y.z.0, the Store needs the
   fourth part to be 0). The identity is the one Partner Center reserved for
-  HelpBuoy Desk and must never change. CHECK the Name against Partner Center
-  (Product identity) before the first upload; the Publisher is that of the
+  HelpBuoy Desk and must never change. The Publisher is that of the
   account, the same as for the client.
 
   The exe is the same as in the MSI, running with full trust. Unlike the MSI

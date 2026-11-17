@@ -2,10 +2,12 @@
 
 Everything Partner Center asks for, for both apps in the Store:
 
-| App | Folder | Package | Store ID |
-| --- | --- | --- | --- |
-| HelpBuoy, the Windows client | `helpbuoy/` | `installer/helpbuoy.appxmanifest.xml` | 9NZXVS50R8VB |
-| HelpBuoy Desk, the desk app | `helpbuoy-desk/` | `installer/helpbuoy-desk.appxmanifest.xml` | |
+| App | Folder | Package | Package family name | Store ID |
+| --- | --- | --- | --- | --- |
+| HelpBuoy, the Windows client | `helpbuoy/` | `installer/helpbuoy.appxmanifest.xml` | MaussoftBV.HelpBuoy_d55rzzeqj6ck6 | 9NZXVS50R8VB |
+| HelpBuoy Desk, the desk app | `helpbuoy-desk/` | `installer/helpbuoy-desk.appxmanifest.xml` | MaussoftBV.HelpBuoyDesk_d55rzzeqj6ck6 | 9NM475B9T4BC |
+
+A Store app keeps the data it writes to AppData in `%LOCALAPPDATA%\Packages\<package family name>`, which Windows removes with the app.
 
 `make msix` builds both packages in `bin/`, unsigned, for the upload; `make msix-test` also signs a copy of each with a self-signed test certificate, to install on a test PC first.
 
