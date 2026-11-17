@@ -9,7 +9,8 @@
 // writes a debug log; --record DIR records the primary monitor for
 // --record-for (see encode.Recorder) and exits without any window or
 // network; --uninstall deletes the key and the settings and exits, which the
-// MSI runs when HelpBuoy is removed.
+// MSI runs when HelpBuoy is removed; --screenshot shows the window as the
+// Store version without underlined access keys, for msstore/screenshots.sh.
 package main
 
 import (
@@ -32,6 +33,7 @@ import (
 	"github.com/helpbuoy/helpbuoy/client-windows/session"
 	"github.com/helpbuoy/helpbuoy/client-windows/ui"
 	"github.com/helpbuoy/helpbuoy/proto/appkey"
+	"github.com/helpbuoy/helpbuoy/proto/i18n"
 	pid "github.com/helpbuoy/helpbuoy/proto/identity"
 	"github.com/helpbuoy/helpbuoy/proto/instance"
 	"github.com/helpbuoy/helpbuoy/proto/screen"
@@ -59,7 +61,9 @@ func main() {
 	recFor := flag.Duration("record-for", 10*time.Second, "how long --record records")
 	recFPS := flag.Int("record-fps", 30, "captures per second for --record")
 	uninstall := flag.Bool("uninstall", false, "delete the key and the settings, then exit")
+	screenshot := flag.Bool("screenshot", false, "look like the Store version on Windows, for screenshots in Wine")
 	flag.Parse()
+	i18n.HideAccessKeys = *screenshot
 
 	if *uninstall {
 		// The data directory holds only the app key, config.json and the
@@ -154,7 +158,7 @@ func main() {
 	// The MSI version updates itself through the "Check for updates" link;
 	// the Store updates the packaged version, which has no link.
 	var checkUpdate func(ctx context.Context) (*update.Release, error)
-	if !packaged() {
+	if !packaged() && !*screenshot {
 		checkUpdate = func(ctx context.Context) (*update.Release, error) {
 			return update.Check(ctx, update.LatestReleaseURL, version, update.ClientMSI)
 		}

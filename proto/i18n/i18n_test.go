@@ -159,3 +159,18 @@ func constString(e ast.Expr) (string, bool) {
 	}
 	return "", false
 }
+
+func TestHideAccessKeys(t *testing.T) {
+	HideAccessKeys = true
+	defer func() { HideAccessKeys = false }()
+	for in, want := range map[string]string{
+		"&Connect":       "Connect",
+		"Save && &close": "Save & close",
+		"No keys":        "No keys",
+		"&Lock to {0}":   "Lock to R&D",
+	} {
+		if got := Trans(in, "R&D"); got != want {
+			t.Errorf("Trans(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

@@ -8,9 +8,15 @@
 // computer comes online. Once the user allows it, the techie runs the inner SSH client, decodes and acks the frames like the
 // desk app and ends the session after -session. With -png the decoded
 // screen, cursor included, is written to a PNG file every 2 s and at the end.
+//
+// With -stdin it reads commands, one per line, instead of acting on timers:
+// "register" registers the last computer that connected, "connect" connects
+// the techie to it. -company, -phone and -description are the
+// helpdesk details it sends; msstore/screenshots.sh uses all of these.
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"image"
@@ -26,6 +32,7 @@ import (
 
 	"github.com/helpbuoy/helpbuoy/client-windows/identity"
 	"github.com/helpbuoy/helpbuoy/client-windows/internal/fakeserver"
+	"github.com/helpbuoy/helpbuoy/proto/control"
 	"github.com/helpbuoy/helpbuoy/proto/inner"
 	"github.com/helpbuoy/helpbuoy/proto/screen"
 	"github.com/helpbuoy/helpbuoy/proto/wire"
@@ -42,17 +49,24 @@ func main() {
 	flag.IntVar(&o.selectIndex, "select", 0, "monitor index for -select-after")
 	flag.DurationVar(&o.refresh, "refresh-after", 0, "ask for a refresh after this long (0 = never)")
 	flag.BoolVar(&o.verbose, "v", false, "print every frame and cursor move")
+	techieName := flag.String("techie", "alice", "name of the techie who connects")
+	stdin := flag.Bool("stdin", false, "read register and connect commands from stdin")
+	var info control.ServerInfo
+	flag.StringVar(&info.Company, "company", "", "company name of the helpdesk")
+	flag.StringVar(&info.Phone, "phone", "", "phone number of the helpdesk")
+	flag.StringVar(&info.Description, "description", "", "description of the helpdesk")
 	flag.Parse()
 
-	techie, err := identity.Ephemeral("alice")
+	techie, err := identity.Ephemeral(*techieName)
 	if err != nil {
 		log.Fatal(err)
 	}
 	r, err := fakeserver.Start(*listen, fakeserver.Options{
 		AutoRegister: *register,
 		AutoConnect:  *connect,
-		TechieName:   "alice",
+		TechieName:   *techieName,
 		TechieKey:    techie.Line,
+		Info:         info,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -63,6 +77,27 @@ func main() {
 			fmt.Printf("%s: %T %+v\n", m.Fingerprint, m.Msg, m.Msg)
 		}
 	}()
+	if *stdin {
+		go func() {
+			sc := bufio.NewScanner(os.Stdin)
+			for sc.Scan() {
+				fp := r.Last()
+				switch cmd := sc.Text(); cmd {
+				case "register":
+					r.Register(fp)
+					fmt.Println("registered", fp)
+				case "connect":
+					if _, err := r.Connect(fp, *techieName, techie.Line); err != nil {
+						fmt.Println("connect:", err)
+					} else {
+						fmt.Println("connecting", fp)
+					}
+				default:
+					fmt.Println("unknown command", cmd)
+				}
+			}
+		}()
+	}
 	go func() {
 		for s := range r.Sessions() {
 			go watch(s, techie.Signer, o)

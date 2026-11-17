@@ -61,6 +61,7 @@ type Server struct {
 	approved   map[string][]control.ApprovedServer // by computer fingerprint
 	conns      map[string]*conn                    // online, by fingerprint
 	refuseAll  bool
+	last       string // fingerprint of the last computer that said hello
 }
 
 type conn struct {
@@ -168,6 +169,13 @@ func (r *Server) Register(fp string) {
 		c.ctl.Send(r.approvedFor(fp))
 		r.autoConnect(fp)
 	}
+}
+
+// Last returns the fingerprint of the last computer that said hello, or "".
+func (r *Server) Last() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.last
 }
 
 // Online reports whether a computer with fingerprint fp is connected.
@@ -310,6 +318,7 @@ func (r *Server) control(c *conn) {
 		return
 	}
 	r.mu.Lock()
+	r.last = c.fp
 	if old := r.conns[c.fp]; old != nil {
 		old.ssh.Close() // a known key that reconnects replaces its connection
 	}

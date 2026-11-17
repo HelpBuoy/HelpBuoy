@@ -74,6 +74,14 @@ func Lang() string {
 	return lang
 }
 
+// HideAccessKeys makes Trans drop the & that marks an access key (and turn
+// && into &), so that labels show no underlined letters. The Windows client
+// sets it for its --screenshot mode: Windows hides the underlines until Alt
+// is pressed, Wine always shows them.
+var HideAccessKeys bool
+
+var accessKeys = strings.NewReplacer("&&", "&", "&", "")
+
 // Trans returns the translation of text with {0}, {1}, ... replaced by
 // fmt.Sprint of the argument at that index. A placeholder without an
 // argument is left as is.
@@ -81,6 +89,9 @@ func Trans(text string, args ...any) string {
 	load()
 	if t, ok := catalog[text]; ok && t != "" {
 		text = t
+	}
+	if HideAccessKeys {
+		text = accessKeys.Replace(text)
 	}
 	return fill(text, args)
 }
