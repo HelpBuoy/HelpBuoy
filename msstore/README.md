@@ -7,10 +7,21 @@ The Store listing of the Windows client (Store ID 9NZXVS50R8VB), in the language
     listing/<language>/features.txt     Product features, one per line, at most 20 of at most 200 characters
     listing/<language>/whatsnew.txt     What's new in this version, at most 1,500 characters; empty for the first submission
     screenshots/<language>/*.png        Screenshots, see below
+    logos/logo-<size>.png               Store logos, the 1:1 app tile icon at 300x300, 150x150 and 71x71
 
 The languages are en-us, nl-nl, de-de, fr-fr, es-es and it-it. The texts use the same words as the app's translations (`proto/i18n/locales`): "techie" is Techniker, technicien, técnico and tecnico, and the buttons are named as the app names them. German and French use the formal Sie and vous, like the app.
 
 `msstore publish` copies the listing of the previous submission, so a change here goes into Partner Center by hand (or through its listing import), and `whatsnew.txt` with it for every release.
+
+## Logos
+
+The logos are the app icon from `tools/genicon`, drawn at 88% of the size and centered on a transparent square, so the rope keeps some room from the edge of the tile. To make them again:
+
+    for n in 300 150 71; do
+        i=$(( (n * 88 + 50) / 100 ))
+        GOWORK=off GO111MODULE=off go run tools/genicon/main.go bin/logo-$i.png $i
+        convert bin/logo-$i.png -background none -gravity center -extent ${n}x${n} msstore/logos/logo-${n}x${n}.png
+    done
 
 ## Screenshots
 
