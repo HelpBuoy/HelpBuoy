@@ -244,11 +244,11 @@ func (w *Window) ConfirmLock(ctx context.Context, company string) bool {
 		WindowTitle:     Title,
 		Flags:           co.TDF_ALLOW_DIALOG_CANCELLATION | co.TDF_POSITION_RELATIVE_TO_WINDOW,
 		Width:           dialogWidth,
-		HMainIcon:       win.TdcIconTdi(co.TDICON_SHIELD),
+		HMainIcon:       win.TdcIconTdi(co.TDICON_INFORMATION),
 		MainInstruction: i18n.Trans("Get help only through {0}?", company),
 		Content:         lockQuestion(company),
 		Buttons: []win.TASKDIALOG_BUTTON{
-			{Id: co.ID_OK, Text: i18n.Trans("&Lock to {0}", company)},
+			{Id: co.ID_OK, Text: i18n.Trans("&Lock")},
 			{Id: co.ID_CANCEL, Text: i18n.Trans("&Not now")},
 		},
 		DefaultButtonId: uint16(co.ID_OK),
@@ -262,6 +262,11 @@ func lockQuestion(company string) string {
 	return i18n.Trans("To protect you from scam calls, do you want this PC to get help via HelpBuoy only "+
 		"through {0}? Other helpdesks can then only reach this PC after {0} allowed them.", company)
 }
+
+// PadDialogButtons adds two spaces before and after the button texts of the
+// task dialogs. The client sets it for its --screenshot mode: Wine leaves
+// almost no room around the text, where Windows leaves about a character.
+var PadDialogButtons bool
 
 // askTaskDialog shows cfg modally on the UI thread and returns the button
 // pressed. When ctx ends the question is moot (the techie gave up, the
@@ -278,6 +283,11 @@ func (w *Window) askTaskDialog(ctx context.Context, cfg *win.TASKDIALOGCONFIG) (
 		}
 		w.bringToFront()
 		cfg.HwndParent = w.wnd.Hwnd()
+		if PadDialogButtons {
+			for i := range cfg.Buttons {
+				cfg.Buttons[i].Text = "  " + cfg.Buttons[i].Text + "  "
+			}
+		}
 		// Counted as a dialog, so the server key warning waits for it.
 		w.dialogs++
 		got, err := win.TaskDialogIndirect(cfg)
