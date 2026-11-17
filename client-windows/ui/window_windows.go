@@ -263,6 +263,11 @@ func lockQuestion(company string) string {
 		"through {0}? Other helpdesks can then only reach this PC after {0} allowed them.", company)
 }
 
+// HideVersion leaves the version out of the window title. The client sets it
+// for its --screenshot mode, so the Store screenshots stay right from one
+// release to the next.
+var HideVersion bool
+
 // PadDialogButtons adds two spaces before and after the button texts of the
 // task dialogs. The client sets it for its --screenshot mode: Wine leaves
 // almost no room around the text, where Windows leaves about a character.
@@ -673,7 +678,7 @@ func (w *Window) apply(v app.View) {
 
 	// Like most apps, the title shows the version: "HelpBuoy v0.4.19".
 	caption := Title
-	if version := w.ctrl.Version(); update.IsRelease(version) {
+	if version := w.ctrl.Version(); update.IsRelease(version) && !HideVersion {
 		caption += " " + version
 	}
 	if v.Screen == app.ScreenMain && v.Company != "" {

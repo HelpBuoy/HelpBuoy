@@ -10,8 +10,9 @@
 // --record-for (see encode.Recorder) and exits without any window or
 // network; --uninstall deletes the key and the settings and exits, which the
 // MSI runs when HelpBuoy is removed; --screenshot shows the window as the
-// Store version without underlined access keys and with roomier dialog
-// buttons, as Windows draws them, for msstore/screenshots.sh in Wine.
+// Store version without underlined access keys, with roomier dialog buttons,
+// as Windows draws them, and without the version in the title, for
+// msstore/screenshots.sh in Wine.
 package main
 
 import (
@@ -65,6 +66,7 @@ func main() {
 	screenshot := flag.Bool("screenshot", false, "look like the Store version on Windows, for screenshots in Wine")
 	flag.Parse()
 	i18n.HideAccessKeys = *screenshot
+	ui.HideVersion = *screenshot
 	ui.PadDialogButtons = *screenshot
 
 	if *uninstall {
