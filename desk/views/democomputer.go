@@ -3,6 +3,7 @@ package views
 import (
 	"hash/fnv"
 	"image"
+	"image/draw"
 	"math"
 	"net"
 	"sync"
@@ -20,6 +21,21 @@ var demoMonitors = []screen.Monitor{
 	{X: 0, Y: 0, W: 1280, H: 720, Primary: true, Name: "Built-in display"},
 	{X: 1280, Y: 0, W: 1024, H: 768, Name: "DELL P2419H"},
 	{X: 2304, Y: 0, W: 2560, H: 1440, Name: "LG QHD"},
+}
+
+// demoScreen, when set, is what the first monitor of the demo computer shows
+// instead of the test pattern; SetDemoScreen sets it.
+var demoScreen *image.RGBA
+
+// SetDemoScreen makes the demo computer show img on its first monitor,
+// which gets the size of img, instead of the test pattern: a real desktop,
+// for the screenshots of the Store listing (msstore/screenshots.sh). Call it
+// before the first demo session.
+func SetDemoScreen(img image.Image) {
+	b := img.Bounds()
+	demoScreen = image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	draw.Draw(demoScreen, demoScreen.Rect, img, b.Min, draw.Src)
+	demoMonitors[0].W, demoMonitors[0].H = b.Dx(), b.Dy()
 }
 
 // Cursor shape IDs of the demo computer.
@@ -214,15 +230,20 @@ func (d *demoComputer) sendFrame() (int, bool) {
 	m := demoMonitors[d.cur]
 	t := time.Since(d.start).Seconds()
 	cur := image.NewRGBA(image.Rect(0, 0, m.W, m.H))
-	label := d.name + "  " + map[screen.QualityMode]string{screen.QualityAuto: "auto", screen.QualitySharp: "sharp", screen.QualityFast: "fast"}[d.quality]
-	screen.TestPattern(cur, t, label)
-	// Scroll for three seconds, then rest for two.
-	if math.Mod(t, 5) < 3 {
-		d.scroll += 2
-	}
+	still := demoScreen != nil && d.cur == 0
 	pr := d.panel()
-	drawPanel(cur, pr, d.scroll)
-	drawVideo(cur, d.video(), t)
+	if still {
+		copy(cur.Pix, demoScreen.Pix)
+	} else {
+		label := d.name + "  " + map[screen.QualityMode]string{screen.QualityAuto: "auto", screen.QualitySharp: "sharp", screen.QualityFast: "fast"}[d.quality]
+		screen.TestPattern(cur, t, label)
+		// Scroll for three seconds, then rest for two.
+		if math.Mod(t, 5) < 3 {
+			d.scroll += 2
+		}
+		drawPanel(cur, pr, d.scroll)
+		drawVideo(cur, d.video(), t)
+	}
 
 	var ops []screen.Rect
 	full := d.prev == nil || d.prev.Rect != cur.Rect
@@ -232,7 +253,7 @@ func (d *demoComputer) sendFrame() (int, bool) {
 		for i := range d.prev.Pix {
 			d.prev.Pix[i] = 1 // differs from every opaque pixel: all tiles are sent
 		}
-	} else if step := d.scrolledBy(pr); step > 0 {
+	} else if step := d.scrolledBy(pr); step > 0 && !still {
 		op := screen.Rect{Kind: screen.OpCopy, X: pr.Min.X, Y: pr.Min.Y, W: pr.Dx(), H: pr.Dy() - step, SrcX: pr.Min.X, SrcY: pr.Min.Y + step}
 		shiftUp(d.prev, pr, step)
 		ops = append(ops, op)

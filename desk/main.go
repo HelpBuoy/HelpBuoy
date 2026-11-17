@@ -11,6 +11,8 @@
 //	--datadir DIR    use DIR instead of the per-user data directory
 //	--screenshot F   save a frame as PNG to F, then exit (with --demo: screenshot.sh)
 //	--size WxH       window size, for --screenshot also below the minimum size
+//	--demo-screen F  with --demo: sessions show the PNG F instead of the test
+//	                 pattern (msstore/screenshots.sh)
 package main
 
 import (
@@ -19,6 +21,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"image/png"
 	"os"
 	"runtime"
 	"slices"
@@ -48,6 +51,7 @@ func main() {
 	dataDir := flag.String("datadir", "", "data directory (default: per-user data directory)")
 	screenshot := flag.String("screenshot", "", "save a frame as PNG to this file, then exit")
 	size := flag.String("size", "1100x700", "window size WxH")
+	demoScreen := flag.String("demo-screen", "", "with --demo: show this PNG in sessions instead of the test pattern")
 	// --upload-bench is a hidden developer check (desk/perf): it measures
 	// texture uploads in a window, prints a table and exits.
 	uploadBench := slices.Contains(os.Args[1:], "--upload-bench")
@@ -55,6 +59,12 @@ func main() {
 		os.Args = slices.DeleteFunc(os.Args, func(a string) bool { return a == "--upload-bench" })
 	}
 	flag.Parse()
+	if *demoScreen != "" {
+		if err := loadDemoScreen(*demoScreen); err != nil {
+			fmt.Fprintln(os.Stderr, "--demo-screen:", err)
+			os.Exit(2)
+		}
+	}
 	var w, h int32
 	if _, err := fmt.Sscanf(*size, "%dx%d", &w, &h); err != nil || w <= 0 || h <= 0 {
 		fmt.Fprintln(os.Stderr, "--size wants WxH, for example 1100x700")
@@ -129,4 +139,19 @@ func main() {
 		rl.CloseWindow()
 		os.Exit(1)
 	}
+}
+
+// loadDemoScreen makes the demo sessions show the PNG at path.
+func loadDemoScreen(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	img, err := png.Decode(f)
+	if err != nil {
+		return err
+	}
+	views.SetDemoScreen(img)
+	return nil
 }
