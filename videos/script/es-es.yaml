@@ -1,0 +1,117 @@
+# Spanish translation of en-us.yaml: only the text fields, keyed by scene id.
+# Words as in the app (proto/i18n/locales/es.json), informal "tú" like the app.
+
+meta:
+  title: "Cómo funciona HelpBuoy"
+  lang: es-es
+
+scenes:
+  intro:
+    text: "Ayuda con tu equipo"
+    note: "paso a paso"
+    say: "Te damos la bienvenida a este breve vídeo. Vamos a enseñarte paso a paso cómo un técnico puede ayudarte a distancia con tu equipo."
+  flow-parts:
+    title: "Quién es quién"
+    steps:
+      - say: "Empecemos por ver quién es quién. A la izquierda estás tú, con la app en tu equipo."
+      - say: "A la derecha está tu técnico, que usa la app desk para ayudarte."
+      - say: "Y en el centro está el servidor, del que nos encargamos nosotros, así que no tienes que configurar nada."
+      - arrows:
+          - { label: "se conecta" }
+          - { label: "se conecta" }
+        say: "Las dos apps se conectan a ese servidor, pero no puede pasar nada sin tu permiso."
+  part-register:
+    text: "Registra tu equipo"
+    note: "solo la primera vez"
+    say: "Empecemos por registrar tu equipo. Esto solo tienes que hacerlo una vez."
+  user-connect:
+    say: "Abre la app y escribe la dirección del servidor que te ha dado tu técnico. Después, haz clic en el botón Conectar."
+  user-warning:
+    say: "La primera vez que te conectas, la app te muestra un aviso. Continúa solo si la dirección te la ha dado alguien a quien conoces y en quien confías."
+  flow-first-contact:
+    title: "Primer contacto"
+    steps:
+      - label: "clave de este equipo"
+        say: "Ahora la app se conecta al servidor y le muestra una clave que pertenece a tu equipo."
+      - say: "El servidor nunca ha visto esta clave, así que tu equipo tiene que esperar hasta que tu técnico la registre."
+  user-key:
+    say: "Mientras tanto, la app te muestra la clave de tu equipo. Haz clic en el botón Copiar clave para copiarla."
+  flow-send-key:
+    title: "Enviar la clave"
+    steps:
+      - label: "tu clave"
+        via: "por correo o chat"
+        say: "Ahora envía la clave a tu técnico, en un correo o en un mensaje de chat. La clave no es secreta, así que puedes enviarla con total tranquilidad."
+  techie-register:
+    say: "Tu técnico elige entonces Registrar equipo, pega tu clave y hace clic en el botón Registrar."
+  flow-register:
+    title: "Registro"
+    steps:
+      - label: "registrar esta clave"
+        say: "La app desk registra tu clave en el servidor, y solo es válida para tu equipo."
+      - label: "registrado"
+        say: "Después, el servidor avisa a tu equipo de que ya está registrado. A partir de ahora, tu equipo recuerda este servidor."
+  user-lock:
+    say: "A continuación, la app te pregunta si quieres recibir ayuda solo de este servicio de soporte. Haz clic en el botón Bloquear para aceptar, porque así te proteges de las llamadas fraudulentas."
+  part-ask:
+    text: "Pide ayuda"
+    note: "cada vez"
+    say: "Tu equipo ya está registrado, así que vamos a ver cómo pedir ayuda. Esto es lo que haces cada vez que la necesitas."
+  flow-ask:
+    title: "Pedir ayuda"
+    steps:
+      - label: "pide ayuda"
+        via: "por teléfono o correo"
+        say: "Cuando necesites ayuda, basta con llamar a tu técnico o escribirle un correo."
+      - label: "en línea"
+        say: "Mientras la app esté abierta, tu técnico puede ver que tu equipo está en línea."
+  user-waiting:
+    say: "Mientras esperas, la app te muestra el teléfono y el nombre de tu servicio de soporte."
+  techie-computers:
+    say: "Tu técnico busca tu equipo en la lista y hace clic en el botón Conectar."
+  flow-request:
+    title: "Solicitud"
+    steps:
+      - label: "¿puedo tomar el control?"
+        say: "Entonces llega una solicitud a tu equipo a través del servidor, pero todavía no pasa nada."
+  user-allow:
+    say: "La app te pregunta primero si tu técnico puede tomar el control. Haz clic en el botón Permitir si estás de acuerdo, o en el botón Cancelar si no lo estás."
+  flow-allow:
+    title: "Permiso"
+    steps:
+      - label: "permitido"
+        say: "La sesión solo empieza cuando has hecho clic en el botón Permitir."
+  part-session:
+    text: "La sesión"
+    note: "hasta que la detengas"
+    say: "Y así llegamos a la sesión en sí. Tú mantienes el control de principio a fin."
+  techie-session:
+    say: "Ahora tu técnico ve tu pantalla, y puede usar el ratón y el teclado para ayudarte."
+  flow-session:
+    title: "Durante la sesión"
+    steps:
+      - label: "imagen de pantalla"
+        say: "Durante la sesión, se envía a tu técnico una imagen de tu pantalla."
+      - label: "ratón y teclado"
+        say: "Lo único que vuelve es lo que tu técnico hace con el ratón y el teclado. Tus archivos nunca se envían."
+      - say: "Puedes recuperar el control en cualquier momento pulsando la tecla Escape."
+      - say: "Cuando termina el trabajo, tú o tu técnico cerráis la sesión."
+  flow-summary:
+    title: "En resumen"
+    steps:
+      - arrows:
+          - { label: "tu clave", via: "una vez" }
+          - { label: "registrar" }
+        say: "En resumen, envías tu clave una sola vez, y tu técnico registra tu equipo."
+      - arrows:
+          - { label: "solicitud" }
+          - { label: "permitido" }
+        say: "A partir de ahí, tu técnico te pide permiso cada vez, y tú decides."
+      - arrows:
+          - { label: "imagen de pantalla" }
+          - { label: "ratón y teclado" }
+        say: "Y durante una sesión, solo se comparten tu pantalla, el ratón y el teclado."
+  outro:
+    text: "Empieza hoy mismo"
+    note: "www.helpbuoy.com"
+    say: "Y así de fácil y segura puede ser la ayuda a distancia. Si quieres ofrecérsela a tus propios clientes, visita nuestra web y empieza hoy mismo."

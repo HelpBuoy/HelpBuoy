@@ -1,0 +1,124 @@
+# Nodes of the animated flow diagrams, on the 1280x720 canvas.
+#
+# icon: a <symbol> id from docs/helpbuoy.connection.diagram.svg (user, techie,
+#       pc, laptop, server, chat, lock, buoy), so the video matches the docs.
+# color: colour of the arrows this node sends (a name from config.yaml colors).
+# label, sub: two lines under the icon, per language.
+#
+# The top row are the people (things they send each other go outside
+# the apps), the bottom row the apps, with the server in between.
+#
+# The badge of a screen scene uses the label of the actor's node and the label
+# of its app node (badge_app).
+
+nodes:
+  user:
+    x: 250
+    y: 215
+    icon: user
+    scale: 1.3
+    color: red
+    badge_app: client
+    label:
+      en-us: "You"
+      nl-nl: "Jij"
+      de-de: "Sie"
+      fr-fr: "Vous"
+      es-es: "Tú"
+      it-it: "Tu"
+    sub:
+      en-us: "need help"
+      nl-nl: "hebt hulp nodig"
+      de-de: "brauchen Hilfe"
+      fr-fr: "avez besoin d'aide"
+      es-es: "necesitas ayuda"
+      it-it: "hai bisogno di aiuto"
+
+  client:
+    x: 250
+    y: 425
+    icon: pc
+    scale: 1.3
+    color: red
+    label:
+      en-us: "App"
+      nl-nl: "App"
+      de-de: "App"
+      fr-fr: "Appli"
+      es-es: "App"
+      it-it: "App"
+    sub:
+      en-us: "on your computer"
+      nl-nl: "op je computer"
+      de-de: "auf Ihrem Computer"
+      fr-fr: "sur votre ordinateur"
+      es-es: "en tu equipo"
+      it-it: "sul tuo computer"
+
+  techie:
+    x: 1030
+    y: 215
+    icon: techie
+    scale: 1.3
+    color: navy
+    badge_app: desk
+    label:
+      en-us: "Techie"
+      nl-nl: "Techie"
+      de-de: "Techniker"
+      fr-fr: "Technicien"
+      es-es: "Técnico"
+      it-it: "Tecnico"
+    sub:
+      en-us: "helps you"
+      nl-nl: "helpt je"
+      de-de: "hilft Ihnen"
+      fr-fr: "vous aide"
+      es-es: "te ayuda"
+      it-it: "ti aiuta"
+
+  desk:
+    x: 1030
+    y: 425
+    icon: laptop
+    scale: 1.3
+    color: navy
+    label:
+      en-us: "Desk app"
+      nl-nl: "Desk-app"
+      de-de: "Desk-App"
+      fr-fr: "Appli desk"
+      es-es: "App desk"
+      it-it: "App desk"
+    sub:
+      en-us: "for the techie"
+      nl-nl: "van de techie"
+      de-de: "des Technikers"
+      fr-fr: "du technicien"
+      es-es: "del técnico"
+      it-it: "del tecnico"
+
+  server:
+    x: 640
+    y: 470
+    icon: server
+    scale: 1.3
+    color: amber
+    label:
+      en-us: "Server"
+      nl-nl: "Server"
+      de-de: "Server"
+      fr-fr: "Serveur"
+      es-es: "Servidor"
+      it-it: "Server"
+    sub:
+      en-us: "managed for you"
+      nl-nl: "voor jou beheerd"
+      de-de: "für Sie verwaltet"
+      fr-fr: "géré pour vous"
+      es-es: "gestionado para ti"
+      it-it: "gestito per te"
+
+# Arrows with a "via" go outside the apps (email, phone, chat). They are drawn
+# dashed in this colour, whoever sends them.
+outside_color: amber

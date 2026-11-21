@@ -1,0 +1,95 @@
+# Render settings for the HelpBuoy instruction videos. Paths are relative to
+# the repository root. The script files (script/*.yaml) hold the content;
+# this file holds everything that is the same for every scene.
+
+output:
+  width: 1280
+  height: 720
+  fps: 30
+  crf: 20            # final H.264 quality (lower is better and bigger)
+  preset: veryfast
+  audio_bitrate: 128k
+  loudness: -16      # integrated loudness target in LUFS (loudnorm)
+
+sources:
+  screenshot: "msstore/{app}/screenshots/{lang}/{name}.png"
+  screenshot_size: [1920, 1080]
+  logo: "msstore/helpbuoy/logos/logo-300x300.png"
+  diagram_style: "docs/helpbuoy.connection.diagram.svg"
+
+languages: [en-us, nl-nl, de-de, fr-fr, es-es, it-it]
+master: en-us
+
+# Screenshots that may never appear in a video (scope: no server setup).
+forbidden_screenshots:
+  - helpbuoy-desk/3-server
+
+# Words that may not appear in any narration or on-screen text (scope check,
+# case-sensitive).
+# Brand names are never spoken or shown in a scene; the narration says what
+# a thing is instead (the app, the desk app, the server).
+# Case-sensitive, so the website address www.helpbuoy.com may stay.
+brand_words: ["HelpBuoy"]
+
+forbidden_words:
+  - helpbuoy-server
+  - helpbuoy-serverctl
+  - systemctl
+  - apt install
+  - sudo
+  - "--"
+  - state.json
+  - built-in server
+
+fonts:
+  sans: "Noto Sans, DejaVu Sans, sans-serif"
+  serif: "Noto Serif, DejaVu Serif, serif"
+
+colors:
+  navy: "#17324B"
+  red: "#D11F2D"
+  amber: "#E3A83A"
+  amber_light: "#F6E4BE"
+  grey: "#A8B6C3"
+  grey_text: "#4B6177"
+  line: "#D3DDE3"
+  background: "#F6F9F9"
+  white: "#FFFFFF"
+
+timing:
+  lead: 0.4          # silence at the start of a screen or part scene, while it fades in
+  flow_lead: 1.0     # the same for a flow scene, while its nodes appear
+  title_lead: 1.0    # and for a title, while the logo appears
+  gap: 0.45          # silence after every narration
+  tail: 0.35         # extra silence at the end of every scene
+  fade: 0.3          # video fade in and out per scene
+  min_narration: 2.0 # quality check per scene or step, seconds
+  max_narration: 20.0
+  arrow_min: 0.8     # an arrow draws in at least this many seconds,
+  arrow_max: 2.4     # at most this many,
+  arrow_end_before: 0.4  # and is complete this long before its sentence ends
+
+screen:
+  supersample: 2     # zoom on a 2x canvas, so the pan moves in half pixels
+  max_zoom: 1.5      # 1.5 is 1:1 with the 1920x1080 source, so text stays sharp
+  zoom_start: 0.9    # seconds before the zoom toward the highlight starts
+  zoom_duration: 1.0
+  slow_zoom: 1.12    # end zoom of "zoom: slow"
+  dim: 0.45          # how dark everything outside the highlight gets
+
+subtitles:
+  max_chars: 42      # per line
+  max_lines: 2       # per cue
+  max_cps: 17        # characters per second, warned when exceeded
+
+# One voice per language: an online Microsoft Edge voice (needs
+# edge-tts and a network connection, list them with: edge-tts --list-voices),
+# with an optional rate such as "+5%". Narration is cached, so a rebuild only
+# asks for the parts that changed.
+voices:
+  en-us: { voice: en-US-AndrewMultilingualNeural }
+  nl-nl: { voice: nl-NL-MaartenNeural }
+  de-de: { voice: de-DE-ChristophNeural }
+  fr-fr: { voice: fr-FR-RemyMultilingualNeural }
+  es-es: { voice: es-ES-AlvaroNeural }
+  it-it: { voice: it-IT-GiuseppeMultilingualNeural }

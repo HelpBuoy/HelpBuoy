@@ -1,0 +1,117 @@
+# Dutch translation of en-us.yaml: only the text fields, keyed by scene id.
+# Words as in the app (proto/i18n/locales/nl.json), informal "je" like the app.
+
+meta:
+  title: "Zo werkt HelpBuoy"
+  lang: nl-nl
+
+scenes:
+  intro:
+    text: "Hulp op je computer"
+    note: "stap voor stap"
+    say: "Welkom bij deze korte video. We laten je stap voor stap zien hoe een techie je op afstand kan helpen met je computer."
+  flow-parts:
+    title: "Wie is wie"
+    steps:
+      - say: "We beginnen met wie wie is. Links zie je jezelf, met de app op je computer."
+      - say: "Rechts zie je je techie, die de desk-app gebruikt om je te helpen."
+      - say: "En in het midden staat de server, die wij voor je beheren, zodat je zelf niets hoeft in te stellen."
+      - arrows:
+          - { label: "verbindt" }
+          - { label: "verbindt" }
+        say: "Beide apps maken verbinding met die server, maar zonder jouw toestemming kan er niets gebeuren."
+  part-register:
+    text: "Je computer registreren"
+    note: "alleen de eerste keer"
+    say: "We beginnen met het registreren van je computer. Dat hoef je maar één keer te doen."
+  user-connect:
+    say: "Open de app en typ het serveradres in dat je van je techie hebt gekregen. Klik daarna op de knop Verbinden."
+  user-warning:
+    say: "De eerste keer dat je verbinding maakt, laat de app een waarschuwing zien. Ga alleen verder als je het adres hebt gekregen van iemand die je kent en vertrouwt."
+  flow-first-contact:
+    title: "Eerste contact"
+    steps:
+      - label: "sleutel van deze computer"
+        say: "De app maakt nu verbinding met de server en laat een sleutel zien die bij jouw computer hoort."
+      - say: "De server heeft deze sleutel nog niet eerder gezien, dus je computer moet wachten tot je techie hem registreert."
+  user-key:
+    say: "Intussen laat de app je de sleutel van je computer zien. Klik op de knop Sleutel kopiëren om hem te kopiëren."
+  flow-send-key:
+    title: "De sleutel versturen"
+    steps:
+      - label: "je sleutel"
+        via: "per e-mail of chat"
+        say: "Stuur de sleutel nu naar je techie, in een e-mail of een chatbericht. De sleutel is niet geheim, dus je kunt hem gerust versturen."
+  techie-register:
+    say: "Je techie kiest dan voor Computer registreren, plakt je sleutel erin en klikt op de knop Registreren."
+  flow-register:
+    title: "Registratie"
+    steps:
+      - label: "registreer deze sleutel"
+        say: "De desk-app registreert je sleutel op de server, en die geldt alleen voor jouw computer."
+      - label: "geregistreerd"
+        say: "De server laat je computer daarna weten dat hij geregistreerd is. Vanaf nu onthoudt je computer deze server."
+  user-lock:
+    say: "Vervolgens vraagt de app of je alleen van deze helpdesk hulp wilt krijgen. Klik op de knop Vergrendelen om dat te bevestigen, want dat beschermt je tegen oplichters aan de telefoon."
+  part-ask:
+    text: "Hulp vragen"
+    note: "elke keer"
+    say: "Je computer is nu geregistreerd, dus laten we kijken hoe je om hulp vraagt. Dit doe je elke keer als je hulp nodig hebt."
+  flow-ask:
+    title: "Hulp vragen"
+    steps:
+      - label: "vraagt om hulp"
+        via: "per telefoon of e-mail"
+        say: "Als je hulp nodig hebt, bel je gewoon je techie of stuur je een e-mail."
+      - label: "online"
+        say: "Zolang de app open staat, kan je techie zien dat je computer online is."
+  user-waiting:
+    say: "Terwijl je wacht, laat de app het telefoonnummer en de naam van je helpdesk zien."
+  techie-computers:
+    say: "Je techie zoekt je computer op in de lijst en klikt op de knop Verbinden."
+  flow-request:
+    title: "Verzoek"
+    steps:
+      - label: "mag ik het overnemen?"
+        say: "Er gaat dan een verzoek via de server naar je computer, maar er gebeurt nog niets."
+  user-allow:
+    say: "De app vraagt je eerst of je techie het mag overnemen. Klik op de knop Toestaan als je dat goed vindt, of op de knop Annuleren als je dat niet wilt."
+  flow-allow:
+    title: "Toestemming"
+    steps:
+      - label: "toegestaan"
+        say: "De sessie begint pas als je op de knop Toestaan hebt geklikt."
+  part-session:
+    text: "De sessie"
+    note: "tot jij hem stopt"
+    say: "Dan komen we bij de sessie zelf. Jij houdt van begin tot eind de controle."
+  techie-session:
+    say: "Je techie ziet nu je scherm, en kan de muis en het toetsenbord gebruiken om je te helpen."
+  flow-session:
+    title: "Tijdens de sessie"
+    steps:
+      - label: "schermbeeld"
+        say: "Tijdens de sessie wordt een beeld van je scherm naar je techie gestuurd."
+      - label: "muis en toetsenbord"
+        say: "Het enige wat terugkomt, is wat je techie met de muis en het toetsenbord doet. Je bestanden worden nooit verstuurd."
+      - say: "Je kunt op elk moment de controle terugnemen door op de Escape-toets te drukken."
+      - say: "Als het werk klaar is, beëindigen jij of je techie de sessie."
+  flow-summary:
+    title: "Kort gezegd"
+    steps:
+      - arrows:
+          - { label: "je sleutel", via: "één keer" }
+          - { label: "registreren" }
+        say: "Kort samengevat stuur jij één keer je sleutel, en registreert je techie je computer."
+      - arrows:
+          - { label: "verzoek" }
+          - { label: "toegestaan" }
+        say: "Daarna vraagt je techie elke keer om jouw toestemming, en beslis jij."
+      - arrows:
+          - { label: "schermbeeld" }
+          - { label: "muis en toetsenbord" }
+        say: "En tijdens een sessie worden alleen je scherm, de muis en het toetsenbord gedeeld."
+  outro:
+    text: "Begin vandaag nog"
+    note: "www.helpbuoy.com"
+    say: "En zo eenvoudig en veilig kan hulp op afstand zijn. Wil je dit ook aan je eigen klanten bieden, kijk dan op onze website en begin vandaag nog."

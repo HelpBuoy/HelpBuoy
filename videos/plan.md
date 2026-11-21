@@ -6,11 +6,11 @@ Produce **one professional instruction video per language** that shows how HelpB
 
 - Store screenshots from the `helpbuoy/helpbuoy` repo, shown with zoom and highlight effects
 - **Animated flow diagrams** between the screenshot scenes. Arrows draw themselves, and the narration and subtitles say what flows from where to where, and who has to send what to whom.
-- Narration generated with **Piper** text-to-speech
-- **Burned-in subtitles**
+- Narration generated with text-to-speech: the online **Edge** voices (`edge-tts`)
+- **Subtitles** as a track the viewer can switch off (a soft subtitle stream in the MP4, plus `.srt` and `.vtt` files)
 - HelpBuoy logo intro and outro
 - Output at **1280×720 (720p)**
-- Published on the HelpBuoy website with the open-source **Video.js** player, not on YouTube
+- Output is plain MP4 files; how they are published is outside this build
 
 **Out of scope:** server setup and administration. The server is offered as a managed service, so the video shows it only as "the HelpBuoy server" that is already there. It shows no commands, no installation and no Desk built-in server.
 
@@ -74,7 +74,7 @@ The flow wording above is a first version. It will be checked against `PLAN.md`,
 
 ## Principles
 
-1. **Minimal, popular tooling.** Only Python 3, FFmpeg, Piper and PyYAML. All of them come from `apt` or `pip`, and there is no GUI, no editor and no browser.
+1. **Minimal, popular tooling.** Only Python 3, FFmpeg, PyYAML and edge-tts. All of them come from `apt` or `pip`, and there is no GUI, no editor and no browser.
 2. **Text in, video out.** Every creative decision lives in readable text files (YAML and Markdown), including the diagrams. The renderer contains no content.
 3. **LLM-friendly.** The script format is simple, documented and validated, so an LLM can write, translate or restructure scenes and the build either succeeds or tells you exactly what's wrong.
 4. **Deterministic and repeatable.** The same input gives the same output, and one command rebuilds everything.
@@ -86,29 +86,19 @@ The flow wording above is a first version. It will be checked against `PLAN.md`,
 |---|---|---|
 | **Python 3** (stdlib) | Orchestrates the build, writes SRT, computes timings, **writes the SVG frames of the animated diagrams** | preinstalled |
 | **PyYAML** | Reads the script files | `sudo apt install python3-yaml` |
-| **FFmpeg** (distro build, with libass and librsvg) | Scaling, zoom/pan, highlight boxes, text cards, **SVG frames to video**, burned-in subtitles, fades, concatenation, loudness normalization | `sudo apt install ffmpeg` |
-| **Piper** | Offline neural text-to-speech | `pip install piper-tts` plus one voice per language |
+| **FFmpeg** (distro build, with librsvg) | Scaling, zoom/pan, highlight boxes, text cards, **SVG frames to video**, the subtitle stream, fades, concatenation, loudness normalization | `sudo apt install ffmpeg` |
+| **edge-tts** | Online neural text-to-speech (Microsoft Edge voices) | `pip install edge-tts` |
 
-Deliberately left out: MoviePy, ImageMagick, Pillow, Manim and Motion Canvas, because FFmpeg and plain SVG cover all of it, and video editors, because nothing is edited by hand. `validate.py` checks once that the installed FFmpeg has the `librsvg` and `libass` support it needs. The standard Debian and Ubuntu builds have both.
+Deliberately left out: MoviePy, ImageMagick, Pillow, Manim and Motion Canvas, because FFmpeg and plain SVG cover all of it, and video editors, because nothing is edited by hand. `validate.py` checks once that the installed FFmpeg has the `librsvg` support it needs. The standard Debian and Ubuntu builds have it.
 
 One-time setup:
 
 ```bash
 sudo apt install ffmpeg python3-yaml fonts-dejavu
-pip install piper-tts
-python3 video/tools/fetch_voices.py   # downloads the voices listed in config.yaml
+pip install edge-tts
 ```
 
-### Piper voices (candidates, pick after one listen)
-
-| Language | Candidate voices |
-|---|---|
-| en-us | `en_US-lessac-medium`, `en_US-amy-medium` |
-| nl-nl | `nl_NL-mls-medium`, `nl_BE-nathalie-medium` |
-| de-de | `de_DE-thorsten-medium` |
-| fr-fr | `fr_FR-siwis-medium` |
-| es-es | `es_ES-davefx-medium` |
-| it-it | `it_IT-paola-medium`, `it_IT-riccardo-x_low` |
+The videos use the Edge voices listed in `config.yaml`. The offline Piper voices were tried first and sounded less natural.
 
 ## Animated flow diagrams
 
@@ -164,10 +154,10 @@ Nodes are only drawn when a scene lists them under `show`.
           say: "and only mouse and keyboard input goes back. No files, no other access." }
 ```
 
-## Layout (new `video/` folder in the repo)
+## Layout (new `videos/` folder in the repo)
 
 ```
-video/
+videos/
 ├── config.yaml              # 1280x720, fps, fonts, colours, voice per language, source paths, outro text
 ├── diagrams.yaml            # nodes, icons and positions of the flow diagrams
 ├── script/
@@ -179,10 +169,9 @@ video/
 ├── tools/
 │   ├── build.py             # the whole pipeline
 │   ├── flow.py              # SVG frame writer for flow scenes (stdlib only)
-│   ├── validate.py          # checks the scripts and FFmpeg features before rendering
-│   └── fetch_voices.py
+│   └── validate.py          # checks the scripts and FFmpeg features before rendering
 ├── build/                   # cache (audio, frames, clips), git-ignored
-└── out/                     # helpbuoy-<lang>.mp4 and web/, git-ignored
+└── out/                     # helpbuoy-<lang>.mp4, .srt and .vtt, git-ignored
 ```
 
 Source paths in `config.yaml`, so nothing is copied:
@@ -235,17 +224,17 @@ scenes:
 | `flow` | Animated diagram: nodes from `diagrams.yaml`, then arrows that draw themselves step by step, each with its own narration |
 | `part` | Short card between parts, for example "1 · Register the computer (first time only)" |
 
-The `say` text is spoken by Piper and also becomes the burned-in subtitle. An optional `subtitle` field overrides the subtitle text, for example to shorten it. A scene, and in a flow every step, lasts as long as its narration plus a configurable pause, so timing is never typed by hand.
+The `say` text is spoken by the voice of the language and also becomes the subtitle. An optional `subtitle` field overrides the subtitle text, for example to shorten it. A scene, and in a flow every step, lasts as long as its narration plus a configurable pause, so timing is never typed by hand.
 
 Highlight coordinates refer to the 1920×1080 screenshot. The windows sit in the same place in every language, so one set of coordinates serves all languages. A per-language override is possible where a translated label is much longer.
 
-## Pipeline (`video/tools/build.py`)
+## Pipeline (`videos/tools/build.py`)
 
 ```bash
-python3 video/tools/build.py                                 # all languages
-python3 video/tools/build.py --lang nl-nl                    # one language
-python3 video/tools/build.py --lang en-us --scene flow-send-key   # preview one scene
-python3 video/tools/build.py --list-assets                   # screenshots and diagram nodes, for the LLM
+python3 videos/tools/build.py                                 # all languages
+python3 videos/tools/build.py --lang nl-nl                    # one language
+python3 videos/tools/build.py --lang en-us --scene flow-send-key   # preview one scene
+python3 videos/tools/build.py --list-assets                   # screenshots and diagram nodes, for the LLM
 ```
 
 1. **Validate.** Check:
@@ -253,8 +242,8 @@ python3 video/tools/build.py --list-assets                   # screenshots and d
    - screenshots that exist for every language, and highlight boxes within 1920×1080
    - diagram nodes and arrows that refer to known nodes
    - subtitle line length
-   - FFmpeg features (librsvg, libass)
-2. **Narrate.** Run Piper on each `say` text, one per scene or per flow step, to make a WAV. Results are cached by a hash of the text and voice.
+   - FFmpeg features (librsvg)
+2. **Narrate.** Run the text-to-speech tool on each `say` text, one per scene or per flow step, to make a WAV. Results are cached by a hash of the text and voice.
 3. **Time.** Read each WAV's length with `ffprobe`; that gives the scene and step durations.
 4. **Subtitles.** Write an `.srt` from the texts and durations. Long sentences are split into lines of at most 42 characters, at most 2 lines per cue.
 5. **Render scenes** at 1280×720:
@@ -262,48 +251,14 @@ python3 video/tools/build.py --list-assets                   # screenshots and d
    - `title` and `part`: FFmpeg `drawtext` and `overlay`
    - `flow`: `flow.py` writes the SVG frames, and FFmpeg encodes them (`-f image2 -c:v librsvg -i frame_%05d.svg`)
    - `fade` in and out on every clip; every clip muxed with its narration and cached by a hash of its inputs
-6. **Assemble.** Join the clips with the FFmpeg concat demuxer, normalize audio with `loudnorm`, and **burn in the subtitles** with the `subtitles=` filter (libass, styled from `config.yaml`) in one final encode (H.264, `-preset veryfast`, AAC, `-movflags +faststart`).
+6. **Assemble.** Join the clips with the FFmpeg concat demuxer, normalize audio with `loudnorm`, and add the subtitles as a soft `mov_text` stream in one final encode (H.264, `-preset veryfast`, AAC, `-movflags +faststart`).
 7. **Verify.** Check the output's length, 1280×720 resolution and audio stream with `ffprobe`, and report any scene that is too short or too long.
 
-Output: `video/out/helpbuoy-<lang>.mp4`. A `make video` target in the existing Makefile runs the whole pipeline.
-
-## Publishing on the website (no YouTube)
-
-The videos are self-hosted on the HelpBuoy website and played with **Video.js** (Apache-2.0, free). It is the most widely used open-source web player, and its v10 rewrite merges in Plyr, Vidstack and Media Chrome, so it's the safe long-term choice. Use the stable release now, and move to v10 once it has reached feature parity.
-
-Why this stays simple:
-- Subtitles are burned in, so the player needs no text tracks or plugins: one MP4 per language and a plain `<video>` element that Video.js upgrades.
-- The MP4s are H.264 + AAC with `-movflags +faststart`, so they start playing before the download finishes on any web server. No streaming server or HLS is needed for a few minutes of 720p.
-- Video.js is **vendored** (its `video.min.js` and `video-js.min.css` are copied into the site), so there are no third-party requests, no CDN and no tracking.
-
-`build.py` also writes a ready-to-deploy folder:
-
-```
-video/out/web/
-├── helpbuoy-en-us.mp4 ... helpbuoy-it-it.mp4
-├── helpbuoy-en-us.jpg ...          # poster frame per language (FFmpeg)
-├── videos.json                      # language → file, title, duration
-└── embed.html                       # example snippet
-```
-
-The embed snippet uses one player with a language picker. It starts in the browser's language (`navigator.language`, falling back to en-us) and switches the source with `player.src()`:
-
-```html
-<link href="/assets/video-js.min.css" rel="stylesheet">
-<video id="helpbuoy-video" class="video-js vjs-16-9" controls preload="metadata"
-       poster="/video/helpbuoy-en-us.jpg">
-  <source src="/video/helpbuoy-en-us.mp4" type="video/mp4">
-</video>
-<select id="helpbuoy-video-lang"><!-- filled from videos.json --></select>
-<script src="/assets/video.min.js"></script>
-<script src="/assets/helpbuoy-video.js"></script>  <!-- ~30 lines: language picker, reads videos.json -->
-```
-
-Deployment is a copy of `video/out/web/` to the website (for example `rsync` in a `make video-publish` target), which can run straight after the build.
+Output: `videos/out/helpbuoy-<lang>.mp4`. A `make video` target in the existing Makefile runs the whole pipeline.
 
 ## Working with an LLM
 
-`video/script/_llm_instructions.md` is the prompt you give an LLM together with the current script files. It contains:
+`videos/script/_llm_instructions.md` is the prompt you give an LLM together with the current script files. It contains:
 
 - the schema and the output of `build.py --list-assets` (screenshots per app, diagram nodes)
 - what each screenshot shows, taken from `msstore/README.md`
@@ -328,17 +283,14 @@ The loop is: ask for a change ("explain the lock option in more detail", "transl
 
 ## Milestones
 
-1. **Skeleton.** `config.yaml`, `diagrams.yaml`, schema, `validate.py`, Piper narration and SRT for `en-us`.
+1. **Skeleton.** `config.yaml`, `diagrams.yaml`, schema, `validate.py`, narration and SRT for `en-us`.
 2. **Flow diagrams.** `flow.py` with the self-drawing arrows, label pills, pulses, greying and looping, then one rendered flow scene to judge the look.
-3. **First video.** Screen, title and part scenes, then the full `en-us` video with burned-in subtitles.
+3. **First video.** Screen, title and part scenes, then the full `en-us` video with subtitles.
 4. **All languages.** Voice choice per language, LLM translation of the script, then a full build of all six languages.
 5. **Polish.** Brand fonts, badges, fades, loudness normalization and caching.
-6. **Website.** Posters, `videos.json`, the Video.js embed with language picker, and `make video-publish`.
-7. **Automation.** `make video`, optionally run by `release.sh` or after `msstore/screenshots.sh`.
+6. **Automation.** `make video`, optionally run by `release.sh` or after `msstore/screenshots.sh`.
 
 ## Open points
 
-- Choice of Piper voice per language, after a quick listen.
 - Whether the Linux and macOS clients get a mention; the screenshots show only the Windows client.
 - Outro wording and link for the managed server offer.
-- Where the website lives (which repo or server) and on which page the video goes, for the `video-publish` target.
