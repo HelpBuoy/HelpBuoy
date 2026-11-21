@@ -1,6 +1,6 @@
 # The APT repository and its signing key
 
-The Debian packages (helpbuoy, helpbuoy-desk and helpbuoy-server, amd64 and arm64) are published in a flat APT repository at https://apt.helpbuoy.com/, so `apt upgrade` and unattended-upgrades pick up new versions. The repository is signed with one GPG key. This page describes how the repository works, how a release gets into it, and how to look after the key.
+The Debian packages (helpbuoy, helpbuoy-desk and helpbuoy-server for amd64 and arm64, helpbuoy-server also for armhf) are published in a flat APT repository at https://apt.helpbuoy.com/, so `apt upgrade` and unattended-upgrades pick up new versions. The repository is signed with one GPG key. This page describes how the repository works, how a release gets into it, and how to look after the key.
 
 ## On the user's machine
 

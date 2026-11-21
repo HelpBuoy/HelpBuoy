@@ -23,6 +23,10 @@ DIST := dist
 LINUX_ARCHES := amd64 arm64
 WIN_ARCHES   := amd64
 TARGETS := $(addprefix linux/,$(LINUX_ARCHES)) $(addprefix windows/,$(WIN_ARCHES))
+# helpbuoy-server also runs on 32-bit Raspberry Pis (armhf, as Debian calls
+# it). It is built for ARMv6 with GOARM=6, so it runs on the Pi Zero and Pi 1
+# with Raspberry Pi OS as well as on every newer Pi.
+SERVER_TARGETS := $(TARGETS) linux/armhf
 WINRES  := go run github.com/tc-hib/go-winres@v0.3.3
 comma   := ,
 space   := $(subst ,, )
@@ -48,7 +52,7 @@ help:
 	@echo "make test     run proto and server tests"
 	@echo "make vet      go vet all modules (client for windows too)"
 	@echo "make fuzz     short fuzz run of the fuzz targets"
-	@echo "make server   build helpbuoy-server ($(TARGETS)) into $(BIN)/"
+	@echo "make server   build helpbuoy-server ($(SERVER_TARGETS)) into $(BIN)/"
 	@echo "make client   build the Windows client ($(WIN_ARCHES)) into $(BIN)/"
 	@echo "make client-linux  build the static Linux client (X11 and Wayland) ($(LINUX_ARCHES)) into $(BIN)/"
 	@echo "make client-macos  build the universal macOS client into $(BIN)/ (needs zig and a macOS SDK)"
@@ -78,18 +82,20 @@ vet:
 fuzz:
 	go test ./proto/serveraddr -run '^$$' -fuzz FuzzParse -fuzztime 20s
 
-# build-all NAME PKG EXTRA_LDFLAGS: build PKG for every target in TARGETS.
+# build-all NAME PKG EXTRA_LDFLAGS [TARGETS]: build PKG for every target in
+# TARGETS (by default $(TARGETS)). armhf is GOARCH=arm with GOARM=6.
 define build-all
-	@for t in $(TARGETS); do \
+	@for t in $(or $(4),$(TARGETS)); do \
 		os=$${t%/*}; arch=$${t#*/}; ext=; [ $$os = windows ] && ext=.exe; \
+		goarch=$$arch; goarm=; [ $$arch = armhf ] && goarch=arm goarm=6; \
 		echo "$(1) $$os/$$arch"; \
-		GOOS=$$os GOARCH=$$arch go build $(GOFLAGS) -ldflags "$(LDFLAGS) $(if $(3),$$( [ $$os = windows ] && echo '$(3)'))" \
+		GOOS=$$os GOARCH=$$goarch GOARM=$$goarm go build $(GOFLAGS) -ldflags "$(LDFLAGS) $(if $(3),$$( [ $$os = windows ] && echo '$(3)'))" \
 			-o $(BIN)/$$os-$$arch/$(1)$$ext $(2) || exit 1; \
 	done
 endef
 
 server:
-	$(call build-all,helpbuoy-server,./server/cmd/helpbuoy-server,)
+	$(call build-all,helpbuoy-server,./server/cmd/helpbuoy-server,,$(SERVER_TARGETS))
 
 desk: $(DESK_SYSO)
 	$(call build-all,helpbuoy-desk,./desk,-H=windowsgui)
@@ -247,6 +253,7 @@ msix-test: msix
 # systemd service running as the helpbuoy-server system user with its state in
 # /var/lib/helpbuoy-server, and helpbuoy-serverctl for admin commands. One per Linux arch.
 DEB_ARCHES := $(patsubst linux/%,%,$(filter linux/%,$(TARGETS)))
+SERVER_DEB_ARCHES := $(patsubst linux/%,%,$(filter linux/%,$(SERVER_TARGETS)))
 
 # Every package adds the HelpBuoy APT repository in its postinst and removes
 # it in its postrm on purge (packaging/debian/apt-source.*), with the public
@@ -264,7 +271,7 @@ endef
 DEB_DATE    = $(shell date -R -d @$$(git log -1 --format=%ct 2>/dev/null || date +%s))
 deb: server
 	@mkdir -p $(DIST)
-	@for arch in $(DEB_ARCHES); do \
+	@for arch in $(SERVER_DEB_ARCHES); do \
 		root=$(BIN)/deb-$$arch; rm -rf $$root; \
 		install -D -m 0755 $(BIN)/linux-$$arch/helpbuoy-server $$root/usr/bin/helpbuoy-server; \
 		install -D -m 0755 packaging/debian/helpbuoy-serverctl $$root/usr/sbin/helpbuoy-serverctl; \
