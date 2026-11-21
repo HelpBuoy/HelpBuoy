@@ -65,6 +65,28 @@ service user on the service's state:
   sudo helpbuoy-serverctl computer remove SHA256:...
   sudo helpbuoy-serverctl info --company 'Example Inc' --phone '+1 234 567 890'
 
+A program that runs as another user, like a web admin under Apache, can run
+the same commands without sudo through the admin socket
+/run/helpbuoy-server-admin.sock (helpbuoy-server-admin.socket, enabled on
+installation). Add its user to the helpbuoy-server-admin group and restart
+it so it picks up the group:
+
+  sudo usermod -aG helpbuoy-server-admin www-data
+
+It sends one line with a JSON array of arguments and gets one line back:
+
+  $ echo '["techie","list","--vhost","acme.helpbuoy.example.com"]' | nc -UN /run/helpbuoy-server-admin.sock
+  {"exit":0,"output":"NAME  FINGERPRINT  LAST SEEN\n..."}
+
+Every connection runs one command as the helpbuoy-server user. Only admin
+commands run (not serve), on the state of the service: --state is refused,
+--vhosts must be HELPBUOY_SERVER_VHOSTS or HELPBUOY_SERVER_STOPPED, and
+--stopped must be HELPBUOY_SERVER_STOPPED.
+"vhost stop NAME" moves a virtual host to HELPBUOY_SERVER_STOPPED (default
+/var/lib/helpbuoy-server/stopped), "vhost start NAME" moves it back and
+"vhost purge NAME" deletes a stopped one; "log --vhost NAME" prints the end
+of its server.log.
+
 The running server picks up changes within a second. Logs are in the
 journal (journalctl -u helpbuoy-server) and in /var/lib/helpbuoy-server/server.log.
 

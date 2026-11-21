@@ -538,11 +538,12 @@ func (f *stateFlags) dir() (string, error) {
 
 func vhostCmd(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("%w: vhost list|add", errUsage)
+		return fmt.Errorf("%w: vhost list|add|stop|start|purge", errUsage)
 	}
 	fs := flag.NewFlagSet("vhost "+args[0], flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	state := addStateFlags(fs)
+	stopped := fs.String("stopped", "", "directory of stopped virtual hosts (default: $HELPBUOY_SERVER_STOPPED)")
 	pos, err := parse(fs, args[1:])
 	if err != nil {
 		return err
@@ -550,6 +551,13 @@ func vhostCmd(args []string, stdout, stderr io.Writer) error {
 	base, err := state.vhostsDir()
 	if err != nil {
 		return err
+	}
+	switch args[0] {
+	case "stop", "start", "purge":
+		if len(pos) != 1 {
+			return fmt.Errorf("%w: vhost %s NAME", errUsage, args[0])
+		}
+		return vhostMove(args[0], base, *stopped, pos[0], stdout)
 	}
 	switch {
 	case args[0] == "list" && len(pos) == 0:
@@ -612,5 +620,55 @@ func vhostCmd(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprintf(stdout, "and:  helpbuoy-server techie add --vhost %s NAME 'ssh-ed25519 ...'\n", name)
 		return nil
 	}
-	return fmt.Errorf("%w: vhost list | vhost add NAME", errUsage)
+	return fmt.Errorf("%w: vhost list | vhost add|stop|start|purge NAME", errUsage)
+}
+
+// vhostMove stops, starts or purges virtual host name. Stopping moves its
+// directory from the virtual hosts directory base to the stopped directory,
+// so a running server drops it within a second and keeps nothing of it
+// open; starting moves it back. Purging deletes it from the stopped
+// directory for good. Both directories must be on the same file system.
+func vhostMove(cmd, base, stopped, name string, stdout io.Writer) error {
+	if stopped == "" {
+		stopped = os.Getenv("HELPBUOY_SERVER_STOPPED")
+	}
+	if stopped == "" {
+		return fmt.Errorf("%w: give the directory of stopped virtual hosts with --stopped", errUsage)
+	}
+	name = strings.ToLower(name)
+	if err := validVhost(name); err != nil {
+		return err
+	}
+	if filepath.Clean(base) == filepath.Clean(stopped) {
+		return errors.New("the virtual hosts and stopped directories are the same")
+	}
+	from, to := filepath.Join(base, name), filepath.Join(stopped, name)
+	if cmd != "stop" {
+		from, to = to, from
+	}
+	if fi, err := os.Lstat(from); err != nil || !fi.IsDir() {
+		return fmt.Errorf("no virtual host %s in %s", name, filepath.Dir(from))
+	}
+	if cmd == "purge" {
+		if err := os.RemoveAll(from); err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "purged %s\n", name)
+		return nil
+	}
+	if _, err := os.Lstat(to); err == nil {
+		return fmt.Errorf("virtual host %s is already in %s", name, filepath.Dir(to))
+	}
+	if err := os.MkdirAll(filepath.Dir(to), 0o700); err != nil {
+		return err
+	}
+	if err := os.Rename(from, to); err != nil {
+		return err
+	}
+	if cmd == "stop" {
+		fmt.Fprintf(stdout, "stopped %s, kept in %s\n", name, stopped)
+	} else {
+		fmt.Fprintf(stdout, "started %s\n", name)
+	}
+	return nil
 }

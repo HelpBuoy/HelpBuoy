@@ -1,0 +1,18 @@
+# The admin socket lets programs that run as another user, like a web admin,
+# run helpbuoy-server admin commands without sudo: add their user to the
+# helpbuoy-server-admin group. Every connection starts helpbuoy-server-admin@.service,
+# which runs one command as the helpbuoy-server user. See README.Debian.
+[Unit]
+Description=helpbuoy server admin socket
+Documentation=https://github.com/helpbuoy/helpbuoy
+
+[Socket]
+ListenStream=/run/helpbuoy-server-admin.sock
+SocketUser=helpbuoy-server
+SocketGroup=helpbuoy-server-admin
+SocketMode=0660
+Accept=yes
+MaxConnections=16
+
+[Install]
+WantedBy=sockets.target

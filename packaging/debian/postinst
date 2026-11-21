@@ -9,11 +9,13 @@ fi
 # Same as what dh_installsystemd generates.
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ]; then
 	# was-enabled defaults to true, so a new installation enables the unit.
-	if deb-systemd-helper --quiet was-enabled 'helpbuoy-server.service'; then
-		deb-systemd-helper enable 'helpbuoy-server.service' >/dev/null || true
-	else
-		deb-systemd-helper update-state 'helpbuoy-server.service' >/dev/null || true
-	fi
+	for unit in helpbuoy-server.service helpbuoy-server-admin.socket; do
+		if deb-systemd-helper --quiet was-enabled "$unit"; then
+			deb-systemd-helper enable "$unit" >/dev/null || true
+		else
+			deb-systemd-helper update-state "$unit" >/dev/null || true
+		fi
+	done
 	if [ -d /run/systemd/system ]; then
 		systemctl --system daemon-reload >/dev/null || true
 		if [ -n "$2" ]; then
@@ -21,7 +23,7 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 		else
 			action=start
 		fi
-		deb-systemd-invoke $action 'helpbuoy-server.service' >/dev/null || true
+		deb-systemd-invoke $action 'helpbuoy-server.service' 'helpbuoy-server-admin.socket' >/dev/null || true
 	fi
 fi
 

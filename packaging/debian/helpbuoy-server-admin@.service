@@ -1,0 +1,52 @@
+# Runs one admin command sent on the admin socket (helpbuoy-server-admin.socket):
+# a line with a JSON array of arguments, like ["techie","list","--vhost","acme.example.com"].
+# Only admin commands run, on the state of the service: --vhosts must be
+# HELPBUOY_SERVER_VHOSTS or HELPBUOY_SERVER_STOPPED, --stopped must be
+# HELPBUOY_SERVER_STOPPED, and --state is refused.
+[Unit]
+Description=helpbuoy server admin command
+Documentation=https://github.com/helpbuoy/helpbuoy
+
+[Service]
+Type=exec
+User=helpbuoy-server
+Group=helpbuoy-server
+Environment=HELPBUOY_SERVER_STATE=/var/lib/helpbuoy-server
+Environment=HELPBUOY_SERVER_VHOSTS=
+Environment=HELPBUOY_SERVER_STOPPED=/var/lib/helpbuoy-server/stopped
+EnvironmentFile=-/etc/default/helpbuoy-server
+ExecStart=/usr/bin/helpbuoy-server admin
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+RuntimeMaxSec=60
+
+StateDirectory=helpbuoy-server
+StateDirectoryMode=0700
+UMask=0077
+
+# Only the state directory and the socket it was started with.
+CapabilityBoundingSet=
+AmbientCapabilities=
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateNetwork=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources

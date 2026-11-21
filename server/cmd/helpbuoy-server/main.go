@@ -71,6 +71,13 @@ commands:
   vhost list                             list the virtual hosts in the --vhosts directory
   vhost add NAME                         add a virtual host, e.g. acme.helpbuoy.example.com; a running
                                          server picks it up within a second
+  vhost stop NAME [--stopped DIR]        move a virtual host to DIR (default: $HELPBUOY_SERVER_STOPPED),
+                                         on the same file system; a running server drops it
+  vhost start NAME [--stopped DIR]       move a stopped virtual host back, with its techies,
+                                         computers and host key
+  vhost purge NAME [--stopped DIR]       delete a stopped virtual host for good
+  log [--lines N]                        print the last N lines of server.log (default 200)
+  admin                                  run one command sent on stdin, for helpbuoy-server-admin.socket
   version                                print the version
 
 Every command except version takes --state DIR (default: $HELPBUOY_SERVER_STATE,
@@ -111,6 +118,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		err = hostkeyCmd(args[1:], stdout, stderr)
 	case "vhost":
 		err = vhostCmd(args[1:], stdout, stderr)
+	case "log":
+		err = logCmd(args[1:], stdout, stderr)
+	case "admin":
+		err = adminCmd(args[1:], stdin, stdout, stderr)
 	case "version", "--version", "-v":
 		fmt.Fprintf(stdout, "helpbuoy-server %s\n", version)
 		return 0

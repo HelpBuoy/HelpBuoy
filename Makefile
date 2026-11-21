@@ -269,6 +269,8 @@ deb: server
 		install -D -m 0755 $(BIN)/linux-$$arch/helpbuoy-server $$root/usr/bin/helpbuoy-server; \
 		install -D -m 0755 packaging/debian/helpbuoy-serverctl $$root/usr/sbin/helpbuoy-serverctl; \
 		install -D -m 0644 packaging/debian/helpbuoy-server.service $$root/usr/lib/systemd/system/helpbuoy-server.service; \
+		install -D -m 0644 packaging/debian/helpbuoy-server-admin.socket $$root/usr/lib/systemd/system/helpbuoy-server-admin.socket; \
+		install -D -m 0644 packaging/debian/helpbuoy-server-admin@.service $$root/usr/lib/systemd/system/helpbuoy-server-admin@.service; \
 		install -D -m 0644 packaging/debian/helpbuoy-server.sysusers $$root/usr/lib/sysusers.d/helpbuoy-server.conf; \
 		install -D -m 0644 packaging/debian/helpbuoy-server.default $$root/etc/default/helpbuoy-server; \
 		install -D -m 0644 packaging/debian/README.Debian $$root/usr/share/doc/helpbuoy-server/README.Debian; \

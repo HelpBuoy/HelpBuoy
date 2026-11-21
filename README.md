@@ -45,6 +45,10 @@ Without a reverse proxy, `helpbuoy-server serve --mode https` serves HTTPS itsel
 
 `HELPBUOY_SERVER_VHOSTS=DIR` saves typing `--vhosts`. A running server starts a new virtual host within a second, and drops one within a second after its directory is deleted. With `--mode https --acme` it gets a certificate for each virtual host.
 
+`vhost stop NAME --stopped DIR2` moves a virtual host to `DIR2` (on the same file system, default `$HELPBUOY_SERVER_STOPPED`), `vhost start NAME` moves it back with its techies, computers and host key, and `vhost purge NAME` deletes a stopped one for good. `log --vhost NAME` prints the end of its `server.log`.
+
+The Debian package also has an admin socket, `/run/helpbuoy-server-admin.sock`, for a web admin that runs as another user: members of the `helpbuoy-server-admin` group send one line with a JSON array of arguments and get `{"exit":N,"output":"..."}` back, without sudo. It runs `helpbuoy-server admin` as the server user, which only accepts admin commands on the directories of the service (`--state` is refused, `--vhosts` and `--stopped` must be the service's) (see `packaging/debian/README.Debian`).
+
 ## Scripts
 
 - `./run.sh`: builds and starts a server, the desk app and the Windows client (in wine) on this machine for testing. All state lives in `.run/`; `./run.sh reset` clears it.

@@ -26,6 +26,17 @@ helpbuoy-server \- server for helpbuoy self-hosted remote support
 .B helpbuoy-server vhost add
 .I name
 .br
+.B helpbuoy-server vhost stop\fR|\fBstart\fR|\fBpurge
+.I name
+.RB [ \-\-stopped
+.IR dir ]
+.br
+.B helpbuoy-server log
+.RB [ \-\-lines
+.IR n ]
+.br
+.B helpbuoy-server admin
+.br
 .B helpbuoy-server techie add
 .I name
 .I key
@@ -114,8 +125,34 @@ adds a virtual host to the
 .B \-\-vhosts
 directory;
 .B vhost list
-lists them. To remove one, delete its directory. A running server picks up
-both within a second.
+lists them.
+.B vhost stop
+moves one to the directory of stopped virtual hosts (on the same file
+system),
+.B vhost start
+moves it back with its techies, computers and host key, and
+.B vhost purge
+deletes a stopped one for good. A running server picks up all of these
+within a second.
+.PP
+.B log
+prints the last lines of server.log.
+.PP
+.B admin
+reads one line with a JSON array of arguments on stdin, runs that admin
+command and answers with one line {"exit":N,"output":"..."}. It refuses
+.B serve
+and
+.BR \-\-state ,
+a
+.B \-\-vhosts
+other than $HELPBUOY_SERVER_VHOSTS or $HELPBUOY_SERVER_STOPPED, and a
+.B \-\-stopped
+other than $HELPBUOY_SERVER_STOPPED. The Debian
+package runs it for every connection on
+.IR /run/helpbuoy-server-admin.sock ,
+open to the group helpbuoy-server-admin, so a web admin running as another
+user can manage the server without sudo.
 .SH OPTIONS
 .TP
 .BI \-\-listen " addr"
@@ -169,5 +206,8 @@ Default state directory. The Debian service sets it to
 .TP
 .B HELPBUOY_SERVER_VHOSTS
 Default virtual hosts directory.
+.TP
+.B HELPBUOY_SERVER_STOPPED
+Default directory of stopped virtual hosts.
 .SH SEE ALSO
 .BR helpbuoy-serverctl (8)

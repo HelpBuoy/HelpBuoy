@@ -24,3 +24,7 @@ HELPBUOY_SERVER_OPTS=
 # name, each with its own state directory in this directory. Leave empty for
 # a single server with its state in /var/lib/helpbuoy-server.
 #HELPBUOY_SERVER_VHOSTS=/var/lib/helpbuoy-server/vhosts
+#
+# Where "helpbuoy-server vhost stop" keeps stopped virtual hosts, on the same
+# file system as HELPBUOY_SERVER_VHOSTS, until "vhost start" or "vhost purge".
+#HELPBUOY_SERVER_STOPPED=/var/lib/helpbuoy-server/stopped

@@ -1,1 +1,3 @@
 u helpbuoy-server - "helpbuoy server" /var/lib/helpbuoy-server /usr/sbin/nologin
+# Members may use the admin socket, /run/helpbuoy-server-admin.sock.
+g helpbuoy-server-admin -

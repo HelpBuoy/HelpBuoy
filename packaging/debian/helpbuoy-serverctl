@@ -19,9 +19,10 @@ fi
 # With virtual hosts (HELPBUOY_SERVER_VHOSTS in /etc/default/helpbuoy-server),
 # commands take --vhost NAME.
 HELPBUOY_SERVER_VHOSTS=
+HELPBUOY_SERVER_STOPPED=/var/lib/helpbuoy-server/stopped
 if [ -r /etc/default/helpbuoy-server ]; then
 	. /etc/default/helpbuoy-server
 fi
 cd /
 exec runuser -u helpbuoy-server -- env HELPBUOY_SERVER_STATE=/var/lib/helpbuoy-server \
-	HELPBUOY_SERVER_VHOSTS="$HELPBUOY_SERVER_VHOSTS" /usr/bin/helpbuoy-server "$@"
+	HELPBUOY_SERVER_VHOSTS="$HELPBUOY_SERVER_VHOSTS" HELPBUOY_SERVER_STOPPED="$HELPBUOY_SERVER_STOPPED" /usr/bin/helpbuoy-server "$@"
