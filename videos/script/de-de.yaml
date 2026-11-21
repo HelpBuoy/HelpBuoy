@@ -1,0 +1,117 @@
+# German translation of en-us.yaml: only the text fields, keyed by scene id.
+# Words as in the app (proto/i18n/locales/de.json), formal "Sie".
+
+meta:
+  title: "So funktioniert HelpBuoy"
+  lang: de-de
+
+scenes:
+  intro:
+    text: "Hilfe für Ihren Computer"
+    note: "Schritt für Schritt"
+    say: "Willkommen zu diesem kurzen Video. Wir zeigen Ihnen Schritt für Schritt, wie ein Techniker Ihnen aus der Ferne an Ihrem Computer helfen kann."
+  flow-parts:
+    title: "Wer ist wer"
+    steps:
+      - say: "Beginnen wir damit, wer wer ist. Links sehen Sie sich selbst, mit der App auf Ihrem Computer."
+      - say: "Rechts sehen Sie Ihren Techniker, der Ihnen mit der Desk-App hilft."
+      - say: "Und in der Mitte steht der Server, den wir für Sie betreiben, sodass Sie selbst nichts einrichten müssen."
+      - arrows:
+          - { label: "verbindet" }
+          - { label: "verbindet" }
+        say: "Beide Apps verbinden sich mit diesem Server, aber ohne Ihre Zustimmung kann nichts passieren."
+  part-register:
+    text: "Ihren Computer registrieren"
+    note: "nur beim ersten Mal"
+    say: "Wir beginnen damit, Ihren Computer zu registrieren. Das müssen Sie nur ein einziges Mal tun."
+  user-connect:
+    say: "Öffnen Sie die App und geben Sie die Serveradresse ein, die Sie von Ihrem Techniker bekommen haben. Klicken Sie danach auf die Schaltfläche Verbinden."
+  user-warning:
+    say: "Beim ersten Verbinden zeigt die App eine Warnung. Fahren Sie nur fort, wenn Sie die Adresse von jemandem bekommen haben, den Sie kennen und dem Sie vertrauen."
+  flow-first-contact:
+    title: "Erster Kontakt"
+    steps:
+      - label: "Schlüssel dieses Computers"
+        say: "Die App verbindet sich jetzt mit dem Server und zeigt ihm einen Schlüssel, der zu Ihrem Computer gehört."
+      - say: "Der Server hat diesen Schlüssel noch nie gesehen, deshalb muss Ihr Computer warten, bis Ihr Techniker ihn registriert."
+  user-key:
+    say: "In der Zwischenzeit zeigt Ihnen die App den Schlüssel Ihres Computers. Klicken Sie auf die Schaltfläche Schlüssel kopieren, um ihn zu kopieren."
+  flow-send-key:
+    title: "Den Schlüssel senden"
+    steps:
+      - label: "Ihr Schlüssel"
+        via: "per E-Mail oder Chat"
+        say: "Schicken Sie den Schlüssel jetzt an Ihren Techniker, in einer E-Mail oder einer Chatnachricht. Der Schlüssel ist nicht geheim, Sie können ihn also unbesorgt verschicken."
+  techie-register:
+    say: "Ihr Techniker wählt dann Computer registrieren, fügt Ihren Schlüssel ein und klickt auf die Schaltfläche Registrieren."
+  flow-register:
+    title: "Registrierung"
+    steps:
+      - label: "Schlüssel registrieren"
+        say: "Die Desk-App registriert Ihren Schlüssel auf dem Server, und er gilt nur für Ihren Computer."
+      - label: "registriert"
+        say: "Der Server teilt Ihrem Computer danach mit, dass er registriert ist. Von nun an merkt sich Ihr Computer diesen Server."
+  user-lock:
+    say: "Als Nächstes fragt die App, ob Sie nur von diesem Helpdesk Hilfe bekommen möchten. Klicken Sie auf die Schaltfläche Binden, um zuzustimmen, denn das schützt Sie vor betrügerischen Anrufen."
+  part-ask:
+    text: "Um Hilfe bitten"
+    note: "jedes Mal"
+    say: "Ihr Computer ist jetzt registriert, sehen wir uns also an, wie Sie um Hilfe bitten. Das tun Sie jedes Mal, wenn Sie Hilfe brauchen."
+  flow-ask:
+    title: "Um Hilfe bitten"
+    steps:
+      - label: "Bitte um Hilfe"
+        via: "per Telefon oder E-Mail"
+        say: "Wenn Sie Hilfe brauchen, rufen Sie Ihren Techniker einfach an oder schreiben ihm eine E-Mail."
+      - label: "online"
+        say: "Solange die App geöffnet ist, kann Ihr Techniker sehen, dass Ihr Computer online ist."
+  user-waiting:
+    say: "Während Sie warten, zeigt die App die Telefonnummer und den Namen Ihres Helpdesks."
+  techie-computers:
+    say: "Ihr Techniker sucht Ihren Computer in der Liste und klickt auf die Schaltfläche Verbinden."
+  flow-request:
+    title: "Anfrage"
+    steps:
+      - label: "darf ich übernehmen?"
+        say: "Dann geht eine Anfrage über den Server an Ihren Computer, aber noch passiert nichts."
+  user-allow:
+    say: "Die App fragt Sie zuerst, ob Ihr Techniker übernehmen darf. Klicken Sie auf die Schaltfläche Zulassen, wenn Sie einverstanden sind, oder auf die Schaltfläche Abbrechen, wenn nicht."
+  flow-allow:
+    title: "Zustimmung"
+    steps:
+      - label: "zugelassen"
+        say: "Die Sitzung beginnt erst, wenn Sie auf die Schaltfläche Zulassen geklickt haben."
+  part-session:
+    text: "Die Sitzung"
+    note: "bis Sie sie beenden"
+    say: "Damit kommen wir zur Sitzung selbst. Sie behalten von Anfang bis Ende die Kontrolle."
+  techie-session:
+    say: "Ihr Techniker sieht jetzt Ihren Bildschirm und kann Maus und Tastatur benutzen, um Ihnen zu helfen."
+  flow-session:
+    title: "Während der Sitzung"
+    steps:
+      - label: "Bildschirminhalt"
+        say: "Während der Sitzung wird ein Bild Ihres Bildschirms an Ihren Techniker gesendet."
+      - label: "Maus und Tastatur"
+        say: "Zurück kommt nur, was Ihr Techniker mit Maus und Tastatur tut. Ihre Dateien werden nie gesendet."
+      - say: "Sie können sich jederzeit die Kontrolle zurückholen, indem Sie die Escape-Taste drücken."
+      - say: "Wenn alles erledigt ist, beenden Sie oder Ihr Techniker die Sitzung."
+  flow-summary:
+    title: "Kurz gesagt"
+    steps:
+      - arrows:
+          - { label: "Ihr Schlüssel", via: "einmal" }
+          - { label: "registrieren" }
+        say: "Kurz zusammengefasst senden Sie Ihren Schlüssel einmal, und Ihr Techniker registriert Ihren Computer."
+      - arrows:
+          - { label: "Anfrage" }
+          - { label: "zugelassen" }
+        say: "Danach bittet Ihr Techniker jedes Mal um Ihre Erlaubnis, und Sie entscheiden."
+      - arrows:
+          - { label: "Bildschirminhalt" }
+          - { label: "Maus und Tastatur" }
+        say: "Und während einer Sitzung werden nur Ihr Bildschirm, die Maus und die Tastatur geteilt."
+  outro:
+    text: "Starten Sie noch heute"
+    note: "www.helpbuoy.com"
+    say: "Und so einfach und sicher kann Hilfe aus der Ferne sein. Wenn Sie das auch Ihren eigenen Kunden anbieten möchten, besuchen Sie unsere Website und starten Sie noch heute."

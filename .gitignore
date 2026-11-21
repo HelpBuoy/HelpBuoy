@@ -4,3 +4,7 @@
 /client-windows/rsrc_windows_*.syso
 /.run/
 /msstore/credentials.env
+/videos/build/
+/videos/out/
+/videos/.venv/
+__pycache__/

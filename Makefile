@@ -42,7 +42,7 @@ DESK_MSI := $(DIST)/helpbuoy-desk_$(APP_VERSION)_amd64.msi
 MSIX := $(BIN)/helpbuoy_$(APP_VERSION).0_x64.msix
 DESK_MSIX := $(BIN)/helpbuoy-desk_$(APP_VERSION).0_x64.msix
 
-.PHONY: help all test vet fuzz server client client-linux client-macos desk-macos zip-macos desk dist msi msix msix-test deb deb-client deb-desk icon clean
+.PHONY: help all test vet fuzz server client client-linux client-macos desk-macos zip-macos desk dist msi msix msix-test deb deb-client deb-desk icon video clean
 
 help:
 	@echo "make test     run proto and server tests"
@@ -63,6 +63,7 @@ help:
 	@echo "make deb-client  Debian package of the Linux client with a menu entry and icons (needs dpkg-deb)"
 	@echo "make deb-desk Debian package of the desk app with a menu entry and icons (needs dpkg-deb)"
 	@echo "make icon     regenerate the lifebuoy app icon (client, copied to the desk app)"
+	@echo "make video    the instruction videos in videos/out/ (needs ffmpeg, edge-tts; see videos/README.md)"
 
 all: vet test server client client-linux desk
 
@@ -336,6 +337,11 @@ icon:
 	done
 	cp client-windows/resources/icon.png desk/resources/icon.png
 	cp client-windows/resources/icon*.png client-linux/resources/
+
+# The instruction videos (videos/): narration with text-to-speech, diagrams as SVG
+# frames, everything assembled by ffmpeg.
+video:
+	python3 videos/tools/build.py
 
 clean:
 	rm -rf $(BIN) $(DIST) desk/rsrc_windows_*.syso client-windows/rsrc_windows_*.syso

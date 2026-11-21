@@ -1,0 +1,117 @@
+# French translation of en-us.yaml: only the text fields, keyed by scene id.
+# Words as in the app (proto/i18n/locales/fr.json), formal "vous".
+
+meta:
+  title: "Comment fonctionne HelpBuoy"
+  lang: fr-fr
+
+scenes:
+  intro:
+    text: "De l'aide sur votre ordinateur"
+    note: "étape par étape"
+    say: "Bienvenue dans cette courte vidéo. Nous allons vous montrer étape par étape comment un technicien peut vous aider à distance sur votre ordinateur."
+  flow-parts:
+    title: "Qui est qui"
+    steps:
+      - say: "Commençons par voir qui est qui. À gauche, c'est vous, avec l'appli sur votre ordinateur."
+      - say: "À droite se trouve votre technicien, qui utilise l'appli desk pour vous aider."
+      - say: "Et au milieu, il y a le serveur, que nous gérons pour vous, donc vous n'avez rien à installer."
+      - arrows:
+          - { label: "se connecte" }
+          - { label: "se connecte" }
+        say: "Les deux applis se connectent à ce serveur, mais rien ne peut se passer sans votre accord."
+  part-register:
+    text: "Enregistrer votre ordinateur"
+    note: "la première fois seulement"
+    say: "Commençons par enregistrer votre ordinateur. C'est une étape que vous ne faites qu'une seule fois."
+  user-connect:
+    say: "Ouvrez l'appli et tapez l'adresse du serveur que votre technicien vous a donnée. Cliquez ensuite sur le bouton Se connecter."
+  user-warning:
+    say: "La première fois que vous vous connectez, l'appli affiche un avertissement. Continuez seulement si l'adresse vous a été donnée par une personne que vous connaissez et en qui vous avez confiance."
+  flow-first-contact:
+    title: "Premier contact"
+    steps:
+      - label: "clé de cet ordinateur"
+        say: "L'appli se connecte maintenant au serveur et lui présente une clé qui appartient à votre ordinateur."
+      - say: "Le serveur n'a encore jamais vu cette clé, donc votre ordinateur doit attendre que votre technicien l'enregistre."
+  user-key:
+    say: "Pendant ce temps, l'appli vous affiche la clé de votre ordinateur. Cliquez sur le bouton Copier la clé pour la copier."
+  flow-send-key:
+    title: "Envoyer la clé"
+    steps:
+      - label: "votre clé"
+        via: "par e-mail ou message"
+        say: "Envoyez maintenant cette clé à votre technicien, dans un e-mail ou un message. La clé n'est pas secrète, vous pouvez donc l'envoyer sans crainte."
+  techie-register:
+    say: "Votre technicien choisit alors Enregistrer un ordinateur, colle votre clé et clique sur le bouton Enregistrer."
+  flow-register:
+    title: "Enregistrement"
+    steps:
+      - label: "enregistrer cette clé"
+        say: "L'appli desk enregistre votre clé sur le serveur, et elle n'est valable que pour votre ordinateur."
+      - label: "enregistré"
+        say: "Le serveur indique ensuite à votre ordinateur qu'il est enregistré. Désormais, votre ordinateur se souvient de ce serveur."
+  user-lock:
+    say: "Ensuite, l'appli vous demande si vous voulez recevoir de l'aide uniquement de ce support. Cliquez sur le bouton Verrouiller pour accepter, car cela vous protège des appels frauduleux."
+  part-ask:
+    text: "Demander de l'aide"
+    note: "à chaque fois"
+    say: "Votre ordinateur est maintenant enregistré, alors voyons comment demander de l'aide. C'est ce que vous ferez chaque fois que vous en aurez besoin."
+  flow-ask:
+    title: "Demander de l'aide"
+    steps:
+      - label: "demande de l'aide"
+        via: "par téléphone ou e-mail"
+        say: "Quand vous avez besoin d'aide, il suffit d'appeler votre technicien ou de lui envoyer un e-mail."
+      - label: "en ligne"
+        say: "Tant que l'appli est ouverte, votre technicien peut voir que votre ordinateur est en ligne."
+  user-waiting:
+    say: "Pendant que vous patientez, l'appli affiche le numéro de téléphone et le nom de votre support."
+  techie-computers:
+    say: "Votre technicien trouve votre ordinateur dans la liste et clique sur le bouton Se connecter."
+  flow-request:
+    title: "Demande"
+    steps:
+      - label: "puis-je prendre la main ?"
+        say: "Une demande passe alors par le serveur jusqu'à votre ordinateur, mais rien ne se passe encore."
+  user-allow:
+    say: "L'appli vous demande d'abord si votre technicien peut prendre la main. Cliquez sur le bouton Autoriser si vous êtes d'accord, ou sur le bouton Annuler si vous ne l'êtes pas."
+  flow-allow:
+    title: "Accord"
+    steps:
+      - label: "autorisé"
+        say: "La session ne commence qu'une fois que vous avez cliqué sur le bouton Autoriser."
+  part-session:
+    text: "La session"
+    note: "jusqu'à ce que vous l'arrêtiez"
+    say: "Nous arrivons maintenant à la session elle-même. Vous gardez le contrôle du début à la fin."
+  techie-session:
+    say: "Votre technicien voit maintenant votre écran, et peut utiliser la souris et le clavier pour vous aider."
+  flow-session:
+    title: "Pendant la session"
+    steps:
+      - label: "image de l'écran"
+        say: "Pendant la session, une image de votre écran est envoyée à votre technicien."
+      - label: "souris et clavier"
+        say: "La seule chose qui revient, c'est ce que votre technicien fait avec la souris et le clavier. Vos fichiers ne sont jamais envoyés."
+      - say: "Vous pouvez reprendre le contrôle à tout moment en appuyant sur la touche Échap."
+      - say: "Une fois le travail terminé, vous ou votre technicien mettez fin à la session."
+  flow-summary:
+    title: "En bref"
+    steps:
+      - arrows:
+          - { label: "votre clé", via: "une fois" }
+          - { label: "enregistrer" }
+        say: "Pour résumer, vous envoyez votre clé une seule fois, et votre technicien enregistre votre ordinateur."
+      - arrows:
+          - { label: "demande" }
+          - { label: "autorisé" }
+        say: "Ensuite, votre technicien vous demande la permission à chaque fois, et c'est vous qui décidez."
+      - arrows:
+          - { label: "image de l'écran" }
+          - { label: "souris et clavier" }
+        say: "Et pendant une session, seuls votre écran, la souris et le clavier sont partagés."
+  outro:
+    text: "Lancez-vous dès aujourd'hui"
+    note: "www.helpbuoy.com"
+    say: "Et voilà à quel point l'aide à distance peut être simple et sûre. Si vous souhaitez la proposer à vos propres clients, rendez-vous sur notre site web et lancez-vous dès aujourd'hui."
