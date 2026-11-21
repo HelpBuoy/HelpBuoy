@@ -87,9 +87,9 @@ subtitles:
 # with an optional rate such as "+5%". Narration is cached, so a rebuild only
 # asks for the parts that changed.
 voices:
-  en-us: { voice: en-US-AndrewMultilingualNeural }
-  nl-nl: { voice: nl-NL-MaartenNeural }
-  de-de: { voice: de-DE-ChristophNeural }
-  fr-fr: { voice: fr-FR-RemyMultilingualNeural }
-  es-es: { voice: es-ES-AlvaroNeural }
-  it-it: { voice: it-IT-GiuseppeMultilingualNeural }
+  en-us: { voice: en-US-AndrewMultilingualNeural, rate: "+8%" }
+  nl-nl: { voice: nl-NL-MaartenNeural, rate: "+8%" }
+  de-de: { voice: de-DE-ChristophNeural, rate: "+8%" }
+  fr-fr: { voice: fr-FR-RemyMultilingualNeural, rate: "+8%" }
+  es-es: { voice: es-ES-AlvaroNeural, rate: "+8%" }
+  it-it: { voice: it-IT-GiuseppeMultilingualNeural, rate: "+8%" }
