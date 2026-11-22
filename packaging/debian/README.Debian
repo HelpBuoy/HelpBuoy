@@ -17,7 +17,7 @@ Behind a reverse proxy the apps reach the server over HTTPS on port 443, and
 users only type the host name. In http mode the server
 listens on plain HTTP on 127.0.0.1:5959, behind a reverse proxy (Apache,
 nginx or HAProxy) that serves HTTPS and passes the path /helpbuoy on as a
-WebSocket. The proxy must keep the Host header, add X-Forwarded-For and allow
+WebSocket. The proxy must keep the path, add X-Forwarded-For and allow
 long idle connections. With Apache 2.4.47 or later:
 
   ProxyPreserveHost On
@@ -45,10 +45,10 @@ helpbuoy.example.com" in /etc/default/helpbuoy-server (see the comments there),
 give the service the capability to bind port 443 as described in the unit
 file, and run "systemctl restart helpbuoy-server".
 
-To host many helpdesks, one per host name (in http or https mode), set
-HELPBUOY_SERVER_VHOSTS in /etc/default/helpbuoy-server and add them with
-"sudo helpbuoy-serverctl vhost add acme.helpbuoy.example.com". The admin
-commands below then take --vhost acme.helpbuoy.example.com.
+To host many helpdesks on one host name, each on its own path (in http or
+https mode), set HELPBUOY_SERVER_VHOSTS in /etc/default/helpbuoy-server and
+add them with "sudo helpbuoy-serverctl vhost add acme". Users then type
+helpbuoy.example.com/acme, and the admin commands below take --vhost acme.
 
 The server refuses computers until it knows who runs it: set the company
 name and phone number, which users waiting for a techie see, with the info
@@ -75,7 +75,7 @@ it so it picks up the group:
 
 It sends one line with a JSON array of arguments and gets one line back:
 
-  $ echo '["techie","list","--vhost","acme.helpbuoy.example.com"]' | nc -UN /run/helpbuoy-server-admin.sock
+  $ echo '["techie","list","--vhost","acme"]' | nc -UN /run/helpbuoy-server-admin.sock
   {"exit":0,"output":"NAME  FINGERPRINT  LAST SEEN\n..."}
 
 Every connection runs one command as the helpbuoy-server user. Only admin

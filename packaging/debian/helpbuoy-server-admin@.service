@@ -1,5 +1,5 @@
 # Runs one admin command sent on the admin socket (helpbuoy-server-admin.socket):
-# a line with a JSON array of arguments, like ["techie","list","--vhost","acme.example.com"].
+# a line with a JSON array of arguments, like ["techie","list","--vhost","acme"].
 # Only admin commands run, on the state of the service: --vhosts must be
 # HELPBUOY_SERVER_VHOSTS or HELPBUOY_SERVER_STOPPED, --stopped must be
 # HELPBUOY_SERVER_STOPPED, and --state is refused.

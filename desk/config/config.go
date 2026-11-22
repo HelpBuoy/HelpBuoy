@@ -53,6 +53,10 @@ const LocalPort = 5959
 // serveraddr.Parse, except that "localhost" without a port means LocalPort.
 func ParseAddr(s string) (serveraddr.Addr, error) {
 	if a, err := serveraddr.ParseDefault(s, LocalPort); err != nil || IsLocal(a) {
+		if err == nil && a.Vhost != "" {
+			// The server inside this app has no virtual hosts.
+			return a, fmt.Errorf("server address %q: the server on this computer has no /%s", s, a.Vhost)
+		}
 		return a, err
 	}
 	return serveraddr.Parse(s)

@@ -1,8 +1,8 @@
 // Package front is the HTTP side of helpbuoy-server: it accepts the apps'
 // WebSocket connections (proto/transport), picks the virtual host from the
-// Host header, takes the client address from X-Forwarded-For when the
-// request comes from a trusted reverse proxy, and hands the connection to
-// that host's SSH server through a net.Listener.
+// path (/helpbuoy/name), takes the client address from X-Forwarded-For when
+// the request comes from a trusted reverse proxy, and hands the connection
+// to that virtual host's SSH server through a net.Listener.
 package front
 
 import (
@@ -29,7 +29,7 @@ type Front struct {
 	trusted []netip.Prefix
 
 	mu    sync.Mutex
-	any   *transport.Listener // without virtual hosts: every host name
+	any   *transport.Listener // without virtual hosts: transport.Path itself
 	hosts map[string]*transport.Listener
 }
 
@@ -39,7 +39,7 @@ func New(addr net.Addr, trusted []netip.Prefix) *Front {
 	return &Front{addr: addr, trusted: trusted, hosts: map[string]*transport.Listener{}}
 }
 
-// Listener returns the listener for every host name, for a server without
+// Listener returns the listener for transport.Path, for a server without
 // virtual hosts.
 func (f *Front) Listener() net.Listener {
 	f.mu.Lock()
@@ -50,8 +50,8 @@ func (f *Front) Listener() net.Listener {
 	return f.any
 }
 
-// AddHost returns the listener for one virtual host. name is a lower-case
-// host name.
+// AddHost returns the listener for one virtual host, served on
+// transport.Path + "/" + name.
 func (f *Front) AddHost(name string) net.Listener {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -72,47 +72,35 @@ func (f *Front) RemoveHost(name string) {
 	}
 }
 
-// HasHost reports whether name is a virtual host.
-func (f *Front) HasHost(name string) bool {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.hosts[name] != nil
-}
-
-// ServeHTTP answers the WebSocket upgrade on transport.Path and a short
-// text on / (for health checks of a proxy or load balancer).
+// ServeHTTP answers the WebSocket upgrade on transport.Path, or on
+// transport.Path/name with virtual hosts, and a short text on / (for health
+// checks of a proxy or load balancer).
 func (f *Front) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	host := HostOf(r)
+	if r.URL.Path == "/" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		fmt.Fprintln(w, "HelpBuoy server. Enter this address in the HelpBuoy app.")
+		return
+	}
+	name, ok := strings.CutPrefix(r.URL.Path, transport.Path)
+	if ok && name != "" {
+		name, ok = strings.CutPrefix(name, "/")
+		ok = ok && name != ""
+	}
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
 	f.mu.Lock()
 	l := f.any
-	if l == nil {
-		l = f.hosts[host]
+	if name != "" {
+		l = f.hosts[name]
 	}
 	f.mu.Unlock()
 	if l == nil {
-		http.Error(w, "no HelpBuoy server for "+host, http.StatusNotFound)
+		http.Error(w, "no HelpBuoy server at "+r.URL.Path, http.StatusNotFound)
 		return
 	}
-	switch r.URL.Path {
-	case transport.Path:
-		l.Hand(w, r, ClientAddr(r, f.trusted))
-	case "/":
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintln(w, "HelpBuoy server. Enter this address in the HelpBuoy app.")
-	default:
-		http.NotFound(w, r)
-	}
-}
-
-// HostOf returns the host name the client asked for: the Host header without
-// port and trailing dot, in lower case.
-func HostOf(r *http.Request) string {
-	h := r.Host
-	if host, _, err := net.SplitHostPort(h); err == nil {
-		h = host
-	}
-	h = strings.TrimSuffix(strings.Trim(h, "[]"), ".")
-	return strings.ToLower(h)
+	l.Hand(w, r, ClientAddr(r, f.trusted))
 }
 
 // ClientAddr returns the client's address: the peer of the HTTP connection,

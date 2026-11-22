@@ -159,12 +159,13 @@ func TestLoadDropsInvalidAddr(t *testing.T) {
 
 func TestParseAddr(t *testing.T) {
 	for in, want := range map[string]string{
-		"localhost":            "localhost:5959",
-		"LocalHost":            "localhost:5959",
-		"localhost:443":        "localhost:443",
-		"helpbuoy.example.com": "helpbuoy.example.com:443",
-		"192.0.2.1":            "192.0.2.1:443",
-		"192.0.2.1:5959":       "192.0.2.1:5959",
+		"localhost":              "localhost:5959",
+		"LocalHost":              "localhost:5959",
+		"localhost:443":          "localhost:443",
+		"helpbuoy.example.com":   "helpbuoy.example.com:443",
+		"192.0.2.1":              "192.0.2.1:443",
+		"192.0.2.1:5959":         "192.0.2.1:5959",
+		"relay.example.com/Acme": "relay.example.com:443/acme",
 	} {
 		a, err := ParseAddr(in)
 		if err != nil || a.String() != want {
@@ -173,5 +174,8 @@ func TestParseAddr(t *testing.T) {
 	}
 	if _, err := ParseAddr("not an address"); err == nil {
 		t.Error("bad address accepted")
+	}
+	if _, err := ParseAddr("localhost/acme"); err == nil {
+		t.Error("a name on the local server accepted")
 	}
 }

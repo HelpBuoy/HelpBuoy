@@ -81,7 +81,7 @@ func parseServe(args []string, stderr io.Writer) (serveConfig, error) {
 	cert := fs.String("cert", "", "with --mode https: certificate file (PEM, full chain)")
 	key := fs.String("key", "", "with --mode https: private key file (PEM)")
 	useACME := fs.Bool("acme", false, "with --mode https: get certificates from Let's Encrypt")
-	acmeHosts := fs.String("acme-host", "", "with --acme and without --vhosts: comma-separated host names to get certificates for")
+	acmeHosts := fs.String("acme-host", "", "with --acme: comma-separated host names to get certificates for")
 	acmeEmail := fs.String("acme-email", "", "with --acme: contact address for Let's Encrypt")
 	trusted := fs.String("trusted-proxy", "127.0.0.1,::1", "comma-separated proxy addresses or CIDRs whose X-Forwarded-For is used; empty trusts none")
 	if err := fs.Parse(args); err != nil {
@@ -123,17 +123,15 @@ func parseServe(args []string, stderr io.Writer) (serveConfig, error) {
 			return serveConfig{}, fmt.Errorf("%w: use either --state or --vhosts", errUsage)
 		}
 		if cfg.mode == modeSSH {
-			return serveConfig{}, fmt.Errorf("%w: virtual hosts need --mode http or https; plain SSH can't name the host", errUsage)
+			return serveConfig{}, fmt.Errorf("%w: virtual hosts need --mode http or https; plain SSH has no path to name one", errUsage)
 		}
-		if cfg.acme && len(cfg.acmeHosts) > 0 {
-			return serveConfig{}, fmt.Errorf("%w: with --vhosts, --acme gets certificates for the virtual hosts; leave out --acme-host", errUsage)
-		}
-		return cfg, nil
 	}
 	if cfg.acme && len(cfg.acmeHosts) == 0 {
 		return serveConfig{}, fmt.Errorf("%w: --acme needs --acme-host with the server's host name", errUsage)
 	}
-	cfg.state, err = stateDir(*state)
+	if cfg.vhosts == "" {
+		cfg.state, err = stateDir(*state)
+	}
 	return cfg, err
 }
 
@@ -207,7 +205,7 @@ func serve(args []string, stdout, stderr io.Writer) error {
 
 	hs := transport.NewHTTPServer(f)
 	if cfg.mode == modeHTTPS {
-		hs.TLSConfig, err = tlsConfig(cfg, base, f)
+		hs.TLSConfig, err = tlsConfig(cfg, base)
 		if err != nil {
 			ln.Close()
 			return err
@@ -284,7 +282,7 @@ func (t teeHandler) WithGroup(g string) slog.Handler {
 // tlsConfig returns the built-in HTTPS server's TLS configuration: the
 // certificate files, Let's Encrypt, or a self-signed certificate kept in
 // base (or base/.tls with virtual hosts).
-func tlsConfig(cfg serveConfig, base string, f *front.Front) (*tls.Config, error) {
+func tlsConfig(cfg serveConfig, base string) (*tls.Config, error) {
 	dir := base
 	if cfg.vhosts != "" {
 		dir = filepath.Join(base, tlsDirName)
@@ -301,19 +299,10 @@ func tlsConfig(cfg serveConfig, base string, f *front.Front) (*tls.Config, error
 			return nil, err
 		}
 		m := &autocert.Manager{
-			Prompt: autocert.AcceptTOS,
-			Cache:  autocert.DirCache(filepath.Join(dir, "acme")),
-			Email:  cfg.acmeEmail,
-		}
-		if cfg.vhosts != "" {
-			m.HostPolicy = func(_ context.Context, host string) error {
-				if !f.HasHost(host) {
-					return fmt.Errorf("no virtual host %s", host)
-				}
-				return nil
-			}
-		} else {
-			m.HostPolicy = autocert.HostWhitelist(cfg.acmeHosts...)
+			Prompt:     autocert.AcceptTOS,
+			Cache:      autocert.DirCache(filepath.Join(dir, "acme")),
+			Email:      cfg.acmeEmail,
+			HostPolicy: autocert.HostWhitelist(cfg.acmeHosts...),
 		}
 		tc := m.TLSConfig()
 		tc.NextProtos = []string{"http/1.1", acme.ALPNProto}
@@ -457,7 +446,7 @@ func (v *vhosts) closeAll() {
 }
 
 // listVhosts returns the virtual host names in dir: the subdirectories
-// named after a host name.
+// with a valid name.
 func listVhosts(dir string) ([]string, error) {
 	ents, err := os.ReadDir(dir)
 	if err != nil {
@@ -473,15 +462,11 @@ func listVhosts(dir string) ([]string, error) {
 	return names, nil
 }
 
-// validVhost checks that name is a lower-case host name, as clients send it
-// in the Host header.
+// validVhost checks that name can be a virtual host, as clients send it in
+// the path.
 func validVhost(name string) error {
-	if strings.HasPrefix(name, ".") || strings.HasSuffix(name, ".") || net.ParseIP(name) != nil {
-		return fmt.Errorf("virtual host %q: use a host name like acme.helpbuoy.example.com", name)
-	}
-	a, err := serveraddr.Parse(name)
-	if err != nil || a.Host != name {
-		return fmt.Errorf("virtual host %q: use a lower-case host name like acme.helpbuoy.example.com", name)
+	if !serveraddr.ValidVhost(name) {
+		return fmt.Errorf("virtual host %q: use a name of lower-case letters, digits and hyphens, like acme", name)
 	}
 	return nil
 }

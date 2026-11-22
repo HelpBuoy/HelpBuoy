@@ -101,7 +101,7 @@ it listens on plain HTTP on
 behind a reverse proxy (Apache, nginx, HAProxy) that serves HTTPS on port 443
 and passes the path
 .B /helpbuoy
-on as a WebSocket, keeping the Host header. With
+on as a WebSocket, keeping the path. With
 .B \-\-mode https
 it serves HTTPS itself, by default on
 .BR :443 .
@@ -181,15 +181,19 @@ Certificate chain and private key in PEM format, loaded again when they change.
 .TP
 .B \-\-acme
 Get certificates from Let's Encrypt with the TLS-ALPN challenge, which needs
-port 443 reachable from the internet. Without
-.BR \-\-vhosts ,
+port 443 reachable from the internet.
 .BI \-\-acme\-host " names"
 lists the host names.
 .TP
 .BI \-\-vhosts " dir"
 Serve one virtual host per subdirectory of
 .IR dir ,
-named after its host name. Each is a state directory of its own. The admin
+each on its own path: users type
+.IR host / name ,
+where
+.I name
+is the name of the subdirectory (lower-case letters, digits and hyphens).
+Each is a state directory of its own. The admin
 commands take
 .BI \-\-vhost " name"
 to work on one of them.

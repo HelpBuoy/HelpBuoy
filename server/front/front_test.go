@@ -60,23 +60,8 @@ func TestParsePrefixes(t *testing.T) {
 	}
 }
 
-func TestHostOf(t *testing.T) {
-	for in, want := range map[string]string{
-		"Acme.On.HelpBuoy.com":     "acme.on.helpbuoy.com",
-		"acme.on.helpbuoy.com:443": "acme.on.helpbuoy.com",
-		"acme.on.helpbuoy.com.":    "acme.on.helpbuoy.com",
-		"[::1]:5959":               "::1",
-	} {
-		r := httptest.NewRequest("GET", "/", nil)
-		r.Host = in
-		if got := HostOf(r); got != want {
-			t.Errorf("HostOf(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
-// TestVirtualHosts routes two host names over one plain HTTP listener, as
-// behind a reverse proxy.
+// TestVirtualHosts routes two names over one plain HTTP listener, as behind
+// a reverse proxy.
 func TestVirtualHosts(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -100,8 +85,8 @@ func TestVirtualHosts(t *testing.T) {
 			}
 		}()
 	}
-	echo("acme.example.com")
-	echo("beta.example.com")
+	echo("acme")
+	echo("beta")
 
 	// A TLS-terminating reverse proxy in front, as in the default setup.
 	target, _ := url.Parse("http://" + ln.Addr().String())
@@ -111,10 +96,10 @@ func TestVirtualHosts(t *testing.T) {
 		r.SetXForwarded()
 	}})
 	defer proxy.Close()
-	read := func(host string) (string, error) {
+	read := func(addr string) (string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		c, err := transport.Dial(ctx, host+":443", transport.DialOptions{
+		c, err := transport.Dial(ctx, addr, transport.DialOptions{
 			Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
 				return (&net.Dialer{}).DialContext(ctx, network, proxy.Listener.Addr().String())
 			},
@@ -127,24 +112,52 @@ func TestVirtualHosts(t *testing.T) {
 		b, err := io.ReadAll(c)
 		return string(b), err
 	}
-	for _, h := range []string{"acme.example.com", "beta.example.com"} {
-		if got, err := read(h); err != nil || got != h[:4] {
-			t.Errorf("%s: got %q, %v", h, got, err)
+	for _, name := range []string{"acme", "beta"} {
+		// The host name plays no part in picking the virtual host.
+		for _, host := range []string{"relay.example.com", name + ".example.com"} {
+			if got, err := read(host + ":443/" + name); err != nil || got != name[:4] {
+				t.Errorf("%s/%s: got %q, %v", host, name, got, err)
+			}
 		}
 	}
-	if _, err := read("other.example.com"); err == nil {
-		t.Error("unknown host accepted")
+	for _, addr := range []string{"relay.example.com:443/other", "relay.example.com:443", "acme.example.com:443"} {
+		if _, err := read(addr); err == nil {
+			t.Errorf("%s accepted", addr)
+		}
 	}
-	f.RemoveHost("beta.example.com")
-	if _, err := read("beta.example.com"); err == nil {
-		t.Error("removed host accepted")
+	f.RemoveHost("beta")
+	if _, err := read("relay.example.com:443/beta"); err == nil {
+		t.Error("removed virtual host accepted")
 	}
 
-	r := httptest.NewRequest("GET", "/", nil)
-	r.Host = "acme.example.com"
+	for path, want := range map[string]int{
+		"/":               http.StatusOK,
+		"/helpbuoy":       http.StatusNotFound,
+		"/helpbuoy/":      http.StatusNotFound,
+		"/helpbuoy/other": http.StatusNotFound,
+		"/helpbuoyacme":   http.StatusNotFound,
+		"/acme":           http.StatusNotFound,
+	} {
+		rec := httptest.NewRecorder()
+		f.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		if rec.Code != want {
+			t.Errorf("%s answered %d, want %d", path, rec.Code, want)
+		}
+	}
+}
+
+// TestNoVirtualHosts: a server without virtual hosts has no names.
+func TestNoVirtualHosts(t *testing.T) {
+	f := New(transport.AddrOf("127.0.0.1:1"), nil)
+	f.Listener()
 	rec := httptest.NewRecorder()
-	f.ServeHTTP(rec, r)
-	if rec.Code != http.StatusOK {
-		t.Errorf("/ answered %d", rec.Code)
+	f.ServeHTTP(rec, httptest.NewRequest("GET", "/helpbuoy/acme", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("/helpbuoy/acme answered %d", rec.Code)
+	}
+	rec = httptest.NewRecorder()
+	f.ServeHTTP(rec, httptest.NewRequest("GET", "/helpbuoy", nil))
+	if rec.Code == http.StatusNotFound {
+		t.Error("/helpbuoy not found")
 	}
 }

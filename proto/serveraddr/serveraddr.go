@@ -1,6 +1,7 @@
 // Package serveraddr parses and normalizes the server address that users type
-// on first start, in the form hostname:port. Apps reach the server over
-// HTTPS (proto/transport), so the port defaults to 443.
+// on first start, in the form hostname:port, or hostname:port/name for one
+// virtual host of a server that has them. Apps reach the server over HTTPS
+// (proto/transport), so the port defaults to 443.
 package serveraddr
 
 import (
@@ -19,17 +20,38 @@ var ErrEmpty = errors.New("server address is empty")
 
 // Addr is a parsed server address.
 type Addr struct {
-	Host string // lower-cased host name or IP literal, without brackets
-	Port int
+	Host  string // lower-cased host name or IP literal, without brackets
+	Port  int
+	Vhost string // lower-cased name of the virtual host, or ""
 }
 
-// String returns the normalized "host:port" form, with brackets for IPv6.
+// String returns the normalized "host:port" or "host:port/name" form, with
+// brackets for IPv6.
 func (a Addr) String() string {
-	return net.JoinHostPort(a.Host, strconv.Itoa(a.Port))
+	s := net.JoinHostPort(a.Host, strconv.Itoa(a.Port))
+	if a.Vhost != "" {
+		s += "/" + a.Vhost
+	}
+	return s
+}
+
+// Split cuts a normalized address into its "host:port" and the name of the
+// virtual host, which is "" for an address without one.
+func Split(addr string) (hostport, vhost string) {
+	hostport, vhost, _ = strings.Cut(addr, "/")
+	return hostport, vhost
+}
+
+// ValidVhost reports whether name can name a virtual host: 1 to 63
+// lower-case letters, digits and hyphens, not starting or ending with a
+// hyphen.
+func ValidVhost(name string) bool {
+	return name == strings.ToLower(name) && !strings.Contains(name, ".") && validHostname(name)
 }
 
 // Parse accepts "host", "host:port", "[v6]", "[v6]:port" and a bare IPv6
-// literal. Surrounding whitespace is ignored. The port defaults to DefaultPort.
+// literal, each with "/name" after it for a virtual host. Surrounding
+// whitespace is ignored. The port defaults to DefaultPort.
 func Parse(s string) (Addr, error) { return ParseDefault(s, DefaultPort) }
 
 // ParseDefault is Parse with another port for an address typed without one.
@@ -38,9 +60,24 @@ func ParseDefault(s string, defaultPort int) (Addr, error) {
 	if s == "" {
 		return Addr{}, ErrEmpty
 	}
-	if strings.ContainsAny(s, " \t\r\n/\\@?#") {
-		return Addr{}, fmt.Errorf("server address %q: use hostname:port, without spaces, scheme or path", s)
+	full := s
+	s, vhost, _ := strings.Cut(s, "/")
+	vhost = strings.ToLower(strings.TrimSuffix(vhost, "/"))
+	if strings.ContainsAny(full, " \t\r\n\\@?#") {
+		return Addr{}, fmt.Errorf("server address %q: use hostname:port or hostname:port/name, without spaces or scheme", full)
 	}
+	if vhost != "" && !ValidVhost(vhost) {
+		return Addr{}, fmt.Errorf("server address %q: %q is not a valid name after the /", full, vhost)
+	}
+	a, err := parseHostPort(s, defaultPort)
+	if err != nil {
+		return Addr{}, err
+	}
+	a.Vhost = vhost
+	return a, nil
+}
+
+func parseHostPort(s string, defaultPort int) (Addr, error) {
 
 	if strings.HasSuffix(s, ":") {
 		return Addr{}, fmt.Errorf("server address %q: port is empty", s)

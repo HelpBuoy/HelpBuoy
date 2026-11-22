@@ -40,12 +40,13 @@ commands:
     [--listen ADDR]                      address to listen on instead of the mode's default
     [--cert FILE --key FILE]             https: certificate files (reloaded when they change)
     [--acme --acme-host NAME]            https: get certificates from Let's Encrypt; needs port
-    [--acme-email ADDR]                  443 reachable from the internet; without --vhosts, list
-                                         the host names with --acme-host
+    [--acme-email ADDR]                  443 reachable from the internet; list the host names
+                                         with --acme-host
                                          https without a certificate: a self-signed one
     [--trusted-proxy LIST]               http and https: proxies whose X-Forwarded-For is used
                                          (default 127.0.0.1,::1)
-    [--vhosts DIR]                       http and https: serve every virtual host in DIR (see vhost)
+    [--vhosts DIR]                       http and https: serve every virtual host in DIR (see vhost),
+                                         each on its own path: users type host/NAME
   techie list                            list techies with their keys and when each was last seen
   techie add NAME 'ssh-ed25519 ...'      add a techie with its key
   techie add-key NAME 'ssh-ed25519 ...'  give a techie another key, for another machine it uses
@@ -69,8 +70,8 @@ commands:
   hostkey [--new]                        print the server host key and fingerprint; --new makes a
                                          new host key, used from the next server start on
   vhost list                             list the virtual hosts in the --vhosts directory
-  vhost add NAME                         add a virtual host, e.g. acme.helpbuoy.example.com; a running
-                                         server picks it up within a second
+  vhost add NAME                         add a virtual host, e.g. acme (lower-case letters, digits
+                                         and hyphens); a running server picks it up within a second
   vhost stop NAME [--stopped DIR]        move a virtual host to DIR (default: $HELPBUOY_SERVER_STOPPED),
                                          on the same file system; a running server drops it
   vhost start NAME [--stopped DIR]       move a stopped virtual host back, with its techies,

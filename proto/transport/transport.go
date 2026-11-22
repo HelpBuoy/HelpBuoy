@@ -1,7 +1,8 @@
 // Package transport carries the SSH connection between the apps and
 // helpbuoy-server over a WebSocket over HTTPS: the apps open
 // wss://host:port/helpbuoy and run SSH inside it, one binary WebSocket
-// message per write.
+// message per write. One virtual host of a server that has them is at
+// wss://host:port/helpbuoy/name.
 //
 // A server can also run in ssh mode: plain SSH without the WebSocket and TLS
 // (direct connect). Dial tries HTTPS first and falls back to direct connect
@@ -33,9 +34,12 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 )
 
-// Path is the URL path the server accepts the WebSocket on.
+// Path is the URL path the server accepts the WebSocket on. A virtual host
+// is one level below it: Path + "/" + its name.
 const Path = "/helpbuoy"
 
 // Subprotocol is the WebSocket subprotocol both ends require, so that an
@@ -46,7 +50,7 @@ const Subprotocol = "helpbuoy-ssh"
 var sshPrefix = []byte("SSH-")
 
 // ErrNotServer is returned by Dial when the address answers HTTPS but is not
-// a HelpBuoy server, or no server for that host name runs there.
+// a HelpBuoy server, or has no virtual host of that name.
 var ErrNotServer = errors.New("not a HelpBuoy server")
 
 // DialOptions tune Dial. The zero value is what the apps use.
@@ -59,9 +63,11 @@ type DialOptions struct {
 	Proxy func(*http.Request) (*url.URL, error)
 }
 
-// URL returns the WebSocket URL for a "host:port" address.
+// URL returns the WebSocket URL for a "host:port" or "host:port/name"
+// address.
 func URL(addr string) (string, error) {
-	host, port, err := net.SplitHostPort(addr)
+	hostport, vhost := serveraddr.Split(addr)
+	host, port, err := net.SplitHostPort(hostport)
 	if err != nil {
 		return "", err
 	}
@@ -69,6 +75,9 @@ func URL(addr string) (string, error) {
 		return "", fmt.Errorf("server address %q: bad port", addr)
 	}
 	u := url.URL{Scheme: "wss", Host: net.JoinHostPort(host, port), Path: Path}
+	if vhost != "" {
+		u.Path += "/" + vhost
+	}
 	if port == "443" {
 		u.Host = host
 		if net.ParseIP(host) != nil && net.ParseIP(host).To4() == nil {
@@ -78,15 +87,16 @@ func URL(addr string) (string, error) {
 	return u.String(), nil
 }
 
-// Dial connects to the server at addr ("host:port") and returns the
-// connection to run SSH over. ctx bounds the connect, the TLS handshake and
+// Dial connects to the server at addr ("host:port", or "host:port/name" for
+// a virtual host) and returns the connection to run SSH over. ctx bounds the connect, the TLS handshake and
 // the WebSocket upgrade, not the life of the returned connection.
 func Dial(ctx context.Context, addr string, o DialOptions) (net.Conn, error) {
 	u, err := URL(addr)
 	if err != nil {
 		return nil, err
 	}
-	host, _, _ := net.SplitHostPort(addr)
+	hostport, vhost := serveraddr.Split(addr)
+	host, _, _ := net.SplitHostPort(hostport)
 	tlsCfg := &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		NextProtos: []string{"http/1.1"},
@@ -96,7 +106,7 @@ func Dial(ctx context.Context, addr string, o DialOptions) (net.Conn, error) {
 		InsecureSkipVerify: true, //nolint:gosec
 	}
 	if net.ParseIP(host) == nil {
-		tlsCfg.ServerName = host // SNI picks the virtual host and certificate
+		tlsCfg.ServerName = host // SNI picks the certificate
 	}
 	tr := &http.Transport{
 		Proxy:             o.Proxy,
@@ -131,8 +141,13 @@ func Dial(ctx context.Context, addr string, o DialOptions) (net.Conn, error) {
 			return nil, fmt.Errorf("%w: %s does not speak HTTPS", ErrNotServer, addr)
 		}
 		// No HTTPS here: try plain SSH (a server in ssh mode), and keep it
-		// only when the port answers with an SSH banner.
-		if nc, derr := dialDirect(ctx, addr, o); derr == nil {
+		// only when the port answers with an SSH banner. Plain SSH can't
+		// name a virtual host, so such a server is not the one asked for.
+		if nc, derr := dialDirect(ctx, hostport, o); derr == nil {
+			if vhost != "" {
+				nc.Close()
+				return nil, fmt.Errorf("%w: %s speaks plain SSH, which has no /%s", ErrNotServer, hostport, vhost)
+			}
 			return nc, nil
 		}
 		switch {

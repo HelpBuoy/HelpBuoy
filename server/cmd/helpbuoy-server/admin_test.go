@@ -41,10 +41,10 @@ func TestCheckAdmin(t *testing.T) {
 		{"version"},
 		{"vhost", "list", "--vhosts", vhosts},
 		{"vhost", "list", "--vhosts=" + stopped + "/"},
-		{"techie", "list", "-vhosts", vhosts, "--vhost", "a.example.com"},
-		{"techie", "add", "--vhost", "a.example.com", "--", "alice", "--", "ssh-ed25519 AAAA"},
-		{"vhost", "stop", "a.example.com"},
-		{"vhost", "stop", "a.example.com", "--vhosts", vhosts, "--stopped", stopped},
+		{"techie", "list", "-vhosts", vhosts, "--vhost", "acme"},
+		{"techie", "add", "--vhost", "acme", "--", "alice", "--", "ssh-ed25519 AAAA"},
+		{"vhost", "stop", "acme"},
+		{"vhost", "stop", "acme", "--vhosts", vhosts, "--stopped", stopped},
 	}
 	for _, args := range ok {
 		if err := checkAdmin(args); err != nil {
@@ -58,9 +58,9 @@ func TestCheckAdmin(t *testing.T) {
 		{"rm", "-rf", "/"},
 		{"techie", "list", "--state", "/etc"},
 		{"techie", "list", "-state=/etc"},
-		{"vhost", "stop", "a.example.com", "--stopped", "/tmp"},
-		{"vhost", "stop", "a.example.com", "--stopped", vhosts},
-		{"vhost", "stop", "a.example.com", "--stopped"},
+		{"vhost", "stop", "acme", "--stopped", "/tmp"},
+		{"vhost", "stop", "acme", "--stopped", vhosts},
+		{"vhost", "stop", "acme", "--stopped"},
 		{"vhost", "list", "--vhosts", "/etc"},
 		{"vhost", "list", "--vhosts=/etc"},
 		{"vhost", "list", "--vhosts"},
@@ -91,39 +91,39 @@ func TestAdminRequests(t *testing.T) {
 		b, _ := json.Marshal(args)
 		return string(b) + "\n"
 	}
-	r := admin(t, req("vhost", "add", "--vhosts", vhosts, "a.example.com"))
-	if r.Exit != 0 || !strings.Contains(r.Output, "added a.example.com") {
+	r := admin(t, req("vhost", "add", "--vhosts", vhosts, "acme"))
+	if r.Exit != 0 || !strings.Contains(r.Output, "added acme") {
 		t.Fatalf("vhost add: %+v", r)
 	}
-	r = admin(t, req("info", "--vhost", "a.example.com", "--company", "Acme", "--phone", "+1 234"))
+	r = admin(t, req("info", "--vhost", "acme", "--company", "Acme", "--phone", "+1 234"))
 	if r.Exit != 0 || !strings.Contains(r.Output, "Acme") {
 		t.Fatalf("info: %+v", r)
 	}
 	// a failing command replies with its exit code and error, not an error of admin
-	r = admin(t, req("techie", "remove", "--vhost", "a.example.com", "--", "nobody"))
+	r = admin(t, req("techie", "remove", "--vhost", "acme", "--", "nobody"))
 	if r.Exit != 1 || !strings.HasPrefix(r.Output, "helpbuoy-server: ") {
 		t.Errorf("techie remove nobody: %+v", r)
 	}
-	if r = admin(t, req("vhost", "stop", "a.example.com")); r.Exit != 0 {
+	if r = admin(t, req("vhost", "stop", "acme")); r.Exit != 0 {
 		t.Fatalf("vhost stop: %+v", r)
 	}
-	if _, err := os.Stat(filepath.Join(stopped, "a.example.com", "state.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(stopped, "acme", "state.json")); err != nil {
 		t.Errorf("not moved to the stopped directory: %v", err)
 	}
-	if r = admin(t, req("info", "--vhosts", stopped, "--vhost", "a.example.com")); r.Exit != 0 || !strings.Contains(r.Output, "Acme") {
+	if r = admin(t, req("info", "--vhosts", stopped, "--vhost", "acme")); r.Exit != 0 || !strings.Contains(r.Output, "Acme") {
 		t.Errorf("info of a stopped vhost: %+v", r)
 	}
-	if r = admin(t, req("vhost", "start", "a.example.com")); r.Exit != 0 {
+	if r = admin(t, req("vhost", "start", "acme")); r.Exit != 0 {
 		t.Fatalf("vhost start: %+v", r)
 	}
-	if r = admin(t, req("vhost", "purge", "a.example.com")); r.Exit != 1 {
+	if r = admin(t, req("vhost", "purge", "acme")); r.Exit != 1 {
 		t.Errorf("purged a running vhost: %+v", r)
 	}
-	admin(t, req("vhost", "stop", "a.example.com"))
-	if r = admin(t, req("vhost", "purge", "a.example.com")); r.Exit != 0 {
+	admin(t, req("vhost", "stop", "acme"))
+	if r = admin(t, req("vhost", "purge", "acme")); r.Exit != 0 {
 		t.Fatalf("vhost purge: %+v", r)
 	}
-	if _, err := os.Stat(filepath.Join(stopped, "a.example.com")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(stopped, "acme")); !os.IsNotExist(err) {
 		t.Errorf("purge left the directory: %v", err)
 	}
 
@@ -141,7 +141,7 @@ func TestAdminRequests(t *testing.T) {
 func TestVhostMoveRefuses(t *testing.T) {
 	vhosts, stopped := adminDirs(t)
 	var out bytes.Buffer
-	if code := run([]string{"vhost", "stop", "a.example.com"}, &out, &out); code != 1 {
+	if code := run([]string{"vhost", "stop", "acme"}, &out, &out); code != 1 {
 		t.Errorf("stopped a vhost that is not there: %d %s", code, out.String())
 	}
 	for _, name := range []string{"../x", "A_B", "."} {
@@ -149,16 +149,16 @@ func TestVhostMoveRefuses(t *testing.T) {
 			t.Errorf("purge %q worked", name)
 		}
 	}
-	run([]string{"vhost", "add", "a.example.com"}, &out, &out)
-	os.MkdirAll(filepath.Join(stopped, "a.example.com"), 0o700)
-	if code := run([]string{"vhost", "stop", "a.example.com"}, &out, &out); code != 1 {
+	run([]string{"vhost", "add", "acme"}, &out, &out)
+	os.MkdirAll(filepath.Join(stopped, "acme"), 0o700)
+	if code := run([]string{"vhost", "stop", "acme"}, &out, &out); code != 1 {
 		t.Errorf("stopped onto a stopped vhost of the same name: %d", code)
 	}
-	if code := run([]string{"vhost", "stop", "a.example.com", "--stopped", vhosts}, &out, &out); code != 1 {
+	if code := run([]string{"vhost", "stop", "acme", "--stopped", vhosts}, &out, &out); code != 1 {
 		t.Errorf("stopped into the vhosts directory itself: %d", code)
 	}
 	t.Setenv("HELPBUOY_SERVER_STOPPED", "")
-	if code := run([]string{"vhost", "stop", "a.example.com"}, &out, &out); code != 2 {
+	if code := run([]string{"vhost", "stop", "acme"}, &out, &out); code != 2 {
 		t.Errorf("stop without a stopped directory: %d", code)
 	}
 }

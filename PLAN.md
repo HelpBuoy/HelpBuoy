@@ -81,14 +81,16 @@ Performance target: **as fast as RDP** for normal desktop work (section 5).
 - **Direct connect**: `--mode ssh`, the default, serves plain SSH without the WebSocket and TLS, on `:5959`.
   The apps always try HTTPS first; when that fails without an HTTP server answering, they
   connect again with plain SSH and keep that connection only if the port sends an SSH
-  banner. Not with virtual hosts, since plain SSH can't name the host.
+  banner. Not with virtual hosts, since plain SSH has no path to name one.
 - **One address for everyone**: techies and computers all use the same `hostname` or
-  `hostname:port`, and an address typed without a port means 443, so behind a proxy users only
+  `hostname:port` (with `/name` after it for a virtual host), and an address typed without a port means 443, so behind a proxy users only
   type the host name. There are no per-techie or per-session ports.
-- **Virtual hosts**: `serve --vhosts DIR` serves one helpdesk per host name from one process
-  and one port, for managed hosting (on.helpbuoy.com). Every subdirectory of `DIR` named
-  after a host name is a state directory of its own (host key, `state.json`, `server.log`); the
-  `Host` header picks it, and an unknown name is refused. `helpbuoy-server vhost add NAME`
+- **Virtual hosts**: `serve --vhosts DIR` serves many helpdesks from one process, one port
+  and one host name, for managed hosting (relay.helpbuoy.com). Users type
+  `relay.helpbuoy.com/acme`, and the apps open `wss://relay.helpbuoy.com/helpbuoy/acme`. Every
+  subdirectory of `DIR` with such a name (lower-case letters, digits, hyphens) is a state
+  directory of its own (host key, `state.json`, `server.log`); the path picks it, the host
+  name plays no part, and an unknown name is refused. `helpbuoy-server vhost add NAME`
   makes one, deleting its directory removes it, and a running server notices both within a
   second. The admin commands take `--vhost NAME`. Techies of one virtual host never see
   the computers of another.
@@ -229,7 +231,7 @@ helpbuoy/
 ├── PLAN.md
 ├── proto/                       # shared, pure Go, no GUI deps
 │   ├── go.mod
-│   ├── serveraddr/               # parse and normalize hostname:port (default port 443)
+│   ├── serveraddr/               # parse and normalize hostname:port[/name] (default port 443)
 │   ├── transport/               # SSH over WebSocket over HTTPS: Dial, Upgrade, Listener
 │   ├── identity/                # Ed25519 key gen, OpenSSH format, fingerprints,
 │   │                            # parsing of pasted keys
@@ -242,7 +244,7 @@ helpbuoy/
 ├── server/                       # helpbuoy-server
 │   ├── go.mod
 │   ├── cmd/helpbuoy-server/             # "serve" plus admin subcommands (3.2), virtual hosts
-│   ├── front/                   # HTTP side: Host -> virtual host, X-Forwarded-For
+│   ├── front/                   # HTTP side: path -> virtual host, X-Forwarded-For
 │   ├── hostkey/
 │   ├── store/                   # state.json: techies, computers; atomic writes
 │   ├── auth/                    # key -> role lookup
@@ -427,7 +429,7 @@ Role caps and timeouts:
   holds its place. A Connect beyond it gets an error Reply ("this server allows one session at
   a time; wait until the other session ends"); running sessions are never ended by it. It is
   set by the admin only, never through the control channel, so a host can sell a helpdesk
-  (a virtual host under on.helpbuoy.com) with a fixed number of sessions. A change takes effect
+  (a virtual host on relay.helpbuoy.com) with a fixed number of sessions. A change takes effect
   at the next Connect.
 - Handshake timeout 10 s, keepalive 15 s, dead connections dropped after 3 missed.
 - Control frames are length-checked before they are read: 16 KiB from computers and pending

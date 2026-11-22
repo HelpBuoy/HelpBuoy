@@ -20,8 +20,9 @@ HELPBUOY_SERVER_MODE=ssh
 # Extra options for "helpbuoy-server serve".
 HELPBUOY_SERVER_OPTS=
 #
-# Virtual hosts (http and https mode): serve many helpdesks, one per host
-# name, each with its own state directory in this directory. Leave empty for
+# Virtual hosts (http and https mode): serve many helpdesks on one host name,
+# each on its own path (helpbuoy.example.com/acme) and with its own state
+# directory, named acme, in this directory. Leave empty for
 # a single server with its state in /var/lib/helpbuoy-server.
 #HELPBUOY_SERVER_VHOSTS=/var/lib/helpbuoy-server/vhosts
 #
