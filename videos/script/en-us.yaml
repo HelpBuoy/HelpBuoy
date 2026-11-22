@@ -45,7 +45,7 @@ scenes:
     type: screen
     actor: user
     screenshot: { app: helpbuoy, name: 2-warning }
-    highlight: { x: 552, y: 278, w: 800, h: 90 }
+    highlight: { x: 552, y: 278, w: 850, h: 90 }
     zoom: highlight
     say: "The first time you connect, the app shows a warning. Only continue if you got the address from someone you know and trust."
   - id: flow-first-contact
@@ -80,7 +80,7 @@ scenes:
     type: screen
     actor: techie
     screenshot: { app: helpbuoy-desk, name: 4-register }
-    highlight: { x: 220, y: 300, w: 1040, h: 300 }
+    highlight: { x: 220, y: 262, w: 1040, h: 338 }
     zoom: highlight
     say: "Your techie then chooses Register computer, pastes in your key and clicks the Register button."
   - id: flow-register
