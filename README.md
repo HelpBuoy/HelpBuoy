@@ -26,7 +26,7 @@ The server runs in one of three modes, chosen with `--mode`:
 
 `--listen` picks another address. The apps always try HTTPS first and fall back to plain SSH when that fails and the port answers with an SSH banner, so users type the same kind of address for every mode: `helpbuoy.example.com`, or `helpbuoy.example.com:5959` for a server in ssh mode.
 
-In http mode (`--mode http`) the server runs behind a reverse proxy (nginx, Apache or HAProxy) that serves HTTPS and passes the path `/helpbuoy` on as a WebSocket, keeping the path and adding `X-Forwarded-For`. [docs/proxy.md](docs/proxy.md) has tested configurations for all three, for several helpdesks behind one proxy, either as one process with virtual hosts or as separate processes.
+In http mode (`--mode http`) the server runs behind a reverse proxy (nginx, Apache or HAProxy) that serves HTTPS and passes the path `/helpbuoy` on as a WebSocket, keeping the path and adding `X-Forwarded-For`. With virtual hosts every helpdesk has a path of its own, so the proxy passes everything on the host name on. [docs/proxy.md](docs/proxy.md) has configurations for all three, for several helpdesks behind one proxy, either as one process with virtual hosts or as separate processes.
 
 Without a reverse proxy, `helpbuoy-server serve --mode https` serves HTTPS itself on `:443`, or on the port given with `--listen`. It takes a certificate with `--cert` and `--key` (loaded again when the files change), gets one from Let's Encrypt with `--acme --acme-host helpbuoy.example.com` (port 443 must be reachable from the internet), or makes a self-signed one. A server on another port is given out as `host:port`.
 
@@ -34,7 +34,7 @@ Without a reverse proxy, `helpbuoy-server serve --mode https` serves HTTPS itsel
 
 ### Virtual hosts
 
-`helpbuoy-server serve --vhosts DIR` serves many helpdesks on one host name, address and port, each on its own path: users type `relay.helpbuoy.example.com/acme` or `relay.helpbuoy.example.com/beta` in the app, which opens its WebSocket on that same address. Every subdirectory of `DIR` with such a name (lower-case letters, digits and hyphens, not `helpbuoy`) is a normal state directory, with its own host key, techies, computers, company details and log. Techies of one virtual host never see the computers of another, and an address with an unknown name or without a name is refused. The host name plays no part, so adding a helpdesk needs no DNS, certificate or proxy change (see [docs/proxy.md](docs/proxy.md)):
+`helpbuoy-server serve --vhosts DIR` serves many helpdesks on one host name, address and port, each on its own path: users type `relay.helpbuoy.example.com/acme` or `relay.helpbuoy.example.com/beta` in the app, which opens its WebSocket on that same address. A browser that opens the address gets a line of text, which also serves as a check that the helpdesk runs. Every subdirectory of `DIR` with such a name (lower-case letters, digits and hyphens, not `helpbuoy`) is a normal state directory, with its own host key, techies, computers, company details and log. Techies of one virtual host never see the computers of another, and an address with an unknown name or without a name is refused. The host name plays no part, so adding a helpdesk needs no DNS, certificate or proxy change (see [docs/proxy.md](docs/proxy.md)). The server needs a host name of its own, since any path on it can be a helpdesk:
 
     helpbuoy-server vhost add acme --vhosts DIR
     helpbuoy-server info --vhost acme --vhosts DIR --company "Acme" --phone "+1 234 567 890"
@@ -53,7 +53,7 @@ The Debian package also has an admin socket, `/run/helpbuoy-server-admin.sock`, 
 
 - `./run.sh`: builds and starts a server, the desk app and the Windows client (in wine) on this machine for testing. All state lives in `.run/`; `./run.sh reset` clears it.
 - `./screenshot.sh [page]`: makes or updates `screenshot.png`, the desk app in demo mode at 800x500, for this README. Uses `xvfb-run` when installed, otherwise a window shows briefly.
-- `./release.sh [major|minor]`: bumps the version (build number by default), builds and tests everything, then tags, pushes and creates the GitHub release with the client and desk app MSIs, the client, desk app and server Debian packages (amd64 and arm64, the server also armhf for 32-bit Raspberry Pis) and the zipped macOS client and desk app. The APT server adds the Debian packages to https://apt.helpbuoy.com/ by itself within ten minutes, see `../helpbuoy-apt`.
+- `./release.sh [major|minor]`: bumps the version (build number by default), builds and tests everything, then tags, pushes and creates the GitHub release with the client and desk app MSIs, the client, desk app and server Debian packages (amd64 and arm64, the server also armhf for 32-bit Raspberry Pis) and the zipped macOS client and desk app. Last, it submits the MSIX packages to the Microsoft Store with `msstore/publish.sh`. The APT server adds the Debian packages to https://apt.helpbuoy.com/ by itself within ten minutes, see `../helpbuoy-apt`.
 
 ## The APT repository
 
@@ -63,7 +63,7 @@ Every Debian package adds the HelpBuoy APT repository at https://apt.helpbuoy.co
 
 The Windows client and the desk app are also in the Microsoft Store (Store IDs 9NZXVS50R8VB and 9NM475B9T4BC), as full-trust MSIX packages of the same exes, so they install without a SmartScreen warning. Once they are live, winget installs them from the Store as well: `winget install 9NZXVS50R8VB` for the client and `winget install 9NM475B9T4BC` for the desk app. The Store versions have no "Check for updates" link, since the Store updates them.
 
-`make msix` builds the unsigned packages in `bin/` from `installer/*.appxmanifest.xml`, packed by `tools/mkmsix` because makeappx only runs on Windows. Upload them to Partner Center by hand for each release; the Store signs them. To try a package before it is in the Store, `make msix-test` signs a copy of each with a self-signed test certificate: import `bin/msix-test.cer` on the test PC into Local Machine, Trusted People, then open a `_test.msix`. The listings, screenshots and logos are in `msstore/`, see [msstore/README.md](msstore/README.md).
+`make msix` builds the unsigned packages in `bin/` from `installer/*.appxmanifest.xml`, packed by `tools/mkmsix` because makeappx only runs on Windows. `msstore/publish.sh` submits them for each release, and `release.sh` runs it; the Store signs them. To try a package before it is in the Store, `make msix-test` signs a copy of each with a self-signed test certificate: import `bin/msix-test.cer` on the test PC into Local Machine, Trusted People, then open a `_test.msix`. The listings, screenshots and logos are in `msstore/`, see [msstore/README.md](msstore/README.md).
 
 ## Building the macOS apps
 
