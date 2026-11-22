@@ -7,110 +7,110 @@ meta:
 
 scenes:
   intro:
-    text: "Hilfe für Ihren Computer"
+    text: "Hilfe aus der Ferne"
     note: "Schritt für Schritt"
-    say: "Willkommen zu diesem kurzen Video. Wir zeigen Ihnen Schritt für Schritt, wie ein Techniker Ihnen aus der Ferne an Ihrem Computer helfen kann."
+    say: "Willkommen zu diesem kurzen Video. Wir zeigen Schritt für Schritt, wie ein Techniker einem Benutzer aus der Ferne am Computer helfen kann."
   flow-parts:
     title: "Wer ist wer"
     steps:
-      - say: "Beginnen wir damit, wer wer ist. Links sehen Sie sich selbst, mit der App auf Ihrem Computer."
-      - say: "Rechts sehen Sie Ihren Techniker, der Ihnen mit der Desk-App hilft."
-      - say: "Und in der Mitte steht der Server, den wir für Sie betreiben, sodass Sie selbst nichts einrichten müssen."
+      - say: "Beginnen wir damit, wer wer ist. Links sehen Sie den Benutzer, mit der App auf seinem Computer."
+      - say: "Rechts sehen Sie den Techniker, der dem Benutzer mit der Desk-App hilft."
+      - say: "Und in der Mitte steht der Server, den wir betreiben, sodass niemand selbst etwas einrichten muss."
       - arrows:
           - { label: "verbindet" }
           - { label: "verbindet" }
-        say: "Beide Apps verbinden sich mit diesem Server, aber ohne Ihre Zustimmung kann nichts passieren."
+        say: "Beide Apps verbinden sich mit diesem Server, aber ohne die Zustimmung des Benutzers kann nichts passieren."
   part-register:
-    text: "Ihren Computer registrieren"
+    text: "Den Computer registrieren"
     note: "nur beim ersten Mal"
-    say: "Wir beginnen damit, Ihren Computer zu registrieren. Das müssen Sie nur ein einziges Mal tun."
+    say: "Wir beginnen damit, den Computer zu registrieren. Das ist nur ein einziges Mal nötig."
   user-connect:
-    say: "Öffnen Sie die App und geben Sie die Serveradresse ein, die Sie von Ihrem Techniker bekommen haben. Klicken Sie danach auf die Schaltfläche Verbinden."
+    say: "Der Benutzer öffnet die App und gibt die Serveradresse ein, die er vom Techniker bekommen hat. Danach klickt er auf die Schaltfläche Verbinden."
   user-warning:
-    say: "Beim ersten Verbinden zeigt die App eine Warnung. Fahren Sie nur fort, wenn Sie die Adresse von jemandem bekommen haben, den Sie kennen und dem Sie vertrauen."
+    say: "Beim ersten Verbinden zeigt die App eine Warnung. Der Benutzer fährt nur fort, wenn er die Adresse von jemandem bekommen hat, den er kennt und dem er vertraut."
   flow-first-contact:
     title: "Erster Kontakt"
     steps:
       - label: "Schlüssel dieses Computers"
-        say: "Die App verbindet sich jetzt mit dem Server und zeigt ihm einen Schlüssel, der zu Ihrem Computer gehört."
-      - say: "Der Server hat diesen Schlüssel noch nie gesehen, deshalb muss Ihr Computer warten, bis Ihr Techniker ihn registriert."
+        say: "Die App verbindet sich jetzt mit dem Server und zeigt ihm einen Schlüssel, der zu diesem Computer gehört."
+      - say: "Der Server hat diesen Schlüssel noch nie gesehen, deshalb muss der Computer warten, bis der Techniker ihn registriert."
   user-key:
-    say: "In der Zwischenzeit zeigt Ihnen die App den Schlüssel Ihres Computers. Klicken Sie auf die Schaltfläche Schlüssel kopieren, um ihn zu kopieren."
+    say: "In der Zwischenzeit zeigt die App den Schlüssel des Computers. Der Benutzer klickt auf die Schaltfläche Schlüssel kopieren, um ihn zu kopieren."
   flow-send-key:
     title: "Den Schlüssel senden"
     steps:
-      - label: "Ihr Schlüssel"
+      - label: "der Schlüssel"
         via: "per E-Mail oder Chat"
-        say: "Schicken Sie den Schlüssel jetzt an Ihren Techniker, in einer E-Mail oder einer Chatnachricht. Der Schlüssel ist nicht geheim, Sie können ihn also unbesorgt verschicken."
+        say: "Der Benutzer schickt den Schlüssel jetzt an den Techniker, in einer E-Mail oder einer Chatnachricht. Der Schlüssel ist nicht geheim, er lässt sich also unbesorgt verschicken."
   techie-register:
-    say: "Ihr Techniker wählt dann Computer registrieren, fügt Ihren Schlüssel ein und klickt auf die Schaltfläche Registrieren."
+    say: "Der Techniker wählt dann Computer registrieren, fügt den Schlüssel ein und klickt auf die Schaltfläche Registrieren."
   flow-register:
     title: "Registrierung"
     steps:
       - label: "Schlüssel registrieren"
-        say: "Die Desk-App registriert Ihren Schlüssel auf dem Server, und er gilt nur für Ihren Computer."
+        say: "Die Desk-App registriert den Schlüssel auf dem Server, und er gilt nur für diesen Computer."
       - label: "registriert"
-        say: "Der Server teilt Ihrem Computer danach mit, dass er registriert ist. Von nun an merkt sich Ihr Computer diesen Server."
+        say: "Der Server teilt dem Computer danach mit, dass er registriert ist. Von nun an merkt sich der Computer diesen Server."
   user-lock:
-    say: "Als Nächstes fragt die App, ob Sie nur von diesem Helpdesk Hilfe bekommen möchten. Klicken Sie auf die Schaltfläche Binden, um zuzustimmen, denn das schützt Sie vor betrügerischen Anrufen."
+    say: "Als Nächstes fragt die App, ob der Benutzer nur von diesem Helpdesk Hilfe bekommen möchte. Mit einem Klick auf die Schaltfläche Binden stimmt er zu, und das schützt ihn vor betrügerischen Anrufen."
   part-ask:
     text: "Um Hilfe bitten"
     note: "jedes Mal"
-    say: "Ihr Computer ist jetzt registriert, sehen wir uns also an, wie Sie um Hilfe bitten. Das tun Sie jedes Mal, wenn Sie Hilfe brauchen."
+    say: "Der Computer ist jetzt registriert, sehen wir uns also an, wie der Benutzer um Hilfe bittet. Das geschieht jedes Mal, wenn Hilfe gebraucht wird."
   flow-ask:
     title: "Um Hilfe bitten"
     steps:
       - label: "Bitte um Hilfe"
         via: "per Telefon oder E-Mail"
-        say: "Wenn Sie Hilfe brauchen, rufen Sie Ihren Techniker einfach an oder schreiben ihm eine E-Mail."
+        say: "Wer Hilfe braucht, ruft den Techniker einfach an oder schreibt ihm eine E-Mail."
       - label: "online"
-        say: "Solange die App geöffnet ist, kann Ihr Techniker sehen, dass Ihr Computer online ist."
+        say: "Solange die App geöffnet ist, kann der Techniker sehen, dass der Computer des Benutzers online ist."
   user-waiting:
-    say: "Während Sie warten, zeigt die App die Telefonnummer und den Namen Ihres Helpdesks."
+    say: "Während der Benutzer wartet, zeigt die App die Telefonnummer und den Namen des Helpdesks."
   techie-computers:
-    say: "Ihr Techniker sucht Ihren Computer in der Liste und klickt auf die Schaltfläche Verbinden."
+    say: "Der Techniker sucht den Computer in der Liste und klickt auf die Schaltfläche Verbinden."
   flow-request:
     title: "Anfrage"
     steps:
       - label: "darf ich übernehmen?"
-        say: "Dann geht eine Anfrage über den Server an Ihren Computer, aber noch passiert nichts."
+        say: "Dann geht eine Anfrage über den Server an den Computer des Benutzers, aber noch passiert nichts."
   user-allow:
-    say: "Die App fragt Sie zuerst, ob Ihr Techniker übernehmen darf. Klicken Sie auf die Schaltfläche Zulassen, wenn Sie einverstanden sind, oder auf die Schaltfläche Abbrechen, wenn nicht."
+    say: "Die App fragt den Benutzer zuerst, ob der Techniker übernehmen darf. Er klickt auf die Schaltfläche Zulassen, wenn er einverstanden ist, oder auf die Schaltfläche Abbrechen, wenn nicht."
   flow-allow:
     title: "Zustimmung"
     steps:
       - label: "zugelassen"
-        say: "Die Sitzung beginnt erst, wenn Sie auf die Schaltfläche Zulassen geklickt haben."
+        say: "Die Sitzung beginnt erst, wenn der Benutzer auf die Schaltfläche Zulassen geklickt hat."
   part-session:
-    text: "Die Sitzung"
-    note: "bis Sie sie beenden"
-    say: "Damit kommen wir zur Sitzung selbst. Sie behalten von Anfang bis Ende die Kontrolle."
+    text: "Hilfe bekommen"
+    note: "jedes Mal"
+    say: "Damit kommen wir zur Hilfe selbst. Benutzer und Techniker sprechen miteinander, während der Techniker arbeitet, und der Benutzer behält von Anfang bis Ende die Kontrolle."
   techie-session:
-    say: "Ihr Techniker sieht jetzt Ihren Bildschirm und kann Maus und Tastatur benutzen, um Ihnen zu helfen."
+    say: "Der Techniker sieht jetzt den Bildschirm des Benutzers und kann Maus und Tastatur benutzen, um zu helfen."
   flow-session:
     title: "Während der Sitzung"
     steps:
       - label: "Bildschirminhalt"
-        say: "Während der Sitzung wird ein Bild Ihres Bildschirms an Ihren Techniker gesendet."
+        say: "Während der Sitzung wird ein Bild des Bildschirms an den Techniker gesendet."
       - label: "Maus und Tastatur"
-        say: "Zurück kommt nur, was Ihr Techniker mit Maus und Tastatur tut. Ihre Dateien werden nie gesendet."
-      - say: "Sie können sich jederzeit die Kontrolle zurückholen, indem Sie die Escape-Taste drücken."
-      - say: "Wenn alles erledigt ist, beenden Sie oder Ihr Techniker die Sitzung."
+        say: "Zurück kommt nur, was der Techniker mit Maus und Tastatur tut. Dateien werden nie gesendet."
+      - say: "Der Benutzer kann sich jederzeit die Kontrolle zurückholen, indem er die Escape-Taste drückt."
+      - say: "Wenn alles erledigt ist, beendet der Benutzer oder der Techniker die Sitzung."
   flow-summary:
     title: "Kurz gesagt"
     steps:
       - arrows:
-          - { label: "Ihr Schlüssel", via: "einmal" }
+          - { label: "der Schlüssel", via: "einmal" }
           - { label: "registrieren" }
-        say: "Kurz zusammengefasst senden Sie Ihren Schlüssel einmal, und Ihr Techniker registriert Ihren Computer."
+        say: "Kurz zusammengefasst sendet der Benutzer den Schlüssel einmal, und der Techniker registriert den Computer."
       - arrows:
           - { label: "Anfrage" }
           - { label: "zugelassen" }
-        say: "Danach bittet Ihr Techniker jedes Mal um Ihre Erlaubnis, und Sie entscheiden."
+        say: "Danach bittet der Techniker jedes Mal um Erlaubnis, und der Benutzer entscheidet."
       - arrows:
           - { label: "Bildschirminhalt" }
           - { label: "Maus und Tastatur" }
-        say: "Und während einer Sitzung werden nur Ihr Bildschirm, die Maus und die Tastatur geteilt."
+        say: "Und während einer Sitzung werden nur der Bildschirm, die Maus und die Tastatur geteilt."
   outro:
     text: "Starten Sie noch heute"
     note: "www.helpbuoy.com"

@@ -106,8 +106,10 @@ and sentences that flow into each other.
   step.
 - No colons, semicolons, brackets, quotes or slashes in `say`; the voice
   reads them badly.
-- Speak to the viewer as the person who gets help ("you", "your computer"),
-  and describe the techie in the third person ("the techie", "your techie").
+- Describe both people in the third person: "the user" (who needs help)
+  and "the techie". Never address the viewer as the person who gets help
+  ("you", "your computer"); the viewer may be either of them. Say "the
+  computer", "the key", "the user's screen".
 - At most about 30 words per `say`. A narration lasts 2 to 20 seconds.
 - Write numbers and keys the way they are spoken ("Escape", not "Esc").
   Use `subtitle` if the text on screen must differ.

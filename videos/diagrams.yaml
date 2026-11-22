@@ -20,19 +20,19 @@ nodes:
     color: red
     badge_app: client
     label:
-      en-us: "You"
-      nl-nl: "Jij"
-      de-de: "Sie"
-      fr-fr: "Vous"
-      es-es: "Tú"
-      it-it: "Tu"
+      en-us: "Computer user"
+      nl-nl: "Computergebruiker"
+      de-de: "Computerbenutzer"
+      fr-fr: "Utilisateur"
+      es-es: "Usuario"
+      it-it: "Utente"
     sub:
-      en-us: "need help"
-      nl-nl: "hebt hulp nodig"
-      de-de: "brauchen Hilfe"
-      fr-fr: "avez besoin d'aide"
-      es-es: "necesitas ayuda"
-      it-it: "hai bisogno di aiuto"
+      en-us: "needs help"
+      nl-nl: "heeft hulp nodig"
+      de-de: "braucht Hilfe"
+      fr-fr: "a besoin d'aide"
+      es-es: "necesita ayuda"
+      it-it: "ha bisogno di aiuto"
 
   client:
     x: 250
@@ -48,12 +48,12 @@ nodes:
       es-es: "App"
       it-it: "App"
     sub:
-      en-us: "on your computer"
-      nl-nl: "op je computer"
-      de-de: "auf Ihrem Computer"
-      fr-fr: "sur votre ordinateur"
-      es-es: "en tu equipo"
-      it-it: "sul tuo computer"
+      en-us: "on the user's computer"
+      nl-nl: "op de computer"
+      de-de: "auf dem Computer"
+      fr-fr: "sur l'ordinateur"
+      es-es: "en el equipo"
+      it-it: "sul computer"
 
   techie:
     x: 1030
@@ -70,12 +70,12 @@ nodes:
       es-es: "Técnico"
       it-it: "Tecnico"
     sub:
-      en-us: "helps you"
-      nl-nl: "helpt je"
-      de-de: "hilft Ihnen"
-      fr-fr: "vous aide"
-      es-es: "te ayuda"
-      it-it: "ti aiuta"
+      en-us: "helps"
+      nl-nl: "helpt"
+      de-de: "hilft"
+      fr-fr: "aide"
+      es-es: "ayuda"
+      it-it: "aiuta"
 
   desk:
     x: 1030
@@ -112,12 +112,12 @@ nodes:
       es-es: "Servidor"
       it-it: "Server"
     sub:
-      en-us: "managed for you"
-      nl-nl: "voor jou beheerd"
-      de-de: "für Sie verwaltet"
-      fr-fr: "géré pour vous"
-      es-es: "gestionado para ti"
-      it-it: "gestito per te"
+      en-us: "managed"
+      nl-nl: "beheerd"
+      de-de: "verwaltet"
+      fr-fr: "géré"
+      es-es: "gestionado"
+      it-it: "gestito"
 
 # Arrows with a "via" go outside the apps (email, phone, chat). They are drawn
 # dashed in this colour, whoever sends them.

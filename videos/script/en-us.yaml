@@ -8,46 +8,46 @@ meta:
 scenes:
   - id: intro
     type: title
-    text: "Help on your computer"
+    text: "Remote help"
     note: "step by step"
-    say: "Welcome to this short video. We'll show you step by step how a techie can help you with your computer from a distance."
+    say: "Welcome to this short video. We'll show you step by step how a techie can help a user with their computer from a distance."
   - id: flow-parts
     type: flow
     title: "Who is who"
     show: [user, client, server, desk, techie]
     steps:
       - highlight: [user, client]
-        say: "Let's start with who is who. On the left is you, with the app on your computer."
+        say: "Let's start with who is who. On the left is the user, with the app on their computer."
       - highlight: [techie, desk]
-        say: "On the right is your techie, who uses the desk app to help you."
+        say: "On the right is the techie, who uses the desk app to help the user."
       - highlight: [server]
-        say: "And in the middle is the server, which we run for you, so there's nothing you need to set up."
+        say: "And in the middle is the server, which we run, so there's nothing anyone needs to set up."
       - arrows:
           - { from: client, to: server, label: "connects" }
           - { from: desk, to: server, label: "connects" }
-        say: "Both apps connect to that server, but nothing can happen without your permission."
+        say: "Both apps connect to that server, but nothing can happen without the user's approval."
   # Part 1 ---------------------------------------------------------------
 
   - id: part-register
     type: part
     number: 1
-    text: "Register your computer"
+    text: "Register the computer"
     note: "first time only"
-    say: "Let's begin by registering your computer. This is something you only have to do once."
+    say: "Let's begin by registering the user's computer. This only has to be done once."
   - id: user-connect
     type: screen
     actor: user
     screenshot: { app: helpbuoy, name: 1-connect }
     highlight: { x: 552, y: 440, w: 840, h: 70 }
     zoom: highlight
-    say: "Open the app and type in the server address you got from your techie. Then click the Connect button."
+    say: "The user opens the app and types in the server address they got from the techie. Then they click the Connect button."
   - id: user-warning
     type: screen
     actor: user
     screenshot: { app: helpbuoy, name: 2-warning }
     highlight: { x: 552, y: 278, w: 850, h: 90 }
     zoom: highlight
-    say: "The first time you connect, the app shows a warning. Only continue if you got the address from someone you know and trust."
+    say: "The first time the user connects, the app shows a warning. They should only continue if they got the address from someone they know and trust."
   - id: flow-first-contact
     type: flow
     title: "First contact"
@@ -56,16 +56,16 @@ scenes:
       - from: client
         to: server
         label: "this computer's key"
-        say: "The app now connects to the server and shows it a key that belongs to your computer."
+        say: "The app now connects to the server and shows it a key that belongs to this computer."
       - highlight: [server]
-        say: "The server hasn't seen this key before, so your computer has to wait until your techie registers it."
+        say: "The server hasn't seen this key before, so the computer has to wait until the techie registers it."
   - id: user-key
     type: screen
     actor: user
     screenshot: { app: helpbuoy, name: 3-key }
     highlight: { x: 552, y: 340, w: 840, h: 250 }
     zoom: highlight
-    say: "In the meantime, the app shows you the key of your computer. Click the Copy key button to copy it."
+    say: "In the meantime, the app shows the user the key of their computer. They click the Copy key button to copy it."
   - id: flow-send-key
     type: flow
     title: "Send the key"
@@ -73,16 +73,16 @@ scenes:
     steps:
       - from: user
         to: techie
-        label: "your key"
+        label: "the key"
         via: "by email or chat"
-        say: "Now send the key to your techie in an email or a chat message. The key is not a secret, so it's perfectly safe to send."
+        say: "The user now sends the key to the techie in an email or a chat message. The key is not a secret, so it's perfectly safe to send."
   - id: techie-register
     type: screen
     actor: techie
     screenshot: { app: helpbuoy-desk, name: 4-register }
     highlight: { x: 220, y: 262, w: 1040, h: 338 }
     zoom: highlight
-    say: "Your techie then chooses Register computer, pastes in your key and clicks the Register button."
+    say: "The techie then chooses Register computer, pastes in the key and clicks the Register button."
   - id: flow-register
     type: flow
     title: "Registration"
@@ -91,18 +91,18 @@ scenes:
       - from: desk
         to: server
         label: "register this key"
-        say: "The desk app registers your key on the server, and it's valid for your computer only."
+        say: "The desk app registers the key on the server, and it's valid for this computer only."
       - from: server
         to: client
         label: "registered"
-        say: "The server then lets your computer know that it's registered. From now on, your computer remembers this server."
+        say: "The server then lets the computer know that it's registered. From now on, the computer remembers this server."
   - id: user-lock
     type: screen
     actor: user
     screenshot: { app: helpbuoy, name: 4-lock }
     highlight: { x: 466, y: 445, w: 1016, h: 245 }
     zoom: highlight
-    say: "Next, the app asks whether you want help from this helpdesk only. Click the Lock button to agree, because that protects you from scam callers."
+    say: "Next, the app asks whether the user wants help from this helpdesk only. They click the Lock button to agree, because that protects them from scam callers."
   # Part 2 ---------------------------------------------------------------
 
   - id: part-ask
@@ -110,7 +110,7 @@ scenes:
     number: 2
     text: "Ask for help"
     note: "every time"
-    say: "Your computer is now registered, so let's look at how you ask for help. This is what you do every time you need it."
+    say: "The computer is now registered, so let's look at how the user asks for help. This is what they do every time they need it."
   - id: flow-ask
     type: flow
     title: "Ask for help"
@@ -120,26 +120,26 @@ scenes:
         to: techie
         label: "asks for help"
         via: "by phone or email"
-        say: "Whenever you need help, just call your techie or send an email."
+        say: "Whenever the user needs help, they just call the techie or send an email."
       - from: client
         to: desk
         through: server
         label: "online"
-        say: "As long as the app is open, your techie can see that your computer is online."
+        say: "As long as the app is open, the techie can see that the user's computer is online."
   - id: user-waiting
     type: screen
     actor: user
     screenshot: { app: helpbuoy, name: 5-waiting }
     highlight: { x: 760, y: 432, w: 420, h: 128 }
     zoom: highlight
-    say: "While you wait, the app shows the phone number and the name of your helpdesk."
+    say: "While the user waits, the app shows the phone number and the name of the helpdesk."
   - id: techie-computers
     type: screen
     actor: techie
     screenshot: { app: helpbuoy-desk, name: 1-computers }
     highlight: { x: 200, y: 752, w: 1530, h: 66 }
     zoom: highlight
-    say: "Your techie finds your computer in the list and clicks the Connect button."
+    say: "The techie finds the user's computer in the list and clicks the Connect button."
   - id: flow-request
     type: flow
     title: "Request"
@@ -149,14 +149,14 @@ scenes:
         to: client
         through: server
         label: "may I take control?"
-        say: "A request then travels through the server to your computer, but nothing happens just yet."
+        say: "A request then travels through the server to the user's computer, but nothing happens just yet."
   - id: user-allow
     type: screen
     actor: user
     screenshot: { app: helpbuoy, name: 6-allow }
     highlight: { x: 520, y: 252, w: 1022, h: 180 }
     zoom: highlight
-    say: "The app first asks you whether your techie may take control. Click the Allow button if you agree, or the Cancel button if you don't."
+    say: "The app first asks the user whether the techie may take control. They click the Allow button if they agree, or the Cancel button if they don't."
   - id: flow-allow
     type: flow
     title: "Approval"
@@ -166,21 +166,21 @@ scenes:
         to: desk
         through: server
         label: "allowed"
-        say: "The session only starts once you've clicked the Allow button."
+        say: "The session only starts once the user has clicked the Allow button."
   # Part 3 ---------------------------------------------------------------
 
   - id: part-session
     type: part
     number: 3
-    text: "The session"
-    note: "until you stop it"
-    say: "That brings us to the session itself. You stay in control from start to finish."
+    text: "Get help"
+    note: "every time"
+    say: "That brings us to getting help. The user and the techie talk it through while the techie works, and the user stays in control from start to finish."
   - id: techie-session
     type: screen
     actor: techie
     screenshot: { app: helpbuoy-desk, name: 2-session }
     zoom: slow
-    say: "Your techie can now see your screen, and can use the mouse and keyboard to help you."
+    say: "The techie can now see the user's screen, and can use the mouse and keyboard to help."
   - id: flow-session
     type: flow
     title: "During the session"
@@ -191,36 +191,36 @@ scenes:
         through: server
         label: "screen image"
         loop: true
-        say: "During the session, a picture of your screen is sent to your techie."
+        say: "During the session, a picture of the user's screen is sent to the techie."
       - from: desk
         to: client
         through: server
         label: "mouse and keyboard"
         loop: true
-        say: "The only thing that comes back is what your techie does with the mouse and the keyboard. Your files are never sent."
+        say: "The only thing that comes back is what the techie does with the mouse and the keyboard. The user's files are never sent."
       - highlight: [user]
-        say: "You can take back control at any moment by pressing the Escape key."
+        say: "The user can take back control at any moment by pressing the Escape key."
       - highlight: [user, techie]
-        say: "When the work is done, either you or your techie ends the session."
+        say: "When the work is done, either the user or the techie ends the session."
   - id: flow-summary
     type: flow
     title: "In short"
     show: [user, client, server, desk, techie]
     steps:
       - arrows:
-          - { from: user, to: techie, label: "your key", via: "once" }
+          - { from: user, to: techie, label: "the key", via: "once" }
           - { from: desk, to: server, label: "register" }
-        say: "To sum it all up, you send your key once, and your techie registers your computer."
+        say: "To sum it all up, the user sends the key once, and the techie registers the computer."
       - clear: true
         arrows:
           - { from: desk, to: client, through: server, label: "request" }
           - { from: client, to: desk, through: server, label: "allowed" }
-        say: "After that, your techie asks for your permission every time, and you decide."
+        say: "After that, the techie asks for approval every time, and the user decides."
       - clear: true
         arrows:
           - { from: client, to: desk, through: server, label: "screen image", loop: true }
           - { from: desk, to: client, through: server, label: "mouse and keyboard", loop: true }
-        say: "And during a session, the only things that are shared are your screen, the mouse and the keyboard."
+        say: "And during a session, the only things that are shared are the screen, the mouse and the keyboard."
   - id: outro
     type: title
     text: "Get started today"

@@ -7,110 +7,110 @@ meta:
 
 scenes:
   intro:
-    text: "Aiuto sul tuo computer"
+    text: "Aiuto a distanza"
     note: "passo dopo passo"
-    say: "Benvenuto in questo breve video. Ti mostriamo passo dopo passo come un tecnico può aiutarti a distanza con il tuo computer."
+    say: "Benvenuto in questo breve video. Ti mostriamo passo dopo passo come un tecnico può aiutare a distanza un utente con il suo computer."
   flow-parts:
     title: "Chi è chi"
     steps:
-      - say: "Cominciamo da chi è chi. A sinistra ci sei tu, con l'app sul tuo computer."
-      - say: "A destra c'è il tuo tecnico, che usa l'app desk per aiutarti."
-      - say: "E al centro c'è il server, che gestiamo noi per te, quindi non devi configurare niente."
+      - say: "Cominciamo da chi è chi. A sinistra c'è l'utente, con l'app sul suo computer."
+      - say: "A destra c'è il tecnico, che usa l'app desk per aiutare l'utente."
+      - say: "E al centro c'è il server, che gestiamo noi, quindi nessuno deve configurare niente."
       - arrows:
           - { label: "si connette" }
           - { label: "si connette" }
-        say: "Entrambe le app si connettono a quel server, ma senza il tuo consenso non può succedere niente."
+        say: "Entrambe le app si connettono a quel server, ma senza il consenso dell'utente non può succedere niente."
   part-register:
-    text: "Registra il tuo computer"
+    text: "Registrare il computer"
     note: "solo la prima volta"
-    say: "Cominciamo registrando il tuo computer. È una cosa che fai una volta sola."
+    say: "Cominciamo registrando il computer. È una cosa che si fa una volta sola."
   user-connect:
-    say: "Apri l'app e scrivi l'indirizzo del server che ti ha dato il tuo tecnico. Poi fai clic sul pulsante Connetti."
+    say: "L'utente apre l'app e scrive l'indirizzo del server che gli ha dato il tecnico. Poi fa clic sul pulsante Connetti."
   user-warning:
-    say: "La prima volta che ti connetti, l'app ti mostra un avviso. Continua solo se l'indirizzo ti è stato dato da qualcuno che conosci e di cui ti fidi."
+    say: "Alla prima connessione, l'app mostra un avviso. L'utente continua solo se l'indirizzo gli è stato dato da qualcuno che conosce e di cui si fida."
   flow-first-contact:
     title: "Primo contatto"
     steps:
       - label: "chiave di questo computer"
-        say: "Ora l'app si connette al server e gli mostra una chiave che appartiene al tuo computer."
-      - say: "Il server non ha mai visto questa chiave, quindi il tuo computer deve aspettare che il tuo tecnico la registri."
+        say: "Ora l'app si connette al server e gli mostra una chiave che appartiene a questo computer."
+      - say: "Il server non ha mai visto questa chiave, quindi il computer deve aspettare che il tecnico la registri."
   user-key:
-    say: "Nel frattempo, l'app ti mostra la chiave del tuo computer. Fai clic sul pulsante Copia chiave per copiarla."
+    say: "Nel frattempo, l'app mostra la chiave del computer. L'utente fa clic sul pulsante Copia chiave per copiarla."
   flow-send-key:
     title: "Invia la chiave"
     steps:
-      - label: "la tua chiave"
+      - label: "la chiave"
         via: "per e-mail o in chat"
-        say: "Ora invia la chiave al tuo tecnico, in un'e-mail o in un messaggio in chat. La chiave non è segreta, quindi puoi inviarla in tutta sicurezza."
+        say: "Ora l'utente invia la chiave al tecnico, in un'e-mail o in un messaggio in chat. La chiave non è segreta, quindi può inviarla in tutta sicurezza."
   techie-register:
-    say: "Il tuo tecnico sceglie quindi Registra computer, incolla la tua chiave e fa clic sul pulsante Registra."
+    say: "Il tecnico sceglie quindi Registra computer, incolla la chiave e fa clic sul pulsante Registra."
   flow-register:
     title: "Registrazione"
     steps:
       - label: "registra questa chiave"
-        say: "L'app desk registra la tua chiave sul server, ed è valida solo per il tuo computer."
+        say: "L'app desk registra la chiave sul server, ed è valida solo per questo computer."
       - label: "registrato"
-        say: "Poi il server comunica al tuo computer che è registrato. Da questo momento, il tuo computer si ricorda di questo server."
+        say: "Poi il server comunica al computer che è registrato. Da questo momento, il computer si ricorda di questo server."
   user-lock:
-    say: "Subito dopo, l'app ti chiede se vuoi ricevere aiuto solo da questo helpdesk. Fai clic sul pulsante Blocca per accettare, perché così sei protetto dalle chiamate truffa."
+    say: "Subito dopo, l'app chiede all'utente se vuole ricevere aiuto solo da questo helpdesk. Fa clic sul pulsante Blocca per accettare, perché così è protetto dalle chiamate truffa."
   part-ask:
-    text: "Chiedi aiuto"
+    text: "Chiedere aiuto"
     note: "ogni volta"
-    say: "Il tuo computer ora è registrato, quindi vediamo come chiedere aiuto. È quello che fai ogni volta che ne hai bisogno."
+    say: "Il computer ora è registrato, quindi vediamo come l'utente chiede aiuto. È quello che fa ogni volta che ne ha bisogno."
   flow-ask:
-    title: "Chiedi aiuto"
+    title: "Chiedere aiuto"
     steps:
       - label: "chiede aiuto"
         via: "per telefono o e-mail"
-        say: "Quando ti serve aiuto, basta chiamare il tuo tecnico o scrivergli un'e-mail."
+        say: "Quando gli serve aiuto, all'utente basta chiamare il tecnico o scrivergli un'e-mail."
       - label: "online"
-        say: "Finché l'app è aperta, il tuo tecnico può vedere che il tuo computer è online."
+        say: "Finché l'app è aperta, il tecnico può vedere che il computer dell'utente è online."
   user-waiting:
-    say: "Mentre aspetti, l'app ti mostra il numero di telefono e il nome del tuo helpdesk."
+    say: "Mentre l'utente aspetta, l'app mostra il numero di telefono e il nome dell'helpdesk."
   techie-computers:
-    say: "Il tuo tecnico trova il tuo computer nell'elenco e fa clic sul pulsante Connetti."
+    say: "Il tecnico trova il computer nell'elenco e fa clic sul pulsante Connetti."
   flow-request:
     title: "Richiesta"
     steps:
       - label: "posso prendere il controllo?"
-        say: "A quel punto una richiesta passa attraverso il server e arriva al tuo computer, ma non succede ancora niente."
+        say: "A quel punto una richiesta passa attraverso il server e arriva al computer dell'utente, ma non succede ancora niente."
   user-allow:
-    say: "L'app ti chiede prima se il tuo tecnico può prendere il controllo. Fai clic sul pulsante Consenti se sei d'accordo, oppure sul pulsante Annulla se non lo sei."
+    say: "L'app chiede prima all'utente se il tecnico può prendere il controllo. Fa clic sul pulsante Consenti se è d'accordo, oppure sul pulsante Annulla se non lo è."
   flow-allow:
     title: "Consenso"
     steps:
       - label: "consentito"
-        say: "La sessione inizia solo dopo che hai fatto clic sul pulsante Consenti."
+        say: "La sessione inizia solo dopo che l'utente ha fatto clic sul pulsante Consenti."
   part-session:
-    text: "La sessione"
-    note: "finché non la fermi tu"
-    say: "Arriviamo così alla sessione vera e propria. Il controllo resta tuo dall'inizio alla fine."
+    text: "Ricevere aiuto"
+    note: "ogni volta"
+    say: "Arriviamo così all'aiuto vero e proprio. L'utente e il tecnico si parlano mentre il tecnico lavora, e il controllo resta all'utente dall'inizio alla fine."
   techie-session:
-    say: "Ora il tuo tecnico vede il tuo schermo, e può usare il mouse e la tastiera per aiutarti."
+    say: "Ora il tecnico vede lo schermo dell'utente, e può usare il mouse e la tastiera per aiutarlo."
   flow-session:
     title: "Durante la sessione"
     steps:
       - label: "immagine dello schermo"
-        say: "Durante la sessione, un'immagine del tuo schermo viene inviata al tuo tecnico."
+        say: "Durante la sessione, un'immagine dello schermo viene inviata al tecnico."
       - label: "mouse e tastiera"
-        say: "L'unica cosa che torna indietro è quello che il tuo tecnico fa con il mouse e la tastiera. I tuoi file non vengono mai inviati."
-      - say: "Puoi riprendere il controllo in qualsiasi momento premendo il tasto Esc."
-      - say: "A lavoro finito, tu o il tuo tecnico terminate la sessione."
+        say: "L'unica cosa che torna indietro è quello che il tecnico fa con il mouse e la tastiera. I file non vengono mai inviati."
+      - say: "L'utente può riprendere il controllo in qualsiasi momento premendo il tasto Esc."
+      - say: "A lavoro finito, l'utente o il tecnico termina la sessione."
   flow-summary:
     title: "In breve"
     steps:
       - arrows:
-          - { label: "la tua chiave", via: "una volta" }
+          - { label: "la chiave", via: "una volta" }
           - { label: "registra" }
-        say: "Riassumendo, invii la tua chiave una volta sola, e il tuo tecnico registra il tuo computer."
+        say: "Riassumendo, l'utente invia la chiave una volta sola, e il tecnico registra il computer."
       - arrows:
           - { label: "richiesta" }
           - { label: "consentito" }
-        say: "Da quel momento, il tuo tecnico ti chiede ogni volta il permesso, e decidi tu."
+        say: "Da quel momento, il tecnico chiede ogni volta il permesso, e decide l'utente."
       - arrows:
           - { label: "immagine dello schermo" }
           - { label: "mouse e tastiera" }
-        say: "E durante una sessione vengono condivisi solo il tuo schermo, il mouse e la tastiera."
+        say: "E durante una sessione vengono condivisi solo lo schermo, il mouse e la tastiera."
   outro:
     text: "Inizia oggi stesso"
     note: "www.helpbuoy.com"

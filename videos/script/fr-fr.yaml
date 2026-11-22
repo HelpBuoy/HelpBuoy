@@ -7,110 +7,110 @@ meta:
 
 scenes:
   intro:
-    text: "De l'aide sur votre ordinateur"
+    text: "L'aide à distance"
     note: "étape par étape"
-    say: "Bienvenue dans cette courte vidéo. Nous allons vous montrer étape par étape comment un technicien peut vous aider à distance sur votre ordinateur."
+    say: "Bienvenue dans cette courte vidéo. Nous allons montrer étape par étape comment un technicien peut aider un utilisateur à distance sur son ordinateur."
   flow-parts:
     title: "Qui est qui"
     steps:
-      - say: "Commençons par voir qui est qui. À gauche, c'est vous, avec l'appli sur votre ordinateur."
-      - say: "À droite se trouve votre technicien, qui utilise l'appli desk pour vous aider."
-      - say: "Et au milieu, il y a le serveur, que nous gérons pour vous, donc vous n'avez rien à installer."
+      - say: "Commençons par voir qui est qui. À gauche se trouve l'utilisateur, avec l'appli sur son ordinateur."
+      - say: "À droite se trouve le technicien, qui utilise l'appli desk pour aider l'utilisateur."
+      - say: "Et au milieu, il y a le serveur, que nous gérons, donc personne n'a rien à installer."
       - arrows:
           - { label: "se connecte" }
           - { label: "se connecte" }
-        say: "Les deux applis se connectent à ce serveur, mais rien ne peut se passer sans votre accord."
+        say: "Les deux applis se connectent à ce serveur, mais rien ne peut se passer sans l'accord de l'utilisateur."
   part-register:
-    text: "Enregistrer votre ordinateur"
+    text: "Enregistrer l'ordinateur"
     note: "la première fois seulement"
-    say: "Commençons par enregistrer votre ordinateur. C'est une étape que vous ne faites qu'une seule fois."
+    say: "Commençons par enregistrer l'ordinateur. C'est une étape qui ne se fait qu'une seule fois."
   user-connect:
-    say: "Ouvrez l'appli et tapez l'adresse du serveur que votre technicien vous a donnée. Cliquez ensuite sur le bouton Se connecter."
+    say: "L'utilisateur ouvre l'appli et tape l'adresse du serveur que le technicien lui a donnée. Il clique ensuite sur le bouton Se connecter."
   user-warning:
-    say: "La première fois que vous vous connectez, l'appli affiche un avertissement. Continuez seulement si l'adresse vous a été donnée par une personne que vous connaissez et en qui vous avez confiance."
+    say: "À la première connexion, l'appli affiche un avertissement. L'utilisateur ne continue que si l'adresse lui a été donnée par une personne qu'il connaît et en qui il a confiance."
   flow-first-contact:
     title: "Premier contact"
     steps:
       - label: "clé de cet ordinateur"
-        say: "L'appli se connecte maintenant au serveur et lui présente une clé qui appartient à votre ordinateur."
-      - say: "Le serveur n'a encore jamais vu cette clé, donc votre ordinateur doit attendre que votre technicien l'enregistre."
+        say: "L'appli se connecte maintenant au serveur et lui présente une clé qui appartient à cet ordinateur."
+      - say: "Le serveur n'a encore jamais vu cette clé, donc l'ordinateur doit attendre que le technicien l'enregistre."
   user-key:
-    say: "Pendant ce temps, l'appli vous affiche la clé de votre ordinateur. Cliquez sur le bouton Copier la clé pour la copier."
+    say: "Pendant ce temps, l'appli affiche la clé de l'ordinateur. L'utilisateur clique sur le bouton Copier la clé pour la copier."
   flow-send-key:
     title: "Envoyer la clé"
     steps:
-      - label: "votre clé"
+      - label: "la clé"
         via: "par e-mail ou message"
-        say: "Envoyez maintenant cette clé à votre technicien, dans un e-mail ou un message. La clé n'est pas secrète, vous pouvez donc l'envoyer sans crainte."
+        say: "L'utilisateur envoie maintenant cette clé au technicien, dans un e-mail ou un message. La clé n'est pas secrète, elle peut donc être envoyée sans crainte."
   techie-register:
-    say: "Votre technicien choisit alors Enregistrer un ordinateur, colle votre clé et clique sur le bouton Enregistrer."
+    say: "Le technicien choisit alors Enregistrer un ordinateur, colle la clé et clique sur le bouton Enregistrer."
   flow-register:
     title: "Enregistrement"
     steps:
       - label: "enregistrer cette clé"
-        say: "L'appli desk enregistre votre clé sur le serveur, et elle n'est valable que pour votre ordinateur."
+        say: "L'appli desk enregistre la clé sur le serveur, et elle n'est valable que pour cet ordinateur."
       - label: "enregistré"
-        say: "Le serveur indique ensuite à votre ordinateur qu'il est enregistré. Désormais, votre ordinateur se souvient de ce serveur."
+        say: "Le serveur indique ensuite à l'ordinateur qu'il est enregistré. Désormais, l'ordinateur se souvient de ce serveur."
   user-lock:
-    say: "Ensuite, l'appli vous demande si vous voulez recevoir de l'aide uniquement de ce support. Cliquez sur le bouton Verrouiller pour accepter, car cela vous protège des appels frauduleux."
+    say: "Ensuite, l'appli demande à l'utilisateur s'il veut recevoir de l'aide uniquement de ce support. Il clique sur le bouton Verrouiller pour accepter, car cela le protège des appels frauduleux."
   part-ask:
     text: "Demander de l'aide"
     note: "à chaque fois"
-    say: "Votre ordinateur est maintenant enregistré, alors voyons comment demander de l'aide. C'est ce que vous ferez chaque fois que vous en aurez besoin."
+    say: "L'ordinateur est maintenant enregistré, alors voyons comment l'utilisateur demande de l'aide. C'est ce qu'il fera chaque fois qu'il en aura besoin."
   flow-ask:
     title: "Demander de l'aide"
     steps:
       - label: "demande de l'aide"
         via: "par téléphone ou e-mail"
-        say: "Quand vous avez besoin d'aide, il suffit d'appeler votre technicien ou de lui envoyer un e-mail."
+        say: "Quand l'utilisateur a besoin d'aide, il lui suffit d'appeler le technicien ou de lui envoyer un e-mail."
       - label: "en ligne"
-        say: "Tant que l'appli est ouverte, votre technicien peut voir que votre ordinateur est en ligne."
+        say: "Tant que l'appli est ouverte, le technicien peut voir que l'ordinateur de l'utilisateur est en ligne."
   user-waiting:
-    say: "Pendant que vous patientez, l'appli affiche le numéro de téléphone et le nom de votre support."
+    say: "Pendant que l'utilisateur patiente, l'appli affiche le numéro de téléphone et le nom du support."
   techie-computers:
-    say: "Votre technicien trouve votre ordinateur dans la liste et clique sur le bouton Se connecter."
+    say: "Le technicien trouve l'ordinateur dans la liste et clique sur le bouton Se connecter."
   flow-request:
     title: "Demande"
     steps:
       - label: "puis-je prendre la main ?"
-        say: "Une demande passe alors par le serveur jusqu'à votre ordinateur, mais rien ne se passe encore."
+        say: "Une demande passe alors par le serveur jusqu'à l'ordinateur de l'utilisateur, mais rien ne se passe encore."
   user-allow:
-    say: "L'appli vous demande d'abord si votre technicien peut prendre la main. Cliquez sur le bouton Autoriser si vous êtes d'accord, ou sur le bouton Annuler si vous ne l'êtes pas."
+    say: "L'appli demande d'abord à l'utilisateur si le technicien peut prendre la main. Il clique sur le bouton Autoriser s'il est d'accord, ou sur le bouton Annuler s'il ne l'est pas."
   flow-allow:
     title: "Accord"
     steps:
       - label: "autorisé"
-        say: "La session ne commence qu'une fois que vous avez cliqué sur le bouton Autoriser."
+        say: "La session ne commence qu'une fois que l'utilisateur a cliqué sur le bouton Autoriser."
   part-session:
-    text: "La session"
-    note: "jusqu'à ce que vous l'arrêtiez"
-    say: "Nous arrivons maintenant à la session elle-même. Vous gardez le contrôle du début à la fin."
+    text: "Recevoir de l'aide"
+    note: "à chaque fois"
+    say: "Nous arrivons maintenant à l'aide elle-même. L'utilisateur et le technicien se parlent pendant que le technicien travaille, et l'utilisateur garde le contrôle du début à la fin."
   techie-session:
-    say: "Votre technicien voit maintenant votre écran, et peut utiliser la souris et le clavier pour vous aider."
+    say: "Le technicien voit maintenant l'écran de l'utilisateur, et peut utiliser la souris et le clavier pour l'aider."
   flow-session:
     title: "Pendant la session"
     steps:
       - label: "image de l'écran"
-        say: "Pendant la session, une image de votre écran est envoyée à votre technicien."
+        say: "Pendant la session, une image de l'écran est envoyée au technicien."
       - label: "souris et clavier"
-        say: "La seule chose qui revient, c'est ce que votre technicien fait avec la souris et le clavier. Vos fichiers ne sont jamais envoyés."
-      - say: "Vous pouvez reprendre le contrôle à tout moment en appuyant sur la touche Échap."
-      - say: "Une fois le travail terminé, vous ou votre technicien mettez fin à la session."
+        say: "La seule chose qui revient, c'est ce que le technicien fait avec la souris et le clavier. Les fichiers ne sont jamais envoyés."
+      - say: "L'utilisateur peut reprendre le contrôle à tout moment en appuyant sur la touche Échap."
+      - say: "Une fois le travail terminé, l'utilisateur ou le technicien met fin à la session."
   flow-summary:
     title: "En bref"
     steps:
       - arrows:
-          - { label: "votre clé", via: "une fois" }
+          - { label: "la clé", via: "une fois" }
           - { label: "enregistrer" }
-        say: "Pour résumer, vous envoyez votre clé une seule fois, et votre technicien enregistre votre ordinateur."
+        say: "Pour résumer, l'utilisateur envoie la clé une seule fois, et le technicien enregistre l'ordinateur."
       - arrows:
           - { label: "demande" }
           - { label: "autorisé" }
-        say: "Ensuite, votre technicien vous demande la permission à chaque fois, et c'est vous qui décidez."
+        say: "Ensuite, le technicien demande la permission à chaque fois, et c'est l'utilisateur qui décide."
       - arrows:
           - { label: "image de l'écran" }
           - { label: "souris et clavier" }
-        say: "Et pendant une session, seuls votre écran, la souris et le clavier sont partagés."
+        say: "Et pendant une session, seuls l'écran, la souris et le clavier sont partagés."
   outro:
     text: "Lancez-vous dès aujourd'hui"
     note: "www.helpbuoy.com"

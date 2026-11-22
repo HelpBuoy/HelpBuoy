@@ -31,12 +31,12 @@
 <use href="#techie" xlink:href="#techie" transform="translate(986 112) scale(1)"/>
 <text x="166" y="118" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="end">Computer user</text>
 <text x="1034" y="118" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="start">Techie</text>
-<text x="166" y="136" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="end">anna@laptop</text>
-<text x="1034" y="136" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="start">bob</text>
+<text x="166" y="136" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="end">anna@ANNA-PC</text>
+<text x="1034" y="136" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="start">Sam</text>
 <use href="#chat" xlink:href="#chat" transform="translate(278 112) scale(1)"/>
 <use href="#chat" xlink:href="#chat" transform="translate(922 112) scale(1)"/>
 <line x1="304" y1="112" x2="896" y2="112" stroke="#E3A83A" stroke-width="2.5" stroke-linecap="round" marker-end="url(#head-E3A83A)"/>
-<text x="600" y="100" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">sends anna@laptop public key (email)</text>
+<text x="600" y="100" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">sends anna@ANNA-PC public key (email or chat)</text>
 <use href="#pc" xlink:href="#pc" transform="translate(214 238) scale(1)"/>
 <text x="166" y="244" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="end">HelpBuoy</text>
 <text x="166" y="262" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="end">client</text>
@@ -50,14 +50,14 @@
 <text x="974" y="190.0" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#4B6177" text-anchor="end" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">into the desk app</text>
 <line x1="650" y1="238" x2="938" y2="238" stroke="#17324B" stroke-width="2.5" stroke-linecap="round" marker-start="url(#tail-17324B)"/>
 <use href="#lock" xlink:href="#lock" transform="translate(789 238) scale(1)"/>
-<text x="789" y="268" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">registers public key for anna@laptop</text>
+<text x="789" y="268" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">registers public key for anna@ANNA-PC</text>
 <line x1="214" y1="150" x2="214" y2="206" stroke="#17324B" stroke-width="2" stroke-linecap="round" marker-end="url(#head-17324B)"/>
 <text x="226" y="171.0" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#4B6177" text-anchor="start" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">starts the client,</text>
 <text x="226" y="190.0" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#4B6177" text-anchor="start" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">types the server address</text>
 <line x1="262" y1="229" x2="550" y2="229" stroke="#17324B" stroke-width="2.5" stroke-linecap="round" marker-end="url(#head-17324B)"/>
 <line x1="550" y1="247" x2="262" y2="247" stroke="#17324B" stroke-width="2.5" stroke-linecap="round" marker-end="url(#head-17324B)"/>
 <use href="#lock" xlink:href="#lock" transform="translate(411 238) scale(1)"/>
-<text x="411" y="218" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">uses anna@laptop private key</text>
+<text x="411" y="218" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">uses anna@ANNA-PC private key</text>
 <text x="411" y="277" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">stores server address and key</text>
 </g>
 <g transform="translate(0 508)">
@@ -71,12 +71,12 @@
 <use href="#techie" xlink:href="#techie" transform="translate(986 112) scale(1)"/>
 <text x="166" y="118" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="end">Computer user</text>
 <text x="1034" y="118" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="start">Techie</text>
-<text x="166" y="136" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="end">anna@laptop</text>
-<text x="1034" y="136" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="start">bob</text>
+<text x="166" y="136" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="end">anna@ANNA-PC</text>
+<text x="1034" y="136" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="start">Sam</text>
 <use href="#chat" xlink:href="#chat" transform="translate(278 112) scale(1)"/>
 <use href="#chat" xlink:href="#chat" transform="translate(922 112) scale(1)"/>
 <line x1="304" y1="112" x2="896" y2="112" stroke="#E3A83A" stroke-width="2.5" stroke-linecap="round" marker-end="url(#head-E3A83A)"/>
-<text x="600" y="100" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">asks for help by phone or chat</text>
+<text x="600" y="100" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="15" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">asks for help by phone or email</text>
 <use href="#pc" xlink:href="#pc" transform="translate(214 238) scale(1)"/>
 <text x="166" y="244" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="end">HelpBuoy</text>
 <text x="166" y="262" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="end">client</text>
@@ -98,7 +98,7 @@
 <line x1="550" y1="247" x2="262" y2="247" stroke="#17324B" stroke-width="2.5" stroke-linecap="round" marker-end="url(#head-17324B)"/>
 <use href="#lock" xlink:href="#lock" transform="translate(411 238) scale(1)"/>
 <text x="411" y="218" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">connects to server</text>
-<text x="411" y="277" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">asks: may bob take control?</text>
+<text x="411" y="277" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#17324B" text-anchor="middle" paint-order="stroke" stroke="#FFFFFF" stroke-width="7" stroke-linejoin="round">asks: may Sam take control?</text>
 </g>
 <g transform="translate(0 866)">
 <rect x="32" y="0" width="1136" height="330" rx="22" fill="#FFFFFF" stroke="#D3DDE3" stroke-width="1.5"/>
@@ -111,8 +111,8 @@
 <use href="#techie" xlink:href="#techie" transform="translate(986 112) scale(1)"/>
 <text x="166" y="118" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="end">Computer user</text>
 <text x="1034" y="118" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="700" fill="#17324B" text-anchor="start">Techie</text>
-<text x="166" y="136" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="end">anna@laptop</text>
-<text x="1034" y="136" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="start">bob</text>
+<text x="166" y="136" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="end">anna@ANNA-PC</text>
+<text x="1034" y="136" font-family="'Atkinson Hyperlegible Next', 'Segoe UI', system-ui, sans-serif" font-size="14" font-weight="400" fill="#4B6177" text-anchor="start">Sam</text>
 <use href="#chat" xlink:href="#chat" transform="translate(278 112) scale(1)"/>
 <use href="#chat" xlink:href="#chat" transform="translate(922 112) scale(1)"/>
 <line x1="304" y1="112" x2="896" y2="112" stroke="#E3A83A" stroke-width="2.5" stroke-linecap="round"/>
