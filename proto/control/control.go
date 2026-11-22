@@ -34,7 +34,7 @@
 // with RequestListing; techies see the open requests in Presence and decide
 // with DecideListing. Allowing adds the server to ApprovedServers for every
 // computer, refusing sends ListingRefused to the one that asked. Techies also
-// change the list themselves with AddApproved and RemoveApproved.
+// change the list themselves with AddApproved, RenameApproved and RemoveApproved.
 //
 // Customers (PLAN.md 13): the computers of a server are grouped per customer.
 // Presence carries the customers and the customer of every computer.
@@ -144,6 +144,7 @@ const (
 	MsgRemoveTechieKey MsgType = 30
 	MsgAddApproved     MsgType = 31
 	MsgRemoveApproved  MsgType = 32
+	MsgRenameApproved  MsgType = 33
 	// server -> any
 	MsgServerInfo MsgType = 17
 	// server -> computer
@@ -266,6 +267,14 @@ type AddApproved struct {
 type RemoveApproved struct {
 	Seq     uint32 `json:"seq"`
 	Address string `json:"address"`
+}
+
+// RenameApproved gives the approved server at the normalized address another
+// name; an empty name takes its name away.
+type RenameApproved struct {
+	Seq     uint32 `json:"seq"`
+	Address string `json:"address"`
+	Name    string `json:"name"`
 }
 
 // ListingRequest is an open listing request as techies see it.
@@ -624,6 +633,8 @@ func typeOf(m any) (MsgType, error) {
 		return MsgAddApproved, nil
 	case *RemoveApproved, RemoveApproved:
 		return MsgRemoveApproved, nil
+	case *RenameApproved, RenameApproved:
+		return MsgRenameApproved, nil
 	case *AddCustomer, AddCustomer:
 		return MsgAddCustomer, nil
 	case *RenameCustomer, RenameCustomer:
@@ -689,6 +700,8 @@ func newOf(t MsgType) (any, error) {
 		return &AddApproved{}, nil
 	case MsgRemoveApproved:
 		return &RemoveApproved{}, nil
+	case MsgRenameApproved:
+		return &RenameApproved{}, nil
 	case MsgAddCustomer:
 		return &AddCustomer{}, nil
 	case MsgRenameCustomer:

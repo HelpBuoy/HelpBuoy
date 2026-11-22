@@ -341,6 +341,10 @@ so such a version still lets the techie in with that key.
 | `helpbuoy-server customer list` / `add` / `rename` / `remove` | manage the customers on the server (13.2) |
 | `helpbuoy-server computer move SHA256:... 'Acme BV' \| --none` | move a computer to another customer, or out of its customer (13.2); `computer add` and `computer list` take `--customer` |
 | `helpbuoy-server limit [--sessions N]` | print or set how many sessions the server allows at the same time, for all techies together (3.4); 0 is no limit, the default. Techies can't change it |
+| `helpbuoy-server other list` | list the other servers the computers of this server may use (12.3): address, name and host key fingerprint |
+| `helpbuoy-server other add vendor.example.com ['Vendor Inc']` | allow another server, as **Add server** in the desk app does: it looks up the host key the server shows now and stores the address with that fingerprint. `--fingerprint SHA256:...` gives the key instead, for a server that can't be reached from here |
+| `helpbuoy-server other rename vendor.example.com 'Vendor Ltd'` | rename an other server; `--none` instead of the name takes the name away |
+| `helpbuoy-server other remove vendor.example.com` | no longer allow an other server |
 | `helpbuoy-server hostkey` | print the host key fingerprint, for techies to compare with what computers show |
 | `helpbuoy-server hostkey --new` | replace the host key, keeping all techies and computers; it takes effect at the next server start, since the running server only watches `state.json`; every computer then shows the changed server identity warning (3.5), and servers that approved this one for their computers (12.3) must approve it again |
 
@@ -368,6 +372,7 @@ Techie commands carry a sequence number and the server answers each with a `Repl
 | `DecideListing` | techie → server | computer fingerprint, address, fingerprint and allow or refuse |
 | `AddApproved` | techie → server | address, host key fingerprint and optional name (up to 64 characters) of a server to put on the approved list (12.3) without a computer asking, in place of an older approval for the same address; without a name the address keeps the name it had, and adding a listed server with another name renames it |
 | `RemoveApproved` | techie → server | normalized address of the server to take off the approved list (12.3) |
+| `RenameApproved` | techie → server | normalized address of an approved server and its new name (up to 64 characters); an empty name takes the name away |
 | `ComputerHello` | computer → server | app version, current `user@machine` (the registered name comes from the key comment) |
 | `Presence` | server → techies | full snapshot after every change: registered computers (`user@machine`, fingerprint, online, open or taken request with id and time, in session with whom and open listing requests), techies (name, the fingerprint of the key it is online with or else its first key, and every key with whether it is online and when it was last seen) and the approved servers of the server |
 | `RegisterComputer` / `UnregisterComputer` | techie → server | public key line or fingerprint (name taken from the key comment, or given when the comment is empty) |
@@ -816,7 +821,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   the server fingerprint to read out to users, and who runs the server (12.4): **Company
   name** and **Phone number** (required) and the optional **Description**, with **Save** (any techie can change them; every computer and techie gets
   the new values right away), and the **Other servers** the computers of this server may
-  also use (12.3): each with its name, address, fingerprint and **Remove** (confirmed with a second
+  also use (12.3): each with its name, address, fingerprint, **Rename** (an inline field, Enter saves, Esc cancels; an empty name takes the name away) and **Remove** (confirmed with a second
   click), and the fields **Name users pick it by** (optional) and **Address of the other
   server** with **Add server**, which looks up the key that server shows and adds it with that. While the company name or phone number is missing, the
   Computers tab and Add computer say that computers can't connect yet, with a button to the
@@ -1213,7 +1218,9 @@ computers refuse it until a techie adds the address again, which takes over the 
 A techie can also give it a name, for example "Vendor Inc", which is what users pick it by;
 the name comes from the primary server because that is who vouches for the list, not from
 what the other server says about itself. A server approved through a request has no name
-and shows its address until a techie adds it again with one.
+and shows its address until a techie gives it one with **Rename**, which changes the name
+of a listed server and nothing else (`RenameApproved`). The admin of the server does the
+same from the command line with `helpbuoy-server other` (3.2).
 Removing takes it off the list for every computer. A computer learns the new list from its
 primary server, at once when it is connected there and otherwise the next time it connects
 there, which is at the latest the next time the client starts. A computer that stays

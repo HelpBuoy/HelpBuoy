@@ -16,6 +16,7 @@ import (
 
 	"github.com/helpbuoy/helpbuoy/desk/config"
 	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/hostprobe"
 	"github.com/helpbuoy/helpbuoy/proto/transport"
 )
 
@@ -194,6 +195,12 @@ func (r *fakeServer) control(sc *ssh.ServerConn, ch ssh.Channel, role control.Ro
 				continue
 			}
 			cc.Send(&control.Reply{Seq: m.Seq})
+		case *control.RenameApproved:
+			if m.Address != "other.example.com:443" || m.Name != "Other Ltd" {
+				cc.Send(&control.Reply{Seq: m.Seq, Error: "bad rename"})
+				continue
+			}
+			cc.Send(&control.Reply{Seq: m.Seq})
 		case *control.RemoveApproved:
 			if m.Address != "other.example.com:443" {
 				cc.Send(&control.Reply{Seq: m.Seq, Error: "bad approved server"})
@@ -305,6 +312,9 @@ func TestOnlinePresenceCommandsAndSession(t *testing.T) {
 	if err := waitResult(t, c.AddApproved("other.example.com", "SHA256:o", "Other Inc")); err != nil {
 		t.Errorf("add approved: %v", err)
 	}
+	if err := waitResult(t, c.RenameApproved("other.example.com:443", "Other Ltd")); err != nil {
+		t.Errorf("rename approved: %v", err)
+	}
 	if err := waitResult(t, c.RemoveApproved("other.example.com:443")); err != nil {
 		t.Errorf("remove approved: %v", err)
 	}
@@ -349,6 +359,8 @@ func TestOnlinePresenceCommandsAndSession(t *testing.T) {
 			s = m.Seq
 		case *control.RemoveApproved:
 			s = m.Seq
+		case *control.RenameApproved:
+			s = m.Seq
 		case *control.Connect:
 			s = m.Seq
 		}
@@ -357,7 +369,7 @@ func TestOnlinePresenceCommandsAndSession(t *testing.T) {
 		}
 		seqs[s] = true
 	}
-	if len(got) != 9 {
+	if len(got) != 10 {
 		t.Errorf("server received %d commands", len(got))
 	}
 
@@ -479,11 +491,11 @@ func TestPinnedKeyAccepted(t *testing.T) {
 	}
 }
 
-// TestProbeHostKey: the probe returns the host key without logging in, and
+// TestProbeHostKey: the probe of proto/hostprobe returns the host key without logging in, and
 // fails when nothing answers or it is not a server.
 func TestProbeHostKey(t *testing.T) {
 	r := newFakeServer(t, newSigner(t).PublicKey())
-	key, err := ProbeHostKey(context.Background(), r.addr(), 2*time.Second, nil, nil)
+	key, err := hostprobe.Probe(context.Background(), r.addr(), 2*time.Second, transport.DialOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -500,7 +512,7 @@ func TestProbeHostKey(t *testing.T) {
 	ln, _ := net.Listen("tcp", "127.0.0.1:0")
 	addr := ln.Addr().String()
 	ln.Close()
-	if _, err := ProbeHostKey(context.Background(), addr, time.Second, nil, nil); err == nil {
+	if _, err := hostprobe.Probe(context.Background(), addr, time.Second, transport.DialOptions{}); err == nil {
 		t.Error("probing a closed port succeeded")
 	}
 }

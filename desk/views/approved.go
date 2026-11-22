@@ -9,12 +9,13 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 
-	"github.com/helpbuoy/helpbuoy/desk/serverconn"
 	"github.com/helpbuoy/helpbuoy/desk/ui"
 	"github.com/helpbuoy/helpbuoy/proto/control"
+	"github.com/helpbuoy/helpbuoy/proto/hostprobe"
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
 	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 	"github.com/helpbuoy/helpbuoy/proto/sysproxy"
+	"github.com/helpbuoy/helpbuoy/proto/transport"
 )
 
 // approvedForm adds and removes the other servers that the computers of
@@ -29,6 +30,30 @@ type approvedForm struct {
 	result  string
 	failed  bool
 	confirm string // address of the server awaiting Remove confirmation
+
+	// The inline rename of a server in the list.
+	renaming   string // address of the server being renamed, or ""
+	renameName ui.Field
+	renameBad  bool // the typed name was rejected
+	renameBlur bool // drop the field's focus at the start of the next frame
+}
+
+// approvedRenameID is the ui id of the inline rename field.
+const approvedRenameID = "approved/rename"
+
+// beginFrame drops the focus of a closed rename field, a frame later so the
+// Enter or Esc that closed it does not reach anything else in that frame.
+func (f *approvedForm) beginFrame(c *ui.Context) {
+	if f.renameBlur {
+		if c.Focus == approvedRenameID {
+			c.Focus = ""
+		}
+		f.renameBlur = false
+	}
+}
+
+func (f *approvedForm) endRename() {
+	f.renaming, f.renameBlur = "", true
 }
 
 func (f *approvedForm) init() {
@@ -43,6 +68,9 @@ func (f *approvedForm) reset() {
 	f.name.Edit.SetText("")
 	f.address.Edit.SetText("")
 	f.result, f.failed, f.confirm = "", false, ""
+	if f.renaming != "" {
+		f.endRename()
+	}
 }
 
 // checkApproved returns the name and normalized address the techie typed,
@@ -67,7 +95,8 @@ func checkApproved(name, address string) (s control.ApprovedServer, problem stri
 const approvedRowH = 44
 
 // drawApproved draws the other servers the computers of this server may
-// use, each with Remove, and the fields to add one. It returns the y below.
+// use, each with Rename and Remove, and the fields to add one. It returns
+// the y below.
 func (a *App) drawApproved(x, y, w float32) float32 {
 	c := a.ui
 	f := &a.approvedForm
@@ -84,12 +113,18 @@ func (a *App) drawApproved(x, y, w float32) float32 {
 		c.Text(ui.Regular, ui.SizeSmall, i18n.Trans("No other servers are allowed."), x, y, ui.ColMuted)
 		y += 26
 	}
-	removeL, cancelL := i18n.Trans("Remove"), i18n.Trans("Cancel")
-	wRemove, wCancel := a.btnW(removeL, 66), a.btnW(cancelL, 68)
+	f.beginFrame(c)
+	removeL, cancelL, renameL := i18n.Trans("Remove"), i18n.Trans("Cancel"), i18n.Trans("Rename")
+	wRemove, wCancel, wRename := a.btnW(removeL, 66), a.btnW(cancelL, 68), a.btnW(renameL, 66)
 	for _, s := range servers {
 		id := "approved/" + s.Address
+		if f.renaming == s.Address {
+			a.drawApprovedRename(s, rl.NewRectangle(x, y-3, fw, 28))
+			y += approvedRowH
+			continue
+		}
 		confirming := f.confirm == s.Address
-		actionW := wRemove
+		actionW := wRename + 4 + wRemove
 		if confirming {
 			actionW = wRemove + 6 + wCancel
 		}
@@ -115,8 +150,18 @@ func (a *App) drawApproved(x, y, w float32) float32 {
 			if c.Button(id+"/cancel", rl.NewRectangle(ax+wRemove+6, ay, wCancel, 30), cancelL, ui.Flat, false) {
 				f.confirm = ""
 			}
-		} else if c.Button(id+"/remove", rl.NewRectangle(ax, ay, wRemove, 30), removeL, ui.Flat, !a.online()) {
-			f.confirm = s.Address
+		} else {
+			if c.Button(id+"/rename", rl.NewRectangle(ax, ay, wRename, 30), renameL, ui.Flat, !a.online()) {
+				f.renaming, f.renameBad, f.confirm = s.Address, false, ""
+				f.renameName.Edit.Max = control.MaxApprovedName
+				f.renameName.Placeholder = s.Address
+				f.renameName.Edit.SetText(s.Name)
+				f.renameName.Edit.SelectAll()
+				c.Focus = approvedRenameID
+			}
+			if c.Button(id+"/remove", rl.NewRectangle(ax+wRename+4, ay, wRemove, 30), removeL, ui.Flat, !a.online()) {
+				f.confirm = s.Address
+			}
 		}
 		y += approvedRowH
 	}
@@ -164,6 +209,43 @@ func (a *App) drawApproved(x, y, w float32) float32 {
 	return y + 12
 }
 
+// drawApprovedRename draws the inline name field of the server being
+// renamed: Enter saves, Esc or a click elsewhere cancels. An empty name takes
+// the name away, after which users see the address.
+func (a *App) drawApprovedRename(s control.ApprovedServer, r rl.Rectangle) {
+	c := a.ui
+	f := &a.approvedForm
+	res := c.TextField(approvedRenameID, r, &f.renameName)
+	hint, col := i18n.Trans("Enter to save, Esc to cancel"), ui.ColMuted
+	if f.renameBad {
+		hint, col = i18n.Trans("The name can have up to {0} printable characters.", control.MaxApprovedName), ui.ColError
+	}
+	c.Text(ui.Regular, ui.SizeSmall, c.Ellipsize(ui.Regular, ui.SizeSmall, hint, r.Width), r.X, r.Y+r.Height+2, col)
+	if res.Changed {
+		f.renameBad = false
+	}
+	switch {
+	case res.Submitted:
+		name := strings.TrimSpace(f.renameName.Edit.String())
+		if !validLine(name, control.MaxApprovedName) {
+			f.renameBad = true
+			return
+		}
+		f.endRename()
+		if name == s.Name || a.backend == nil {
+			return
+		}
+		addr := s.Address
+		a.run(a.backend.RenameApproved(addr, name), func(err error) {
+			if err != nil {
+				a.notes["approved/"+addr] = note{text: i18n.Trans("Could not rename: {0}", err), until: a.ui.Now.Add(6 * time.Second)}
+			}
+		})
+	case rl.IsKeyPressed(rl.KeyEscape), c.Focus != approvedRenameID:
+		f.endRename()
+	}
+}
+
 // addApproved looks up the host key of the server at s.Address and sends
 // AddApproved with it, then empties the fields when it worked. Adding a
 // server that is on the list with another name renames it, and one that
@@ -182,7 +264,7 @@ func (a *App) addApproved(s control.ApprovedServer) {
 			proxy = sysproxy.Off
 		}
 		probe = func(addr string) (string, error) {
-			key, err := serverconn.ProbeHostKey(context.Background(), addr, 0, nil, proxy)
+			key, err := hostprobe.Probe(context.Background(), addr, 0, transport.DialOptions{Proxy: proxy})
 			if err != nil {
 				return "", err
 			}

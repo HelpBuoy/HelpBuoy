@@ -458,6 +458,8 @@ func (r *Registry) Handle(c *Conn, m any) error {
 		return r.addApproved(c, m)
 	case *control.RemoveApproved:
 		return r.removeApproved(c, m)
+	case *control.RenameApproved:
+		return r.renameApproved(c, m)
 	case *control.AddCustomer:
 		return r.addCustomer(c, m)
 	case *control.RenameCustomer:
@@ -811,6 +813,26 @@ func (r *Registry) removeApproved(c *Conn, m *control.RemoveApproved) error {
 	err = r.mutate(func(st *store.State) error { return st.RemoveApproved(m.Address) })
 	if err == nil {
 		r.log.Info("approved server removed", "address", m.Address, "by", by)
+	}
+	r.reply(c, m.Seq, err)
+	return nil
+}
+
+// renameApproved renames a server on the approved list on behalf of techie
+// c; every computer gets the list with the new name.
+func (r *Registry) renameApproved(c *Conn, m *control.RenameApproved) error {
+	by, err := r.techieName(c, "RenameApproved")
+	if err != nil {
+		return err
+	}
+	var old string
+	err = r.mutate(func(st *store.State) error {
+		var err error
+		old, err = st.RenameApproved(m.Address, m.Name)
+		return err
+	})
+	if err == nil {
+		r.log.Info("approved server renamed", "address", m.Address, "from", old, "to", strings.TrimSpace(m.Name), "by", by)
 	}
 	r.reply(c, m.Seq, err)
 	return nil

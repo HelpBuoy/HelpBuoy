@@ -223,6 +223,17 @@ func (d *demo) AddApproved(address, fingerprint, name string) <-chan error {
 	return done(nil)
 }
 
+// RenameApproved renames a demo approved server locally.
+func (d *demo) RenameApproved(address, name string) <-chan error {
+	p := d.a.presence
+	for i := range p.Approved {
+		if p.Approved[i].Address == address {
+			p.Approved[i].Name = name
+		}
+	}
+	return done(nil)
+}
+
 // RemoveApproved removes a demo approved server locally.
 func (d *demo) RemoveApproved(address string) <-chan error {
 	p := d.a.presence

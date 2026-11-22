@@ -62,13 +62,21 @@ commands:
   customer add NAME                      add a customer, a group of computers
   customer rename CUSTOMER NAME          rename a customer
   customer remove CUSTOMER               remove a customer; its computers are kept, without customer
+  other list                             list the other servers the computers of this server may
+                                         use, such as that of a software vendor
+  other add ADDRESS [NAME]               allow another server, remembered by the key it shows now;
+                                         NAME is what users pick it by; --fingerprint SHA256:...
+                                         gives the key instead of looking it up
+  other rename ADDRESS NAME              rename an other server; --none takes its name away
+  other remove ADDRESS                   no longer allow an other server
   info [--company C] [--phone P]         print or set who runs this server, shown to users waiting
        [--description D]                 for a techie; the company name and phone number are required
                                          before computers can connect
   limit [--sessions N]                   print or set how many sessions the server allows at the
                                          same time (0: no limit, the default); techies can't change it
   hostkey [--new]                        print the server host key and fingerprint; --new makes a
-                                         new host key, used from the next server start on
+                                         new host key, used from the next server start on; servers
+                                         that allow this one as an other server must add it again
   vhost list                             list the virtual hosts in the --vhosts directory
   vhost add NAME                         add a virtual host, e.g. acme (lower-case letters, digits
                                          and hyphens); a running server picks it up within a second
@@ -111,6 +119,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		err = computerCmd(args[1:], stdout, stderr)
 	case "customer":
 		err = customerCmd(args[1:], stdout, stderr)
+	case "other":
+		err = otherCmd(args[1:], stdout, stderr)
 	case "info":
 		err = infoCmd(args[1:], stdout, stderr)
 	case "limit":

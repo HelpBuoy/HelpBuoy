@@ -147,6 +147,7 @@ func TestMessagesPerRole(t *testing.T) {
 		{"DecideListing", &control.DecideListing{Seq: 1, Computer: "SHA256:x"}, map[control.Role]bool{control.RoleTechie: true}},
 		{"AddApproved", &control.AddApproved{Seq: 1, Address: "bad address"}, map[control.Role]bool{control.RoleTechie: true}},
 		{"RemoveApproved", &control.RemoveApproved{Seq: 1, Address: "nowhere.example.com:443"}, map[control.Role]bool{control.RoleTechie: true}},
+		{"RenameApproved", &control.RenameApproved{Seq: 1, Address: "nowhere.example.com:443", Name: "x"}, map[control.Role]bool{control.RoleTechie: true}},
 		{"RequestListing", &control.RequestListing{Address: "bad address"}, map[control.Role]bool{control.RoleComputer: true}},
 		// Server->app messages are never accepted from apps.
 		{"Hello", &control.Hello{Role: control.RoleTechie}, nil},
@@ -754,6 +755,19 @@ func TestManageApproved(t *testing.T) {
 	}
 	mustWait[control.ApprovedServers](t, cl, func(m *control.ApprovedServers) bool { return len(m.Servers) == 1 && m.Servers[0].Name == "Vendor Ltd" })
 	if err := reply(8, &control.AddApproved{Seq: 8, Address: "other.example.com", Fingerprint: two, Name: "bad\x00name"}); err == "" {
+		t.Fatal("a bad name was accepted")
+	}
+	if err := reply(9, &control.RenameApproved{Seq: 9, Address: want.Address, Name: " Books Support "}); err != "" {
+		t.Fatalf("rename command: %s", err)
+	}
+	mustWait[control.ApprovedServers](t, cl, func(m *control.ApprovedServers) bool {
+		return len(m.Servers) == 1 && m.Servers[0].Name == "Books Support" && m.Servers[0].Fingerprint == two
+	})
+	if err := reply(10, &control.RenameApproved{Seq: 10, Address: want.Address}); err != "" {
+		t.Fatalf("take the name away: %s", err)
+	}
+	mustWait[control.ApprovedServers](t, cl, func(m *control.ApprovedServers) bool { return len(m.Servers) == 1 && m.Servers[0].Name == "" })
+	if err := reply(11, &control.RenameApproved{Seq: 11, Address: want.Address, Name: "bad\x00name"}); err == "" {
 		t.Fatal("a bad name was accepted")
 	}
 	if err := reply(5, &control.RemoveApproved{Seq: 5, Address: want.Address}); err != "" {

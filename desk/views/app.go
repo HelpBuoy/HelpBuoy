@@ -81,6 +81,7 @@ type backend interface {
 	SetServerInfo(info control.ServerInfo) <-chan error
 	DecideListing(computer string, req control.ListingRequest, allow bool) <-chan error
 	AddApproved(address, fingerprint, name string) <-chan error
+	RenameApproved(address, name string) <-chan error
 	RemoveApproved(address string) <-chan error
 }
 
@@ -172,7 +173,7 @@ type App struct {
 	infoForm     infoForm     // who runs the server, on the Server tab
 	approvedForm approvedForm // the other servers computers may use, on the Server tab
 	// probeServer looks up the host key fingerprint of another server a
-	// techie adds; nil uses serverconn.ProbeHostKey. The demo has its own.
+	// techie adds; nil uses hostprobe.Probe. The demo has its own.
 	probeServer func(addr string) (string, error)
 	confirmKey  bool // the Remove key confirmation on the damaged key screen
 	pageHeight  map[tabKind]float32

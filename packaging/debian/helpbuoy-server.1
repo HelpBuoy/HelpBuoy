@@ -68,6 +68,21 @@ helpbuoy-server \- server for helpbuoy self-hosted remote support
 .B helpbuoy-server customer add
 .I name
 .br
+.B helpbuoy-server other list
+.br
+.B helpbuoy-server other add
+.I address
+.RI [ name ]
+.RB [ \-\-fingerprint
+.IR fingerprint ]
+.br
+.B helpbuoy-server other rename
+.I address
+.RI [ name | \-\-none ]
+.br
+.B helpbuoy-server other remove
+.I address
+.br
 .B helpbuoy-server info
 .RB [ \-\-company
 .IR name ]
@@ -118,7 +133,20 @@ When they are missing and
 runs in a terminal, it asks for them first.
 .B hostkey \-\-new
 makes a new host key, used from the next server start on; every registered
-computer then warns that the server identity changed.
+computer then warns that the server identity changed, and every server that
+allows this one as an other server has to add it again.
+.PP
+.B other
+manages the other servers the computers of this server may use, such as that
+of a software vendor. A computer that its user locked to this server only
+connects here and to these servers.
+.B other add
+looks up the host key the server at
+.I address
+shows at that moment and remembers the server by it; the computers then only
+accept that key.
+.I name
+is what users pick the server by.
 .PP
 .B vhost add
 adds a virtual host to the

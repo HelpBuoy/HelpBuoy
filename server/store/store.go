@@ -625,6 +625,23 @@ func (st *State) RemoveApproved(addr string) error {
 	return nil
 }
 
+// RenameApproved gives the approved server at addr another name; an empty
+// name takes its name away. It returns the name the server had.
+func (st *State) RenameApproved(addr, name string) (string, error) {
+	name, err := cleanLine("name", name, control.MaxApprovedName)
+	if err != nil {
+		return "", err
+	}
+	i := slices.IndexFunc(st.Approved, func(a control.ApprovedServer) bool { return a.Address == addr })
+	if i < 0 {
+		return "", fmt.Errorf("no approved server at %s", addr)
+	}
+	old := st.Approved[i].Name
+	st.Approved = slices.Clone(st.Approved)
+	st.Approved[i].Name = name
+	return old, nil
+}
+
 // cleanLine trims s and checks it like a name, but allows it to be empty.
 func cleanLine(what, s string, max int) (string, error) {
 	if strings.TrimSpace(s) == "" {
