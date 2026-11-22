@@ -1,6 +1,39 @@
-# HelpBuoy
+<div align="center">
+  <img src="desk/resources/icon.png" alt="HelpBuoy logo" height="72">
+  <h1>HelpBuoy</h1>
+  <a href="https://www.helpbuoy.com">HelpBuoy</a>: an alternative to TeamViewer QuickSupport and Microsoft Quick Assist.<br /><br />
+  <p>HelpBuoy is open-source remote support that you host yourself. A techie sees the screen of someone who asked for help and uses their mouse and keyboard, after that person allowed it. It runs on Windows, Linux and macOS.</p>
+</div>
+<p align="center">
+  <a href="https://www.helpbuoy.com">Website</a> | <a href="https://www.helpbuoy.com/docs/getting-started/">Getting started</a> | <a href="https://www.helpbuoy.com/docs/">Documentation</a> | <a href="https://www.helpbuoy.com/download/">Download</a> | <a href="https://www.helpbuoy.com/video/">Video</a> | <a href="https://www.helpbuoy.com/support/">Support</a>
+</p>
+<p align="center">
+  <a href="https://github.com/HelpBuoy/HelpBuoy/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/HelpBuoy/HelpBuoy"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/HelpBuoy/HelpBuoy"></a>
+</p>
 
-Self-hosted remote support for Windows, Linux and macOS, a small alternative to TeamViewer QuickSupport.
+![The desk app listing computers](screenshot.png)
+
+## What it does
+
+- The person who needs help starts a small app and is asked before anyone takes control. Esc always takes control back.
+- A session only carries the screen (computer to techie) and mouse and keyboard input (techie to computer). There is no shell, no file transfer and no unattended access.
+- Everything runs over SSH inside a WebSocket over HTTPS, so it gets through networks that only allow web traffic. The server only connects the two sides and can't read a session.
+- You run the server: as one Go binary, as a Debian package, or inside the desk app. Nothing depends on helpbuoy.com.
+- A PC can be locked to its helpdesk, so a scam caller can't talk the user into connecting to another server.
+
+## Quick start
+
+1. Install the desk app on the techie's computer and the client on the computer that needs help, from the [download page](https://www.helpbuoy.com/download/) or the [latest release](https://github.com/HelpBuoy/HelpBuoy/releases/latest).
+2. Start the desk app and connect with the address left empty. It then runs the server inside the app, on port 5959. Enter your company name and phone number on the Server tab.
+3. Start the client on the other computer, type the address the desk app shows on its Server tab and send the key the client shows to the techie.
+4. In the desk app, add the computer with that key and press Connect. The user allows it, and the session starts.
+
+For a server that is always on, install `helpbuoy-server` from the same release; see [Running the server](#running-the-server). [Getting started](https://www.helpbuoy.com/docs/getting-started/) has the steps in more detail.
+
+![How HelpBuoy connects: register the computer, ask for help, get help](docs/helpbuoy.connection.diagram.svg)
+
+## What is in this repository
 
 - `server/`: `helpbuoy-server`, a single Go binary that speaks SSH over a WebSocket over HTTPS, so it gets through networks that only allow web traffic. It authenticates keys and connects techies to computers. No shell, no file transfer, no forwarding. One server can host many helpdesks, each on its own path, like `relay.example.com/acme`.
 - `desk/`: the cross-platform app the support techie uses. On Macs without Metal, such as virtual machines, it draws with Apple's software OpenGL renderer.
@@ -8,11 +41,7 @@ Self-hosted remote support for Windows, Linux and macOS, a small alternative to 
 - `client-linux/`: the same app for Linux. It is a single static binary for amd64 and arm64 that speaks the X11 protocol itself (with jezek/xgb), so it needs no libraries and runs on any X11 desktop. On a Wayland desktop (GNOME, KDE Plasma) it shares through the remote desktop portal, which asks the user which monitor to share, and reads the screen with GStreamer's `pipewiresrc` (packages `gstreamer1.0-pipewire` and `gstreamer1.0-tools`); without those it explains what to install. A local Esc ends the session but still reaches the focused application.
 - `client-macos/`: the same app for macOS 12.3 and later, as one universal app for Intel and Apple silicon. It captures the screen with ScreenCaptureKit, or with CoreGraphics on Macs without Metal such as virtual machines, where a ScreenCaptureKit stream crashes WindowServer. It injects input with CGEvent, and draws the same window as the Linux client. On first start it asks for the Screen Recording and Accessibility permissions and opens the right page of System Settings.
 
-A session only carries the screen (computer to techie) and mouse and keyboard input (techie to computer). See [PLAN.md](PLAN.md) for the design.
-
-![The desk app listing computers](screenshot.png)
-
-![How HelpBuoy connects: register the computer, ask for help, get help](docs/helpbuoy.connection.diagram.svg)
+See [PLAN.md](PLAN.md) for the design.
 
 ## Running the server
 
