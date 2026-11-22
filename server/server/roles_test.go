@@ -145,6 +145,8 @@ func TestMessagesPerRole(t *testing.T) {
 		{"UnregisterTechie", &control.UnregisterTechie{Seq: 1, Name: "nobody"}, map[control.Role]bool{control.RoleTechie: true}},
 		{"SetServerInfo", &control.SetServerInfo{Seq: 1, Company: "bad\x00title"}, map[control.Role]bool{control.RoleTechie: true}},
 		{"DecideListing", &control.DecideListing{Seq: 1, Computer: "SHA256:x"}, map[control.Role]bool{control.RoleTechie: true}},
+		{"AddApproved", &control.AddApproved{Seq: 1, Address: "bad address"}, map[control.Role]bool{control.RoleTechie: true}},
+		{"RemoveApproved", &control.RemoveApproved{Seq: 1, Address: "nowhere.example.com:443"}, map[control.Role]bool{control.RoleTechie: true}},
 		{"RequestListing", &control.RequestListing{Address: "bad address"}, map[control.Role]bool{control.RoleComputer: true}},
 		// Server->app messages are never accepted from apps.
 		{"Hello", &control.Hello{Role: control.RoleTechie}, nil},
@@ -645,8 +647,8 @@ func TestListing(t *testing.T) {
 		return len(m.Servers) == 1 && m.Servers[0] == approved
 	})
 	p = presenceWhere(t, h, func(p *control.Presence) bool { return len(p.Computers[0].Listings) == 0 })
-	if len(p.Computers[0].Approved) != 1 || p.Computers[0].Approved[0] != approved {
-		t.Fatalf("approved %+v", p.Computers[0].Approved)
+	if len(p.Approved) != 1 || p.Approved[0] != approved {
+		t.Fatalf("approved %+v", p.Approved)
 	}
 	// Deciding a request that is not open fails.
 	h.Send(&control.DecideListing{Seq: 2, Computer: fp(ck), Address: l.Address, Fingerprint: other, Allow: true})
@@ -669,8 +671,98 @@ func TestListing(t *testing.T) {
 	}
 	mustWait[control.ListingRefused](t, cl2, func(m *control.ListingRefused) bool { return m.Fingerprint == third })
 	p = presenceWhere(t, h, func(p *control.Presence) bool { return len(p.Computers[0].Listings) == 0 })
-	if len(p.Computers[0].Approved) != 1 {
-		t.Fatalf("refusing changed the approved list: %+v", p.Computers[0].Approved)
+	if len(p.Approved) != 1 {
+		t.Fatalf("refusing changed the approved list: %+v", p.Approved)
+	}
+}
+
+// TestListingAllComputers: an approval holds for every computer of the
+// server. Allowing the request of one computer sends the others the new
+// list too and closes their request for the same server, and a computer
+// that asks for an approved server gets the list at once.
+func TestListingAllComputers(t *testing.T) {
+	e := newEnv(t, nil)
+	h := e.techie("alice")
+	a, ak := e.computer("anna@PC")
+	b, _ := e.computer("bob@PC")
+	for _, cl := range []*fake.Conn{a, b} {
+		mustWait[control.ApprovedServers](t, cl, func(m *control.ApprovedServers) bool { return len(m.Servers) == 0 })
+	}
+	other := fp(fake.NewKey())
+	req := &control.RequestListing{Address: "vendor.example.com:443", Fingerprint: other}
+	a.Send(req)
+	b.Send(req)
+	presenceWhere(t, h, func(p *control.Presence) bool {
+		return len(p.Computers) == 2 && len(p.Computers[0].Listings) == 1 && len(p.Computers[1].Listings) == 1
+	})
+	h.Send(&control.DecideListing{Seq: 1, Computer: fp(ak), Address: req.Address, Fingerprint: other, Allow: true})
+	if rep := mustWait[control.Reply](t, h, func(r *control.Reply) bool { return r.Seq == 1 }); rep.Error != "" {
+		t.Fatalf("allow: %s", rep.Error)
+	}
+	for _, cl := range []*fake.Conn{a, b} {
+		mustWait[control.ApprovedServers](t, cl, func(m *control.ApprovedServers) bool {
+			return len(m.Servers) == 1 && m.Servers[0].Fingerprint == other
+		})
+	}
+	presenceWhere(t, h, func(p *control.Presence) bool {
+		return len(p.Approved) == 1 && len(p.Computers[0].Listings) == 0 && len(p.Computers[1].Listings) == 0
+	})
+	c, _ := e.computer("carl@PC")
+	mustWait[control.ApprovedServers](t, c, func(m *control.ApprovedServers) bool { return len(m.Servers) == 1 })
+	c.Send(req)
+	mustWait[control.ApprovedServers](t, c, func(m *control.ApprovedServers) bool { return len(m.Servers) == 1 })
+}
+
+// TestManageApproved: a techie adds and removes approved servers without a
+// computer asking. Every computer gets the new list, adding closes the open
+// request for that server, and a new key for an address replaces the old.
+func TestManageApproved(t *testing.T) {
+	e := newEnv(t, nil)
+	h := e.techie("alice")
+	cl, _ := e.computer("anna@PC")
+	mustWait[control.ApprovedServers](t, cl, func(m *control.ApprovedServers) bool { return len(m.Servers) == 0 })
+	one, two := fp(fake.NewKey()), fp(fake.NewKey())
+	cl.Send(&control.RequestListing{Address: "vendor.example.com", Fingerprint: one})
+	presenceWhere(t, h, func(p *control.Presence) bool { return len(p.Computers) == 1 && len(p.Computers[0].Listings) == 1 })
+	reply := func(seq uint32, m any) string {
+		t.Helper()
+		h.Send(m)
+		return mustWait[control.Reply](t, h, func(r *control.Reply) bool { return r.Seq == seq }).Error
+	}
+	if err := reply(1, &control.AddApproved{Seq: 1, Address: " Vendor.example.com ", Fingerprint: one, Name: " Vendor Inc "}); err != "" {
+		t.Fatalf("add: %s", err)
+	}
+	want := control.ApprovedServer{Address: "vendor.example.com:443", Fingerprint: one, Name: "Vendor Inc"}
+	mustWait[control.ApprovedServers](t, cl, func(m *control.ApprovedServers) bool { return len(m.Servers) == 1 && m.Servers[0] == want })
+	presenceWhere(t, h, func(p *control.Presence) bool {
+		return len(p.Approved) == 1 && p.Approved[0] == want && len(p.Computers[0].Listings) == 0
+	})
+	if err := reply(2, &control.AddApproved{Seq: 2, Address: "vendor.example.com", Fingerprint: one}); err == "" {
+		t.Fatal("adding the same server twice succeeded")
+	}
+	if err := reply(3, &control.AddApproved{Seq: 3, Address: "vendor.example.com", Fingerprint: "SHA256:short"}); err == "" {
+		t.Fatal("a bad fingerprint was accepted")
+	}
+	if err := reply(4, &control.AddApproved{Seq: 4, Address: "vendor.example.com", Fingerprint: two}); err != "" {
+		t.Fatalf("new key: %s", err)
+	}
+	mustWait[control.ApprovedServers](t, cl, func(m *control.ApprovedServers) bool {
+		return len(m.Servers) == 1 && m.Servers[0].Fingerprint == two && m.Servers[0].Name == "Vendor Inc"
+	})
+	if err := reply(7, &control.AddApproved{Seq: 7, Address: "vendor.example.com", Fingerprint: two, Name: "Vendor Ltd"}); err != "" {
+		t.Fatalf("rename: %s", err)
+	}
+	mustWait[control.ApprovedServers](t, cl, func(m *control.ApprovedServers) bool { return len(m.Servers) == 1 && m.Servers[0].Name == "Vendor Ltd" })
+	if err := reply(8, &control.AddApproved{Seq: 8, Address: "other.example.com", Fingerprint: two, Name: "bad\x00name"}); err == "" {
+		t.Fatal("a bad name was accepted")
+	}
+	if err := reply(5, &control.RemoveApproved{Seq: 5, Address: want.Address}); err != "" {
+		t.Fatalf("remove: %s", err)
+	}
+	mustWait[control.ApprovedServers](t, cl, func(m *control.ApprovedServers) bool { return len(m.Servers) == 0 })
+	presenceWhere(t, h, func(p *control.Presence) bool { return len(p.Approved) == 0 })
+	if err := reply(6, &control.RemoveApproved{Seq: 6, Address: want.Address}); err == "" {
+		t.Fatal("removing twice succeeded")
 	}
 }
 

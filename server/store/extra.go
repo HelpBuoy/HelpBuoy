@@ -3,10 +3,13 @@ package store
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
 	"sync"
+
+	"github.com/helpbuoy/helpbuoy/proto/control"
 )
 
 // Extra holds the fields of a state.json object that this version does not
@@ -26,7 +29,45 @@ type (
 func (st *State) UnmarshalJSON(b []byte) error {
 	var err error
 	st.Extra, err = unmarshalWithExtra(b, (*plainState)(st))
-	return err
+	if err != nil {
+		return err
+	}
+	return st.liftApproved()
+}
+
+// liftApproved moves the approved servers that an older version kept per
+// computer to the list of the server, where the first approval of an
+// address wins.
+func (st *State) liftApproved() error {
+	const field = "approved"
+	for i := range st.Computers {
+		c := &st.Computers[i]
+		raw, ok := c.Extra[field]
+		if !ok {
+			continue
+		}
+		var old []control.ApprovedServer
+		if err := json.Unmarshal(raw, &old); err != nil {
+			return fmt.Errorf("computer %q: approved servers: %w", c.Name, err)
+		}
+		for _, a := range old {
+			known := slices.ContainsFunc(st.Approved, func(b control.ApprovedServer) bool { return b.Address == a.Address })
+			if !known && len(st.Approved) < control.MaxApprovedServers {
+				st.Approved = append(st.Approved, a)
+			}
+		}
+		extra := Extra{}
+		for k, v := range c.Extra {
+			if k != field {
+				extra[k] = v
+			}
+		}
+		if len(extra) == 0 {
+			extra = nil
+		}
+		c.Extra = extra
+	}
+	return nil
 }
 
 func (st State) MarshalJSON() ([]byte, error) {

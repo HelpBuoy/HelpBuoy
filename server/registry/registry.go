@@ -258,18 +258,15 @@ func (r *Registry) OpenControl(c *Conn) error {
 	case control.RoleTechie:
 		c.peer.NotifyPresence()
 	case control.RoleComputer:
-		c.peer.Send(r.approvedLocked(c.fp))
+		c.peer.Send(r.approvedLocked())
 	}
 	return nil
 }
 
-// approvedLocked returns the ApprovedServers message for computer fp.
-func (r *Registry) approvedLocked(fp string) *control.ApprovedServers {
-	m := &control.ApprovedServers{Servers: []control.ApprovedServer{}}
-	if sc, ok := r.idx.Computer(fp); ok {
-		m.Servers = append(m.Servers, sc.Approved...)
-	}
-	return m
+// approvedLocked returns the ApprovedServers message, the same for every
+// computer.
+func (r *Registry) approvedLocked() *control.ApprovedServers {
+	return &control.ApprovedServers{Servers: append([]control.ApprovedServer{}, r.idx.State.Approved...)}
 }
 
 // send queues m if the connection can receive messages.
@@ -320,6 +317,7 @@ func (r *Registry) presenceLocked() control.Presence {
 	now := r.cfg.Now().UTC()
 	st := r.idx.State
 	p := control.Presence{Computers: []control.ComputerInfo{}, Techies: []control.TechieInfo{}}
+	p.Approved = slices.Clone(st.Approved)
 	for _, cu := range st.Customers {
 		p.Customers = append(p.Customers, control.CustomerInfo{ID: cu.ID, Name: cu.Name})
 	}
@@ -331,7 +329,6 @@ func (r *Registry) presenceLocked() control.Presence {
 			RegisteredBy: sc.RegisteredBy,
 			RegisteredAt: sc.RegisteredAt,
 			LastSeen:     sc.LastSeen,
-			Approved:     slices.Clone(sc.Approved),
 			Listings:     slices.Clone(sc.Listings),
 			Customer:     sc.Customer,
 		}
@@ -387,7 +384,7 @@ func (r *Registry) SetIndex(idx *store.Index) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	old := r.idx.State
-	oldIdx := r.idx
+	approvedChanged := !slices.Equal(old.Approved, idx.State.Approved)
 	r.idx = idx
 	if old.Info() != idx.State.Info() {
 		info := r.serverInfoLocked()
@@ -400,12 +397,8 @@ func (r *Registry) SetIndex(idx *store.Index) {
 		switch {
 		case id.Role == c.role:
 			c.name, c.keyLine = id.Name, id.KeyLine
-			if c.role == control.RoleComputer {
-				was, _ := oldIdx.Computer(fp)
-				now, _ := idx.Computer(fp)
-				if !slices.Equal(was.Approved, now.Approved) {
-					send(c, r.approvedLocked(fp))
-				}
+			if c.role == control.RoleComputer && approvedChanged {
+				send(c, r.approvedLocked())
 			}
 		case c.role == control.RolePending && id.Role == control.RoleComputer && !idx.State.Info().Configured():
 			r.log.Info("computer refused: no company name and phone number set", "fp", fp, "ip", c.ip)
@@ -420,7 +413,7 @@ func (r *Registry) SetIndex(idx *store.Index) {
 			}
 			r.lastSeen[fp] = r.cfg.Now()
 			send(c, &control.Registered{})
-			send(c, r.approvedLocked(fp))
+			send(c, r.approvedLocked())
 			r.log.Info("pending promoted", "fp", fp, "name", id.Name, "ip", c.ip)
 		default:
 			reason := "key removed from the server"
@@ -461,6 +454,10 @@ func (r *Registry) Handle(c *Conn, m any) error {
 		return r.requestListing(c, m)
 	case *control.DecideListing:
 		return r.decideListing(c, m)
+	case *control.AddApproved:
+		return r.addApproved(c, m)
+	case *control.RemoveApproved:
+		return r.removeApproved(c, m)
 	case *control.AddCustomer:
 		return r.addCustomer(c, m)
 	case *control.RenameCustomer:
@@ -750,14 +747,15 @@ func (r *Registry) requestListing(c *Conn, m *control.RequestListing) error {
 		r.log.Info("listing requested", "fp", c.fp, "address", m.Address, "server", m.Fingerprint)
 	case res == store.ListingApproved:
 		r.mu.Lock()
-		send(c, r.approvedLocked(c.fp))
+		send(c, r.approvedLocked())
 		r.mu.Unlock()
 	}
 	return nil
 }
 
 // decideListing allows or refuses a computer's listing request on behalf of
-// techie c. The computer gets its new approved list, or ListingRefused.
+// techie c. Allowing sends every computer the new approved list, refusing
+// sends the computer ListingRefused.
 func (r *Registry) decideListing(c *Conn, m *control.DecideListing) error {
 	by, err := r.techieName(c, "DecideListing")
 	if err != nil {
@@ -779,6 +777,40 @@ func (r *Registry) decideListing(c *Conn, m *control.DecideListing) error {
 			}
 			r.mu.Unlock()
 		}
+	}
+	r.reply(c, m.Seq, err)
+	return nil
+}
+
+// addApproved puts a server on the approved list on behalf of techie c;
+// every computer gets the new list when the new state is installed.
+func (r *Registry) addApproved(c *Conn, m *control.AddApproved) error {
+	by, err := r.techieName(c, "AddApproved")
+	if err != nil {
+		return err
+	}
+	var addr string
+	err = r.mutate(func(st *store.State) error {
+		var err error
+		addr, err = st.AddApproved(m.Address, m.Fingerprint, m.Name)
+		return err
+	})
+	if err == nil {
+		r.log.Info("approved server added", "address", addr, "server", strings.TrimSpace(m.Fingerprint), "name", strings.TrimSpace(m.Name), "by", by)
+	}
+	r.reply(c, m.Seq, err)
+	return nil
+}
+
+// removeApproved takes a server off the approved list on behalf of techie c.
+func (r *Registry) removeApproved(c *Conn, m *control.RemoveApproved) error {
+	by, err := r.techieName(c, "RemoveApproved")
+	if err != nil {
+		return err
+	}
+	err = r.mutate(func(st *store.State) error { return st.RemoveApproved(m.Address) })
+	if err == nil {
+		r.log.Info("approved server removed", "address", m.Address, "by", by)
 	}
 	r.reply(c, m.Seq, err)
 	return nil

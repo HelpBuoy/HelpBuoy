@@ -29,11 +29,12 @@
 //
 // The lock to a primary server (PLAN.md 12): right after Hello (registered
 // computers) or Registered (pending ones), the server sends ApprovedServers,
-// the servers it approved for this computer, and again whenever that list
+// the servers it approved for all its computers, and again whenever that list
 // changes. A locked computer asks its primary server to approve another server
 // with RequestListing; techies see the open requests in Presence and decide
-// with DecideListing. Allowing adds the server to ApprovedServers, refusing
-// sends ListingRefused.
+// with DecideListing. Allowing adds the server to ApprovedServers for every
+// computer, refusing sends ListingRefused to the one that asked. Techies also
+// change the list themselves with AddApproved and RemoveApproved.
 //
 // Customers (PLAN.md 13): the computers of a server are grouped per customer.
 // Presence carries the customers and the customer of every computer.
@@ -141,6 +142,8 @@ const (
 	// 28 was LimitTechie
 	MsgAddTechieKey    MsgType = 29
 	MsgRemoveTechieKey MsgType = 30
+	MsgAddApproved     MsgType = 31
+	MsgRemoveApproved  MsgType = 32
 	// server -> any
 	MsgServerInfo MsgType = 17
 	// server -> computer
@@ -199,15 +202,27 @@ type SetServerInfo struct {
 const DefaultInstruction = "A techie can now ask to connect. You will be asked first, " +
 	"and pressing Esc always takes back control."
 
-// ApprovedServer is a server a primary server approved for one of its
-// computers: one address with one host key.
+// ApprovedServer is a server a primary server approved for its computers:
+// one address with one host key.
 type ApprovedServer struct {
 	Address     string `json:"address"`     // normalized host:port
 	Fingerprint string `json:"fingerprint"` // SHA256:... of its host key
+	// Name is what a techie of the primary server called it, for the user
+	// to pick it by; empty if it has no name.
+	Name string `json:"name,omitempty"`
 }
 
-// ApprovedServers is the full list of servers this server approved for the
-// computer, sent after Hello or Registered and whenever it changes.
+// Is reports whether a is the server at address with the host key
+// fingerprint, whatever its name.
+func (a ApprovedServer) Is(address, fingerprint string) bool {
+	return a.Address == address && a.Fingerprint == fingerprint
+}
+
+// MaxApprovedName is the longest name of an approved server, in characters.
+const MaxApprovedName = 64
+
+// ApprovedServers is the full list of servers this server approved for its
+// computers, sent after Hello or Registered and whenever it changes.
 type ApprovedServers struct {
 	Servers []ApprovedServer `json:"servers"`
 }
@@ -236,6 +251,23 @@ type DecideListing struct {
 	Allow       bool   `json:"allow"`
 }
 
+// AddApproved puts a server on the approved list without a computer asking
+// for it, in place of an older approval for the same address. Name is
+// optional; without one the server keeps the name it had.
+type AddApproved struct {
+	Seq         uint32 `json:"seq"`
+	Address     string `json:"address"`
+	Fingerprint string `json:"fingerprint"`
+	Name        string `json:"name,omitempty"`
+}
+
+// RemoveApproved takes the server at the normalized address off the approved
+// list.
+type RemoveApproved struct {
+	Seq     uint32 `json:"seq"`
+	Address string `json:"address"`
+}
+
 // ListingRequest is an open listing request as techies see it.
 type ListingRequest struct {
 	Address     string    `json:"address"`
@@ -244,7 +276,7 @@ type ListingRequest struct {
 }
 
 // MaxListingRequests bounds the open listing requests of one computer, and
-// MaxApprovedServers its approved list.
+// MaxApprovedServers the approved list of a server.
 const (
 	MaxListingRequests = 5
 	MaxApprovedServers = 100
@@ -277,6 +309,8 @@ type Presence struct {
 	Computers []ComputerInfo `json:"computers"` // all registered computers, online or not
 	Techies   []TechieInfo   `json:"techies"`   // all techies, online or not
 	Customers []CustomerInfo `json:"customers,omitempty"`
+	// Approved are the servers approved for the computers (PLAN.md 12).
+	Approved []ApprovedServer `json:"approved_servers,omitempty"`
 }
 
 // CustomerInfo is one customer: a group of computers (PLAN.md 13).
@@ -299,8 +333,6 @@ type ComputerInfo struct {
 	LastSeen      time.Time    `json:"last_seen"`
 	Request       *RequestInfo `json:"request,omitempty"`         // request of a Connect, nil if none
 	InSessionWith string       `json:"in_session_with,omitempty"` // techie name while a session runs
-	// Approved are the servers approved for this computer (PLAN.md 12).
-	Approved []ApprovedServer `json:"approved,omitempty"`
 	// Listings are its open requests to approve another server.
 	Listings []ListingRequest `json:"listings,omitempty"`
 	// Customer is the id of its customer, empty for none (PLAN.md 13).
@@ -588,6 +620,10 @@ func typeOf(m any) (MsgType, error) {
 		return MsgListingRefused, nil
 	case *DecideListing, DecideListing:
 		return MsgDecideListing, nil
+	case *AddApproved, AddApproved:
+		return MsgAddApproved, nil
+	case *RemoveApproved, RemoveApproved:
+		return MsgRemoveApproved, nil
 	case *AddCustomer, AddCustomer:
 		return MsgAddCustomer, nil
 	case *RenameCustomer, RenameCustomer:
@@ -649,6 +685,10 @@ func newOf(t MsgType) (any, error) {
 		return &ListingRefused{}, nil
 	case MsgDecideListing:
 		return &DecideListing{}, nil
+	case MsgAddApproved:
+		return &AddApproved{}, nil
+	case MsgRemoveApproved:
+		return &RemoveApproved{}, nil
 	case MsgAddCustomer:
 		return &AddCustomer{}, nil
 	case MsgRenameCustomer:

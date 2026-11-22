@@ -80,6 +80,8 @@ type backend interface {
 	CancelRequest(requestID string)
 	SetServerInfo(info control.ServerInfo) <-chan error
 	DecideListing(computer string, req control.ListingRequest, allow bool) <-chan error
+	AddApproved(address, fingerprint, name string) <-chan error
+	RemoveApproved(address string) <-chan error
 }
 
 type tabKind int
@@ -163,13 +165,14 @@ type App struct {
 	keysOpen      string    // techie whose keys show on the Techies tab
 	confirmTKey   string    // techie key fingerprint awaiting Remove confirmation
 
-	tabs       []*tab
-	active     int          // index into tabs
-	reg        registerPage // Register computer
-	regTechie  registerPage // Register techie
-	infoForm   infoForm     // who runs the server, on the Server tab
-	confirmKey bool         // the Remove key confirmation on the damaged key screen
-	pageHeight map[tabKind]float32
+	tabs         []*tab
+	active       int          // index into tabs
+	reg          registerPage // Register computer
+	regTechie    registerPage // Register techie
+	infoForm     infoForm     // who runs the server, on the Server tab
+	approvedForm approvedForm // the other servers computers may use, on the Server tab
+	confirmKey   bool         // the Remove key confirmation on the damaged key screen
+	pageHeight   map[tabKind]float32
 
 	lastInput     time.Time
 	fps           int32
@@ -210,6 +213,7 @@ func New(opts Options) *App {
 	a.regTechie.init(true)
 	a.cust.init()
 	a.infoForm.init()
+	a.approvedForm.init()
 	a.cs.init()
 	if opts.Demo {
 		a.demo = newDemo(a)
@@ -663,6 +667,8 @@ func (a *App) leaveTab(i int) {
 	case tabTechies:
 		a.confirmRemove = ""
 		a.keysOpen, a.confirmTKey = "", ""
+	case tabServer:
+		a.approvedForm.reset()
 	}
 }
 

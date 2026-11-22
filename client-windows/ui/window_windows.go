@@ -63,6 +63,13 @@ type Window struct {
 	btnConnect   *ui.Button
 	chkProxy     *ui.CheckBox // "Use system proxy settings"
 	lblAddrError *ui.Static
+	// ScreenAddress of a locked PC: the other helpdesks to pick, the last
+	// button being More when there are more than fit, and the way back.
+	btnOthers [app.HelpdeskSlots]*ui.Button
+	others    []app.Helpdesk // what the buttons pick; shorter when the last is More
+	otherPage int
+	lblOther  *ui.Static
+	lnkHome   *ui.SysLink
 	// ScreenKey
 	lblKeyIntro  *ui.Static
 	edtKey       *ui.Edit
@@ -124,11 +131,17 @@ func New(iconID uint16) *Window {
 
 	w.lblHeading = static(i18n.Trans("Connect to a techie"), co.SS_LEFT)
 	w.lblAddrHint = static(i18n.Trans("Type the server address a techie gave you, for example helpbuoy.example.com."), co.SS_LEFT)
+	// Before the address field, so Tab reaches them first.
+	for i := range w.btnOthers {
+		w.btnOthers[i] = button("", co.BS_PUSHBUTTON)
+	}
+	w.lblOther = static("", co.SS_LEFT)
 	w.edtAddr = ui.NewEdit(p, ui.OptsEdit())
 	w.btnConnect = button(i18n.Trans("&Connect"), co.BS_DEFPUSHBUTTON)
 	w.chkProxy = ui.NewCheckBox(p, ui.OptsCheckBox().Text(i18n.Trans("Use system proxy settings")).
 		Size(1, 1).CtrlStyle(co.BS_AUTOCHECKBOX).State(co.BST_CHECKED))
 	w.lblAddrError = static("", co.SS_LEFT)
+	w.lnkHome = link("", 0)
 
 	w.lblKeyIntro = static(i18n.Trans("Paste this key into an email to a techie."), co.SS_LEFT)
 	w.edtKey = ui.NewEdit(p, ui.OptsEdit().CtrlStyle(co.ES_MULTILINE|co.ES_READONLY|co.ES_AUTOVSCROLL))
@@ -160,6 +173,12 @@ func New(iconID uint16) *Window {
 		{w.btnConnect, 334, 105, 102, 28, fontNormal},
 		{w.chkProxy, 24, 140, 412, 22, fontNormal},
 		{w.lblAddrError, 24, 170, 412, 70, fontNormal},
+		{w.btnOthers[0], 24, 94, 412, 26, fontNormal},
+		{w.btnOthers[1], 24, 94, 412, 26, fontNormal},
+		{w.btnOthers[2], 24, 94, 412, 26, fontNormal},
+		{w.btnOthers[3], 24, 94, 412, 26, fontNormal},
+		{w.lblOther, 24, 158, 412, 20, fontNormal},
+		{w.lnkHome, 24, 302, 412, 20, fontNormal},
 
 		{w.lblKeyIntro, 24, 18, 412, 36, fontNormal},
 		{w.edtKey, 24, 56, 412, 62, fontNormal},
@@ -386,19 +405,142 @@ func (w *Window) events() {
 	w.btnCopy.On().BnClicked(func() { w.copyText(w.view.KeyLine, w.btnCopy) })
 	w.btnRemoveKey.On().BnClicked(w.confirmRemoveKey)
 	w.btnContinue.On().BnClicked(func() { w.ctrl.ContinueWarning() })
-	w.lnkChange.On().NmClick(func(_ *win.NMLINK) { w.ctrl.Disconnect() })
+	w.lnkChange.On().NmClick(func(_ *win.NMLINK) { w.ctrl.Leave() })
+	w.lnkHome.On().NmClick(func(_ *win.NMLINK) { w.ctrl.Home() })
+	for i, b := range w.btnOthers {
+		b.On().BnClicked(func() { w.pickOther(i) })
+	}
 	w.lnkUpdate.On().NmClick(func(_ *win.NMLINK) { w.checkForUpdate() })
 	w.btnDisconnect.On().BnClicked(func() {
 		if w.view.InSession {
 			w.ctrl.EndSession()
 		} else {
-			w.ctrl.Disconnect()
+			w.ctrl.Leave()
 		}
 	})
 }
 
 func (w *Window) connect() {
 	w.ctrl.Connect(w.edtAddr.Text())
+}
+
+// pickOther is button i of the other helpdesks: it connects to that
+// helpdesk, or as More shows the next ones.
+func (w *Window) pickOther(i int) {
+	if w.view.Screen != app.ScreenAddress || w.view.Connecting || w.updating != "" {
+		return
+	}
+	if i >= len(w.others) {
+		w.otherPage++
+		w.layoutAddress(w.view)
+		w.btnOthers[0].Focus()
+		return
+	}
+	w.ctrl.Connect(w.others[i].Address)
+}
+
+// leaveText is the text of the button of the waiting screen and of the link
+// of the key screen: what leaving this server means.
+func leaveText(v app.View) string {
+	switch v.Leave {
+	case app.LeaveOther:
+		return i18n.Trans("Other helpdesk...")
+	case app.LeaveCancel:
+		return i18n.Trans("Cancel request")
+	case app.LeaveHome:
+		return i18n.Trans("Back to {0}", v.LockedTo)
+	}
+	return ""
+}
+
+// ellipsize shortens s with "..." until it fits in wd units of font f.
+func (w *Window) ellipsize(f fontKind, s string, wd int) string {
+	if w.textW(f, s) <= wd {
+		return s
+	}
+	rs := []rune(s)
+	for len(rs) > 1 && w.textW(f, string(rs)+"...") > wd {
+		rs = rs[:len(rs)-1]
+	}
+	return strings.TrimRight(string(rs), " ") + "..."
+}
+
+// noAccel makes s the text of a button as it is: a & in a name is not an
+// access key.
+func noAccel(s string) string { return strings.ReplaceAll(s, "&", "&&") }
+
+// linkText makes s the text of a link. Names from a server go in, so what
+// could be markup is left out.
+func linkText(s string) string {
+	return "<a>" + strings.NewReplacer("<", "", ">", "").Replace(s) + "</a>"
+}
+
+// layoutAddress places and shows the controls of the address screen. A
+// locked PC has the other helpdesks to pick above the address field, and
+// the way back to its primary server at the bottom.
+func (w *Window) layoutAddress(v app.View) {
+	locked := v.LockedTo != ""
+	idle := !v.Connecting && w.updating == ""
+	move := func(c ui.Window, y, h int) {
+		it := w.item(c)
+		it.y, it.h = y, h
+		w.place(c)
+	}
+	show(w.lblOther, locked)
+	show(w.lnkHome, locked)
+	if !locked {
+		w.others = nil
+		for _, b := range w.btnOthers {
+			show(b, false)
+		}
+		move(w.lblAddrHint, 58, 42)
+		move(w.edtAddr, 106, 26)
+		move(w.btnConnect, 105, 28)
+		move(w.chkProxy, 140, 22)
+		move(w.lblAddrError, 170, 70)
+		return
+	}
+	shown, more := app.HelpdeskPage(v.Others, w.otherPage)
+	w.others = shown
+	n := len(shown)
+	if more {
+		n++
+	}
+	cols := 1
+	if n > 2 {
+		cols = 2
+	}
+	bw := (contentW - (cols-1)*8) / cols
+	for i, b := range w.btnOthers {
+		show(b, i < n)
+		if i >= n {
+			continue
+		}
+		it := w.item(b)
+		it.x, it.y, it.w = 24+(i%cols)*(bw+8), 94+(i/cols)*30, bw
+		w.place(b)
+		text := i18n.Trans("More...")
+		if i < len(shown) {
+			text = noAccel(w.ellipsize(it.font, shown[i].Label, bw-20))
+		}
+		setText(b, text)
+		b.Hwnd().EnableWindow(idle)
+	}
+	y := 94
+	other := i18n.Trans("Type the address of another helpdesk to ask for it:")
+	if n > 0 {
+		y += (n+cols-1)/cols*30 + 4
+		other = i18n.Trans("Not listed? Type its address to ask for it:")
+	}
+	move(w.lblAddrHint, 56, 36)
+	setText(w.lblOther, other)
+	move(w.lblOther, y, 20)
+	move(w.edtAddr, y+22, 26)
+	move(w.btnConnect, y+21, 28)
+	move(w.chkProxy, y+54, 22)
+	move(w.lblAddrError, y+80, 298-(y+80))
+	setText(w.lnkHome, linkText(w.ellipsize(fontNormal, i18n.Trans("Back to {0}", v.LockedTo), contentW)))
+	w.lnkHome.Hwnd().EnableWindow(idle)
 }
 
 // scale converts 96-DPI units to pixels at the window's DPI.
@@ -556,13 +698,31 @@ func (w *Window) apply(v app.View) {
 	for _, c := range []ui.Window{w.lblHeading, w.lblAddrHint, w.edtAddr, w.btnConnect, w.chkProxy, w.lblAddrError} {
 		show(c, addr)
 	}
-	if addr {
-		hint := i18n.Trans("Type the server address a techie gave you, for example helpbuoy.example.com.")
-		if v.LockedTo != "" {
-			hint = i18n.Trans("This PC gets help through {0}. Other servers can only connect after {0} allowed them.", v.LockedTo)
+	locked := v.LockedTo != ""
+	if !addr {
+		show(w.lblOther, false)
+		show(w.lnkHome, false)
+		for _, b := range w.btnOthers {
+			show(b, false)
 		}
+	}
+	if addr {
+		if entered {
+			w.otherPage = 0
+		}
+		w.layoutAddress(v)
+		heading := i18n.Trans("Connect to a techie")
+		hint := i18n.Trans("Type the server address a techie gave you, for example helpbuoy.example.com.")
+		if locked {
+			heading = i18n.Trans("Get help from another helpdesk")
+			hint = i18n.Trans("This PC gets help through {0}. Other servers can only connect after {0} allowed them.", v.LockedTo)
+			if len(v.Others) > 0 {
+				hint = i18n.Trans("{0} allowed these helpdesks:", v.LockedTo)
+			}
+		}
+		setText(w.lblHeading, heading)
 		setText(w.lblAddrHint, hint)
-		if entered && v.Address != "" {
+		if entered && (v.Address != "" || locked) {
 			w.edtAddr.SetText(v.Address)
 		}
 		w.edtAddr.Hwnd().EnableWindow(!v.Connecting && w.updating == "")
@@ -577,11 +737,19 @@ func (w *Window) apply(v app.View) {
 			setText(w.btnConnect, i18n.Trans("Connecting..."))
 			setText(w.lblAddrError, "")
 		} else {
-			setText(w.btnConnect, i18n.Trans("&Connect"))
+			if locked {
+				setText(w.btnConnect, i18n.Trans("Ask"))
+			} else {
+				setText(w.btnConnect, i18n.Trans("&Connect"))
+			}
 			setText(w.lblAddrError, v.Error)
 			if entered || prev.Connecting {
-				w.edtAddr.Focus()
-				w.edtAddr.SetSelection(0, -1)
+				if locked && len(v.Others) > 0 && v.Error == "" {
+					w.btnOthers[0].Focus()
+				} else {
+					w.edtAddr.Focus()
+					w.edtAddr.SetSelection(0, -1)
+				}
 			}
 		}
 	}
@@ -609,6 +777,13 @@ func (w *Window) apply(v app.View) {
 		show(c, key)
 	}
 	show(w.lnkChange, key || warn)
+	if key || warn {
+		change := i18n.Trans("Use a different server address")
+		if t := leaveText(v); t != "" {
+			change = w.ellipsize(fontNormal, t, contentW)
+		}
+		setText(w.lnkChange, linkText(change))
+	}
 	if key {
 		setText(w.edtKey, v.KeyLine)
 		setText(w.lblKeyFp, i18n.Trans("Key fingerprint:\n{0}", v.KeyFingerprint))
@@ -659,6 +834,8 @@ func (w *Window) apply(v app.View) {
 		// session; afterwards it disconnects again.
 		if v.InSession {
 			setText(w.btnDisconnect, i18n.Trans("&End session"))
+		} else if t := leaveText(v); t != "" {
+			setText(w.btnDisconnect, noAccel(w.ellipsize(fontNormal, t, contentW-32)))
 		} else {
 			setText(w.btnDisconnect, i18n.Trans("&Disconnect"))
 		}

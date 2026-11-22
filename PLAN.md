@@ -309,9 +309,9 @@ State directory in the user's data directory, next to the desk app's own data:
 `~/.local/share/helpbuoy-server` on Linux, `~/Library/Application Support/helpbuoy-server` on macOS,
 `%LOCALAPPDATA%\helpbuoy-server` on Windows (override with `--state`). It holds `hostkey_ed25519` (0600) and `state.json` with who runs the server (address,
 company name, phone number, description; 12.4), techies (name, and per key the public key
-and when it was last seen) and registered
-computers (key, `user@machine` name, registered by, registered at, last seen, approved
-servers and open listing requests, 12.3). Computer registrations never expire; they are removed
+and when it was last seen), the approved servers (12.3) and registered
+computers (key, `user@machine` name, registered by, registered at, last seen and open
+listing requests, 12.3). Computer registrations never expire; they are removed
 only by `UnregisterComputer` or `helpbuoy-server computer remove`. They are added by
 `RegisterComputer` or `helpbuoy-server computer add`. Writes are temp file + `fsync` + `rename`.
 Fields in `state.json` that a version doesn't know, at the top level or in a techie or
@@ -362,12 +362,14 @@ Techie commands carry a sequence number and the server answers each with a `Repl
 |---|---|---|
 | `Hello` | server → any | role, server time, limits |
 | `ServerInfo` | server → any | who runs the server: company name, phone number and description (12.4), right after `Hello` and again whenever they change |
-| `ApprovedServers` | server → computer | the servers this server approved for the computer, each an address and host key fingerprint (12.3), after `Hello` or `Registered` and again whenever the list changes |
+| `ApprovedServers` | server → computer | the servers this server approved for its computers, the same list for every computer, each an address, a host key fingerprint and optionally the name a techie gave it (12.3), after `Hello` or `Registered` and again whenever the list changes |
 | `RequestListing` | computer → server | address and host key fingerprint of a server the locked computer wants to use (12.3) |
 | `ListingRefused` | server → computer | a techie refused that request |
 | `DecideListing` | techie → server | computer fingerprint, address, fingerprint and allow or refuse |
+| `AddApproved` | techie → server | address, host key fingerprint and optional name (up to 64 characters) of a server to put on the approved list (12.3) without a computer asking, in place of an older approval for the same address; without a name the address keeps the name it had, and adding a listed server with another name renames it |
+| `RemoveApproved` | techie → server | normalized address of the server to take off the approved list (12.3) |
 | `ComputerHello` | computer → server | app version, current `user@machine` (the registered name comes from the key comment) |
-| `Presence` | server → techies | full snapshot after every change: registered computers (`user@machine`, fingerprint, online, open or taken request with id and time, in session with whom, approved servers and open listing requests) and techies (name, the fingerprint of the key it is online with or else its first key, and every key with whether it is online and when it was last seen) |
+| `Presence` | server → techies | full snapshot after every change: registered computers (`user@machine`, fingerprint, online, open or taken request with id and time, in session with whom and open listing requests), techies (name, the fingerprint of the key it is online with or else its first key, and every key with whether it is online and when it was last seen) and the approved servers of the server |
 | `RegisterComputer` / `UnregisterComputer` | techie → server | public key line or fingerprint (name taken from the key comment, or given when the comment is empty) |
 | `RegisterTechie` | techie → server | public key line and name: adds another techie, like `helpbuoy-server techie add` |
 | `UnregisterTechie` | techie → server | name: removes another techie, like `helpbuoy-server techie remove`; an online techie is disconnected, and a techie cannot remove itself |
@@ -466,7 +468,7 @@ Role caps and timeouts:
   session locally, even if the server misbehaves.
 - **Pending keys** are never shown to anyone.
 - **A locked computer** (12) only connects to its primary server and the servers
-  that server approved for it, and only removing its local files undoes the lock.
+  that server approved for its computers, and only removing its local files undoes the lock.
 - **Unknown servers**: anyone can run a server and give it any company name. The client
   warns in full on the first connection to a new server (6.2), and a locked client only
   reaches the servers its primary server approved (12). Nothing depends on helpbuoy.com.
@@ -654,8 +656,10 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   the field locked while it does; the field can only be edited when that fails or after
   **Disconnect**. Errors are shown inline: name not found, connection refused, timeout, not a
   helpbuoy server. A changed server key brings the user back here with the warning (3.5).
-  On a locked PC (12) the hint above the field says which company the PC gets help
-  through and that other servers need its approval.
+  On a locked PC (12) this screen is where the user picks another helpdesk (12.3): the
+  approved servers as buttons, the field to ask for one that is not listed, and the way back
+  to the primary server. With no approved servers the hint says which company the PC gets
+  help through and that other servers need its approval.
 - Right after the first successful connection to a new server, before the key screen, the
   client shows a full warning: "Only continue if someone you know personally gave you this
   address. If someone called you unexpectedly, hang up: banks, Microsoft and the police never
@@ -663,7 +667,8 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   key, so people who run their own server see it once per computer.
 - If the server doesn't know this PC's key yet: server fingerprint, the public key line in a
   read-only box, the key fingerprint, a big **Copy key** button, and "Paste this key into an
-  email to a techie." A link goes back to the address field.
+  email to a techie." A link goes back to the address field; on a locked PC it reads as
+  the button of the waiting screen does (12.3).
 - Waits for `Registered`, then saves the configuration and moves to the waiting screen.
 
 ### 6.3 Waiting screen
@@ -674,7 +679,9 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   Esc.", Allow and Cancel.
 - **Disconnect** is always available while connected: it leaves the server and goes back to
   the address screen. During a session the same button reads **End session** and ends only
-  the session (like Esc); afterwards it is Disconnect again.
+  the session (like Esc); afterwards it is Disconnect again. On a locked PC (12.3) the
+  button reads **Other helpdesk...** on the primary server, **Back to Example Inc** on
+  another server and **Cancel request** while the primary server decides about a request.
 - The computer never shows the name techies registered or renamed it under: the server does
   not send it to the computer (neither `Hello` nor `Registered` carry it). That name is only
   for techies.
@@ -808,7 +815,10 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
 - Once online the tabs appear. The **Server** tab shows the connection status, the address,
   the server fingerprint to read out to users, and who runs the server (12.4): **Company
   name** and **Phone number** (required) and the optional **Description**, with **Save** (any techie can change them; every computer and techie gets
-  the new values right away). While the company name or phone number is missing, the
+  the new values right away), and the **Other servers** the computers of this server may
+  also use (12.3): each with its name, address, fingerprint and **Remove** (confirmed with a second
+  click), and the fields **Name users pick it by** (optional), **Address of the other server**
+  and its **server fingerprint** with **Add server**. While the company name or phone number is missing, the
   Computers tab and Add computer say that computers can't connect yet, with a button to the
   Server tab, and **Disconnect** (not while sessions are open; back to the connect screen,
   stopping the local server). There is no settings tab: nothing else is configurable.
@@ -898,7 +908,7 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   `user@machine` the computer reports differs from the name, it shows as a muted second line.
 - **Remove** a computer (unregister) from the list.
 - **Server requests** (12.3): a locked computer that asks for another server shows the
-  requested address and fingerprint below its row, with **Allow** and **Refuse**.
+  requested address and fingerprint below its row, with **Allow for all computers** and **Refuse**.
 - **Customers** (13.4): the computers show per customer in collapsible sections,
   with a filter field, **Move** next to Rename and Remove, and **Add customer** next to Add
   computer.
@@ -1038,12 +1048,13 @@ clients.
   refuse it).
 - Lock (12): a server without a company name and phone number refuses computers but
   lets techies and pending keys in, so a techie not added yet can see their key line; listing requests are stored, deduplicated, shown in
-  `Presence` and decided only by techies; allowing sends the new approved list (also after a
+  `Presence` and decided only by techies; allowing sends every computer the new approved list (also after a
   reconnect), refusing sends `ListingRefused`; the client asks the lock question once per
   connection and only once registered, locks to the pinned host key, asks the primary server
   about a server that is not approved after seeing only its host key, connects there once
-  approved, pins approved servers by the approved fingerprint, starts on the primary server
-  when its last address is no longer allowed, and keeps the lock through Remove key.
+  approved, pins approved servers by the approved fingerprint, always starts on the primary
+  server, picks an approved server and goes back without typing, skips the first connection
+  warning, and keeps the lock through Remove key.
 - Customers (13): a state without customers loads with every computer in "No
   customer"; removing a customer keeps its computers; the techies an older version limited
   to customers are refused, and their list is kept in `state.json`.
@@ -1119,7 +1130,8 @@ The client warns on the first connection to a new server but never stops the use
 is exactly what the helpdesk scam relies on.
 
 A client registered on a server is asked to **lock** to it. A locked client only connects to
-that server, its **primary server**, and to the servers the primary server approved for it.
+that server, its **primary server**, and to the servers the primary server approved. An approval is for
+the whole server: it holds for every computer of the primary server.
 There is no setting for this on the server: every server asks.
 
 ### 12.1 The lock question
@@ -1161,8 +1173,8 @@ at the keyboard can still delete the files, and a machine-wide policy set by an 
 
 ### 12.3 Connecting to another server
 
-The client's screens stay the same. A locked user who needs help from someone else (a
-software vendor, a second helpdesk) types the address as they do today. If that server is not
+A locked user who needs help from someone else (a software vendor, a second helpdesk)
+picks that server when it is approved (see below), and otherwise types its address. If that server is not
 on the approved list, the connection becomes a request to the primary server to list it: the
 client connects only far enough to see the host key, does nothing else with that server, and
 then connects to the primary server, as a computer of its own, and sends it the address and
@@ -1170,15 +1182,50 @@ host key fingerprint (`RequestListing`). It keeps that connection while it waits
 the request again after a reconnect.
 
 In the desk app the request shows in the computer list, on the row of that computer, with the
-requested address and fingerprint and **Allow** and **Refuse** (7.2). A techie approves it,
-and the approval is permanent: the server stays on that computer's approved list (one entry
-per address, so approving a new key for an address replaces the old one), and the client
+requested address and fingerprint and **Allow for all computers** and **Refuse** (7.2). A techie approves it,
+and the approval is for the whole server, not for that computer or its
+customer (13), and stays until a techie removes it: the server goes on the one approved list of the primary server (one entry
+per address, so approving a new key for an address replaces the old one), every computer
+gets the new list, and the same request of other computers is closed with it. The other
+server still only reaches the computers that are registered on it, and every session still
+needs the user's approval (3.5). The client
 continues its normal flow with it, pinning that server's host key by the approved
 fingerprint. Until a techie decides, the client shows its waiting for a techie screen (6.3)
 for the primary server, with "Waiting until Example Inc allows server:port." Refusing sends
 the client back to the address screen with "Example Inc did not allow this PC to connect to
 server:port." A scam caller then has to get a techie at the primary server to approve their
 server.
+
+Techies also manage the approved list themselves, on the Server tab of the desk app (7.1),
+so a helpdesk can allow the server of a software vendor before any user asks for it. Adding
+takes the address and the host key fingerprint of the other server, which the other
+helpdesk reads from its own Server tab; the server is never approved by its address alone.
+A techie can also give it a name, for example "Vendor Inc", which is what users pick it by;
+the name comes from the primary server because that is who vouches for the list, not from
+what the other server says about itself. A server approved through a request has no name
+and shows its address until a techie adds it again with one.
+Removing takes it off the list for every computer. A computer learns the new list from its
+primary server, at once when it is connected there and otherwise the next time it connects
+there, which is at the latest the next time the client starts. A computer that stays
+connected to a removed server keeps using it until then.
+
+**A locked PC has a home.** It always starts on its primary server, never on the server it
+used last, and it never types an address to reach a server that is approved:
+
+- On the waiting screen of the primary server the button reads **Other helpdesk...**
+  instead of Disconnect. It opens the address screen, which on a locked PC is headed "Get
+  help from another helpdesk": a button per approved server (its name, else its address),
+  below them "Not listed? Type its address to ask for it:" with the address field and
+  **Ask**, and the link **Back to Example Inc**. Four buttons fit; with more approved
+  servers the fourth is **More...**, which shows the next three.
+- A button connects to that server at once. The first connection warning (6.2) is not
+  shown on a locked PC: it only reaches its primary server and what that one approved.
+- On another server the button of the waiting screen, and the link of the key screen when
+  that server does not know the PC yet, read **Back to Example Inc** and connect to the
+  primary server.
+- While the primary server decides about a request the button reads **Cancel request**.
+
+An unlocked PC keeps Disconnect and the free address field.
 
 Only the primary server's changed host key can be trusted by the user (3.5); an approved
 server whose key changed needs a new approval. Remove key, shown only when the key is
@@ -1206,8 +1253,10 @@ connected to.
   now (`client-windows/config`, `client-windows/app`). Once locked, the primary stays when
   the user connects to an approved server. Older clients skip the new messages (3.3), so
   they keep working but never lock.
-- The server stores the company name, phone number, address and description, and per
-  computer its approved servers and open requests, in `state.json` (3.2). No extra file.
+- The server stores the company name, phone number, address and description, its approved
+  servers, and per computer the open requests, in `state.json` (3.2). No extra file. A
+  `state.json` of a version that kept the approved servers per computer is read by moving
+  them to the list of the server, where the first approval of an address wins.
 - A machine-wide policy set by an administrator (issue #16) is not built yet; when it is,
   it always wins over a lock the user agreed to.
 
@@ -1234,7 +1283,7 @@ within one helpdesk. The two combine: every virtual host has its own customers.
 ### 13.1 What stays the same
 
 - Computers don't learn their customer. The lock (12), the waiting screen (12.4),
-  `ServerInfo` and the approved servers stay per server and per computer, so the clients
+  `ServerInfo` and the approved servers stay per server, so the clients
   don't change.
 - A server that never adds a customer looks and behaves as it does today.
 - Computers are registered by techies only (3.1), and pending keys are still never shown,
@@ -1306,5 +1355,3 @@ they should get in. The desk app and the CLI no longer offer a limit, and messag
 - Whether a customer can have its own phone number or description on the waiting screen
   (12.4), for customers with their own support line or opening hours. Computers would then
   learn something from their customer, through a `ServerInfo` per computer.
-- Whether a server can be approved (12.3) for a whole customer at once, for example a
-  software vendor that every PC of one customer may use, next to the approval per computer.

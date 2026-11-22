@@ -209,3 +209,114 @@ func TestProxyCheckbox(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestOtherHelpdesks: the address screen of a locked PC has a button per
+// approved helpdesk, More when there are more than fit, and the way back;
+// the waiting screen's button says where leaving goes.
+func TestOtherHelpdesks(t *testing.T) {
+	host := newFakeHost()
+	w := NewWithHost(host, nil)
+	var loads atomic.Int32
+	ctrl := newController(t, &loads, w)
+	done := make(chan error, 1)
+	go func() { done <- w.Run(ctrl) }()
+	waitFor(t, "the controller to start", func() bool { return loads.Load() > 0 })
+
+	shot := func(name string) {
+		dir := os.Getenv("HELPBUOY_UI_PNG_DIR")
+		if dir == "" {
+			return
+		}
+		w.do(func() { w.redraw() })
+		host.mu.Lock()
+		defer host.mu.Unlock()
+		if f, err := os.Create(dir + "/" + name + ".png"); err == nil {
+			png.Encode(f, host.frame)
+			f.Close()
+		}
+	}
+	others := func(n int) []app.Helpdesk {
+		var hs []app.Helpdesk
+		for i := range n {
+			hs = append(hs, app.Helpdesk{Label: "Vendor " + string(rune('A'+i)) + " Inc", Address: "vendor" + string(rune('a'+i)) + ".example.com:443"})
+		}
+		return hs
+	}
+	texts := func() (out []string) {
+		w.do(func() {
+			for _, b := range w.btnOthers {
+				if b.visible {
+					out = append(out, b.text)
+				}
+			}
+		})
+		return out
+	}
+	locked := app.View{Screen: app.ScreenAddress, LockedTo: "Example Inc", UseSystemProxy: true}
+
+	// Unlocked: no buttons, no way back.
+	w.do(func() { w.apply(app.View{Screen: app.ScreenAddress, UseSystemProxy: true}) })
+	if got := texts(); len(got) != 0 || w.lnkHome.visible || w.lblOther.visible {
+		t.Fatalf("unlocked address screen shows %v", got)
+	}
+
+	v := locked
+	w.do(func() { w.apply(v) })
+	if got := texts(); len(got) != 0 || !w.lnkHome.visible || w.btnConnect.text != "Ask" {
+		t.Fatalf("no other helpdesks: %v, button %q", got, w.btnConnect.text)
+	}
+	shot("others-0")
+
+	v.Others = others(2)
+	v.Error = "Example Inc did not allow this PC to connect to scam.example.com:443."
+	w.do(func() { w.apply(v) })
+	if got := texts(); len(got) != 2 || got[0] != "Vendor A Inc" {
+		t.Fatalf("two helpdesks: %v", got)
+	}
+	shot("others-2")
+
+	v.Others, v.Error = others(8), ""
+	w.do(func() { w.apply(app.View{Screen: app.ScreenMain}); w.apply(v) })
+	if got := texts(); len(got) != 4 || got[2] != "Vendor C Inc" || got[3] != "More..." {
+		t.Fatalf("eight helpdesks: %v", got)
+	}
+	shot("others-8")
+	// The focus is on the first helpdesk; More is the fourth button.
+	w.do(func() { w.pickOther(3) })
+	if got := texts(); len(got) != 4 || got[0] != "Vendor D Inc" {
+		t.Fatalf("second page: %v", got)
+	}
+	w.do(func() { w.pickOther(3) })
+	if got := texts(); len(got) != 3 || got[0] != "Vendor G Inc" || got[2] != "More..." {
+		t.Fatalf("last page: %v", got)
+	}
+	w.do(func() { w.pickOther(2) })
+	if got := texts(); len(got) != 4 || got[0] != "Vendor A Inc" {
+		t.Fatalf("first page again: %v", got)
+	}
+
+	for leave, want := range map[app.Leave]string{
+		app.LeaveDisconnect: "Disconnect",
+		app.LeaveOther:      "Other helpdesk...",
+		app.LeaveCancel:     "Cancel request",
+		app.LeaveHome:       "Back to Example Inc",
+	} {
+		m := app.View{Screen: app.ScreenMain, Ready: true, KeyComment: "anna@PC", Company: "Vendor Inc", Phone: "+1 234",
+			ServerAddress: "vendor.example.com:443", Instruction: "A techie can now ask to connect.", Leave: leave}
+		if leave != app.LeaveDisconnect {
+			m.LockedTo = "Example Inc"
+		}
+		var got string
+		w.do(func() { w.apply(m); got = w.btnDisconnect.text })
+		if got != want {
+			t.Errorf("leave %d: button %q, want %q", leave, got, want)
+		}
+		if leave == app.LeaveHome {
+			shot("main-home")
+		}
+	}
+	host.events <- CloseEvent{}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}

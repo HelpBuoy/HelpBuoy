@@ -291,6 +291,21 @@ func (c *Conn) DecideListing(computer string, req control.ListingRequest, allow 
 	})
 }
 
+// AddApproved puts the server at address with host key fingerprint on the
+// approved list of the server (PLAN.md 12.3), under an optional name.
+func (c *Conn) AddApproved(address, fingerprint, name string) <-chan error {
+	return c.command(func(seq uint32) any {
+		return &control.AddApproved{Seq: seq, Address: address, Fingerprint: fingerprint, Name: name}
+	})
+}
+
+// RemoveApproved takes the server at address off the approved list.
+func (c *Conn) RemoveApproved(address string) <-chan error {
+	return c.command(func(seq uint32) any {
+		return &control.RemoveApproved{Seq: seq, Address: address}
+	})
+}
+
 // Connect asks the computer with the given fingerprint to allow a session.
 // requestID comes from control.NewRequestID; the session channel that
 // follows when the user allows it carries the same id.

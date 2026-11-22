@@ -231,3 +231,37 @@ func TestUnknownFieldsAreKept(t *testing.T) {
 		t.Error("known field kept as extra")
 	}
 }
+
+// TestApprovedPerComputerIsLifted: the approved servers an older version
+// kept per computer become the approved list of the server, where the first
+// approval of an address wins.
+func TestApprovedPerComputerIsLifted(t *testing.T) {
+	fp := func() string { return auth.Fingerprint(newKey(t)) }
+	v1, v2, w := fp(), fp(), fp()
+	computer := func(name, approved string) string {
+		return `{"public_key":"` + auth.KeyLine(newKey(t), name) + `","name":"` + name +
+			`","registered_by":"alice","registered_at":"2026-01-02T03:04:05Z","tags":[]` + approved + `}`
+	}
+	in := `{"company":"T","phone":"1","techies":[],"computers":[` +
+		computer("anna@PC", `,"approved":[{"address":"vendor.example.com:443","fingerprint":"`+v1+`"}]`) + `,` +
+		computer("bob@PC", `,"approved":[{"address":"vendor.example.com:443","fingerprint":"`+v2+
+			`"},{"address":"other.example.com:443","fingerprint":"`+w+`"}]`) + `,` +
+		computer("carl@PC", "") + `]}`
+	idx, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := idx.State
+	want := []control.ApprovedServer{
+		{Address: "vendor.example.com:443", Fingerprint: v1},
+		{Address: "other.example.com:443", Fingerprint: w},
+	}
+	if len(st.Approved) != 2 || st.Approved[0] != want[0] || st.Approved[1] != want[1] {
+		t.Fatalf("approved %+v, want %+v", st.Approved, want)
+	}
+	for _, c := range st.Computers {
+		if _, ok := c.Extra["approved"]; ok || string(c.Extra["tags"]) != "[]" {
+			t.Errorf("computer %s extra %q", c.Name, c.Extra)
+		}
+	}
+}

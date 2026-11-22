@@ -593,6 +593,78 @@ func TestLockAndApprove(t *testing.T) {
 	}
 }
 
+// TestLockedHelpdesks: a locked PC picks an approved server without typing
+// and without the first connection warning, goes back to its primary server
+// from there, and always starts on its primary server.
+func TestLockedHelpdesks(t *testing.T) {
+	e, c, ui := lockedEnv(t)
+	other := startServer(t)
+	vendor := control.ApprovedServer{Address: other.Addr(), Fingerprint: ssh.FingerprintSHA256(other.HostKey()), Name: "Vendor\nInc"}
+	e.server.SetApproved(e.fp(), []control.ApprovedServer{vendor})
+	waitFor(t, func() bool { l := e.config().Lock; return l != nil && len(l.Approved) == 1 })
+	if v := c.View(); v.Screen != ScreenMain || v.Leave != LeaveOther || len(v.Others) != 0 {
+		t.Fatalf("at home %+v", v)
+	}
+
+	c.Leave()
+	v := ui.wait(t, "other helpdesks", screenIs(ScreenAddress))
+	if v.Address != "" || len(v.Others) != 1 || v.Others[0] != (Helpdesk{Label: "Vendor Inc", Address: other.Addr()}) {
+		t.Fatalf("other helpdesks %+v", v)
+	}
+	waitOffline(t, e.server, e.fp())
+
+	// The other server does not know this PC yet: the key screen, without
+	// the warning, and the way back.
+	c.Connect(v.Others[0].Address)
+	v = ui.wait(t, "key screen of the other server", func(v View) bool { return v.Screen == ScreenKey || v.Screen == ScreenWarning })
+	if v.Screen != ScreenKey || v.Leave != LeaveHome || v.LockedTo != "Example Inc" {
+		t.Fatalf("on the other server %+v", v)
+	}
+	c.Leave()
+	v = ui.wait(t, "home", readyMain)
+	if v.ServerAddress != e.server.Addr() || v.Leave != LeaveOther {
+		t.Fatalf("back home %+v", v)
+	}
+
+	// The last address was the other server; the PC still starts at home.
+	c.Close()
+	if last := e.config().LastAddress; last != e.server.Addr() && last != other.Addr() {
+		t.Fatalf("last address %q", last)
+	}
+	cfg := e.config()
+	cfg.LastAddress = other.Addr()
+	config.Store{Dir: e.dir}.Save(cfg)
+	c2, ui2 := e.controller()
+	c2.Start()
+	if v := ui2.wait(t, "home after a restart", readyMain); v.ServerAddress != e.server.Addr() {
+		t.Fatalf("started on %q", v.ServerAddress)
+	}
+	// Back to the primary server also works from the screen to pick one.
+	c2.Leave()
+	ui2.wait(t, "other helpdesks", screenIs(ScreenAddress))
+	c2.Home()
+	ui2.wait(t, "home", readyMain)
+}
+
+// TestLockCancelRequest: while the primary server decides, the button
+// cancels the request.
+func TestLockCancelRequest(t *testing.T) {
+	e, c, ui := lockedEnv(t)
+	other := startServer(t)
+	c.Leave()
+	ui.wait(t, "other helpdesks", screenIs(ScreenAddress))
+	c.Connect(other.Addr())
+	v := ui.wait(t, "waiting for approval", func(v View) bool { return readyMain(v) && v.Notice != "" })
+	if v.Leave != LeaveCancel {
+		t.Fatalf("leave %v", v.Leave)
+	}
+	c.Leave()
+	if v := ui.wait(t, "other helpdesks", screenIs(ScreenAddress)); v.Address != "" || v.Error != "" {
+		t.Fatalf("after cancel %+v", v)
+	}
+	waitOffline(t, e.server, e.fp())
+}
+
 // TestLockRefused: a refused server brings the user back to the address
 // screen with the reason.
 func TestLockRefused(t *testing.T) {

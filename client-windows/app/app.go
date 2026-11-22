@@ -50,6 +50,49 @@ func (s Screen) String() string {
 // works. Tests shorten it.
 var warnDelay = 5 * time.Second
 
+// Leave is what the button of the waiting screen and the link of the key
+// screen do on this connection (PLAN.md 12.3). Controller.Leave does it.
+type Leave int
+
+// Leave kinds.
+const (
+	// LeaveDisconnect is Disconnect: an unlocked PC goes back to the
+	// address screen.
+	LeaveDisconnect Leave = iota
+	// LeaveOther is "Other helpdesk": a locked PC on its primary server
+	// goes to the other helpdesks it can pick.
+	LeaveOther
+	// LeaveCancel is "Cancel request": a locked PC stops waiting for its
+	// primary server to allow another server.
+	LeaveCancel
+	// LeaveHome is "Back to Example Inc": a locked PC on another server goes
+	// back to its primary server.
+	LeaveHome
+)
+
+// Helpdesk is another server a locked PC can pick: one its primary server
+// approved.
+type Helpdesk struct {
+	Label   string // its name, else its address
+	Address string // what Connect takes
+}
+
+// HelpdeskSlots is how many buttons the window has for other helpdesks.
+const HelpdeskSlots = 4
+
+// HelpdeskPage returns the helpdesks the window shows on page (from 0) of
+// others, and whether its last button is "More" instead, which goes to the
+// next page; the page after the last one is the first again.
+func HelpdeskPage(others []Helpdesk, page int) (shown []Helpdesk, more bool) {
+	if len(others) <= HelpdeskSlots {
+		return others, false
+	}
+	per := HelpdeskSlots - 1
+	pages := (len(others) + per - 1) / per
+	from := (page % pages) * per
+	return others[from:min(from+per, len(others))], true
+}
+
 // View is everything the window shows.
 type View struct {
 	Screen Screen
@@ -60,9 +103,14 @@ type View struct {
 	// Error is an inline error (ScreenAddress, ScreenKeyError).
 	Error string
 	// LockedTo is the company (or address) of the primary server this PC is
-	// locked to, "" while unlocked. The address screen says that other
-	// servers need its approval.
+	// locked to, "" while unlocked. The address screen of a locked PC is
+	// where the user picks another helpdesk: one of Others, or an address
+	// to ask the primary server for, with a way back to the primary server.
 	LockedTo string
+	// Others are the other helpdesks a locked PC can pick (ScreenAddress).
+	Others []Helpdesk
+	// Leave says what leaving this server means (ScreenMain, ScreenKey).
+	Leave Leave
 	// UseSystemProxy is the "Use system proxy settings" box under the
 	// address field.
 	UseSystemProxy bool
@@ -257,6 +305,27 @@ func (c *Controller) viewLocked() View {
 		if v.LockedTo == "" {
 			v.LockedTo = l.Address
 		}
+		switch {
+		case c.listing != nil:
+			v.Leave = LeaveCancel
+		case c.addr != l.Address:
+			v.Leave = LeaveHome
+		default:
+			v.Leave = LeaveOther
+		}
+		if v.Screen == ScreenAddress {
+			// The field of a locked PC is for another helpdesk.
+			if v.Address == l.Address {
+				v.Address = ""
+			}
+			for _, a := range l.Approved {
+				h := Helpdesk{Label: servertext.Clean(a.Name), Address: a.Address}
+				if h.Label == "" {
+					h.Label = a.Address
+				}
+				v.Others = append(v.Others, h)
+			}
+		}
 	}
 	return v
 }
@@ -281,7 +350,7 @@ func (c *Controller) screenLocked() View {
 		v.Screen = ScreenAddress
 		v.Address = c.addr
 		v.Connecting = c.probing
-		if v.Address == "" {
+		if v.Address == "" && c.cfg.Lock == nil {
 			v.Address = c.storedAddrLocked()
 		}
 		switch {
@@ -337,9 +406,9 @@ func describeKeyError(err error) string {
 }
 
 // Start loads the key and the configuration and connects to the last server
-// address. Without a stored address it shows the empty address screen;
-// the address can only be changed once connecting failed or after
-// Disconnect.
+// address, or for a locked PC to its primary server. Without a stored
+// address it shows the empty address screen; the address can only be
+// changed once connecting failed or after Disconnect.
 func (c *Controller) Start() {
 	c.mu.Lock()
 	c.loadLocked()
@@ -352,17 +421,16 @@ func (c *Controller) Start() {
 
 // storedAddrLocked is the address to connect to or prefill: the last one
 // that reached a server, else the server this PC is registered on. A locked
-// PC only goes back to an address it may still use, else to its primary
-// server.
+// PC always starts on its primary server, which also brings its approved
+// list up to date (PLAN.md 12.3).
 func (c *Controller) storedAddrLocked() string {
-	addr := c.cfg.LastAddress
-	if addr == "" {
-		addr = c.cfg.ServerAddress
-	}
-	if l := c.cfg.Lock; l != nil && !c.allowedLocked(addr) {
+	if l := c.cfg.Lock; l != nil {
 		return l.Address
 	}
-	return addr
+	if c.cfg.LastAddress != "" {
+		return c.cfg.LastAddress
+	}
+	return c.cfg.ServerAddress
 }
 
 // allowedLocked reports whether this PC may connect to addr: always while
@@ -555,7 +623,7 @@ func (c *Controller) probeLocked(addr string) {
 			c.lastErr = err
 		default:
 			s := control.ApprovedServer{Address: addr, Fingerprint: ssh.FingerprintSHA256(key)}
-			if slices.Contains(c.cfg.Lock.Approved, s) {
+			if slices.ContainsFunc(c.cfg.Lock.Approved, func(a control.ApprovedServer) bool { return a.Is(s.Address, s.Fingerprint) }) {
 				c.startComputerLocked(addr, nil)
 			} else {
 				c.startComputerLocked(c.cfg.Lock.Address, &s)
@@ -578,8 +646,43 @@ func (c *Controller) Disconnect() {
 	c.log.Info("disconnected by the user", "server", c.addr)
 	c.stopComputerLocked()
 	c.lastErr = nil
+	if c.cfg.Lock != nil {
+		c.addr, c.inputErr = "", "" // the field is for another helpdesk
+	}
 	c.mu.Unlock()
 	c.update()
+}
+
+// Home connects a locked PC to its primary server: "Back to Example Inc" on
+// another server and on the screen to pick one.
+func (c *Controller) Home() {
+	c.mu.Lock()
+	l := c.cfg.Lock
+	if c.closed || l == nil || c.key == nil || c.keyErr != nil {
+		c.mu.Unlock()
+		return
+	}
+	c.log.Info("back to the primary server", "server", l.Address)
+	c.inputErr = ""
+	c.startComputerLocked(l.Address, nil)
+	c.mu.Unlock()
+	c.update()
+}
+
+// Leave is the button of the waiting screen outside a session and the link
+// of the key screen: what View.Leave says. Only a locked PC on another
+// server goes straight back to its primary server; everything else goes to
+// the address screen, which on a locked PC is where to pick a helpdesk.
+func (c *Controller) Leave() {
+	c.mu.Lock()
+	l := c.cfg.Lock
+	home := l != nil && c.computer != nil && c.listing == nil && c.addr != l.Address
+	c.mu.Unlock()
+	if home {
+		c.Home()
+		return
+	}
+	c.Disconnect()
 }
 
 // EndSession is the End session button shown during a session: it ends
@@ -627,9 +730,10 @@ func (c *Controller) mayTrustLocked() bool {
 }
 
 // warnedLocked reports whether the first connection warning was accepted for
-// the server key with fingerprint fp.
+// the server key with fingerprint fp. A locked PC is not warned: it only
+// reaches its primary server and the servers that one approved.
 func (c *Controller) warnedLocked(fp string) bool {
-	return fp == "" || slices.Contains(c.cfg.WarnedServers, fp)
+	return fp == "" || c.cfg.Lock != nil || slices.Contains(c.cfg.WarnedServers, fp)
 }
 
 // countDown renders once a second while the first connection warning that
@@ -838,7 +942,7 @@ func (h handler) ApprovedServers(servers []control.ApprovedServer) {
 	}
 	save := !slices.Equal(l.Approved, servers)
 	l.Approved = slices.Clone(servers)
-	if q := c.listing; q != nil && slices.Contains(servers, *q) {
+	if q := c.listing; q != nil && slices.ContainsFunc(servers, func(a control.ApprovedServer) bool { return a.Is(q.Address, q.Fingerprint) }) {
 		c.log.Info("the primary server approved the server", "server", q.Address, "fingerprint", q.Fingerprint)
 		c.startComputerLocked(q.Address, nil)
 	}

@@ -103,6 +103,8 @@ func newDemo(a *App) *demo {
 	jan.Customer, piet.Customer, kees.Customer = "demo-acme", "demo-acme", "demo-acme"
 	oma.Customer, anna.Customer = "demo-family", "demo-family"
 	p.Computers = []control.ComputerInfo{piet, oma, anna, lisa, jan, kees}
+	vendor, _, _ := newKey("")
+	p.Approved = []control.ApprovedServer{{Address: "support.vendor-example.com:443", Fingerprint: ssh.FingerprintSHA256(vendor.PublicKey()), Name: "Vendor Inc"}}
 	a.setPresence(p)
 	a.setServerInfo(&control.ServerInfo{Company: "Example Inc", Phone: "+1 234 567 890", Description: "Monday to Friday 9:00 to 17:00"})
 	return d
@@ -202,6 +204,25 @@ func (d *demo) SetServerInfo(info control.ServerInfo) <-chan error {
 	return done(nil)
 }
 
+// AddApproved adds a demo approved server locally.
+func (d *demo) AddApproved(address, fingerprint, name string) <-chan error {
+	addr, err := serveraddr.Parse(address)
+	if err != nil {
+		return done(err)
+	}
+	p := d.a.presence
+	p.Approved = append(slices.DeleteFunc(p.Approved, func(s control.ApprovedServer) bool { return s.Address == addr.String() }),
+		control.ApprovedServer{Address: addr.String(), Fingerprint: fingerprint, Name: name})
+	return done(nil)
+}
+
+// RemoveApproved removes a demo approved server locally.
+func (d *demo) RemoveApproved(address string) <-chan error {
+	p := d.a.presence
+	p.Approved = slices.DeleteFunc(p.Approved, func(s control.ApprovedServer) bool { return s.Address == address })
+	return done(nil)
+}
+
 // DecideListing allows or refuses a demo listing request locally.
 func (d *demo) DecideListing(fp string, req control.ListingRequest, allow bool) <-chan error {
 	p := d.a.presence
@@ -214,7 +235,7 @@ func (d *demo) DecideListing(fp string, req control.ListingRequest, allow bool) 
 			if l.Address == req.Address && l.Fingerprint == req.Fingerprint {
 				c.Listings = append(c.Listings[:j:j], c.Listings[j+1:]...)
 				if allow {
-					c.Approved = append(c.Approved, control.ApprovedServer{Address: l.Address, Fingerprint: l.Fingerprint})
+					p.Approved = append(p.Approved, control.ApprovedServer{Address: l.Address, Fingerprint: l.Fingerprint})
 				}
 				return done(nil)
 			}

@@ -104,6 +104,7 @@ func (a *App) setServerInfo(info *control.ServerInfo) {
 	}
 	if info == nil {
 		f.result, f.failed = "", false
+		a.approvedForm.reset()
 	}
 	a.info = info
 }
@@ -213,7 +214,8 @@ func label(c *ui.Context, text string, x, y float32) float32 {
 }
 
 // drawServer is the Server tab: the connection status, the address (for the
-// server inside this app, the addresses to give out) and the fingerprint to read out to users, and Disconnect.
+// server inside this app, the addresses to give out) and the fingerprint to read out to users, who runs
+// the server, the other servers its computers may use, and Disconnect.
 func (a *App) drawServer(x, y, w float32) float32 {
 	c := a.ui
 	c.Text(ui.Bold, ui.SizeHeading, i18n.Trans("Server"), x, y, ui.ColText)
@@ -243,6 +245,9 @@ func (a *App) drawServer(x, y, w float32) float32 {
 	y += 34
 	if a.info != nil {
 		y = a.drawServerInfo(x, y, w)
+	}
+	if a.presence != nil {
+		y = a.drawApproved(x, y, w)
 	}
 	if a.demo == nil {
 		busy := a.sessionCount() > 0

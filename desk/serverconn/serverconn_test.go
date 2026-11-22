@@ -187,6 +187,18 @@ func (r *fakeServer) control(sc *ssh.ServerConn, ch ssh.Channel, role control.Ro
 				continue
 			}
 			cc.Send(&control.Reply{Seq: m.Seq})
+		case *control.AddApproved:
+			if m.Address != "other.example.com" || m.Fingerprint != "SHA256:o" || m.Name != "Other Inc" {
+				cc.Send(&control.Reply{Seq: m.Seq, Error: "bad approved server"})
+				continue
+			}
+			cc.Send(&control.Reply{Seq: m.Seq})
+		case *control.RemoveApproved:
+			if m.Address != "other.example.com:443" {
+				cc.Send(&control.Reply{Seq: m.Seq, Error: "bad approved server"})
+				continue
+			}
+			cc.Send(&control.Reply{Seq: m.Seq})
 		case *control.Connect:
 			if m.Fingerprint != "SHA256:a" {
 				cc.Send(&control.Reply{Seq: m.Seq, Error: "computer is not online"})
@@ -289,6 +301,12 @@ func TestOnlinePresenceCommandsAndSession(t *testing.T) {
 	if err := waitResult(t, c.DecideListing("SHA256:a", req, true)); err != nil {
 		t.Errorf("decide listing: %v", err)
 	}
+	if err := waitResult(t, c.AddApproved("other.example.com", "SHA256:o", "Other Inc")); err != nil {
+		t.Errorf("add approved: %v", err)
+	}
+	if err := waitResult(t, c.RemoveApproved("other.example.com:443")); err != nil {
+		t.Errorf("remove approved: %v", err)
+	}
 	if err := waitResult(t, c.Connect("SHA256:nope", "r0")); err == nil {
 		t.Error("connect to an offline computer succeeded")
 	}
@@ -326,6 +344,10 @@ func TestOnlinePresenceCommandsAndSession(t *testing.T) {
 			}
 		case *control.DecideListing:
 			s = m.Seq
+		case *control.AddApproved:
+			s = m.Seq
+		case *control.RemoveApproved:
+			s = m.Seq
 		case *control.Connect:
 			s = m.Seq
 		}
@@ -334,7 +356,7 @@ func TestOnlinePresenceCommandsAndSession(t *testing.T) {
 		}
 		seqs[s] = true
 	}
-	if len(got) != 7 {
+	if len(got) != 9 {
 		t.Errorf("server received %d commands", len(got))
 	}
 

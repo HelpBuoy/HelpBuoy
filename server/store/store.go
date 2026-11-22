@@ -79,9 +79,8 @@ type Computer struct {
 	RegisteredBy string    `json:"registered_by"`
 	RegisteredAt time.Time `json:"registered_at"`
 	LastSeen     time.Time `json:"last_seen,omitzero"`
-	// Approved are the servers this server approved for the computer, and
-	// Listings its open requests to approve one (PLAN.md 12.3).
-	Approved []control.ApprovedServer `json:"approved,omitempty"`
+	// Listings are the computer's open requests to approve another server
+	// (PLAN.md 12.3).
 	Listings []control.ListingRequest `json:"listings,omitempty"`
 	// Customer is the id of the computer's customer, empty for none.
 	Customer string `json:"customer,omitempty"`
@@ -97,6 +96,9 @@ type State struct {
 	Techies     []Techie   `json:"techies"`
 	Computers   []Computer `json:"computers"`
 	Customers   []Customer `json:"customers,omitempty"`
+	// Approved are the servers this server approved for all its computers
+	// (PLAN.md 12.3), one per address.
+	Approved []control.ApprovedServer `json:"approved_servers,omitempty"`
 	// MaxSessions is how many sessions the server allows at the same time,
 	// counted from the moment a techie asks to connect; 0 is no limit. Only
 	// the admin sets it (helpbuoy-server limit), never a techie, so a host can
@@ -176,6 +178,14 @@ func NewIndex(st *State) (*Index, error) {
 		}
 		idx.hfps = append(idx.hfps, fps)
 	}
+	for _, a := range st.Approved {
+		if err := checkServer(a.Address, a.Fingerprint); err != nil {
+			return nil, fmt.Errorf("approved server: %w", err)
+		}
+		if n, err := cleanLine("name", a.Name, control.MaxApprovedName); err != nil || n != a.Name {
+			return nil, fmt.Errorf("approved server %s: bad name %q", a.Address, a.Name)
+		}
+	}
 	for i, c := range st.Computers {
 		k, _, err := auth.ParseKey(c.PublicKey)
 		if err != nil {
@@ -190,11 +200,6 @@ func NewIndex(st *State) (*Index, error) {
 		}
 		if _, ok := idx.customers[c.Customer]; c.Customer != "" && !ok {
 			return nil, fmt.Errorf("computer %q: no customer with id %q", c.Name, c.Customer)
-		}
-		for _, a := range c.Approved {
-			if err := checkServer(a.Address, a.Fingerprint); err != nil {
-				return nil, fmt.Errorf("computer %q: approved server: %w", c.Name, err)
-			}
 		}
 		for _, l := range c.Listings {
 			if err := checkServer(l.Address, l.Fingerprint); err != nil {
@@ -248,8 +253,8 @@ func (x *Index) Customer(id string) (Customer, bool) {
 // Clone returns a deep copy.
 func (st *State) Clone() *State {
 	// Extra maps are shared: they are never changed, only replaced.
-	// The Approved and Listings slices of computers are shared too: they
-	// are replaced, never changed in place.
+	// The Approved slice and the Listings slices of computers are shared
+	// too: they are replaced, never changed in place.
 	n := *st
 	n.Techies, n.Computers = slices.Clone(st.Techies), slices.Clone(st.Computers)
 	for i := range n.Techies {
@@ -515,7 +520,7 @@ func (st *State) RequestListing(fp, addr, serverFP string, at time.Time) (Listin
 		return 0, fmt.Errorf("no computer with fingerprint %s", fp)
 	}
 	c := &st.Computers[i]
-	if slices.Contains(c.Approved, control.ApprovedServer{Address: addr, Fingerprint: serverFP}) {
+	if st.approved(addr, serverFP) {
 		return ListingApproved, nil
 	}
 	if slices.ContainsFunc(c.Listings, func(l control.ListingRequest) bool {
@@ -531,9 +536,10 @@ func (st *State) RequestListing(fp, addr, serverFP string, at time.Time) (Listin
 }
 
 // DecideListing closes the open request of computer fp for the server at
-// addr with fingerprint serverFP. Allowing puts the server on the
-// computer's approved list, in place of an older approval for the same
-// address. It returns the computer's name.
+// addr with fingerprint serverFP. Allowing puts the server on the approved
+// list, which holds for all computers, in place of an older approval for
+// the same address; the same request of other computers is closed with it.
+// It returns the computer's name.
 func (st *State) DecideListing(fp, addr, serverFP string, allow bool) (string, error) {
 	i := slices.IndexFunc(st.Computers, func(c Computer) bool { return sameKey(c.PublicKey, fp) })
 	if i < 0 {
@@ -548,13 +554,75 @@ func (st *State) DecideListing(fp, addr, serverFP string, allow bool) (string, e
 	}
 	c.Listings = slices.Delete(slices.Clone(c.Listings), j, j+1)
 	if allow {
-		approved := slices.DeleteFunc(slices.Clone(c.Approved), func(a control.ApprovedServer) bool { return a.Address == addr })
-		if len(approved) >= control.MaxApprovedServers {
-			return "", fmt.Errorf("too many approved servers (max %d)", control.MaxApprovedServers)
+		if err := st.approve(addr, serverFP, ""); err != nil {
+			return "", err
 		}
-		c.Approved = append(approved, control.ApprovedServer{Address: addr, Fingerprint: serverFP})
 	}
 	return c.Name, nil
+}
+
+// approved reports whether the server at addr with fingerprint serverFP is
+// on the approved list.
+func (st *State) approved(addr, serverFP string) bool {
+	return slices.ContainsFunc(st.Approved, func(a control.ApprovedServer) bool { return a.Is(addr, serverFP) })
+}
+
+// approve puts the server at addr with fingerprint serverFP on the approved
+// list, in place of an older approval for the same address, and closes the
+// open requests for it. Without a name it keeps the name the address had.
+func (st *State) approve(addr, serverFP, name string) error {
+	if old := slices.IndexFunc(st.Approved, func(a control.ApprovedServer) bool { return a.Address == addr }); old >= 0 && name == "" {
+		name = st.Approved[old].Name
+	}
+	approved := slices.DeleteFunc(slices.Clone(st.Approved), func(a control.ApprovedServer) bool { return a.Address == addr })
+	if len(approved) >= control.MaxApprovedServers {
+		return fmt.Errorf("too many approved servers (max %d)", control.MaxApprovedServers)
+	}
+	st.Approved = append(approved, control.ApprovedServer{Address: addr, Fingerprint: serverFP, Name: name})
+	same := func(l control.ListingRequest) bool { return l.Address == addr && l.Fingerprint == serverFP }
+	for k := range st.Computers {
+		o := &st.Computers[k]
+		if slices.ContainsFunc(o.Listings, same) {
+			o.Listings = slices.DeleteFunc(slices.Clone(o.Listings), same)
+		}
+	}
+	return nil
+}
+
+// AddApproved puts the server at addr with host key fingerprint serverFP on
+// the approved list without a computer asking for it, in place of an older
+// approval for the same address. The name is optional; adding a server that
+// is on the list with another name renames it. It returns the normalized
+// address.
+func (st *State) AddApproved(addr, serverFP, name string) (string, error) {
+	a, err := serveraddr.Parse(strings.TrimSpace(addr))
+	if err != nil {
+		return "", err
+	}
+	addr, serverFP = a.String(), strings.TrimSpace(serverFP)
+	if err := checkServer(addr, serverFP); err != nil {
+		return "", err
+	}
+	name, err = cleanLine("name", name, control.MaxApprovedName)
+	if err != nil {
+		return "", err
+	}
+	if slices.ContainsFunc(st.Approved, func(a control.ApprovedServer) bool {
+		return a.Is(addr, serverFP) && (name == "" || name == a.Name)
+	}) {
+		return "", fmt.Errorf("the server %s is already approved", addr)
+	}
+	return addr, st.approve(addr, serverFP, name)
+}
+
+// RemoveApproved takes the server at addr off the approved list.
+func (st *State) RemoveApproved(addr string) error {
+	approved := slices.DeleteFunc(slices.Clone(st.Approved), func(a control.ApprovedServer) bool { return a.Address == addr })
+	if len(approved) == len(st.Approved) {
+		return fmt.Errorf("no approved server at %s", addr)
+	}
+	st.Approved = approved
+	return nil
 }
 
 // cleanLine trims s and checks it like a name, but allows it to be empty.

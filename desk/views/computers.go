@@ -530,11 +530,12 @@ func listingKey(fp string, l control.ListingRequest) string {
 }
 
 // drawListings draws the open listing requests of a computer, from y down,
-// in width w: the other server it asks to use, with Allow and Refuse. It
-// reports whether a button was clicked.
+// in width w: the other server it asks to use, with Allow and Refuse.
+// Allowing holds for all computers of the server. It reports whether a
+// button was clicked.
 func (a *App) drawListings(ci control.ComputerInfo, x, y, w float32) bool {
 	c := a.ui
-	allowL, refuseL := i18n.Trans("Allow"), i18n.Trans("Refuse")
+	allowL, refuseL := i18n.Trans("Allow for all computers"), i18n.Trans("Refuse")
 	wAllow, wRefuse := a.btnW(allowL, 70), a.btnW(refuseL, 70)
 	clicked := false
 	for i, l := range ci.Listings {
