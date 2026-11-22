@@ -425,8 +425,11 @@ out. A key counts as proven only after its signature has been verified in the SS
 The HTTP layer comes first: request headers within 10 s and at most 16 KiB, only the
 WebSocket upgrade on `/helpbuoy` with the `helpbuoy-ssh` subprotocol. The source IP for these
 limits is the peer of the HTTP connection, or the client in `X-Forwarded-For` when that peer
-is a trusted proxy. The limits apply per virtual host; process-wide limits across virtual
-hosts are not there yet.
+is a trusted proxy. The limits apply per virtual host; the server has no process-wide limits
+across virtual hosts. On relay.helpbuoy.com the proxy caps the connections instead: Apache
+has a maximum number of client workers, and every connection holds one, so that is the most
+connections the server gets for all virtual hosts together. It does not tell virtual hosts or
+source IPs apart.
 
 Role caps and timeouts:
 - Per techie: max 20 concurrent sessions. Per computer: exactly one session at a time, enforced by the server and again by the computer.
