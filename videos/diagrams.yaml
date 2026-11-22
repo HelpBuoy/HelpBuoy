@@ -112,12 +112,12 @@ nodes:
       es-es: "Servidor"
       it-it: "Server"
     sub:
-      en-us: "managed"
-      nl-nl: "beheerd"
-      de-de: "verwaltet"
-      fr-fr: "géré"
-      es-es: "gestionado"
-      it-it: "gestito"
+      en-us: "we can run it for you"
+      nl-nl: "kunnen wij beheren"
+      de-de: "können wir betreiben"
+      fr-fr: "nous pouvons le gérer"
+      es-es: "podemos gestionarlo"
+      it-it: "possiamo gestirlo noi"
 
 # Arrows with a "via" go outside the apps (email, phone, chat). They are drawn
 # dashed in this colour, whoever sends them.

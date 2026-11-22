@@ -15,7 +15,7 @@ scenes:
     steps:
       - say: "Commençons par voir qui est qui. À gauche se trouve l'utilisateur, avec l'appli sur son ordinateur."
       - say: "À droite se trouve le technicien, qui utilise l'appli desk pour aider l'utilisateur."
-      - say: "Et au milieu, il y a le serveur, que nous gérons, donc personne n'a rien à installer."
+      - say: "Et au milieu, il y a le serveur, que nous pouvons gérer pour vous, donc vous n'avez rien à installer."
       - arrows:
           - { label: "se connecte" }
           - { label: "se connecte" }

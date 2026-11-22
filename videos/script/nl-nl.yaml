@@ -15,7 +15,7 @@ scenes:
     steps:
       - say: "We beginnen met wie wie is. Links zie je de gebruiker, met de app op de computer."
       - say: "Rechts zie je de techie, die de desk-app gebruikt om de gebruiker te helpen."
-      - say: "En in het midden staat de server, die wij beheren, zodat niemand zelf iets hoeft in te stellen."
+      - say: "En in het midden staat de server, die wij voor je kunnen beheren, zodat je zelf niets hoeft in te stellen."
       - arrows:
           - { label: "verbindt" }
           - { label: "verbindt" }

@@ -15,7 +15,7 @@ scenes:
     steps:
       - say: "Empecemos por ver quién es quién. A la izquierda está el usuario, con la app en su equipo."
       - say: "A la derecha está el técnico, que usa la app desk para ayudar al usuario."
-      - say: "Y en el centro está el servidor, del que nos encargamos nosotros, así que nadie tiene que configurar nada."
+      - say: "Y en el centro está el servidor, del que podemos encargarnos nosotros, así que no tienes que configurar nada."
       - arrows:
           - { label: "se conecta" }
           - { label: "se conecta" }

@@ -13,7 +13,7 @@ You write or change the narration and structure of the HelpBuoy instruction
 video. The video explains how HelpBuoy works for two people: the **user**
 who needs help (the HelpBuoy client on their computer) and the **techie**
 who helps (the HelpBuoy Desk app). Everything goes through **the server**,
-which is managed for them. The video itself never names the brand (see
+which we can run for the techie (optional; they can also run their own). The video itself never names the brand (see
 Style).
 
 Your output is one or more complete YAML files that pass
@@ -67,7 +67,7 @@ Do not invent other flows, features or guarantees.
 
 - No server setup or administration: no commands, no installation, no
   `helpbuoy-server`, no Desk built-in server. The server is "the HelpBuoy
-  server", managed for you.
+  server", which we can run for the techie. Say "can", it is optional.
 - How a techie gets access to the server is not covered.
 
 ## Style

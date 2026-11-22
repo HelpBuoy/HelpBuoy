@@ -21,7 +21,7 @@ scenes:
       - highlight: [techie, desk]
         say: "On the right is the techie, who uses the desk app to help the user."
       - highlight: [server]
-        say: "And in the middle is the server, which we run, so there's nothing anyone needs to set up."
+        say: "And in the middle is the server, which we can run for you, so there's nothing you need to set up."
       - arrows:
           - { from: client, to: server, label: "connects" }
           - { from: desk, to: server, label: "connects" }

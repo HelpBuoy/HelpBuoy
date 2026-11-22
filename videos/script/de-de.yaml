@@ -15,7 +15,7 @@ scenes:
     steps:
       - say: "Beginnen wir damit, wer wer ist. Links sehen Sie den Benutzer, mit der App auf seinem Computer."
       - say: "Rechts sehen Sie den Techniker, der dem Benutzer mit der Desk-App hilft."
-      - say: "Und in der Mitte steht der Server, den wir betreiben, sodass niemand selbst etwas einrichten muss."
+      - say: "Und in der Mitte steht der Server, den wir für Sie betreiben können, sodass Sie selbst nichts einrichten müssen."
       - arrows:
           - { label: "verbindet" }
           - { label: "verbindet" }
