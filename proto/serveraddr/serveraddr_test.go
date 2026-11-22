@@ -51,6 +51,7 @@ func TestParseInvalid(t *testing.T) {
 		"server.example.com/acme_1",
 		"server.example.com/-acme",
 		"server.example.com/acme.",
+		"server.example.com/helpbuoy",
 		"server.example.com/acme.example.com",
 		"server.example.com:/acme",
 		"/acme",

@@ -2,7 +2,7 @@
 // helpbuoy-server over a WebSocket over HTTPS: the apps open
 // wss://host:port/helpbuoy and run SSH inside it, one binary WebSocket
 // message per write. One virtual host of a server that has them is at
-// wss://host:port/helpbuoy/name.
+// wss://host:port/name, the address users type.
 //
 // A server can also run in ssh mode: plain SSH without the WebSocket and TLS
 // (direct connect). Dial tries HTTPS first and falls back to direct connect
@@ -38,8 +38,8 @@ import (
 	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
 )
 
-// Path is the URL path the server accepts the WebSocket on. A virtual host
-// is one level below it: Path + "/" + its name.
+// Path is the URL path a server without virtual hosts accepts the WebSocket
+// on. A virtual host has its own path instead: "/" + its name.
 const Path = "/helpbuoy"
 
 // Subprotocol is the WebSocket subprotocol both ends require, so that an
@@ -76,7 +76,7 @@ func URL(addr string) (string, error) {
 	}
 	u := url.URL{Scheme: "wss", Host: net.JoinHostPort(host, port), Path: Path}
 	if vhost != "" {
-		u.Path += "/" + vhost
+		u.Path = "/" + vhost
 	}
 	if port == "443" {
 		u.Host = host

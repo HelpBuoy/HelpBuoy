@@ -44,9 +44,10 @@ func Split(addr string) (hostport, vhost string) {
 
 // ValidVhost reports whether name can name a virtual host: 1 to 63
 // lower-case letters, digits and hyphens, not starting or ending with a
-// hyphen.
+// hyphen. The name is the path of the virtual host, so "helpbuoy", the path
+// of a server without virtual hosts, is not one.
 func ValidVhost(name string) bool {
-	return name == strings.ToLower(name) && !strings.Contains(name, ".") && validHostname(name)
+	return name != "helpbuoy" && name == strings.ToLower(name) && !strings.Contains(name, ".") && validHostname(name)
 }
 
 // Parse accepts "host", "host:port", "[v6]", "[v6]:port" and a bare IPv6

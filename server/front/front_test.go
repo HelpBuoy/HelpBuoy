@@ -130,13 +130,17 @@ func TestVirtualHosts(t *testing.T) {
 		t.Error("removed virtual host accepted")
 	}
 
+	// Without the upgrade, as from a browser or a check: a short text for a
+	// virtual host that is there.
 	for path, want := range map[string]int{
-		"/":               http.StatusOK,
-		"/helpbuoy":       http.StatusNotFound,
-		"/helpbuoy/":      http.StatusNotFound,
-		"/helpbuoy/other": http.StatusNotFound,
-		"/helpbuoyacme":   http.StatusNotFound,
-		"/acme":           http.StatusNotFound,
+		"/":              http.StatusOK,
+		"/acme":          http.StatusOK,
+		"/acme/":         http.StatusNotFound,
+		"/acme/helpbuoy": http.StatusNotFound,
+		"/helpbuoy":      http.StatusNotFound,
+		"/helpbuoy/acme": http.StatusNotFound,
+		"/other":         http.StatusNotFound,
+		"/beta":          http.StatusNotFound, // removed
 	} {
 		rec := httptest.NewRecorder()
 		f.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
@@ -150,14 +154,16 @@ func TestVirtualHosts(t *testing.T) {
 func TestNoVirtualHosts(t *testing.T) {
 	f := New(transport.AddrOf("127.0.0.1:1"), nil)
 	f.Listener()
-	rec := httptest.NewRecorder()
-	f.ServeHTTP(rec, httptest.NewRequest("GET", "/helpbuoy/acme", nil))
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("/helpbuoy/acme answered %d", rec.Code)
-	}
-	rec = httptest.NewRecorder()
-	f.ServeHTTP(rec, httptest.NewRequest("GET", "/helpbuoy", nil))
-	if rec.Code == http.StatusNotFound {
-		t.Error("/helpbuoy not found")
+	for path, want := range map[string]int{
+		"/":              http.StatusOK,
+		"/helpbuoy":      http.StatusOK,
+		"/acme":          http.StatusNotFound,
+		"/helpbuoy/acme": http.StatusNotFound,
+	} {
+		rec := httptest.NewRecorder()
+		f.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		if rec.Code != want {
+			t.Errorf("%s answered %d, want %d", path, rec.Code, want)
+		}
 	}
 }

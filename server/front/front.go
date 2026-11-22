@@ -1,6 +1,6 @@
 // Package front is the HTTP side of helpbuoy-server: it accepts the apps'
 // WebSocket connections (proto/transport), picks the virtual host from the
-// path (/helpbuoy/name), takes the client address from X-Forwarded-For when
+// path (/name), takes the client address from X-Forwarded-For when
 // the request comes from a trusted reverse proxy, and hands the connection
 // to that virtual host's SSH server through a net.Listener.
 package front
@@ -50,8 +50,7 @@ func (f *Front) Listener() net.Listener {
 	return f.any
 }
 
-// AddHost returns the listener for one virtual host, served on
-// transport.Path + "/" + name.
+// AddHost returns the listener for one virtual host, served on "/" + name.
 func (f *Front) AddHost(name string) net.Listener {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -72,35 +71,30 @@ func (f *Front) RemoveHost(name string) {
 	}
 }
 
-// ServeHTTP answers the WebSocket upgrade on transport.Path, or on
-// transport.Path/name with virtual hosts, and a short text on / (for health
-// checks of a proxy or load balancer).
+// ServeHTTP answers the WebSocket upgrade on transport.Path, or with
+// virtual hosts on /name, and a short text on / (for health checks of a
+// proxy or load balancer) and for a browser that opens the address of a
+// server.
 func (f *Front) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/" {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintln(w, "HelpBuoy server. Enter this address in the HelpBuoy app.")
-		return
-	}
-	name, ok := strings.CutPrefix(r.URL.Path, transport.Path)
-	if ok && name != "" {
-		name, ok = strings.CutPrefix(name, "/")
-		ok = ok && name != ""
-	}
-	if !ok {
-		http.NotFound(w, r)
-		return
-	}
+	name := strings.TrimPrefix(r.URL.Path, "/")
 	f.mu.Lock()
-	l := f.any
-	if name != "" {
-		l = f.hosts[name]
+	l := f.hosts[name]
+	if f.any != nil {
+		l = nil
+		if r.URL.Path == transport.Path {
+			l = f.any
+		}
 	}
 	f.mu.Unlock()
-	if l == nil {
+	switch {
+	case l == nil && r.URL.Path != "/":
 		http.Error(w, "no HelpBuoy server at "+r.URL.Path, http.StatusNotFound)
-		return
+	case l == nil || !strings.EqualFold(r.Header.Get("Upgrade"), "websocket"):
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		fmt.Fprintln(w, "HelpBuoy server. Enter this address in the HelpBuoy app.")
+	default:
+		l.Hand(w, r, ClientAddr(r, f.trusted))
 	}
-	l.Hand(w, r, ClientAddr(r, f.trusted))
 }
 
 // ClientAddr returns the client's address: the peer of the HTTP connection,

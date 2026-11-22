@@ -87,8 +87,8 @@ Performance target: **as fast as RDP** for normal desktop work (section 5).
   type the host name. There are no per-techie or per-session ports.
 - **Virtual hosts**: `serve --vhosts DIR` serves many helpdesks from one process, one port
   and one host name, for managed hosting (relay.helpbuoy.com). Users type
-  `relay.helpbuoy.com/acme`, and the apps open `wss://relay.helpbuoy.com/helpbuoy/acme`. Every
-  subdirectory of `DIR` with such a name (lower-case letters, digits, hyphens) is a state
+  `relay.helpbuoy.com/acme`, and the apps open `wss://relay.helpbuoy.com/acme`. Every
+  subdirectory of `DIR` with such a name (lower-case letters, digits, hyphens, not `helpbuoy`) is a state
   directory of its own (host key, `state.json`, `server.log`); the path picks it, the host
   name plays no part, and an unknown name is refused. `helpbuoy-server vhost add NAME`
   makes one, deleting its directory removes it, and a running server notices both within a

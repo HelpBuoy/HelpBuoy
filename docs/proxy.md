@@ -4,14 +4,14 @@ The apps connect to `wss://host/helpbuoy` and run SSH inside the WebSocket. With
 
 | Setup | Users type | The apps connect to |
 | --- | --- | --- |
-| One server with virtual hosts | `relay.helpbuoy.example.com/acme` | `wss://relay.helpbuoy.example.com/helpbuoy/acme` |
+| One server with virtual hosts | `relay.helpbuoy.example.com/acme` | `wss://relay.helpbuoy.example.com/acme` |
 | Separate servers | `acme.helpbuoy.example.com` | `wss://acme.helpbuoy.example.com/helpbuoy` |
 
 Users type the address in the app, without a port.
 
 ## What the proxy must do
 
-- Serve HTTPS on port 443 and pass the path `/helpbuoy`, and with virtual hosts everything below it (`/helpbuoy/acme`), on to the server as a WebSocket (HTTP/1.1 with `Upgrade`), without changing the path. Nothing else on the host name needs to reach the server, so the same host name can also serve a website.
+- Serve HTTPS on port 443 and pass the requests on to the server as a WebSocket (HTTP/1.1 with `Upgrade`), without changing the path. A server without virtual hosts only needs the path `/helpbuoy`, so its host name can also serve a website. With virtual hosts every helpdesk has its own path (`/acme`), so give the server a host name of its own and pass everything on.
 - Add `X-Forwarded-For`. The server takes the client address from it for its limits per IP and its logs, but only on connections from a trusted proxy (`--trusted-proxy`, default `127.0.0.1,::1`). Set that flag when the proxy runs on another machine.
 - Allow long idle connections. A computer waiting for a techie keeps its connection open for hours. The apps and the server send a keepalive every 15 seconds, so any timeout above a minute works; the examples use an hour.
 
@@ -19,7 +19,7 @@ Any certificate works for the apps, even a self-signed one, since they identify 
 
 ## Option 1: one server with virtual hosts
 
-The simplest setup for many helpdesks is one `helpbuoy-server` process with virtual hosts, on one host name with one ordinary certificate. The server picks the helpdesk from the path: `relay.helpbuoy.example.com/acme` is the virtual host `acme`. Each virtual host has its own host key, techies, computers and log, and the server refuses names it doesn't know. The host name plays no part in this.
+The simplest setup for many helpdesks is one `helpbuoy-server` process with virtual hosts, on one host name with one ordinary certificate. The server picks the helpdesk from the path: `relay.helpbuoy.example.com/acme` is the virtual host `acme`, and the apps open their WebSocket on exactly that address. A browser that opens it gets a line of text. Each virtual host has its own host key, techies, computers and log, and the server refuses names it doesn't know. The host name plays no part in this.
 
     export HELPBUOY_SERVER_VHOSTS=/var/lib/helpbuoy-server/vhosts
     helpbuoy-server vhost add acme
@@ -27,7 +27,7 @@ The simplest setup for many helpdesks is one `helpbuoy-server` process with virt
     helpbuoy-server techie add --vhost acme alice 'ssh-ed25519 AAAA...'
     helpbuoy-server serve --mode http
 
-Adding a helpdesk later is `vhost add` again; the running server picks it up within a second, and the proxy, DNS and certificate need no change. These configurations also serve a single server without virtual hosts, whose address is just the host name.
+Adding a helpdesk later is `vhost add` again; the running server picks it up within a second, and the proxy, DNS and certificate need no change. A single server without virtual hosts, whose address is just the host name, only needs `/helpbuoy` passed on, as in option 2.
 
 ### nginx
 
@@ -40,8 +40,8 @@ server {
     ssl_certificate     /etc/letsencrypt/live/relay.helpbuoy.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/relay.helpbuoy.example.com/privkey.pem;
 
-    # Also matches /helpbuoy/acme. No URI after the port, so the path is kept.
-    location /helpbuoy {
+    # Every path is a helpdesk. No URI after the port, so the path is kept.
+    location / {
         proxy_pass http://127.0.0.1:5959;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -63,7 +63,7 @@ Apache 2.4.47 or later with `mod_ssl`, `mod_proxy` and `mod_proxy_http`. Unknown
     SSLEngine on
     SSLCertificateFile    /etc/letsencrypt/live/relay.helpbuoy.example.com/fullchain.pem
     SSLCertificateKeyFile /etc/letsencrypt/live/relay.helpbuoy.example.com/privkey.pem
-    ProxyPass /helpbuoy http://127.0.0.1:5959/helpbuoy upgrade=websocket timeout=3600
+    ProxyPass / http://127.0.0.1:5959/ upgrade=websocket timeout=3600
 </VirtualHost>
 ```
 
@@ -81,7 +81,6 @@ frontend https
     bind :443 ssl crt /etc/haproxy/certs/relay.helpbuoy.example.com.pem
     bind :::443 v6only ssl crt /etc/haproxy/certs/relay.helpbuoy.example.com.pem
     option forwardfor
-    http-request return status 404 if !{ path /helpbuoy } !{ path_beg /helpbuoy/ }
     default_backend helpbuoy
 
 backend helpbuoy
@@ -224,11 +223,11 @@ backend beta
 
 The WebSocket upgrade should come back as `101 Switching Protocols`:
 
-    curl -si --http1.1 --max-time 3 https://relay.helpbuoy.example.com/helpbuoy/acme \
+    curl -si --http1.1 --max-time 3 https://relay.helpbuoy.example.com/acme \
         -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
         -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H 'Sec-WebSocket-Protocol: helpbuoy-ssh' | head -1
 
-With separate servers the URL is `https://acme.helpbuoy.example.com/helpbuoy`. A `404` means the proxy doesn't know the host name or the server doesn't know the name after `/helpbuoy/`, a `502` or `503` that the server isn't running on the port the proxy uses. Once an app connects, the `auth ok` lines in the server log (`server.log` in the state directory) should show the app's own address as `ip`, not the proxy's; if they show the proxy's, add the proxy's address to `--trusted-proxy`.
+With separate servers the URL is `https://acme.helpbuoy.example.com/helpbuoy`. A `404` means the proxy doesn't know the host name or the server doesn't know the name, a `502` or `503` that the server isn't running on the port the proxy uses. Once an app connects, the `auth ok` lines in the server log (`server.log` in the state directory) should show the app's own address as `ip`, not the proxy's; if they show the proxy's, add the proxy's address to `--trusted-proxy`.
 
 ## Without a proxy
 

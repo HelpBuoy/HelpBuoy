@@ -16,7 +16,7 @@ A session only carries the screen (computer to techie) and mouse and keyboard in
 
 ## Running the server
 
-The apps connect to `wss://host/helpbuoy` and run SSH inside the WebSocket. An address typed without a port means 443. The pinned SSH host key identifies the server, not the TLS certificate, so the apps accept any certificate, including a self-signed one or that of a proxy that inspects TLS.
+The apps connect to `wss://host/helpbuoy`, or to `wss://host/name` for a virtual host, and run SSH inside the WebSocket. An address typed without a port means 443. The pinned SSH host key identifies the server, not the TLS certificate, so the apps accept any certificate, including a self-signed one or that of a proxy that inspects TLS.
 
 The server runs in one of three modes, chosen with `--mode`:
 
@@ -34,7 +34,7 @@ Without a reverse proxy, `helpbuoy-server serve --mode https` serves HTTPS itsel
 
 ### Virtual hosts
 
-`helpbuoy-server serve --vhosts DIR` serves many helpdesks on one host name, address and port, each on its own path: users type `relay.helpbuoy.example.com/acme` or `relay.helpbuoy.example.com/beta` in the app. Every subdirectory of `DIR` with such a name (lower-case letters, digits and hyphens) is a normal state directory, with its own host key, techies, computers, company details and log. Techies of one virtual host never see the computers of another, and an address with an unknown name or without a name is refused. The host name plays no part, so adding a helpdesk needs no DNS, certificate or proxy change (see [docs/proxy.md](docs/proxy.md)):
+`helpbuoy-server serve --vhosts DIR` serves many helpdesks on one host name, address and port, each on its own path: users type `relay.helpbuoy.example.com/acme` or `relay.helpbuoy.example.com/beta` in the app, which opens its WebSocket on that same address. Every subdirectory of `DIR` with such a name (lower-case letters, digits and hyphens, not `helpbuoy`) is a normal state directory, with its own host key, techies, computers, company details and log. Techies of one virtual host never see the computers of another, and an address with an unknown name or without a name is refused. The host name plays no part, so adding a helpdesk needs no DNS, certificate or proxy change (see [docs/proxy.md](docs/proxy.md)):
 
     helpbuoy-server vhost add acme --vhosts DIR
     helpbuoy-server info --vhost acme --vhosts DIR --company "Acme" --phone "+1 234 567 890"

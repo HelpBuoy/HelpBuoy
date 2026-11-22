@@ -10,6 +10,9 @@ fi
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ]; then
 	# was-enabled defaults to true, so a new installation enables the unit.
 	for unit in helpbuoy-server.service helpbuoy-server-admin.socket; do
+		# Removing the package masks the units (postrm); installing it again
+		# must take that mask off, or the service can't start.
+		deb-systemd-helper unmask "$unit" >/dev/null || true
 		if deb-systemd-helper --quiet was-enabled "$unit"; then
 			deb-systemd-helper enable "$unit" >/dev/null || true
 		else

@@ -78,7 +78,7 @@ func TestValidVhost(t *testing.T) {
 			t.Errorf("%q: %v", name, err)
 		}
 	}
-	for _, name := range []string{"", ".tls", "Acme", "acme.example.com", "acme.", "192.0.2.1", "a:1", "a b", "a/b", "a_b", "-a", "a-", strings.Repeat("a", 64)} {
+	for _, name := range []string{"", ".tls", "helpbuoy", "Acme", "acme.example.com", "acme.", "192.0.2.1", "a:1", "a b", "a/b", "a_b", "-a", "a-", strings.Repeat("a", 64)} {
 		if validVhost(name) == nil {
 			t.Errorf("%q accepted", name)
 		}

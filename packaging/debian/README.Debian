@@ -49,6 +49,8 @@ To host many helpdesks on one host name, each on its own path (in http or
 https mode), set HELPBUOY_SERVER_VHOSTS in /etc/default/helpbuoy-server and
 add them with "sudo helpbuoy-serverctl vhost add acme". Users then type
 helpbuoy.example.com/acme, and the admin commands below take --vhost acme.
+Behind a reverse proxy, pass every path on to the server instead of only
+/helpbuoy, since each helpdesk has a path of its own.
 
 The server refuses computers until it knows who runs it: set the company
 name and phone number, which users waiting for a techie see, with the info

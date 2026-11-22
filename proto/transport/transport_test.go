@@ -18,8 +18,8 @@ func TestURL(t *testing.T) {
 		"192.0.2.1:443":              "wss://192.0.2.1/helpbuoy",
 		"[2001:db8::1]:443":          "wss://[2001:db8::1]/helpbuoy",
 		"[2001:db8::1]:8443":         "wss://[2001:db8::1]:8443/helpbuoy",
-		"relay.example.com:443/acme": "wss://relay.example.com/helpbuoy/acme",
-		"[2001:db8::1]:8443/acme":    "wss://[2001:db8::1]:8443/helpbuoy/acme",
+		"relay.example.com:443/acme": "wss://relay.example.com/acme",
+		"[2001:db8::1]:8443/acme":    "wss://[2001:db8::1]:8443/acme",
 	} {
 		got, err := URL(in)
 		if err != nil || got != want {
