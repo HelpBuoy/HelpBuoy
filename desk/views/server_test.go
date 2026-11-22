@@ -34,28 +34,24 @@ func TestCheckInfo(t *testing.T) {
 }
 
 func TestCheckApproved(t *testing.T) {
-	fp := "SHA256:" + strings.Repeat("A", 43)
 	for _, tc := range []struct {
-		name, label, address, fingerprint string
-		want                              string // normalized address, "" when refused
-		empty                             bool
+		name, label, address string
+		want                 string // normalized address, "" when refused
+		empty                bool
 	}{
-		{"host", " Vendor Inc ", " Vendor.example.com ", " " + fp + " ", "vendor.example.com:443", false},
-		{"port", "", "vendor.example.com:5959", fp, "vendor.example.com:5959", false},
-		{"nothing typed", "", "", "", "", true},
-		{"only a name", "Vendor Inc", "", "", "", true},
-		{"no fingerprint", "", "vendor.example.com", "", "", true},
-		{"bad address", "", "not an address", fp, "", false},
-		{"short fingerprint", "", "vendor.example.com", "SHA256:abc", "", false},
-		{"other hash", "", "vendor.example.com", "MD5:" + strings.Repeat("A", 43), "", false},
-		{"long name", strings.Repeat("x", control.MaxApprovedName+1), "vendor.example.com", fp, "", false},
+		{"host", " Vendor Inc ", " Vendor.example.com ", "vendor.example.com:443", false},
+		{"port", "", "vendor.example.com:5959", "vendor.example.com:5959", false},
+		{"nothing typed", "", "", "", true},
+		{"only a name", "Vendor Inc", "", "", true},
+		{"bad address", "", "not an address", "", false},
+		{"long name", strings.Repeat("x", control.MaxApprovedName+1), "vendor.example.com", "", false},
 	} {
-		s, problem, empty := checkApproved(tc.label, tc.address, tc.fingerprint)
+		s, problem, empty := checkApproved(tc.label, tc.address)
 		if s.Address != tc.want || empty != tc.empty || (problem == "") != (tc.want != "" || tc.empty) {
 			t.Errorf("%s: %+v, problem %q, empty %v", tc.name, s, problem, empty)
 		}
-		if tc.want != "" && (s.Fingerprint != fp || s.Name != strings.TrimSpace(tc.label)) {
-			t.Errorf("%s: fingerprint %q, name %q", tc.name, s.Fingerprint, s.Name)
+		if tc.want != "" && s.Name != strings.TrimSpace(tc.label) {
+			t.Errorf("%s: name %q", tc.name, s.Name)
 		}
 	}
 }

@@ -817,8 +817,8 @@ SSH logins. Shared code in `proto/appkey`, also used by the desk app.
   name** and **Phone number** (required) and the optional **Description**, with **Save** (any techie can change them; every computer and techie gets
   the new values right away), and the **Other servers** the computers of this server may
   also use (12.3): each with its name, address, fingerprint and **Remove** (confirmed with a second
-  click), and the fields **Name users pick it by** (optional), **Address of the other server**
-  and its **server fingerprint** with **Add server**. While the company name or phone number is missing, the
+  click), and the fields **Name users pick it by** (optional) and **Address of the other
+  server** with **Add server**, which looks up the key that server shows and adds it with that. While the company name or phone number is missing, the
   Computers tab and Add computer say that computers can't connect yet, with a button to the
   Server tab, and **Disconnect** (not while sessions are open; back to the connect screen,
   stopping the local server). There is no settings tab: nothing else is configurable.
@@ -1198,8 +1198,14 @@ server.
 
 Techies also manage the approved list themselves, on the Server tab of the desk app (7.1),
 so a helpdesk can allow the server of a software vendor before any user asks for it. Adding
-takes the address and the host key fingerprint of the other server, which the other
-helpdesk reads from its own Server tab; the server is never approved by its address alone.
+takes only the address of the other server: it is trust on first use, like every server
+(3.5). The desk app connects to that address only far enough to see its host key, as a
+locked client does for a request, and sends the server the address with the fingerprint
+it saw (`AddApproved`). So the techie types no fingerprint, the list still holds one
+specific key per address, and every computer pins that same key. The list shows the
+fingerprint, for a techie who wants to compare it with the other helpdesk. A server that
+does not answer can't be added. When the other server later shows another key, the
+computers refuse it until a techie adds the address again, which takes over the new key.
 A techie can also give it a name, for example "Vendor Inc", which is what users pick it by;
 the name comes from the primary server because that is who vouches for the list, not from
 what the other server says about itself. A server approved through a request has no name

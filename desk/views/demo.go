@@ -64,6 +64,13 @@ func newDemo(a *App) *demo {
 	a.status = serverconn.StatusEvent{Status: serverconn.StatusOnline, HostKey: a.hostKey}
 	a.me = "techie"
 	a.backend = d
+	a.probeServer = func(string) (string, error) {
+		k, _, err := newKey("")
+		if err != nil {
+			return "", err
+		}
+		return ssh.FingerprintSHA256(k.PublicKey()), nil
+	}
 
 	now := time.Now()
 	computer := func(name string, online bool) control.ComputerInfo {

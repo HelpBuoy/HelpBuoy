@@ -171,8 +171,11 @@ type App struct {
 	regTechie    registerPage // Register techie
 	infoForm     infoForm     // who runs the server, on the Server tab
 	approvedForm approvedForm // the other servers computers may use, on the Server tab
-	confirmKey   bool         // the Remove key confirmation on the damaged key screen
-	pageHeight   map[tabKind]float32
+	// probeServer looks up the host key fingerprint of another server a
+	// techie adds; nil uses serverconn.ProbeHostKey. The demo has its own.
+	probeServer func(addr string) (string, error)
+	confirmKey  bool // the Remove key confirmation on the damaged key screen
+	pageHeight  map[tabKind]float32
 
 	lastInput     time.Time
 	fps           int32

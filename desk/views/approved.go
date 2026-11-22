@@ -1,27 +1,34 @@
 package views
 
 import (
+	"context"
 	"strings"
 	"time"
 
+	"golang.org/x/crypto/ssh"
+
 	rl "github.com/gen2brain/raylib-go/raylib"
 
+	"github.com/helpbuoy/helpbuoy/desk/serverconn"
 	"github.com/helpbuoy/helpbuoy/desk/ui"
 	"github.com/helpbuoy/helpbuoy/proto/control"
 	"github.com/helpbuoy/helpbuoy/proto/i18n"
 	"github.com/helpbuoy/helpbuoy/proto/serveraddr"
+	"github.com/helpbuoy/helpbuoy/proto/sysproxy"
 )
 
 // approvedForm adds and removes the other servers that the computers of
-// this server may use (PLAN.md 12.3), on the Server tab.
+// this server may use (PLAN.md 12.3), on the Server tab. A server is added
+// by its address: the desk app looks up the host key the server shows at
+// that moment and the computers only accept that key from then on, trust on
+// first use.
 type approvedForm struct {
-	name        ui.Field
-	address     ui.Field
-	fingerprint ui.Field
-	busy        bool
-	result      string
-	failed      bool
-	confirm     string // address of the server awaiting Remove confirmation
+	name    ui.Field
+	address ui.Field
+	busy    bool
+	result  string
+	failed  bool
+	confirm string // address of the server awaiting Remove confirmation
 }
 
 func (f *approvedForm) init() {
@@ -29,38 +36,31 @@ func (f *approvedForm) init() {
 	f.name.Edit.Max = control.MaxApprovedName
 	f.address.Placeholder = i18n.Trans("For example {0}", "help.example.com")
 	f.address.Edit.Max = 255
-	f.fingerprint.Placeholder = "SHA256:…"
-	f.fingerprint.Mono = true
-	f.fingerprint.Edit.Max = 64
 }
 
 // reset empties the form and closes the Remove confirmation.
 func (f *approvedForm) reset() {
 	f.name.Edit.SetText("")
 	f.address.Edit.SetText("")
-	f.fingerprint.Edit.SetText("")
 	f.result, f.failed, f.confirm = "", false, ""
 }
 
-// checkApproved returns the server the techie typed, or why the server
-// would refuse it; empty is true when the address or the fingerprint is
+// checkApproved returns the name and normalized address the techie typed,
+// or why the server would refuse them; empty is true when the address is
 // still empty. The name is optional.
-func checkApproved(name, address, fingerprint string) (s control.ApprovedServer, problem string, empty bool) {
-	name, address, fingerprint = strings.TrimSpace(name), strings.TrimSpace(address), strings.TrimSpace(fingerprint)
+func checkApproved(name, address string) (s control.ApprovedServer, problem string, empty bool) {
+	name, address = strings.TrimSpace(name), strings.TrimSpace(address)
 	if !validLine(name, control.MaxApprovedName) {
 		return s, i18n.Trans("The name can have up to {0} printable characters.", control.MaxApprovedName), false
 	}
-	if address == "" || fingerprint == "" {
+	if address == "" {
 		return s, "", true
 	}
 	addr, err := serveraddr.Parse(address)
 	if err != nil {
 		return s, i18n.Trans("This is not a server address."), false
 	}
-	if !control.ValidFingerprint(fingerprint) {
-		return s, i18n.Trans("A fingerprint is SHA256: followed by 43 characters."), false
-	}
-	return control.ApprovedServer{Address: addr.String(), Fingerprint: fingerprint, Name: name}, "", false
+	return control.ApprovedServer{Address: addr.String(), Name: name}, "", false
 }
 
 // approvedRowH is the height of one server in the list of other servers.
@@ -73,7 +73,7 @@ func (a *App) drawApproved(x, y, w float32) float32 {
 	f := &a.approvedForm
 	c.Text(ui.Bold, ui.SizeBody, i18n.Trans("Other servers"), x, y, ui.ColText)
 	y += 26
-	y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Computers that are locked to this server can also get help through these servers, for example the server of a software vendor. This holds for all computers of this server."), x, y, w, ui.ColMuted)
+	y += c.Paragraph(ui.Regular, ui.SizeSmall, i18n.Trans("Computers that are locked to this server can also get help through these servers, for example the server of a software vendor. This holds for all computers of this server. A server is remembered by the key it shows when you add it."), x, y, w, ui.ColMuted)
 	y += 10
 	fw := min(w, 560)
 	var servers []control.ApprovedServer
@@ -129,7 +129,6 @@ func (a *App) drawApproved(x, y, w float32) float32 {
 	}{
 		{"approved/name", i18n.Trans("Name users pick it by (optional)"), &f.name},
 		{"approved/address", i18n.Trans("Address of the other server"), &f.address},
-		{"approved/fingerprint", i18n.Trans("Its server fingerprint (the other helpdesk finds it on the Server tab)"), &f.fingerprint},
 	} {
 		y = label(c, fl.label, x, y)
 		r := c.TextField(fl.id, rl.NewRectangle(x, y, fw, 40), fl.field)
@@ -140,7 +139,7 @@ func (a *App) drawApproved(x, y, w float32) float32 {
 	if changed {
 		f.result = ""
 	}
-	s, problem, empty := checkApproved(f.name.Edit.String(), f.address.Edit.String(), f.fingerprint.Edit.String())
+	s, problem, empty := checkApproved(f.name.Edit.String(), f.address.Edit.String())
 	if problem != "" {
 		y += c.Paragraph(ui.Regular, ui.SizeSmall, problem, x, y, w, ui.ColError)
 		y += 3
@@ -165,24 +164,54 @@ func (a *App) drawApproved(x, y, w float32) float32 {
 	return y + 12
 }
 
-// addApproved sends AddApproved and empties the fields when it worked.
-// Adding a server that is on the list with another name renames it.
+// addApproved looks up the host key of the server at s.Address and sends
+// AddApproved with it, then empties the fields when it worked. Adding a
+// server that is on the list with another name renames it, and one that
+// shows another key now than when it was added gets the new key.
 func (a *App) addApproved(s control.ApprovedServer) {
 	f := &a.approvedForm
 	if f.busy || a.backend == nil {
 		return
 	}
 	f.busy, f.result, f.confirm = true, "", ""
-	a.run(a.backend.AddApproved(s.Address, s.Fingerprint, s.Name), func(err error) {
-		f.busy = false
-		if err != nil {
-			f.result, f.failed = i18n.Trans("Not added: {0}", err), true
+	backend := a.backend
+	probe := a.probeServer
+	if probe == nil {
+		proxy := sysproxy.Func()
+		if a.cfg.NoSystemProxy {
+			proxy = sysproxy.Off
+		}
+		probe = func(addr string) (string, error) {
+			key, err := serverconn.ProbeHostKey(context.Background(), addr, 0, nil, proxy)
+			if err != nil {
+				return "", err
+			}
+			return ssh.FingerprintSHA256(key), nil
+		}
+	}
+	var fp string
+	found := make(chan error, 1)
+	go func() {
+		var err error
+		fp, err = probe(s.Address)
+		found <- err
+	}()
+	a.run(found, func(err error) {
+		if err != nil || a.backend != backend {
+			f.busy = false
+			f.result, f.failed = i18n.Trans("Not added: no HelpBuoy server answers at {0}.", s.Address), true
 			return
 		}
-		f.name.Edit.SetText("")
-		f.address.Edit.SetText("")
-		f.fingerprint.Edit.SetText("")
-		f.result, f.failed = i18n.Trans("Added {0}.", s.Address), false
+		a.run(backend.AddApproved(s.Address, fp, s.Name), func(err error) {
+			f.busy = false
+			if err != nil {
+				f.result, f.failed = i18n.Trans("Not added: {0}", err), true
+				return
+			}
+			f.name.Edit.SetText("")
+			f.address.Edit.SetText("")
+			f.result, f.failed = i18n.Trans("Added {0}.", s.Address), false
+		})
 	})
 }
 

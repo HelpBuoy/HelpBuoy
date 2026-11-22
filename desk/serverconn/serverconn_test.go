@@ -2,6 +2,7 @@ package serverconn
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
@@ -475,6 +476,32 @@ func TestPinnedKeyAccepted(t *testing.T) {
 		case <-time.After(10 * time.Second):
 			t.Fatal("not online")
 		}
+	}
+}
+
+// TestProbeHostKey: the probe returns the host key without logging in, and
+// fails when nothing answers or it is not a server.
+func TestProbeHostKey(t *testing.T) {
+	r := newFakeServer(t, newSigner(t).PublicKey())
+	key, err := ProbeHostKey(context.Background(), r.addr(), 2*time.Second, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(key.Marshal(), r.hostKey.PublicKey().Marshal()) {
+		t.Error("the probe returned another key than the host key")
+	}
+	r.mu.Lock()
+	n := r.logins
+	r.mu.Unlock()
+	if n != 0 {
+		t.Errorf("the probe logged in %d times", n)
+	}
+
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	addr := ln.Addr().String()
+	ln.Close()
+	if _, err := ProbeHostKey(context.Background(), addr, time.Second, nil, nil); err == nil {
+		t.Error("probing a closed port succeeded")
 	}
 }
 
