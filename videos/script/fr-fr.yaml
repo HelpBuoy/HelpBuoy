@@ -94,7 +94,7 @@ scenes:
         say: "Pendant la session, une image de l'écran est envoyée au technicien."
       - label: "souris et clavier"
         say: "La seule chose qui revient, c'est ce que le technicien fait avec la souris et le clavier. Les fichiers ne sont jamais envoyés."
-      - say: "L'utilisateur peut reprendre le contrôle à tout moment en appuyant sur la touche Échap."
+      - say: "L'utilisateur peut reprendre le contrôle à tout moment en appuyant sur \"Échap\"."
       - say: "Une fois le travail terminé, l'utilisateur ou le technicien met fin à la session."
   flow-summary:
     title: "En bref"

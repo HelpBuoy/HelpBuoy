@@ -94,7 +94,7 @@ scenes:
         say: "Tijdens de sessie wordt een beeld van het scherm naar de techie gestuurd."
       - label: "muis en toetsenbord"
         say: "Het enige wat terugkomt, is wat de techie met de muis en het toetsenbord doet. Bestanden worden nooit verstuurd."
-      - say: "De gebruiker kan op elk moment de controle terugnemen door op de Escape-toets te drukken."
+      - say: "De gebruiker kan op elk moment de controle terugnemen door op \"Escape\" te drukken."
       - say: "Als het werk klaar is, beëindigt de gebruiker of de techie de sessie."
   flow-summary:
     title: "Kort gezegd"

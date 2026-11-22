@@ -96,12 +96,14 @@ and sentences that flow into each other.
 - No one or two word sentences ("Welcome.", "Done."), the voice stresses
   them wrongly. A short sentence is fine when it leads into the next one
   ("Let's start with who is who.").
-- Name what a thing is when you mention it: "click the Connect button",
-  "press the Escape key", never "click Connect" or "press Escape".
+- Name what a thing on the screen is when you mention it: "click the
+  Connect button", never "click Connect".
 - Put the label of a button or menu item between double quotes in `say`,
   exactly as it is on the screen: `click the \"Connect\" button`. The voice
   then stresses the label as a name instead of reading it as part of the
-  sentence. Names of keys ("the Escape key") get no quotes.
+  sentence.
+- A key of the keyboard is quoted too, without the word "key":
+  `by pressing \"Escape\"`, not "the Escape key".
 - Do not squeeze two ideas into one sentence with "which", "where" or
   "by doing". Two plain sentences sound better than one contorted one.
 - Contractions are fine and sound natural ("that's", "doesn't", "it's").
@@ -109,7 +111,8 @@ and sentences that flow into each other.
   step is spoken on its own, so a sentence must not run over into the next
   step.
 - No colons, semicolons, brackets or slashes in `say`; the voice reads
-  them badly. Quotes only around the label of a button or menu item.
+  them badly. Quotes only around the label of a button or menu item, or
+  the name of a key.
 - Describe both people in the third person: "the user" (who needs help)
   and "the techie". Never address the viewer as the person who gets help
   ("you", "your computer"); the viewer may be either of them. Say "the

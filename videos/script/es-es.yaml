@@ -94,7 +94,7 @@ scenes:
         say: "Durante la sesión, se envía al técnico una imagen de la pantalla."
       - label: "ratón y teclado"
         say: "Lo único que vuelve es lo que el técnico hace con el ratón y el teclado. Los archivos nunca se envían."
-      - say: "El usuario puede recuperar el control en cualquier momento pulsando la tecla Escape."
+      - say: "El usuario puede recuperar el control en cualquier momento pulsando \"Escape\"."
       - say: "Cuando termina el trabajo, el usuario o el técnico cierra la sesión."
   flow-summary:
     title: "En resumen"

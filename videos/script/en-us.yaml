@@ -199,7 +199,7 @@ scenes:
         loop: true
         say: "The only thing that comes back is what the techie does with the mouse and the keyboard. The user's files are never sent."
       - highlight: [user]
-        say: "The user can take back control at any moment by pressing the Escape key."
+        say: "The user can take back control at any moment by pressing \"Escape\"."
       - highlight: [user, techie]
         say: "When the work is done, either the user or the techie ends the session."
   - id: flow-summary

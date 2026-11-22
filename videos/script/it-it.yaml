@@ -94,7 +94,7 @@ scenes:
         say: "Durante la sessione, un'immagine dello schermo viene inviata al tecnico."
       - label: "mouse e tastiera"
         say: "L'unica cosa che torna indietro è quello che il tecnico fa con il mouse e la tastiera. I file non vengono mai inviati."
-      - say: "L'utente può riprendere il controllo in qualsiasi momento premendo il tasto Esc."
+      - say: "L'utente può riprendere il controllo in qualsiasi momento premendo \"Esc\"."
       - say: "A lavoro finito, l'utente o il tecnico termina la sessione."
   flow-summary:
     title: "In breve"

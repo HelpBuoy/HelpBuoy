@@ -94,7 +94,7 @@ scenes:
         say: "Während der Sitzung wird ein Bild des Bildschirms an den Techniker gesendet."
       - label: "Maus und Tastatur"
         say: "Zurück kommt nur, was der Techniker mit Maus und Tastatur tut. Dateien werden nie gesendet."
-      - say: "Der Benutzer kann sich jederzeit die Kontrolle zurückholen, indem er die Escape-Taste drückt."
+      - say: "Der Benutzer kann sich jederzeit die Kontrolle zurückholen, indem er \"Escape\" drückt."
       - say: "Wenn alles erledigt ist, beendet der Benutzer oder der Techniker die Sitzung."
   flow-summary:
     title: "Kurz gesagt"
