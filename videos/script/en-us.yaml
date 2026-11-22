@@ -10,7 +10,7 @@ scenes:
     type: title
     text: "Remote help"
     note: "step by step"
-    say: "Welcome to this short video. We'll show you step by step how a techie can help a user with their computer from a distance."
+    say: "Welcome to this short video. We'll show you step by step how a user can get help from a techie with their computer from a distance."
   - id: flow-parts
     type: flow
     title: "Who is who"

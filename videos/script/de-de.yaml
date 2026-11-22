@@ -9,7 +9,7 @@ scenes:
   intro:
     text: "Hilfe aus der Ferne"
     note: "Schritt für Schritt"
-    say: "Willkommen zu diesem kurzen Video. Wir zeigen Schritt für Schritt, wie ein Techniker einem Benutzer aus der Ferne am Computer helfen kann."
+    say: "Willkommen zu diesem kurzen Video. Wir zeigen Schritt für Schritt, wie ein Benutzer aus der Ferne Hilfe von einem Techniker am Computer bekommen kann."
   flow-parts:
     title: "Wer ist wer"
     steps:

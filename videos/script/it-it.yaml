@@ -9,7 +9,7 @@ scenes:
   intro:
     text: "Aiuto a distanza"
     note: "passo dopo passo"
-    say: "Benvenuto in questo breve video. Ti mostriamo passo dopo passo come un tecnico può aiutare a distanza un utente con il suo computer."
+    say: "Benvenuto in questo breve video. Ti mostriamo passo dopo passo come un utente può ricevere aiuto a distanza da un tecnico con il suo computer."
   flow-parts:
     title: "Chi è chi"
     steps:

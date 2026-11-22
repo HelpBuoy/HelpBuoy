@@ -9,7 +9,7 @@ scenes:
   intro:
     text: "Hulp op afstand"
     note: "stap voor stap"
-    say: "Welkom bij deze korte video. We laten stap voor stap zien hoe een techie een gebruiker op afstand kan helpen met de computer."
+    say: "Welkom bij deze korte video. We laten stap voor stap zien hoe een gebruiker op afstand hulp kan krijgen van een techie met de computer."
   flow-parts:
     title: "Wie is wie"
     steps:
