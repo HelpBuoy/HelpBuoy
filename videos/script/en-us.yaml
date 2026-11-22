@@ -40,7 +40,7 @@ scenes:
     screenshot: { app: helpbuoy, name: 1-connect }
     highlight: { x: 552, y: 440, w: 840, h: 70 }
     zoom: highlight
-    say: "The user opens the app and types in the server address they got from the techie. Then they click the Connect button."
+    say: "The user opens the app and types in the server address they got from the techie. Then they click the \"Connect\" button."
   - id: user-warning
     type: screen
     actor: user
@@ -65,7 +65,7 @@ scenes:
     screenshot: { app: helpbuoy, name: 3-key }
     highlight: { x: 552, y: 340, w: 840, h: 250 }
     zoom: highlight
-    say: "In the meantime, the app shows the user the key of their computer. They click the Copy key button to copy it."
+    say: "In the meantime, the app shows the user the key of their computer. They click the \"Copy key\" button to copy it."
   - id: flow-send-key
     type: flow
     title: "Send the key"
@@ -82,7 +82,7 @@ scenes:
     screenshot: { app: helpbuoy-desk, name: 4-register }
     highlight: { x: 220, y: 262, w: 1040, h: 338 }
     zoom: highlight
-    say: "The techie then chooses Register computer, pastes in the key and clicks the Register button."
+    say: "The techie then chooses \"Register computer\", pastes in the key and clicks the \"Register\" button."
   - id: flow-register
     type: flow
     title: "Registration"
@@ -102,7 +102,7 @@ scenes:
     screenshot: { app: helpbuoy, name: 4-lock }
     highlight: { x: 466, y: 445, w: 1016, h: 245 }
     zoom: highlight
-    say: "Next, the app asks whether the user wants help from this helpdesk only. They click the Lock button to agree, because that protects them from scam callers."
+    say: "Next, the app asks whether the user wants help from this helpdesk only. They click the \"Lock\" button to agree, because that protects them from scam callers."
   # Part 2 ---------------------------------------------------------------
 
   - id: part-ask
@@ -139,7 +139,7 @@ scenes:
     screenshot: { app: helpbuoy-desk, name: 1-computers }
     highlight: { x: 200, y: 752, w: 1530, h: 66 }
     zoom: highlight
-    say: "The techie finds the user's computer in the list and clicks the Connect button."
+    say: "The techie finds the user's computer in the list and clicks the \"Connect\" button."
   - id: flow-request
     type: flow
     title: "Request"
@@ -156,7 +156,7 @@ scenes:
     screenshot: { app: helpbuoy, name: 6-allow }
     highlight: { x: 520, y: 252, w: 1022, h: 180 }
     zoom: highlight
-    say: "The app first asks the user whether the techie may take control. They click the Allow button if they agree, or the Cancel button if they don't."
+    say: "The app first asks the user whether the techie may take control. They click the \"Allow\" button if they agree, or the \"Cancel\" button if they don't."
   - id: flow-allow
     type: flow
     title: "Approval"
@@ -166,7 +166,7 @@ scenes:
         to: desk
         through: server
         label: "allowed"
-        say: "The session only starts once the user has clicked the Allow button."
+        say: "The session only starts once the user has clicked the \"Allow\" button."
   # Part 3 ---------------------------------------------------------------
 
   - id: part-session

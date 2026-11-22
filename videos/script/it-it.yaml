@@ -25,7 +25,7 @@ scenes:
     note: "solo la prima volta"
     say: "Cominciamo registrando il computer. È una cosa che si fa una volta sola."
   user-connect:
-    say: "L'utente apre l'app e scrive l'indirizzo del server che gli ha dato il tecnico. Poi fa clic sul pulsante Connetti."
+    say: "L'utente apre l'app e scrive l'indirizzo del server che gli ha dato il tecnico. Poi fa clic sul pulsante \"Connetti\"."
   user-warning:
     say: "Alla prima connessione, l'app mostra un avviso. L'utente continua solo se l'indirizzo gli è stato dato da qualcuno che conosce e di cui si fida."
   flow-first-contact:
@@ -35,7 +35,7 @@ scenes:
         say: "Ora l'app si connette al server e gli mostra una chiave che appartiene a questo computer."
       - say: "Il server non ha mai visto questa chiave, quindi il computer deve aspettare che il tecnico la registri."
   user-key:
-    say: "Nel frattempo, l'app mostra la chiave del computer. L'utente fa clic sul pulsante Copia chiave per copiarla."
+    say: "Nel frattempo, l'app mostra la chiave del computer. L'utente fa clic sul pulsante \"Copia chiave\" per copiarla."
   flow-send-key:
     title: "Invia la chiave"
     steps:
@@ -43,7 +43,7 @@ scenes:
         via: "per e-mail o in chat"
         say: "Ora l'utente invia la chiave al tecnico, in un'e-mail o in un messaggio in chat. La chiave non è segreta, quindi può inviarla in tutta sicurezza."
   techie-register:
-    say: "Il tecnico sceglie quindi Registra computer, incolla la chiave e fa clic sul pulsante Registra."
+    say: "Il tecnico sceglie quindi \"Registra computer\", incolla la chiave e fa clic sul pulsante \"Registra\"."
   flow-register:
     title: "Registrazione"
     steps:
@@ -52,7 +52,7 @@ scenes:
       - label: "registrato"
         say: "Poi il server comunica al computer che è registrato. Da questo momento, il computer si ricorda di questo server."
   user-lock:
-    say: "Subito dopo, l'app chiede all'utente se vuole ricevere aiuto solo da questo helpdesk. Fa clic sul pulsante Blocca per accettare, perché così è protetto dalle chiamate truffa."
+    say: "Subito dopo, l'app chiede all'utente se vuole ricevere aiuto solo da questo helpdesk. Fa clic sul pulsante \"Blocca\" per accettare, perché così è protetto dalle chiamate truffa."
   part-ask:
     text: "Chiedere aiuto"
     note: "ogni volta"
@@ -68,19 +68,19 @@ scenes:
   user-waiting:
     say: "Mentre l'utente aspetta, l'app mostra il numero di telefono e il nome dell'helpdesk."
   techie-computers:
-    say: "Il tecnico trova il computer nell'elenco e fa clic sul pulsante Connetti."
+    say: "Il tecnico trova il computer nell'elenco e fa clic sul pulsante \"Connetti\"."
   flow-request:
     title: "Richiesta"
     steps:
       - label: "posso prendere il controllo?"
         say: "A quel punto una richiesta passa attraverso il server e arriva al computer dell'utente, ma non succede ancora niente."
   user-allow:
-    say: "L'app chiede prima all'utente se il tecnico può prendere il controllo. Fa clic sul pulsante Consenti se è d'accordo, oppure sul pulsante Annulla se non lo è."
+    say: "L'app chiede prima all'utente se il tecnico può prendere il controllo. Fa clic sul pulsante \"Consenti\" se è d'accordo, oppure sul pulsante \"Annulla\" se non lo è."
   flow-allow:
     title: "Consenso"
     steps:
       - label: "consentito"
-        say: "La sessione inizia solo dopo che l'utente ha fatto clic sul pulsante Consenti."
+        say: "La sessione inizia solo dopo che l'utente ha fatto clic sul pulsante \"Consenti\"."
   part-session:
     text: "Ricevere aiuto"
     note: "ogni volta"

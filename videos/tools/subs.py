@@ -4,15 +4,27 @@ the MP4 as a soft subtitle stream, and published for other players)."""
 import re
 
 PUNCT = re.compile(r"[,.;:!?]$")
+QUOTED = re.compile(r'"[^"]*"')
+GLUE = "\x00"  # stands for a space inside quotes, where a line never breaks
+
+
+def _glue(text):
+    """Text as words, with a quoted label (a button name) as one word."""
+    text = QUOTED.sub(lambda m: m.group().replace(" ", GLUE), " ".join(text.split()))
+    return text.split(" ")
+
+
+def _unglue(text):
+    return text.replace(GLUE, " ")
 
 
 def wrap(text, max_chars):
     """One line if it fits, else two lines broken near the middle, else
     greedy lines (which the validator reports as too many)."""
-    text = " ".join(text.split())
+    words = _glue(text)
+    text = _unglue(" ".join(words))
     if len(text) <= max_chars:
         return [text]
-    words = text.split(" ")
     best = None
     for i in range(1, len(words)):
         a, b = " ".join(words[:i]), " ".join(words[i:])
@@ -22,7 +34,7 @@ def wrap(text, max_chars):
             if best is None or score < best[0]:
                 best = (score, [a, b])
     if best:
-        return best[1]
+        return [_unglue(line) for line in best[1]]
     lines, cur = [], ""
     for w in words:
         if cur and len(cur) + 1 + len(w) > max_chars:
@@ -31,13 +43,13 @@ def wrap(text, max_chars):
         else:
             cur = f"{cur} {w}".strip()
     lines.append(cur)
-    return lines
+    return [_unglue(line) for line in lines]
 
 
 def split_cues(text, max_chars, max_lines=2):
     """Split text into cues that each fit max_lines lines, preferring to end a
     cue at the end of a sentence or clause."""
-    words = " ".join(text.split()).split(" ")
+    words = _glue(text)
     cues, cur = [], []
     limit = max_chars * max_lines - 4
     for w in words:
@@ -59,7 +71,7 @@ def split_cues(text, max_chars, max_lines=2):
             cur.append(w)
     if cur:
         cues.append(" ".join(cur))
-    return cues
+    return [_unglue(c) for c in cues]
 
 
 def timed_cues(text, start, end, max_chars):

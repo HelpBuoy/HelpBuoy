@@ -187,9 +187,11 @@ def check_scene(s, lang, cfg, diagrams, symbols, errors, warnings, where):
                 errors.append(f"{where}: {field} contains the brand name '{w}'; say what it is instead "
                               f"(the app, the desk app, the server): {text!r}")
         if field == "say":
-            if re.search(r"[:;()\[\]\"/]", text):
-                errors.append(f"{where}: say contains a colon, semicolon, bracket, quote or slash, "
+            if re.search(r"[:;()\[\]/]", text):
+                errors.append(f"{where}: say contains a colon, semicolon, bracket or slash, "
                               f"which the voice stumbles over: {text!r}")
+            if text.count('"') % 2:
+                errors.append(f"{where}: say has a quote that is not closed: {text!r}")
             if not re.search(r"[.?!]$", text.strip()):
                 errors.append(f"{where}: say must end with a full stop, question mark or exclamation mark: {text!r}")
             for sentence in re.split(r"(?<=[.?!])\s+", text):

@@ -25,7 +25,7 @@ scenes:
     note: "la première fois seulement"
     say: "Commençons par enregistrer l'ordinateur. C'est une étape qui ne se fait qu'une seule fois."
   user-connect:
-    say: "L'utilisateur ouvre l'appli et tape l'adresse du serveur que le technicien lui a donnée. Il clique ensuite sur le bouton Se connecter."
+    say: "L'utilisateur ouvre l'appli et tape l'adresse du serveur que le technicien lui a donnée. Il clique ensuite sur le bouton \"Se connecter\"."
   user-warning:
     say: "À la première connexion, l'appli affiche un avertissement. L'utilisateur ne continue que si l'adresse lui a été donnée par une personne qu'il connaît et en qui il a confiance."
   flow-first-contact:
@@ -35,7 +35,7 @@ scenes:
         say: "L'appli se connecte maintenant au serveur et lui présente une clé qui appartient à cet ordinateur."
       - say: "Le serveur n'a encore jamais vu cette clé, donc l'ordinateur doit attendre que le technicien l'enregistre."
   user-key:
-    say: "Pendant ce temps, l'appli affiche la clé de l'ordinateur. L'utilisateur clique sur le bouton Copier la clé pour la copier."
+    say: "Pendant ce temps, l'appli affiche la clé de l'ordinateur. L'utilisateur clique sur le bouton \"Copier la clé\" pour la copier."
   flow-send-key:
     title: "Envoyer la clé"
     steps:
@@ -43,7 +43,7 @@ scenes:
         via: "par e-mail ou message"
         say: "L'utilisateur envoie maintenant cette clé au technicien, dans un e-mail ou un message. La clé n'est pas secrète, elle peut donc être envoyée sans crainte."
   techie-register:
-    say: "Le technicien choisit alors Enregistrer un ordinateur, colle la clé et clique sur le bouton Enregistrer."
+    say: "Le technicien choisit alors \"Enregistrer un ordinateur\", colle la clé et clique sur le bouton \"Enregistrer\"."
   flow-register:
     title: "Enregistrement"
     steps:
@@ -52,7 +52,7 @@ scenes:
       - label: "enregistré"
         say: "Le serveur indique ensuite à l'ordinateur qu'il est enregistré. Désormais, l'ordinateur se souvient de ce serveur."
   user-lock:
-    say: "Ensuite, l'appli demande à l'utilisateur s'il veut recevoir de l'aide uniquement de ce support. Il clique sur le bouton Verrouiller pour accepter, car cela le protège des appels frauduleux."
+    say: "Ensuite, l'appli demande à l'utilisateur s'il veut recevoir de l'aide uniquement de ce support. Il clique sur le bouton \"Verrouiller\" pour accepter, car cela le protège des appels frauduleux."
   part-ask:
     text: "Demander de l'aide"
     note: "à chaque fois"
@@ -68,19 +68,19 @@ scenes:
   user-waiting:
     say: "Pendant que l'utilisateur patiente, l'appli affiche le numéro de téléphone et le nom du support."
   techie-computers:
-    say: "Le technicien trouve l'ordinateur dans la liste et clique sur le bouton Se connecter."
+    say: "Le technicien trouve l'ordinateur dans la liste et clique sur le bouton \"Se connecter\"."
   flow-request:
     title: "Demande"
     steps:
       - label: "puis-je prendre la main ?"
         say: "Une demande passe alors par le serveur jusqu'à l'ordinateur de l'utilisateur, mais rien ne se passe encore."
   user-allow:
-    say: "L'appli demande d'abord à l'utilisateur si le technicien peut prendre la main. Il clique sur le bouton Autoriser s'il est d'accord, ou sur le bouton Annuler s'il ne l'est pas."
+    say: "L'appli demande d'abord à l'utilisateur si le technicien peut prendre la main. Il clique sur le bouton \"Autoriser\" s'il est d'accord, ou sur le bouton \"Annuler\" s'il ne l'est pas."
   flow-allow:
     title: "Accord"
     steps:
       - label: "autorisé"
-        say: "La session ne commence qu'une fois que l'utilisateur a cliqué sur le bouton Autoriser."
+        say: "La session ne commence qu'une fois que l'utilisateur a cliqué sur le bouton \"Autoriser\"."
   part-session:
     text: "Recevoir de l'aide"
     note: "à chaque fois"

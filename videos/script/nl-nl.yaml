@@ -25,7 +25,7 @@ scenes:
     note: "alleen de eerste keer"
     say: "We beginnen met het registreren van de computer. Dat hoeft maar één keer te gebeuren."
   user-connect:
-    say: "De gebruiker opent de app en typt het serveradres in dat de techie heeft gegeven. Daarna klikt de gebruiker op de knop Verbinden."
+    say: "De gebruiker opent de app en typt het serveradres in dat de techie heeft gegeven. Daarna klikt de gebruiker op de knop \"Verbinden\"."
   user-warning:
     say: "Bij de eerste verbinding laat de app een waarschuwing zien. De gebruiker gaat alleen verder als het adres komt van iemand die bekend en vertrouwd is."
   flow-first-contact:
@@ -35,7 +35,7 @@ scenes:
         say: "De app maakt nu verbinding met de server en laat een sleutel zien die bij deze computer hoort."
       - say: "De server heeft deze sleutel nog niet eerder gezien, dus de computer moet wachten tot de techie hem registreert."
   user-key:
-    say: "Intussen laat de app de sleutel van de computer zien. De gebruiker klikt op de knop Sleutel kopiëren om hem te kopiëren."
+    say: "Intussen laat de app de sleutel van de computer zien. De gebruiker klikt op de knop \"Sleutel kopiëren\" om hem te kopiëren."
   flow-send-key:
     title: "De sleutel versturen"
     steps:
@@ -43,7 +43,7 @@ scenes:
         via: "per e-mail of chat"
         say: "De gebruiker stuurt de sleutel nu naar de techie, in een e-mail of een chatbericht. De sleutel is niet geheim, dus dat kan gerust."
   techie-register:
-    say: "De techie kiest dan voor Computer registreren, plakt de sleutel erin en klikt op de knop Registreren."
+    say: "De techie kiest dan voor \"Computer registreren\", plakt de sleutel erin en klikt op de knop \"Registreren\"."
   flow-register:
     title: "Registratie"
     steps:
@@ -52,7 +52,7 @@ scenes:
       - label: "geregistreerd"
         say: "De server laat de computer daarna weten dat hij geregistreerd is. Vanaf nu onthoudt de computer deze server."
   user-lock:
-    say: "Vervolgens vraagt de app of de gebruiker alleen van deze helpdesk hulp wil krijgen. Een klik op de knop Vergrendelen bevestigt dat, en beschermt de gebruiker tegen oplichters aan de telefoon."
+    say: "Vervolgens vraagt de app of de gebruiker alleen van deze helpdesk hulp wil krijgen. Een klik op de knop \"Vergrendelen\" bevestigt dat, en beschermt de gebruiker tegen oplichters aan de telefoon."
   part-ask:
     text: "Hulp vragen"
     note: "elke keer"
@@ -68,19 +68,19 @@ scenes:
   user-waiting:
     say: "Tijdens het wachten laat de app het telefoonnummer en de naam van de helpdesk zien."
   techie-computers:
-    say: "De techie zoekt de computer op in de lijst en klikt op de knop Verbinden."
+    say: "De techie zoekt de computer op in de lijst en klikt op de knop \"Verbinden\"."
   flow-request:
     title: "Verzoek"
     steps:
       - label: "mag ik het overnemen?"
         say: "Er gaat dan een verzoek via de server naar de computer van de gebruiker, maar er gebeurt nog niets."
   user-allow:
-    say: "De app vraagt de gebruiker eerst of de techie het mag overnemen. De gebruiker klikt op de knop Toestaan om dat goed te vinden, of op de knop Annuleren om het te weigeren."
+    say: "De app vraagt de gebruiker eerst of de techie het mag overnemen. De gebruiker klikt op de knop \"Toestaan\" om dat goed te vinden, of op de knop \"Annuleren\" om het te weigeren."
   flow-allow:
     title: "Toestemming"
     steps:
       - label: "toegestaan"
-        say: "De sessie begint pas als de gebruiker op de knop Toestaan heeft geklikt."
+        say: "De sessie begint pas als de gebruiker op de knop \"Toestaan\" heeft geklikt."
   part-session:
     text: "Hulp krijgen"
     note: "elke keer"

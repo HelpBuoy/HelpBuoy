@@ -25,7 +25,7 @@ scenes:
     note: "nur beim ersten Mal"
     say: "Wir beginnen damit, den Computer zu registrieren. Das ist nur ein einziges Mal nötig."
   user-connect:
-    say: "Der Benutzer öffnet die App und gibt die Serveradresse ein, die er vom Techniker bekommen hat. Danach klickt er auf die Schaltfläche Verbinden."
+    say: "Der Benutzer öffnet die App und gibt die Serveradresse ein, die er vom Techniker bekommen hat. Danach klickt er auf die Schaltfläche \"Verbinden\"."
   user-warning:
     say: "Beim ersten Verbinden zeigt die App eine Warnung. Der Benutzer fährt nur fort, wenn er die Adresse von jemandem bekommen hat, den er kennt und dem er vertraut."
   flow-first-contact:
@@ -35,7 +35,7 @@ scenes:
         say: "Die App verbindet sich jetzt mit dem Server und zeigt ihm einen Schlüssel, der zu diesem Computer gehört."
       - say: "Der Server hat diesen Schlüssel noch nie gesehen, deshalb muss der Computer warten, bis der Techniker ihn registriert."
   user-key:
-    say: "In der Zwischenzeit zeigt die App den Schlüssel des Computers. Der Benutzer klickt auf die Schaltfläche Schlüssel kopieren, um ihn zu kopieren."
+    say: "In der Zwischenzeit zeigt die App den Schlüssel des Computers. Der Benutzer klickt auf die Schaltfläche \"Schlüssel kopieren\", um ihn zu kopieren."
   flow-send-key:
     title: "Den Schlüssel senden"
     steps:
@@ -43,7 +43,7 @@ scenes:
         via: "per E-Mail oder Chat"
         say: "Der Benutzer schickt den Schlüssel jetzt an den Techniker, in einer E-Mail oder einer Chatnachricht. Der Schlüssel ist nicht geheim, er lässt sich also unbesorgt verschicken."
   techie-register:
-    say: "Der Techniker wählt dann Computer registrieren, fügt den Schlüssel ein und klickt auf die Schaltfläche Registrieren."
+    say: "Der Techniker wählt dann \"Computer registrieren\", fügt den Schlüssel ein und klickt auf die Schaltfläche \"Registrieren\"."
   flow-register:
     title: "Registrierung"
     steps:
@@ -52,7 +52,7 @@ scenes:
       - label: "registriert"
         say: "Der Server teilt dem Computer danach mit, dass er registriert ist. Von nun an merkt sich der Computer diesen Server."
   user-lock:
-    say: "Als Nächstes fragt die App, ob der Benutzer nur von diesem Helpdesk Hilfe bekommen möchte. Mit einem Klick auf die Schaltfläche Binden stimmt er zu, und das schützt ihn vor betrügerischen Anrufen."
+    say: "Als Nächstes fragt die App, ob der Benutzer nur von diesem Helpdesk Hilfe bekommen möchte. Mit einem Klick auf die Schaltfläche \"Binden\" stimmt er zu, und das schützt ihn vor betrügerischen Anrufen."
   part-ask:
     text: "Um Hilfe bitten"
     note: "jedes Mal"
@@ -68,19 +68,19 @@ scenes:
   user-waiting:
     say: "Während der Benutzer wartet, zeigt die App die Telefonnummer und den Namen des Helpdesks."
   techie-computers:
-    say: "Der Techniker sucht den Computer in der Liste und klickt auf die Schaltfläche Verbinden."
+    say: "Der Techniker sucht den Computer in der Liste und klickt auf die Schaltfläche \"Verbinden\"."
   flow-request:
     title: "Anfrage"
     steps:
       - label: "darf ich übernehmen?"
         say: "Dann geht eine Anfrage über den Server an den Computer des Benutzers, aber noch passiert nichts."
   user-allow:
-    say: "Die App fragt den Benutzer zuerst, ob der Techniker übernehmen darf. Er klickt auf die Schaltfläche Zulassen, wenn er einverstanden ist, oder auf die Schaltfläche Abbrechen, wenn nicht."
+    say: "Die App fragt den Benutzer zuerst, ob der Techniker übernehmen darf. Er klickt auf die Schaltfläche \"Zulassen\", wenn er einverstanden ist, oder auf die Schaltfläche \"Abbrechen\", wenn nicht."
   flow-allow:
     title: "Zustimmung"
     steps:
       - label: "zugelassen"
-        say: "Die Sitzung beginnt erst, wenn der Benutzer auf die Schaltfläche Zulassen geklickt hat."
+        say: "Die Sitzung beginnt erst, wenn der Benutzer auf die Schaltfläche \"Zulassen\" geklickt hat."
   part-session:
     text: "Hilfe bekommen"
     note: "jedes Mal"

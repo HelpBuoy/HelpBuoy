@@ -98,14 +98,18 @@ and sentences that flow into each other.
   ("Let's start with who is who.").
 - Name what a thing is when you mention it: "click the Connect button",
   "press the Escape key", never "click Connect" or "press Escape".
+- Put the label of a button or menu item between double quotes in `say`,
+  exactly as it is on the screen: `click the \"Connect\" button`. The voice
+  then stresses the label as a name instead of reading it as part of the
+  sentence. Names of keys ("the Escape key") get no quotes.
 - Do not squeeze two ideas into one sentence with "which", "where" or
   "by doing". Two plain sentences sound better than one contorted one.
 - Contractions are fine and sound natural ("that's", "doesn't", "it's").
 - End every `say` with a full stop or a question mark, never a comma: each
   step is spoken on its own, so a sentence must not run over into the next
   step.
-- No colons, semicolons, brackets, quotes or slashes in `say`; the voice
-  reads them badly.
+- No colons, semicolons, brackets or slashes in `say`; the voice reads
+  them badly. Quotes only around the label of a button or menu item.
 - Describe both people in the third person: "the user" (who needs help)
   and "the techie". Never address the viewer as the person who gets help
   ("you", "your computer"); the viewer may be either of them. Say "the
