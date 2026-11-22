@@ -20,7 +20,7 @@
 - A session only carries the screen (computer to techie) and mouse and keyboard input (techie to computer). There is no shell, no file transfer and no unattended access.
 - Everything runs over SSH inside a WebSocket over HTTPS, so it gets through networks that only allow web traffic. The server only connects the two sides and can't read a session.
 - You run the server: as one Go binary, as a Debian package, or inside the desk app. Nothing depends on helpbuoy.com.
-- A PC can be locked to its helpdesk, so a scam caller can't talk the user into connecting to another server.
+- A PC can be locked to its helpdesk, so a scam caller can't talk the user into connecting to another server. That helpdesk decides which other helpdesks, such as a software vendor, may help too.
 
 ## Quick start
 
@@ -32,6 +32,18 @@
 For a server that is always on, install `helpbuoy-server` from the same release; see [Running the server](#running-the-server). [Getting started](https://www.helpbuoy.com/docs/getting-started/) has the steps in more detail.
 
 ![How HelpBuoy connects: register the computer, ask for help, get help](docs/helpbuoy.connection.diagram.svg)
+
+## A helpdesk and a software vendor
+
+People often get help from more than one place: an IT company (an MSP) or a relative for the PC, and a software vendor for one program on it. In HelpBuoy each of them runs a server of their own, and the PC has one helpdesk that is its own.
+
+- The user locks the PC to its own helpdesk, the **primary server**. The PC always starts there.
+- That helpdesk keeps one list of other servers its PCs may use. A techie adds a vendor on the Server tab of the desk app, with a name and the address of the vendor's server. The desk app remembers the key that server shows at that moment, and the PCs only accept that key.
+- On the PC the user presses "Other helpdesk..." and picks the vendor from a list, and goes back with "Back to" and the name of their own helpdesk. Nobody types an address.
+- The vendor adds the PC on its own server, like any other computer. Every session still needs the user's approval.
+- When a user types the address of a server that is not on the list, the PC does not connect there. The request goes to a techie of its own helpdesk, who allows or refuses it for all its PCs.
+
+The two servers never talk to each other, and neither sees the other's computers or sessions. [Work with another helpdesk](https://www.helpbuoy.com/docs/other-helpdesks/) is the guide for both sides, and [PLAN.md](PLAN.md) section 12 has the design.
 
 ## What is in this repository
 

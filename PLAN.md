@@ -1130,9 +1130,13 @@ The client warns on the first connection to a new server but never stops the use
 is exactly what the helpdesk scam relies on.
 
 A client registered on a server is asked to **lock** to it. A locked client only connects to
-that server, its **primary server**, and to the servers the primary server approved. An approval is for
-the whole server: it holds for every computer of the primary server.
-There is no setting for this on the server: every server asks.
+that server, its **primary server**, and to the servers the primary server approved. An
+approval is for the whole server: it holds for every computer of the primary server. There
+is no setting for this on the server: every server asks.
+
+The case this is built for is a helpdesk and a software vendor: an IT company (an MSP) or a
+relative looks after the PC, and a vendor supports one program on it. Both run a server of
+their own. 12.6 sums up who does what; 12.1 to 12.5 are the parts.
 
 ### 12.1 The lock question
 
@@ -1174,18 +1178,18 @@ at the keyboard can still delete the files, and a machine-wide policy set by an 
 ### 12.3 Connecting to another server
 
 A locked user who needs help from someone else (a software vendor, a second helpdesk)
-picks that server when it is approved (see below), and otherwise types its address. If that server is not
-on the approved list, the connection becomes a request to the primary server to list it: the
+picks that server when it is approved (see below), and otherwise types its address. If that
+server is not on the approved list, the connection becomes a request to the primary server to list it: the
 client connects only far enough to see the host key, does nothing else with that server, and
 then connects to the primary server, as a computer of its own, and sends it the address and
 host key fingerprint (`RequestListing`). It keeps that connection while it waits, and sends
 the request again after a reconnect.
 
 In the desk app the request shows in the computer list, on the row of that computer, with the
-requested address and fingerprint and **Allow for all computers** and **Refuse** (7.2). A techie approves it,
-and the approval is for the whole server, not for that computer or its
-customer (13), and stays until a techie removes it: the server goes on the one approved list of the primary server (one entry
-per address, so approving a new key for an address replaces the old one), every computer
+requested address and fingerprint and **Allow for all computers** and **Refuse** (7.2). A
+techie approves it, and the approval is for the whole server, not for that computer or its
+customer (13), and stays until a techie removes it: the server goes on the one approved
+list of the primary server (one entry per address, so approving a new key for an address replaces the old one), every computer
 gets the new list, and the same request of other computers is closed with it. The other
 server still only reaches the computers that are registered on it, and every session still
 needs the user's approval (3.5). The client
@@ -1268,6 +1272,39 @@ connected to.
 
 There is no check with helpbuoy.com: the user's own helpdesk decides which other servers may
 reach the PC, so nothing in a session depends on helpbuoy.com being reachable.
+
+### 12.6 The helpdesk and the vendor
+
+The PC is locked to the server of its own helpdesk, here Example Inc, and gets help from
+the server of a vendor, here Vendor Inc, as well.
+
+| Who | Does what |
+|---|---|
+| The user | Locks the PC to Example Inc (12.1). Picks Vendor Inc under **Other helpdesk...** and comes back with **Back to Example Inc** (12.3). Sends the PC's key to Vendor Inc the first time. Approves every session, on either server. |
+| A techie of Example Inc | Adds the server of Vendor Inc on the Server tab, by name and address; the desk app pins the key that server shows (12.3). Removes it again. Allows or refuses a server a user asked for by typing its address. |
+| A techie of Vendor Inc | Gives Example Inc the address of their server. Registers the PC on their own server the first time the user picks them, then connects as to any computer. |
+| The server of Example Inc | Keeps the one approved list and sends it to all its computers. Keeps the open requests per computer. |
+| The server of Vendor Inc | Nothing special: it sees the PC as a computer of its own. |
+
+What holds between the two:
+
+- The servers never talk to each other. The only contact is the desk app of Example Inc
+  reading the host key of Vendor Inc once, when a techie adds it, and a locked client doing
+  the same for a request.
+- The client is connected to one server at a time, so the PC is online on one of the two.
+  On the other it shows as offline.
+- The lock belongs to Example Inc only. The client does not ask the lock question on the
+  server of Vendor Inc, and it ignores the approved list that server sends: only the list of
+  the primary server counts. So Vendor Inc can't pass the PC on to a third server.
+- Each server knows the PC by the same key, but keeps its own name for it, its own
+  customer (13) and its own techies. Neither sees the other's computers, techies or sessions.
+- An approval is an address with one host key. When Vendor Inc replaces its host key
+  (3.2), the PCs of Example Inc refuse it until a techie of Example Inc adds the address
+  again.
+- Removing Vendor Inc from the list reaches a PC the next time it talks to Example Inc,
+  which is at the latest when the client starts.
+- An unlocked PC needs none of this: it can type any address, with the first connection
+  warning (6.2).
 
 ## 13. Customers on one server
 
