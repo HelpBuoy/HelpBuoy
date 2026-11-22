@@ -5,6 +5,7 @@ import re
 
 PUNCT = re.compile(r"[,.;:!?]$")
 QUOTED = re.compile(r'"[^"]*"')
+ORPHAN = 0.4  # a cue shorter than this part of a line is too short to stand alone
 GLUE = "\x00"  # stands for a space inside quotes, where a line never breaks
 
 
@@ -71,6 +72,20 @@ def split_cues(text, max_chars, max_lines=2):
             cur.append(w)
     if cur:
         cues.append(" ".join(cur))
+    # A cue of a word or two that only holds the end of a sentence reads
+    # badly: share the words with the cue before it.
+    for i in range(1, len(cues)):
+        if len(cues[i]) < max_chars * ORPHAN and not re.search(r"[.!?]$", cues[i - 1]):
+            both = (cues[i - 1] + " " + cues[i]).split(" ")
+            best = None
+            for j in range(1, len(both)):
+                a, b = " ".join(both[:j]), " ".join(both[j:])
+                if all(len(c) <= limit and len(wrap(c, max_chars)) <= max_lines for c in (a, b)):
+                    score = abs(len(a) - len(b)) - (12 if PUNCT.search(a) else 0)
+                    if best is None or score < best[0]:
+                        best = (score, a, b)
+            if best:
+                cues[i - 1], cues[i] = best[1], best[2]
     return [_unglue(c) for c in cues]
 
 
