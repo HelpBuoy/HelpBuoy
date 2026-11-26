@@ -62,7 +62,7 @@ help:
 	@echo "make desk-macos    build the universal macOS desk app into $(BIN)/"
 	@echo "make dist     all release packages in $(DIST)/: msi, deb, deb-client, deb-desk and zip-macos"
 	@echo "make msi      per-user installers of the Windows client and desk app (needs wixl and msitools)"
-	@echo "              with SIGN=1 the exes and MSIs are signed (needs jsign and SimplySign Desktop)"
+	@echo "              with SIGN=1 the exes and MSIs are signed (needs ssctl, logged in)"
 	@echo "make msix     the Windows client and desk app for the Microsoft Store, unsigned, in $(BIN)/"
 	@echo "make msix-test  the same, signed with a self-signed test certificate (needs osslsigncode)"
 	@echo "make deb      Debian 13 package of helpbuoy-server with a systemd service (needs dpkg-deb)"
@@ -206,29 +206,20 @@ define build-msi
 endef
 
 # Code signing of the Windows exes and MSIs with SIGN=1, which release.sh
-# sets: jsign with the Certum certificate of Maussoft B.V., whose key stays
-# in the Certum cloud (SimplySign). Start SimplySign Desktop and log in with a
-# token from the SimplySign mobile app first. jsign, not osslsigncode: the
-# SimplySign PKCS#11 library has OpenSSL 1.0 built in and crashes next to the
-# system OpenSSL 3. CERTUM_CERT is the certificate followed by the
-# intermediate CA, PEM. CERTUM_PIN and CERTUM_ALIAS, from the environment,
-# are only needed when SimplySign asks for a PIN or has more than one key.
-SIGN          ?=
-CERTUM_MODULE ?= $(firstword $(wildcard /opt/SimplySignDesktop/SimplySignPKCS*.so))
-CERTUM_CERT   ?= $(HOME)/.config/certum/codesign.pem
+# sets: ssctl (github.com/mevdschee/simplysign-go) with the Certum certificate
+# of Maussoft B.V., whose key stays in the Certum cloud (SimplySign). Run
+# "ssctl login" first, with a token from the SimplySign mobile app. ssctl adds
+# the intermediate CA and a timestamp of Certum by itself, and needs neither
+# SimplySign Desktop nor its PKCS#11 library.
+SIGN  ?=
+SSCTL ?= ssctl
 
-# sign FILES: sign FILES in place when SIGN is set. jsign takes a SunPKCS11
-# configuration, not the library itself.
-sign = $(if $(SIGN),printf 'name = SimplySign\nlibrary = %s\n' '$(CERTUM_MODULE)' > $(BIN)/simplysign.cfg && \
-	jsign --storetype PKCS11 --keystore $(BIN)/simplysign.cfg --storepass "$$CERTUM_PIN" \
-		$${CERTUM_ALIAS:+--alias "$$CERTUM_ALIAS"} --certfile $(CERTUM_CERT) \
-		--alg SHA-256 --name HelpBuoy --url https://www.helpbuoy.com/ \
-		--tsaurl http://time.certum.pl --tsmode RFC3161 $(1) && \
-	rm $(BIN)/simplysign.cfg,@echo "not signed (no SIGN=1): $(1)")
+# sign FILES: sign FILES in place when SIGN is set, one at a time.
+sign = $(if $(SIGN),for f in $(1); do $(SSCTL) sign $$f || exit 1; done,@echo "not signed (no SIGN=1): $(1)")
 
 msi: client desk
-	@$(if $(SIGN),test -f "$(CERTUM_MODULE)" -a -f "$(CERTUM_CERT)" && command -v jsign >/dev/null || \
-		{ echo "SIGN=1 needs jsign$(,) SimplySign Desktop and $(CERTUM_CERT)$(,) see README.md" >&2; exit 1; },true)
+	@$(if $(SIGN),command -v $(SSCTL) >/dev/null && $(SSCTL) info >/dev/null || \
+		{ echo "SIGN=1 needs ssctl$(,) logged in with \"ssctl login\"$(,) see README.md" >&2; exit 1; },true)
 	@mkdir -p $(DIST)
 	@# Sign the exes before the MSIs are built, so the MSIs install the signed exes.
 	$(call sign,$(BIN)/windows-amd64/helpbuoy.exe $(BIN)/windows-amd64/helpbuoy-desk.exe)

@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# sudo apt install jq zip wixl msitools gh dpkg default-jre
-# jsign: install jsign_<version>_all.deb from https://github.com/ebourg/jsign/releases
+# sudo apt install jq zip wixl msitools gh dpkg
+# go install github.com/mevdschee/simplysign-go/cmd/ssctl@latest
 #
 # Releases a new version of helpbuoy:
 #
@@ -23,8 +23,7 @@
 # up the Debian packages from the release by itself and adds them to
 # https://apt.helpbuoy.com/ within ten minutes (see ../helpbuoy-apt). The
 # macOS client needs zig and a macOS SDK, see README.md. The Windows exes and
-# MSIs are signed (SIGN=1, see the Makefile): start SimplySign Desktop and log
-# in first.
+# MSIs are signed (SIGN=1, see the Makefile): run "ssctl login" first.
 #
 # Last, it submits the MSIX packages of both apps to the Microsoft Store
 # with msstore/publish.sh. When that fails (msstore not set up, or the last

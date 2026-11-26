@@ -110,7 +110,7 @@ The Windows client and the desk app are also in the Microsoft Store (Store IDs 9
 
 The client and desk app MSIs on the release, and the exes they install, are signed with a Certum code signing certificate issued to Maussoft B.V. To check, right-click the file in Explorer, choose Properties and open the "Digital Signatures" tab. SmartScreen may still warn about a new release until enough people have downloaded it ("More info", "Run anyway"); the Store versions never get that warning.
 
-`make msi SIGN=1` signs the exes and MSIs with [jsign](https://github.com/ebourg/jsign); `release.sh` sets it, and without it they are not signed. The key stays in the Certum cloud: start SimplySign Desktop and log in with a token from the SimplySign mobile app first. The certificate, followed by the Certum Code Signing 2021 CA, is read from `~/.config/certum/codesign.pem` (`CERTUM_CERT`); the Makefile has the other settings. The MSIX packages stay unsigned, since the Store signs them.
+`make msi SIGN=1` signs the exes and MSIs with [ssctl](https://github.com/mevdschee/simplysign-go); `release.sh` sets it, and without it they are not signed. The key stays in the Certum cloud: run `ssctl login` first and log in with a token from the SimplySign mobile app. ssctl adds the Certum Code Signing 2021 CA and a timestamp by itself, so SimplySign Desktop is not needed. The MSIX packages stay unsigned, since the Store signs them.
 
 ## Building the macOS apps
 
