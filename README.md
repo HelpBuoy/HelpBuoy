@@ -106,6 +106,12 @@ The Windows client and the desk app are also in the Microsoft Store (Store IDs 9
 
 `make msix` builds the unsigned packages in `bin/` from `installer/*.appxmanifest.xml`, packed by `tools/mkmsix` because makeappx only runs on Windows. `msstore/publish.sh` submits them for each release, and `release.sh` runs it; the Store signs them. To try a package before it is in the Store, `make msix-test` signs a copy of each with a self-signed test certificate: import `bin/msix-test.cer` on the test PC into Local Machine, Trusted People, then open a `_test.msix`. The listings, screenshots and logos are in `msstore/`, see [msstore/README.md](msstore/README.md).
 
+## Code signing on Windows
+
+The client and desk app MSIs on the release, and the exes they install, are signed with a Certum code signing certificate issued to Maussoft B.V. To check, right-click the file in Explorer, choose Properties and open the "Digital Signatures" tab. SmartScreen may still warn about a new release until enough people have downloaded it ("More info", "Run anyway"); the Store versions never get that warning.
+
+`make msi SIGN=1` signs the exes and MSIs with [jsign](https://github.com/ebourg/jsign); `release.sh` sets it, and without it they are not signed. The key stays in the Certum cloud: start SimplySign Desktop and log in with a token from the SimplySign mobile app first. The certificate, followed by the Certum Code Signing 2021 CA, is read from `~/.config/certum/codesign.pem` (`CERTUM_CERT`); the Makefile has the other settings. The MSIX packages stay unsigned, since the Store signs them.
+
 ## Building the macOS apps
 
 Everything else builds with only Go, including the macOS desk app and the Linux packages for amd64 and arm64, but the macOS client needs cgo for ScreenCaptureKit and AppKit. It is cross compiled on Linux with zig against the macOS 12.3 SDK:

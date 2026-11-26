@@ -1,6 +1,7 @@
 #!/bin/bash
 #
-# sudo apt install jq zip wixl msitools gh dpkg
+# sudo apt install jq zip wixl msitools gh dpkg default-jre
+# jsign: install jsign_<version>_all.deb from https://github.com/ebourg/jsign/releases
 #
 # Releases a new version of helpbuoy:
 #
@@ -21,7 +22,9 @@
 # GitHub release v<version> with all files in dist/. The APT server picks
 # up the Debian packages from the release by itself and adds them to
 # https://apt.helpbuoy.com/ within ten minutes (see ../helpbuoy-apt). The
-# macOS client needs zig and a macOS SDK, see README.md.
+# macOS client needs zig and a macOS SDK, see README.md. The Windows exes and
+# MSIs are signed (SIGN=1, see the Makefile): start SimplySign Desktop and log
+# in first.
 #
 # Last, it submits the MSIX packages of both apps to the Microsoft Store
 # with msstore/publish.sh. When that fails (msstore not set up, or the last
@@ -70,7 +73,7 @@ echo "Releasing helpbuoy $version (revision $revision)"
 
 # Build, test and package. VERSION goes into main.version of every binary and
 # into the file names in dist/.
-make vet test dist VERSION="v$version"
+make vet test dist VERSION="v$version" SIGN=1
 
 # Commit, tag, push and publish.
 git commit -q -m "Release v$version" $client $desk
