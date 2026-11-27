@@ -214,20 +214,24 @@ endef
 SIGN  ?=
 SSCTL ?= ssctl
 
-# sign FILES: sign FILES in place when SIGN is set, one at a time.
-sign = $(if $(SIGN),for f in $(1); do $(SSCTL) sign $$f || exit 1; done,@echo "not signed (no SIGN=1): $(1)")
+# sign FILES,NAME: sign FILES in place when SIGN is set, one at a time, with
+# NAME as the program name (the UAC prompt of an MSI shows it) and the website
+# as the URL.
+sign = $(if $(SIGN),for f in $(1); do $(SSCTL) sign --name "$(2)" --url https://www.helpbuoy.com $$f || exit 1; done,@echo "not signed (no SIGN=1): $(1)")
 
 msi: client desk
 	@$(if $(SIGN),command -v $(SSCTL) >/dev/null && $(SSCTL) info >/dev/null || \
 		{ echo "SIGN=1 needs ssctl$(,) logged in with \"ssctl login\"$(,) see README.md" >&2; exit 1; },true)
 	@mkdir -p $(DIST)
 	@# Sign the exes before the MSIs are built, so the MSIs install the signed exes.
-	$(call sign,$(BIN)/windows-amd64/helpbuoy.exe $(BIN)/windows-amd64/helpbuoy-desk.exe)
+	$(call sign,$(BIN)/windows-amd64/helpbuoy.exe,HelpBuoy)
+	$(call sign,$(BIN)/windows-amd64/helpbuoy-desk.exe,HelpBuoy Desk)
 	GOWORK=off GO111MODULE=off go run tools/mkico/main.go $(BIN)/helpbuoy.ico $(CLIENT_ICONS)
 	$(call build-msi,installer/helpbuoy.wxs,$(BIN)/windows-amd64/helpbuoy.exe,$(FILE_VERSION),$(MSI))
 	$(call build-msi,installer/helpbuoy-desk.wxs,$(BIN)/windows-amd64/helpbuoy-desk.exe,$(DESK_FILE_VERSION),$(DESK_MSI))
 	@# Sign the MSIs last, any change to them after this breaks the signature.
-	$(call sign,$(MSI) $(DESK_MSI))
+	$(call sign,$(MSI),HelpBuoy)
+	$(call sign,$(DESK_MSI),HelpBuoy Desk)
 
 # msix: the Windows client and desk app as MSIX packages for the Microsoft
 # Store (installer/*.appxmanifest.xml), packed by tools/mkmsix since makeappx
