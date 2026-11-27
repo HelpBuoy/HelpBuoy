@@ -70,7 +70,8 @@ failed=()
 for app in "${apps[@]}"; do
 	msix=bin/${app}_$version.0_x64.msix
 	echo "Submitting $msix to the Store as ${ids[$app]}"
-	if ! msstore publish bin --inputFile "$msix" --appId "${ids[$app]}"; then
+	# msstore 0.4 has no --inputFile any more: the package goes in as the path.
+	if ! msstore publish "$msix" --appId "${ids[$app]}"; then
 		failed+=("$app")
 	fi
 done
